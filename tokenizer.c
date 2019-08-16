@@ -1,5 +1,6 @@
 typedef enum {
 			  TOKEN_KW,
+			  TOKEN_IDENT,
 			  TOKEN_EOF
 } TokenKind;
 
@@ -12,9 +13,9 @@ typedef enum {
 			  KW_COUNT
 } Keyword;
 
+/* OPTIM: Use a trie or just a function if this gets too long */
 static const char *keywords[KW_COUNT] =
-	{";", "==", "<", "<=", "="};
-
+	{";", "==", "<", "<=", "="}; 
 
 /* NOTE: LineNo is typedef'd in util/err.c */
 typedef struct {
@@ -23,6 +24,7 @@ typedef struct {
     LineNo col;
 	union {
 		Keyword kw;
+		Identifier ident;
 	};
 } Token;
 
@@ -38,6 +40,10 @@ static void token_fprint(FILE *out, Token *t) {
 	switch (t->kind) {
 	case TOKEN_KW:
 		fprintf(out, "keyword: %s", keywords[t->kw]);
+		break;
+	case TOKEN_IDENT:
+		fprintf(out, "identifier: %ld:", t->ident->id);
+		ident_fprint(out, t->ident);
 		break;
 	case TOKEN_EOF:
 		fprintf(out, "eof");
@@ -87,11 +93,22 @@ static Tokenizer tokenize_file(FILE *fp) {
 			}
 		}
 		if (kw != KW_COUNT) {
-			Token kw_token;
-			kw_token.kind = TOKEN_KW;
-			kw_token.kw = kw;
-			tokenizer_add(&t, &kw_token, line, col);
+			/* it's a keyword */
+			Token token;
+			token.kind = TOKEN_KW;
+			token.kw = kw;
+			tokenizer_add(&t, &token, line, col);
 			col += (LineNo)strlen(keywords[kw]);
+			continue;
+		}
+
+		if (isident(c)) {
+			/* it's an identifier */
+			Identifier ident = ident_finsert(fp);
+			Token token;
+			token.kind = TOKEN_IDENT;
+			token.ident = ident;
+			tokenizer_add(&t, &token, line, col);			
 			continue;
 		}
 		

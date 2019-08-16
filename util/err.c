@@ -8,3 +8,31 @@ static void err_print(LineNo line, LineNo col, const char *fmt, ...) {
 	vfprintf(stderr, fmt, args);
 	va_end(args);
 }
+
+static void *err_malloc(size_t size) {
+	void *ret = malloc(size);
+	if (!ret) {
+		fprintf(stderr, "Error: Out of memory.\n");
+		abort();
+	}
+	return ret;
+}
+
+static void *err_calloc(size_t n, size_t size) {
+	void *ret = calloc(n, size);
+	if (!ret) {
+		fprintf(stderr, "Error: Out of memory.\n");
+		abort();
+	}
+	return ret;
+}
+
+static void *err_realloc(void *data, size_t new_size) {
+	void *ret = realloc(data, new_size);
+	if (!ret) {
+		fprintf(stderr, "Error: Out of memory.\n");
+		abort();
+	}
+	return ret;
+}
+

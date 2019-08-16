@@ -7,6 +7,7 @@
 #include <ctype.h>
 #include "util/err.c"
 #include "util/files.c"
+#include "identifiers.c"
 #include "tokenizer.c"
 
 int main(int argc, char **argv) {
@@ -31,6 +32,7 @@ int main(int argc, char **argv) {
 	printf("\n");
 
 	tokenizer_free(&t);
-	
+
 	fclose(in);
+	idents_free();
 }

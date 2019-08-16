@@ -1,0 +1,75 @@
+static char identifier_chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.";
+#define NIDENTIFIER_CHARS ((int)((sizeof identifier_chars) - 1)) /* -1 for null char */
+
+/* returns -1 if c is not a valid identifier character, its index in identifier_chars otherwise */
+static int ident_char_index(int c) {
+	if (c >= 'a' && c <= 'z')
+		return c - 'a';	
+	if (c >= 'A' && c <= 'Z')
+		return c - 'A' + 26;
+	if (c >= '0' && c <= '9')
+		return c - '0' + 52;
+	if (c == '_') return 62;
+	if (c == '.') return 63;
+	return -1;
+}
+
+/* can this character be used in an identifier? */
+static int isident(int c) {
+	return ident_char_index(c) != -1; /* OPTIM: Write separate function */
+}
+
+typedef struct IdentTree {
+	/* zero value is an empty trie */
+	long id;
+	int len; /* length of identifier = depth in tree */
+	struct IdentTree *children;
+	struct IdentTree *parent;
+} IdentTree;
+
+typedef IdentTree *Identifier;
+
+static IdentTree ident_base_tree;
+static long ident_curr_id; /* NOTE: you should eventually add something to reset this */
+
+static Identifier ident_tree_finsert(IdentTree *t, FILE *fp) {
+	while (1) {
+		int c = fgetc(fp);
+		if (!isident(c)) {
+			if (t->id == 0) t->id = ++ident_curr_id;
+			return t;
+		}
+		if (!t->children) {
+			/* allocate children */
+			t->children = err_calloc(NIDENTIFIER_CHARS, sizeof *t->children);
+			for (int i = 0; i < NIDENTIFIER_CHARS; i++)
+				t->children[i].parent = t; /* child's parent = self */
+		}
+		t = &t->children[ident_char_index(c)];
+	}
+}
+
+/* inserts if does not exist. reads until non-ident char is found. */
+/* advances past identifier */
+static Identifier ident_finsert(FILE *fp) {
+	return ident_tree_finsert(&ident_base_tree, fp);
+}
+
+
+static void ident_fprint(FILE *out, Identifier id) {
+	if (id->parent == NULL) return; /* at root */
+	/* OPTIM: Use malloc(id->len)???? */
+	ident_fprint(out, id->parent);
+	fputc(identifier_chars[id - id->parent->children /* index of self in parent */], out);
+}
+
+static void idents_free_tree(IdentTree *tree) {
+	if (!tree->children) return;
+	for (int i = 0; i < NIDENTIFIER_CHARS; i++)
+		idents_free_tree(&tree->children[i]);
+	free(tree->children);
+}
+
+static void idents_free(void) {
+	idents_free_tree(&ident_base_tree);
+}
