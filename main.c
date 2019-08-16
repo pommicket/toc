@@ -6,7 +6,6 @@
 #include <string.h>
 #include <ctype.h>
 #include "util/err.c"
-#include "util/files.c"
 #include "identifiers.c"
 #include "tokenizer.c"
 
@@ -21,8 +20,20 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "Could not open file: %s.\n", argv[1]);
 		return EXIT_FAILURE;
 	}
-
-	Tokenizer t = tokenize_file(in);
+	
+	char *contents = err_malloc(4096); /* TODO:check files with >this */
+	size_t contents_cap = 4096;
+	size_t contents_len = 0;
+	while (fgets(contents + contents_len, (int)(contents_cap - contents_len), in)) {
+		contents_len += strlen(contents + contents_len);
+		if (contents_len >= contents_cap - 1024) {
+			contents_cap *= 2;
+			contents = err_realloc(contents, contents_cap);
+		}
+	}
+	/* TODO: check ferror */
+	
+	Tokenizer t = tokenize_string(contents);
 	
 	for (size_t i = 0; i < t.ntokens; i++) {
 		if (i)
@@ -31,8 +42,9 @@ int main(int argc, char **argv) {
 	}
 	printf("\n");
 
+	free(contents);
 	tokenizer_free(&t);
-
+	
 	fclose(in);
 	idents_free();
 }

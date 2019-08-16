@@ -7,6 +7,7 @@ static void err_print(LineNo line, LineNo col, const char *fmt, ...) {
 	va_start(args, fmt);
 	vfprintf(stderr, fmt, args);
 	va_end(args);
+	fprintf(stderr, "\n");
 }
 
 static void *err_malloc(size_t size) {

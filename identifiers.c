@@ -32,9 +32,10 @@ typedef IdentTree *Identifier;
 static IdentTree ident_base_tree;
 static long ident_curr_id; /* NOTE: you should eventually add something to reset this */
 
-static Identifier ident_tree_finsert(IdentTree *t, FILE *fp) {
+/* moves s to the char after the identifier */
+static Identifier ident_tree_insert(IdentTree *t, char **s) {
 	while (1) {
-		int c = fgetc(fp);
+		char c = *((*s)++);
 		if (!isident(c)) {
 			if (t->id == 0) t->id = ++ident_curr_id;
 			return t;
@@ -51,8 +52,8 @@ static Identifier ident_tree_finsert(IdentTree *t, FILE *fp) {
 
 /* inserts if does not exist. reads until non-ident char is found. */
 /* advances past identifier */
-static Identifier ident_finsert(FILE *fp) {
-	return ident_tree_finsert(&ident_base_tree, fp);
+static Identifier ident_insert(char **s) {
+	return ident_tree_insert(&ident_base_tree, s);
 }
 
 

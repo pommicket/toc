@@ -1,9 +1,4 @@
    
-== <
-<<foo<<<
-bar
-foo
-bar
-baz
-bar
-foo
+0x3f3a == 0777
+/* /* /*foo*/*/ /**/*/!~~
+
