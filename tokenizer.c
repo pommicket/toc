@@ -1,9 +1,10 @@
 typedef enum {
 			  TOKEN_KW,
 			  TOKEN_IDENT,
-			  TOKEN_NUM_LITERAL,
+			  TOKEN_NUM_CONST,
+			  TOKEN_CHAR_CONST,
 			  TOKEN_EOF
-			  /* TODO: char literals, str literals */
+			  /* TODO: char constnats, str constants */
 } TokenKind;
 
 typedef enum {
@@ -21,22 +22,22 @@ static const char *keywords[KW_COUNT] =
 
 #define TOKENIZER_USE_LLONG 1
 
-typedef unsigned long long LiteralInt;
+typedef unsigned long long IntConst;
 
-typedef long double LiteralReal; /* OPTIM: Maybe only use double */
+typedef long double RealConst; /* OPTIM: Maybe only use double */
 
 typedef enum {
-			  NUM_LITERAL_INT,
-			  NUM_LITERAL_REAL
-} NumLiteralKind;
+			  NUM_CONST_INT,
+			  NUM_CONST_REAL
+} NumConstKind;
 
 typedef struct {
-	NumLiteralKind kind;
+	NumConstKind kind;
 	union {
-		LiteralInt intval;
-		LiteralReal realval;
+		IntConst intval;
+		RealConst realval;
 	};
-} NumLiteral;
+} NumConst;
 
 /* NOTE: LineNo is typedef'd in util/err.c */
 typedef struct {
@@ -46,7 +47,8 @@ typedef struct {
 	union {
 		Keyword kw;
 		Identifier ident;
-		NumLiteral num;
+		NumConst num;
+		char chr;
 	};
 } Token;
 
@@ -67,16 +69,19 @@ static void token_fprint(FILE *out, Token *t) {
 		fprintf(out, "identifier: %ld:", t->ident->id);
 		ident_fprint(out, t->ident);
 		break;
-	case TOKEN_NUM_LITERAL:
+	case TOKEN_NUM_CONST:
 		fprintf(out, "number: ");
 		switch (t->num.kind) {
-		case NUM_LITERAL_INT:
+		case NUM_CONST_INT:
 			fprintf(out, "%llu", t->num.intval);
 			break;
-		case NUM_LITERAL_REAL:
+		case NUM_CONST_REAL:
 			fprintf(out, "%g", (double)t->num.realval);
 			break;
 		}
+		break;
+	case TOKEN_CHAR_CONST:
+		fprintf(out, "char: '%c' (%d)", t->chr, t->chr);
 		break;
 	case TOKEN_EOF:
 		fprintf(out, "eof");
@@ -94,7 +99,7 @@ static void tokenizer_add(Tokenizer *t, Token *token, LineNo line, LineNo col) {
 	t->tokens[t->ntokens++] = *token;
 }
 
-static Tokenizer tokenize_string(char *s) {	/* NOTE: May modify string. Don't even try to pass it a literal.*/
+static Tokenizer tokenize_string(char *s) {	/* NOTE: May modify string. Don't even try to pass it a string literal.*/
 	int has_err = 0;
 	Tokenizer t;
 	t.cap = 256;
@@ -179,12 +184,12 @@ static Tokenizer tokenize_string(char *s) {	/* NOTE: May modify string. Don't ev
 		/* check if it's a number */
 
 		if (isdigit(*s)) {
-			/* it's a numerical literal */
+			/* it's a numeric constant */
 			int base = 10;
-			LiteralReal decimal_pow10;
-			NumLiteral l;
-			l.kind = NUM_LITERAL_INT;
-			l.intval = 0;
+			RealConst decimal_pow10;
+			NumConst n;
+			n.kind = NUM_CONST_INT;
+			n.intval = 0;
 			LineNo line_start = line, col_start = col;
 			if (*s == '0') {
 				s++; col++;
@@ -211,7 +216,7 @@ static Tokenizer tokenize_string(char *s) {	/* NOTE: May modify string. Don't ev
 
 			while (1) {
 				if (*s == '.') {
-					if (l.kind == NUM_LITERAL_REAL) {
+					if (n.kind == NUM_CONST_REAL) {
 						err_print(line, col, "Double . in number.");
 						goto err;
 					}
@@ -219,16 +224,16 @@ static Tokenizer tokenize_string(char *s) {	/* NOTE: May modify string. Don't ev
 						err_print(line, col, "Decimal point in non base 10 number.");
 						goto err;
 					}
-					l.kind = NUM_LITERAL_REAL;
+				    n.kind = NUM_CONST_REAL;
 					decimal_pow10 = 0.1;
-					l.realval = (LiteralReal)l.intval;
+					n.realval = (RealConst)n.intval;
 					s++, col++;
 					continue;
 				} else if (*s == 'e') {
 					s++; col++;
-					if (l.kind == NUM_LITERAL_INT) {
-						l.kind = NUM_LITERAL_REAL;
-						l.realval = (LiteralReal)l.intval;
+					if (n.kind == NUM_CONST_INT) {
+						n.kind = NUM_CONST_REAL;
+						n.realval = (RealConst)n.intval;
 					}
 					/* TODO: check if exceeding maximum exponent */
 					int exponent = 0;
@@ -248,9 +253,9 @@ static Tokenizer tokenize_string(char *s) {	/* NOTE: May modify string. Don't ev
 					/* OPTIM: Slow for very large exponents (unlikely to happen) */
 					for (int i = 0; i < exponent; i++) {
 						if (negative_exponent)
-							l.realval /= 10;
+							n.realval /= 10;
 						else
-							l.realval *= 10;
+							n.realval *= 10;
 					}
 						
 					break;
@@ -272,30 +277,68 @@ static Tokenizer tokenize_string(char *s) {	/* NOTE: May modify string. Don't ev
 						err_print(line, col, "Digit %d cannot appear in a base %d number.", digit, base);
 						goto err;
 					}
-					/* end of numerical literal */
+					/* end of numeric constant */
 					break;
 				}
-				switch (l.kind) {
-				case NUM_LITERAL_INT:
-					if (l.intval > ULLONG_MAX / (LiteralInt)base) {
+				switch (n.kind) {
+				case NUM_CONST_INT:
+					if (n.intval > ULLONG_MAX / (IntConst)base) {
 						/* too big! */
-						err_print(line, col, "Number too big to fit in a numerical literal.");
+						err_print(line, col, "Number too big to fit in a numeric constant.");
 						goto err;
 					}
-					l.intval *= (LiteralInt)base;
-					l.intval += (LiteralInt)digit;
+					n.intval *= (IntConst)base;
+					n.intval += (IntConst)digit;
 					break;
-				case NUM_LITERAL_REAL:
-					l.realval += decimal_pow10 * (LiteralReal)digit;
+				case NUM_CONST_REAL:
+					n.realval += decimal_pow10 * (RealConst)digit;
 					decimal_pow10 /= 10;
 					break;
 				}
 				s++; col++;
 			}
 			Token token;
-			token.kind = TOKEN_NUM_LITERAL;
-			token.num = l;
+			token.kind = TOKEN_NUM_CONST;
+			token.num = n;
 			tokenizer_add(&t, &token, line_start, col_start);
+			continue;
+		}
+
+		if (*s == '\'') {
+			/* it's a character constant! */
+			s++; col++;
+			char c;
+			if (*s == '\\') {
+				/* escape sequence */
+				s++; col++;
+				/* TODO: Separate into function when string literals are added; add more of these */
+				switch (*s) {
+				case '\'':
+					c = '\'';
+					break;
+				case '\\':
+					c = '\\';
+					break;
+				case 'n':
+					c = '\n';
+					break;
+				default:
+					err_print(line, col, "Unrecognized escape character: '%c'.", *s);
+					goto err;
+				}
+			} else {
+				c = *s;
+			}
+			s++; col++;
+			if (*s != '\'') {
+				err_print(line, col, "End of character constant expected.");
+				goto err;
+			}
+			s++; col++;
+			Token token;
+			token.kind = TOKEN_CHAR_CONST;
+			token.chr = c;
+			tokenizer_add(&t, &token, line, col);
 			continue;
 		}
 		
