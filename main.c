@@ -5,6 +5,8 @@
 #include <stdarg.h>
 #include <string.h>
 #include <ctype.h>
+#include <limits.h>
+#include "util/colored_text.c"
 #include "util/err.c"
 #include "identifiers.c"
 #include "tokenizer.c"
@@ -21,17 +23,21 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 	
-	char *contents = err_malloc(4096); /* TODO:check files with >this */
-	size_t contents_cap = 4096;
-	size_t contents_len = 0;
+	char *contents = err_malloc(4096);
+	long contents_cap = 4096;
+	long contents_len = 0;
 	while (fgets(contents + contents_len, (int)(contents_cap - contents_len), in)) {
-		contents_len += strlen(contents + contents_len);
-		if (contents_len >= contents_cap - 1024) {
+		contents_len += (long)strlen(contents + contents_len);
+		
+		if (contents_len >= (long)contents_cap - 1024) {
 			contents_cap *= 2;
-			contents = err_realloc(contents, contents_cap);
+			contents = err_realloc(contents, (size_t)contents_cap);
 		}
 	}
-	/* TODO: check ferror */
+	if (ferror(in)) {
+		fprintf(stderr, "Error reading input file: %s.\n", argv[1]);
+		return EXIT_FAILURE;
+	}
 	
 	Tokenizer t = tokenize_string(contents);
 	

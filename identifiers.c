@@ -19,6 +19,11 @@ static int isident(int c) {
 	return ident_char_index(c) != -1; /* OPTIM: Write separate function */
 }
 
+/* can this character be used as the first character in an identifier? */
+static int isidentstart(int c) {
+	return isident(c) && c != '_' && c != '.';
+}
+
 typedef struct IdentTree {
 	/* zero value is an empty trie */
 	long id;

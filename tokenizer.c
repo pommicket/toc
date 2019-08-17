@@ -21,23 +21,12 @@ static const char *keywords[KW_COUNT] =
 
 #define TOKENIZER_USE_LLONG 1
 
-#if TOKENIZER_USE_LLONG
-typedef long long LiteralInt;
-typedef unsigned long long LiteralUInt;
-#define LITERAL_INT_FMT "%lld"
-#define LITERAL_UINT_FMT "%llu"
-#else
-typedef long LiteralInt;
-typedef unsigned long LiteralUInt;
-#define LITERAL_INT_FMT "%ld"
-#define LITERAL_UINT_FMT "%lu"
-#endif
+typedef unsigned long long LiteralInt;
 
-typedef double LiteralReal;
+typedef long double LiteralReal; /* OPTIM: Maybe only use double */
 
 typedef enum {
 			  NUM_LITERAL_INT,
-			  NUM_LITERAL_UINT,
 			  NUM_LITERAL_REAL
 } NumLiteralKind;
 
@@ -45,7 +34,6 @@ typedef struct {
 	NumLiteralKind kind;
 	union {
 		LiteralInt intval;
-		LiteralUInt uintval;
 		LiteralReal realval;
 	};
 } NumLiteral;
@@ -83,13 +71,10 @@ static void token_fprint(FILE *out, Token *t) {
 		fprintf(out, "number: ");
 		switch (t->num.kind) {
 		case NUM_LITERAL_INT:
-			fprintf(out, LITERAL_INT_FMT, t->num.intval);
-			break;
-		case NUM_LITERAL_UINT:
-			fprintf(out, LITERAL_UINT_FMT, t->num.uintval);
+			fprintf(out, "%llu", t->num.intval);
 			break;
 		case NUM_LITERAL_REAL:
-			fprintf(out, "%f", t->num.realval);
+			fprintf(out, "%g", (double)t->num.realval);
 			break;
 		}
 		break;
@@ -102,7 +87,7 @@ static void token_fprint(FILE *out, Token *t) {
 static void tokenizer_add(Tokenizer *t, Token *token, LineNo line, LineNo col) {
 	if (t->ntokens >= t->cap) {
 		t->cap *= 2;
-		t->tokens = err_realloc(t->tokens, t->cap);
+		t->tokens = err_realloc(t->tokens, t->cap * sizeof(*t->tokens));
 	}
 	token->line = line;
 	token->col = col;
@@ -112,9 +97,9 @@ static void tokenizer_add(Tokenizer *t, Token *token, LineNo line, LineNo col) {
 static Tokenizer tokenize_string(char *s) {	/* NOTE: May modify string. Don't even try to pass it a literal.*/
 	int has_err = 0;
 	Tokenizer t;
-	t.cap = 4096; /* TODO: test more tokens than this */
+	t.cap = 256;
 	t.ntokens = 0;
-	t.tokens = malloc(t.cap * sizeof(*t.tokens));
+	t.tokens = err_malloc(t.cap * sizeof(*t.tokens));
 
 	LineNo line = 1;
 	LineNo col = 1;
@@ -190,11 +175,16 @@ static Tokenizer tokenize_string(char *s) {	/* NOTE: May modify string. Don't ev
 			s += (LineNo)strlen(keywords[kw]);
 			continue;
 		}
+		
+		/* check if it's a number */
 
 		if (isdigit(*s)) {
-			/* it's a numerical constant */
+			/* it's a numerical literal */
 			int base = 10;
-			LiteralInt intval = 0;
+			LiteralReal decimal_pow10;
+			NumLiteral l;
+			l.kind = NUM_LITERAL_INT;
+			l.intval = 0;
 			LineNo line_start = line, col_start = col;
 			if (*s == '0') {
 				s++; col++;
@@ -218,11 +208,52 @@ static Tokenizer tokenize_string(char *s) {	/* NOTE: May modify string. Don't ev
 					}
 				}
 			}
+
 			while (1) {
 				if (*s == '.') {
-					/* TODO */
+					if (l.kind == NUM_LITERAL_REAL) {
+						err_print(line, col, "Double . in number.");
+						goto err;
+					}
+					if (base != 10) {
+						err_print(line, col, "Decimal point in non base 10 number.");
+						goto err;
+					}
+					l.kind = NUM_LITERAL_REAL;
+					decimal_pow10 = 0.1;
+					l.realval = (LiteralReal)l.intval;
+					s++, col++;
+					continue;
 				} else if (*s == 'e') {
-					/* TODO */
+					s++; col++;
+					if (l.kind == NUM_LITERAL_INT) {
+						l.kind = NUM_LITERAL_REAL;
+						l.realval = (LiteralReal)l.intval;
+					}
+					/* TODO: check if exceeding maximum exponent */
+					int exponent = 0;
+					if (*s == '+') {
+						s++; col++;
+					}
+					
+					int negative_exponent = 0;
+					if (*s == '-') {
+						s++; col++;
+						negative_exponent = 1;
+					}
+					for (; isdigit(*s); s++, col++) {
+						exponent *= 10;
+						exponent += *s - '0';
+					}
+					/* OPTIM: Slow for very large exponents (unlikely to happen) */
+					for (int i = 0; i < exponent; i++) {
+						if (negative_exponent)
+							l.realval /= 10;
+						else
+							l.realval *= 10;
+					}
+						
+					break;
 				}
 				int digit = -1;
 				if (base == 16) {
@@ -236,23 +267,39 @@ static Tokenizer tokenize_string(char *s) {	/* NOTE: May modify string. Don't ev
 						digit = *s - '0';
 				}
 				if (digit < 0 || digit >= base) {
+					if (isdigit(*s)) {
+						/* something like 0b011012 */
+						err_print(line, col, "Digit %d cannot appear in a base %d number.", digit, base);
+						goto err;
+					}
 					/* end of numerical literal */
 					break;
 				}
-				/* TODO: check overflow; switch to uint */
-				intval *= base;
-				intval += digit;
+				switch (l.kind) {
+				case NUM_LITERAL_INT:
+					if (l.intval > ULLONG_MAX / (LiteralInt)base) {
+						/* too big! */
+						err_print(line, col, "Number too big to fit in a numerical literal.");
+						goto err;
+					}
+					l.intval *= (LiteralInt)base;
+					l.intval += (LiteralInt)digit;
+					break;
+				case NUM_LITERAL_REAL:
+					l.realval += decimal_pow10 * (LiteralReal)digit;
+					decimal_pow10 /= 10;
+					break;
+				}
 				s++; col++;
 			}
 			Token token;
 			token.kind = TOKEN_NUM_LITERAL;
-			token.num.kind = NUM_LITERAL_INT;
-			token.num.intval = intval;
+			token.num = l;
 			tokenizer_add(&t, &token, line_start, col_start);
 			continue;
 		}
 		
-		if (isident(*s)) {
+		if (isidentstart(*s)) {
 			/* it's an identifier */
 			Identifier ident = ident_insert(&s);
 			Token token;
@@ -261,27 +308,26 @@ static Tokenizer tokenize_string(char *s) {	/* NOTE: May modify string. Don't ev
 			tokenizer_add(&t, &token, line, col);			
 			continue;
 		}
-
 		int has_newline;
 		char *end_of_line = strchr(s, '\n');
 		has_newline = end_of_line != NULL;
 		if (has_newline)
 			*end_of_line = 0;
 		
-		err_print(line, col, "Unrecognized token:\n\there --> %s\n", s);
+		err_print(line, col, TEXT_IMPORTANT("Unrecognized token:") "\n\there --> %s\n", s);
+		if (has_newline)
+			*end_of_line = '\n';
+	err:
 		has_err = 1;
-		if (has_newline) {
-			/* increment line counter because of it */
-		    line++;
-			col = 1;
-		} else {
-			col += (LineNo)strlen(s);
-		}
-		s += strlen(s);
+		s = strchr(s, '\n');
+		if (s == NULL) break;
+		s++; /* move past newline */
+		col = 1;
+		line++;
+				
 	}
-	/* TODO: Check ferror/errno */
 	if (has_err) {
-		fprintf(stderr, "Errors occured while preprocessing.\n");
+		fprintf(stderr, TEXT_IMPORTANT("Errors occured while preprocessing.\n"));
 		abort();
 	}
 	t.token = t.tokens;
