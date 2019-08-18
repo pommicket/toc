@@ -11,6 +11,7 @@ typedef enum {
 			  KW_SEMICOLON,
 			  KW_EQ,
 			  KW_COLON,
+			  KW_COMMA,
 			  KW_FN,
 			  KW_LPAREN,
 			  KW_RPAREN,
@@ -25,7 +26,7 @@ typedef enum {
 
 /* OPTIM: Use a trie or just a function if this gets too long */
 static const char *keywords[KW_COUNT] =
-	{";", "=", ":", "fn", "(", ")", "{", "}", "==", "<", "<=", "-"}; 
+	{";", "=", ":", ",", "fn", "(", ")", "{", "}", "==", "<", "<=", "-"}; 
 
 #define TOKR_USE_LLONG 1
 
@@ -51,11 +52,15 @@ typedef struct {
 	size_t len;
 } StrConst;
 
+typedef struct {
+	LineNo line;
+	char *code;
+} Location;
+
 /* NOTE: LineNo is typedef'd in util/err.c */
 typedef struct {
 	TokenKind kind;
-	LineNo line;
-	char *code;
+	Location where;
 	union {
 		Keyword kw;
 		Identifier ident;
@@ -79,7 +84,7 @@ static bool token_is_kw(Token *t, Keyword kw) {
 }
 
 static void token_fprint(FILE *out, Token *t) {
-	fprintf(out, "l%lu-", (unsigned long)t->line);
+	fprintf(out, "l%lu-", (unsigned long)t->where.line);
 	switch (t->kind) {
 	case TOKEN_KW:
 		fprintf(out, "keyword: %s", keywords[t->kw]);
@@ -112,10 +117,10 @@ static void token_fprint(FILE *out, Token *t) {
 }
 
 static void tokr_add(Tokenizer *t, Token *token) {
-	if (!token->line)
-		token->line = t->line;
-	if (!token->code)
-		token->code = t->s;
+	if (!token->where.line)
+		token->where.line = t->line;
+	if (!token->where.code)
+		token->where.code = t->s;
 	tokens_add(&t->tokens, token);
 }
 
@@ -166,16 +171,26 @@ static void tokenization_err(Tokenizer *t, const char *fmt, ...) {
 
 /* to be used after tokenization */
 static void tokr_err(Tokenizer *t, const char *fmt, ...) {
-	LineNo line = t->token->line;
+	LineNo line = t->token->where.line;
 	va_list args;
 	va_start(args, fmt);
-	err_vprint(line, t->token->code, fmt, args);
+	err_vprint(line, t->token->where.code, fmt, args);
 	va_end(args);
 	while (1) {
-		if (t->token->line != line) break;
+		if (t->token->where.line != line) break;
 		if (t->token->kind == TOKEN_EOF) break;
 		t->token++;
 	}
+}
+
+static void tokr_put_location(Tokenizer *tokr, Token *t) {
+	t->where.line = tokr->line;
+	t->where.code = tokr->s;
+}
+
+static void tokr_get_location(Tokenizer *tokr, Token *t) {
+	tokr->line = t->where.line;
+	tokr->s = t->where.code;
 }
 
 static bool tokenize_string(Tokenizer *tokr, char *str) {
@@ -256,8 +271,7 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 			n.kind = NUM_CONST_INT;
 			n.intval = 0;
 			Token token = {0};
-			token.line = t.line;
-			token.code = t.s;
+			tokr_put_location(&t, &token);
 			if (*t.s == '0') {
 				tokr_nextchar(&t);
 				/* octal/hexadecimal/binary (or zero) */
@@ -374,8 +388,7 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 			/* it's a character constant! */
 			tokr_nextchar(&t);
 			Token token = {0};
-			token.line = t.line;
-			token.code = t.s;
+			tokr_put_location(&t, &token);
 			char c;
 			if (*t.s == '\\') {
 				/* escape sequence */
@@ -403,8 +416,7 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 		if (*t.s == '"') {
 			/* it's a string constant! */
 			Token token;
-			token.line = t.line;
-			token.code = t.s;
+			tokr_put_location(&t, &token);
 			tokr_nextchar(&t);
 			size_t len = 0;
 			size_t backslashes = 0;
@@ -413,8 +425,7 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 					backslashes++;
 				} else if (*t.s == 0) {
 					/* return t to opening " so that we go to the next line */
-					t.line = token.line;
-					t.s = token.code;
+					tokr_get_location(&t, &token);
 					tokenization_err(&t, "No matching \" found.");
 					goto err;
 				} else {
@@ -425,8 +436,7 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 			}
 			char *str = malloc(len + 1);
 		    char *strptr = str;
-			t.s = token.code;
-			t.line = token.line;
+			tokr_get_location(&t, &token);
 			tokr_nextchar(&t); /* past opening " */
 			while (*t.s != '"') {
 				assert(*t.s);
@@ -455,8 +465,7 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 		if (isidentstart(*t.s)) {
 			/* it's an identifier */
 			Token token = {0};
-			token.line = t.line;
-			token.code = t.s;
+			tokr_put_location(&t, &token);
 			Identifier ident = ident_insert(&t.s);
 			token.kind = TOKEN_IDENT;
 			token.ident = ident;

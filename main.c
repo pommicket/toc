@@ -57,7 +57,10 @@ int main(int argc, char **argv) {
 	printf("\n");
 	
    	ParsedFile f;
-	parse_file(&f, &t);
+	if (!parse_file(&f, &t)) {
+		err_fprint(TEXT_IMPORTANT("Errors occured while parsing.\n"));
+		return EXIT_FAILURE;
+	}
 
 	parsed_file_fprint(stdout, &f);
 	

@@ -1,17 +1,18 @@
 typedef struct {
-	LineNo line;
-	LineNo col;
-} Location;
-
-typedef struct {
 	Location where;
-	char *var;
+	Identifier var;
+	bool is_const;
+	bool has_expr;
 } Declaration;
 
 arr_declaration(Declarations, Declaration, decls_)
 
+typedef enum {
+			  STMT_DECLS
+} StatementKind;
+	
 typedef struct {
-	int type;
+	StatementKind kind;
 	Location where;
 	union {
 		Declarations decls;
@@ -26,11 +27,47 @@ typedef struct {
 
 /* TODO: Add newline tokens back in; give tokens pointer to text */
 static bool parse_decls(Declarations *ds, Tokenizer *t) {
-	if (t->token->kind != TOKEN_IDENT) {
-		tokr_err(t, "Cannot declare non-identifier.");
-		return false;
+	decls_create(ds);
+	while (1) {
+		Declaration decl = {0};
+		if (t->token->kind != TOKEN_IDENT) {
+			tokr_err(t, "Cannot declare non-identifier.");
+			return false;
+		}
+
+		decl.where = t->token->where;
+		decl.var = t->token->ident;
+		t->token++;
+
+		if (!token_is_kw(t->token, KW_COLON)) {
+			tokr_err(t, "Expected ':' in declaration.");
+			return false;
+		}
+
+		/* TODO: type */
+
+		t->token++;
+	
+		if (token_is_kw(t->token, KW_SEMICOLON)) {
+		} else if (token_is_kw(t->token, KW_EQ)) {
+			t->token++;
+			decl.has_expr = true;
+		} else if (token_is_kw(t->token, KW_MINUS)) {
+			t->token++;
+			decl.has_expr = true;
+			decl.is_const = true;
+		}
+		decls_add(ds, &decl);
+		if (token_is_kw(t->token, KW_SEMICOLON)) {
+			t->token++;
+			break;
+		}
+		if (!token_is_kw(t->token, KW_COMMA)) {
+			tokr_err(t, "Expected ';' or ',' to finish or continue declaration.");
+			return false;
+		}
+		t->token++; /* move past comma */
 	}
-	t->token++;
 	return true;
 }
 
@@ -38,9 +75,9 @@ static bool parse_stmt(Statement *s, Tokenizer *t) {
 	if (token_is_kw(t->token + 1, KW_COLON)) {
 		return parse_decls(&s->decls, t);
 	} else {
-		t->token++;	/* TODO: This is temporary */
+		tokr_err(t, "Unreocgnized statement.");
+		return false;
 	}
-	return true;
 }
 
 static bool parse_file(ParsedFile *f, Tokenizer *t) {
@@ -55,8 +92,29 @@ static bool parse_file(ParsedFile *f, Tokenizer *t) {
 	return ret;
 }
 
+static void decl_fprint(FILE *out, Declaration *d) {
+	fprintf(out, "l%lu:", (unsigned long)d->where.line);
+	ident_fprint(out, d->var);
+	if (d->is_const) {
+		fprintf(out, "[const]");
+	}
+	if (d->has_expr) {
+		fprintf(out, "=");
+	}
+}
+
 static void stmt_fprint(FILE *out, Statement *s) {
-	fprintf(out, "statement!\n");
+	switch (s->kind) {
+	case STMT_DECLS:
+		arr_foreach(s->decls, Declaration, decl) {
+			if (decl != s->decls.data) {
+				fprintf(out, ", ");
+			}
+			decl_fprint(out, decl);
+		}
+		fprintf(out, ";\n");
+		break;
+	}
 }
 
 static void parsed_file_fprint(FILE *out, ParsedFile *f) {
