@@ -27,14 +27,15 @@ int main(int argc, char **argv) {
 	}
 	
 	char *contents = err_malloc(4096);
-	long contents_cap = 4096;
+	long contents_cap = 4095;
 	long contents_len = 0;
 	while (fgets(contents + contents_len, (int)(contents_cap - contents_len), in)) {
 		contents_len += (long)strlen(contents + contents_len);
 		
 		if (contents_len >= (long)contents_cap - 1024) {
 			contents_cap *= 2;
-			contents = err_realloc(contents, (size_t)contents_cap);
+			/* allocate +1 so that pointers don't overflow */
+			contents = err_realloc(contents, (size_t)contents_cap + 1);
 		}
 	}
 	if (ferror(in)) {

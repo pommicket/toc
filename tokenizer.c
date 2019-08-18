@@ -19,31 +19,57 @@ typedef enum {
 			  KW_RBRACE,
 			  KW_EQEQ,
 			  KW_LT,
-			  KW_LE,
+			  KW_LE,			  
 			  KW_MINUS,
+			  KW_INT,
+			  KW_I8,
+			  KW_I16,
+			  KW_I32,
+			  KW_I64,
+			  KW_U8,
+			  KW_U16,
+			  KW_U32,
+			  KW_U64,
+			  KW_FLOAT,
+			  KW_F32,
+			  KW_F64,
 			  KW_COUNT
 } Keyword;
 
-/* OPTIM: Use a trie or just a function if this gets too long */
 static const char *keywords[KW_COUNT] =
-	{";", "=", ":", ",", "fn", "(", ")", "{", "}", "==", "<", "<=", "-"}; 
+	{";", "=", ":", ",", "fn", "(", ")", "{", "}", "==", "<", "<=", "-",
+	 "int", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "float", "f32",
+	 "f64"};
+
+/* Returns KW_COUNT if it's not a keyword */
+/* OPTIM: don't use strncmp so much */
+static Keyword tokenize_keyword(char **s) {
+	for (Keyword k = 0; k < KW_COUNT; k++) {
+		size_t len = strlen(keywords[k]);
+		if (strncmp(*s, keywords[k], len) == 0) {
+			*s += len;
+			return k;
+		}
+	}
+	return KW_COUNT;
+}
 
 #define TOKR_USE_LLONG 1
 
 typedef unsigned long long IntConst;
 
-typedef long double RealConst; /* OPTIM: Switch to double */
+typedef long double FloatConst; /* OPTIM: Switch to double */
 
 typedef enum {
 			  NUM_CONST_INT,
-			  NUM_CONST_REAL
+			  NUM_CONST_FLOAT
 } NumConstKind;
 
 typedef struct {
 	NumConstKind kind;
 	union {
 		IntConst intval;
-		RealConst realval;
+		FloatConst floatval;
 	};
 } NumConst;
 
@@ -79,6 +105,8 @@ typedef struct {
 	Token *token; /* token currently being processed */
 } Tokenizer;
 
+
+
 static bool token_is_kw(Token *t, Keyword kw) {
 	return t->kind == TOKEN_KW && t->kw == kw;
 }
@@ -99,8 +127,8 @@ static void token_fprint(FILE *out, Token *t) {
 		case NUM_CONST_INT:
 			fprintf(out, "%llu", t->num.intval);
 			break;
-		case NUM_CONST_REAL:
-			fprintf(out, "%g", (double)t->num.realval);
+		case NUM_CONST_FLOAT:
+			fprintf(out, "%g", (double)t->num.floatval);
 			break;
 		}
 		break;
@@ -245,20 +273,17 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 			}
 			if (is_comment) continue;
 		}
-		Keyword kw;
-		for (kw = 0; kw < KW_COUNT; kw++) {
-			if (strncmp(t.s, keywords[kw], strlen(keywords[kw])) == 0) {
-				break;
-			}
-		}
-		if (kw != KW_COUNT) {
-			/* it's a keyword */
+		{
 			Token token = {0};
-			token.kind = TOKEN_KW;
-			token.kw = kw;
-			tokr_add(&t, &token);
-			t.s += (LineNo)strlen(keywords[kw]);
-			continue;
+			tokr_put_location(&t, &token);
+			Keyword kw = tokenize_keyword(&t.s);
+			if (kw != KW_COUNT) {
+				/* it's a keyword */
+				token.kind = TOKEN_KW;
+				token.kw = kw;
+				tokr_add(&t, &token);
+				continue;
+			}
 		}
 		
 		/* check if it's a number */
@@ -266,7 +291,7 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 		if (isdigit(*t.s)) {
 			/* it's a numeric constant */
 			int base = 10;
-			RealConst decimal_pow10;
+			FloatConst decimal_pow10;
 			NumConst n;
 			n.kind = NUM_CONST_INT;
 			n.intval = 0;
@@ -297,7 +322,7 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 
 			while (1) {
 				if (*t.s == '.') {
-					if (n.kind == NUM_CONST_REAL) {
+					if (n.kind == NUM_CONST_FLOAT) {
 						tokenization_err(&t, "Double . in number.");
 						goto err;
 					}
@@ -305,16 +330,16 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 						tokenization_err(&t, "Decimal point in non base 10 number.");
 						goto err;
 					}
-				    n.kind = NUM_CONST_REAL;
+				    n.kind = NUM_CONST_FLOAT;
 					decimal_pow10 = 0.1;
-					n.realval = (RealConst)n.intval;
+					n.floatval = (FloatConst)n.intval;
 					tokr_nextchar(&t);
 					continue;
 				} else if (*t.s == 'e') {
 					tokr_nextchar(&t);
 					if (n.kind == NUM_CONST_INT) {
-						n.kind = NUM_CONST_REAL;
-						n.realval = (RealConst)n.intval;
+						n.kind = NUM_CONST_FLOAT;
+						n.floatval = (FloatConst)n.intval;
 					}
 					/* TODO: check if exceeding maximum exponent */
 					int exponent = 0;
@@ -333,9 +358,9 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 					/* OPTIM: Slow for very large exponents (unlikely to happen) */
 					for (int i = 0; i < exponent; i++) {
 						if (negative_exponent)
-							n.realval /= 10;
+							n.floatval /= 10;
 						else
-							n.realval *= 10;
+							n.floatval *= 10;
 					}
 						
 					break;
@@ -371,8 +396,8 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 					n.intval *= (IntConst)base;
 					n.intval += (IntConst)digit;
 					break;
-				case NUM_CONST_REAL:
-					n.realval += decimal_pow10 * (RealConst)digit;
+				case NUM_CONST_FLOAT:
+					n.floatval += decimal_pow10 * (FloatConst)digit;
 					decimal_pow10 /= 10;
 					break;
 				}
@@ -469,7 +494,7 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 			Identifier ident = ident_insert(&t.s);
 			token.kind = TOKEN_IDENT;
 			token.ident = ident;
-			tokr_add(&t, &token);			
+			tokr_add(&t, &token);
 			continue;
 		}		
 		tokenization_err(&t, "Token not recognized");
