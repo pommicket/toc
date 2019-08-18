@@ -21,7 +21,7 @@ static int isident(int c) {
 
 /* can this character be used as the first character in an identifier? */
 static int isidentstart(int c) {
-	return isident(c) && c != '_' && c != '.';
+	return isident(c) && c != '.';
 }
 
 typedef struct IdentTree {
@@ -40,11 +40,12 @@ static long ident_curr_id; /* NOTE: you should eventually add something to reset
 /* moves s to the char after the identifier */
 static Identifier ident_tree_insert(IdentTree *t, char **s) {
 	while (1) {
-		char c = *((*s)++);
+		char c = **s;
 		if (!isident(c)) {
 			if (t->id == 0) t->id = ++ident_curr_id;
 			return t;
 		}
+		
 		if (!t->children) {
 			/* allocate children */
 			t->children = err_calloc(NIDENTIFIER_CHARS, sizeof *t->children);
@@ -52,6 +53,7 @@ static Identifier ident_tree_insert(IdentTree *t, char **s) {
 				t->children[i].parent = t; /* child's parent = self */
 		}
 		t = &t->children[ident_char_index(c)];
+		(*s)++;
 	}
 }
 
