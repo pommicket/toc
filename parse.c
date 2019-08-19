@@ -30,6 +30,7 @@ typedef struct {
 typedef enum {
 			  EXPR_INT_LITERAL,
 			  EXPR_FLOAT_LITERAL,
+			  EXPR_IDENT, /* variable or constant */
 			  EXPR_BINARY_OP,
 			  EXPR_UNARY_OP
 } ExprKind;
@@ -62,6 +63,7 @@ typedef struct Expression {
 			struct Expression *lhs;
 			struct Expression *rhs;
 		} binary;
+		Identifier ident;
 	};
 } Expression;
 
@@ -70,7 +72,7 @@ typedef struct Expression {
 #define DECL_FLAG_HAS_EXPR 0x04
 typedef struct {
 	Location where;
-	Identifier var;
+	Array idents;
 	Type type;
 	Expression expr;
 	uint16_t flags;
@@ -79,14 +81,14 @@ typedef struct {
 /* OPTIM: Instead of using dynamic arrays, do two passes. */
 
 typedef enum {
-			  STMT_DECLS
+			  STMT_DECL
 } StatementKind;
 	
 typedef struct {
 	Location where;
 	StatementKind kind;
 	union {
-		Array decls;
+		Declaration decl;
 	};
 } Statement;
 
@@ -100,9 +102,9 @@ typedef struct {
 } Parser;
 
 /* 
-allocate a new expression.
-IMPORTANT: This invalidates all other parser-allocated Expression pointers.
- */
+   allocate a new expression.
+   IMPORTANT: This invalidates all other parser-allocated Expression pointers.
+*/
 static Expression *parser_new_expr(Parser *p) {
 	return block_arr_add(&p->exprs);
 }
@@ -209,6 +211,10 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 				break;
 			}
 		} break;
+		case TOKEN_IDENT:
+			e->kind = EXPR_IDENT;
+			e->ident = t->token->ident;
+			break;
 		default:
 			tokr_err(t, "Unrecognized expression.");
 			return false;
@@ -246,7 +252,7 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 	}
 	if (lowest_precedence == NOT_AN_OP) {
 		/* function calls, array accesses, etc. OR
-		 something like (5+3)*/
+		   something like (5+3)*/
 		tokr_err(t, "Not implemented yet.");
 		return false;
 	}
@@ -317,12 +323,12 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 }
 
 /*
-ends_with = which keyword does this expression end with?
-if it's KW_RPAREN, this will match parentheses properly.
+  ends_with = which keyword does this expression end with?
+  if it's KW_RPAREN, this will match parentheses properly.
 */
 typedef enum {
-	  EXPR_END_RPAREN_OR_COMMA,
-	  EXPR_END_SEMICOLON
+			  EXPR_END_RPAREN_OR_COMMA,
+			  EXPR_END_SEMICOLON
 } ExprEndKind;
 static Token *expr_find_end(Parser *p, ExprEndKind ends_with) {
 	Tokenizer *t = p->tokr;
@@ -369,74 +375,80 @@ static Token *expr_find_end(Parser *p, ExprEndKind ends_with) {
 	}
 }
 
-static bool decls_parse(Array *ds, Parser *p) {
+static bool decl_parse(Declaration *d, Parser *p) {
 	Tokenizer *t = p->tokr;
-	arr_create(ds, sizeof(Declaration));
+	/* OPTIM: Maybe don't use a dynamic array or use parser allocator. */
+	arr_create(&d->idents, sizeof(Identifier));
+	
 	while (1) {
-		Declaration *decl = arr_add(ds);
+		Identifier *ident = arr_add(&d->idents);
 		if (t->token->kind != TOKEN_IDENT) {
 			tokr_err(t, "Cannot declare non-identifier.");
 			return false;
 		}
-
-		decl->where = t->token->where;
-		decl->var = t->token->ident;
-		decl->flags = 0;
+		*ident = t->token->ident;
 		t->token++;
-
-		if (!token_is_kw(t->token, KW_COLON)) {
-			tokr_err(t, "Expected ':' in declaration.");
-			return false;
-		}
-		t->token++;
-
-		if (!token_is_kw(t->token, KW_MINUS)
-			&& !token_is_kw(t->token, KW_EQ)
-			&& !token_is_kw(t->token, KW_SEMICOLON)) {
-			if (!type_parse(&decl->type, p))
-				return false;
-		} else {
-			decl->flags |= DECL_FLAG_INFER_TYPE;
-		}
-		
-		if (token_is_kw(t->token, KW_SEMICOLON)) {
-			if (decl->flags & DECL_FLAG_INFER_TYPE) {
-				tokr_err(t, "Cannot infer type without expression.");
-				return false;
-			}
-		} else if (token_is_kw(t->token, KW_EQ)) {
+		if (token_is_kw(t->token, KW_COMMA)) {
 			t->token++;
-			if (!expr_parse(&decl->expr, p, expr_find_end(p, EXPR_END_SEMICOLON)))
-				return false;
-			decl->flags |= DECL_FLAG_HAS_EXPR;
-		} else if (token_is_kw(t->token, KW_MINUS)) {
-			t->token++;
-			if (!expr_parse(&decl->expr, p, expr_find_end(p, EXPR_END_SEMICOLON)))
-				return false;
-			decl->flags |= DECL_FLAG_HAS_EXPR | DECL_FLAG_CONST;
-		} else {
-			tokr_err(t, "Expected ';', '=', or '-' in delaration.");
-			return false;
+			continue;
 		}
-		if (token_is_kw(t->token, KW_SEMICOLON)) {
+		if (token_is_kw(t->token, KW_COLON)) {
 			t->token++;
 			break;
 		}
-		if (!token_is_kw(t->token, KW_COMMA)) {
-			tokr_err(t, "Expected ';' or ',' to finish or continue declaration.");
+		tokr_err(t, "Expected ',' to continue listing variables or ':' to indicate type."); 
+	}
+	
+	d->flags = 0;
+	
+	
+
+	if (!token_is_kw(t->token, KW_MINUS)
+		&& !token_is_kw(t->token, KW_EQ)
+		&& !token_is_kw(t->token, KW_SEMICOLON)) {
+		if (!type_parse(&d->type, p))
+			return false;
+	} else {
+		d->flags |= DECL_FLAG_INFER_TYPE;
+	}
+		
+	if (token_is_kw(t->token, KW_SEMICOLON)) {
+		if (d->flags & DECL_FLAG_INFER_TYPE) {
+			tokr_err(t, "Cannot infer type without expression.");
 			return false;
 		}
-		t->token++; /* move past comma */
+	} else if (token_is_kw(t->token, KW_EQ)) {
+		t->token++;
+		if (!expr_parse(&d->expr, p, expr_find_end(p, EXPR_END_SEMICOLON)))
+			return false;
+		d->flags |= DECL_FLAG_HAS_EXPR;
+	} else if (token_is_kw(t->token, KW_MINUS)) {
+		t->token++;
+		if (!expr_parse(&d->expr, p, expr_find_end(p, EXPR_END_SEMICOLON)))
+			return false;
+		d->flags |= DECL_FLAG_HAS_EXPR | DECL_FLAG_CONST;
+	} else {
+		tokr_err(t, "Expected ';', '=', or '-' in delaration.");
+		return false;
 	}
-	return true;
+	if (token_is_kw(t->token, KW_SEMICOLON)) {
+		t->token++;
+		return true;
+	}
+	tokr_err(t, "Expected ';'"); /* should never happen in theory right now */
+	return false;
 }
 
 static bool stmt_parse(Statement *s, Parser *p) {
 	Tokenizer *t = p->tokr;
 	s->where = t->token->where;
-	if (token_is_kw(t->token + 1, KW_COLON)) {
-		s->kind = STMT_DECLS;
-		return decls_parse(&s->decls, p);
+	/* 
+	   NOTE: This may cause problems in the future! Other statements might have comma
+	   as the second token.
+	*/
+	if (token_is_kw(t->token + 1, KW_COLON) || token_is_kw(t->token + 1, KW_COMMA)) {
+		s->kind = STMT_DECL;
+		return decl_parse(&s->decl, p);
 	} else {
 		tokr_err(t, "Unreocgnized statement.");
 		return false;
@@ -471,6 +483,9 @@ static void expr_fprint(FILE *out, Expression *e) {
 	case EXPR_FLOAT_LITERAL:
 		fprintf(out, "%f", (double)e->floatl);
 		break;
+	case EXPR_IDENT:
+		ident_fprint(out, e->ident);
+		break;
 	case EXPR_BINARY_OP:
 		switch (e->binary.op) {
 		case BINARY_PLUS:
@@ -495,6 +510,7 @@ static void expr_fprint(FILE *out, Expression *e) {
 		fprintf(out, "(");
 		expr_fprint(out, e->unary.of);
 		fprintf(out, ")");
+		break;
 	}
 }
 
@@ -509,7 +525,10 @@ static void type_fprint(FILE *out, Type *t) {
 
 static void decl_fprint(FILE *out, Declaration *d) {
 	PARSE_PRINT_LOCATION(d->where);
-	ident_fprint(out, d->var);
+	arr_foreach(&d->idents, Identifier, ident) {
+		if (ident != d->idents.data) fprintf(out, ", ");
+		ident_fprint(out, *ident);
+	}
 	if (d->flags & DECL_FLAG_CONST) {
 		fprintf(out, "[const]");
 	}
@@ -526,13 +545,8 @@ static void decl_fprint(FILE *out, Declaration *d) {
 static void stmt_fprint(FILE *out, Statement *s) {
 	PARSE_PRINT_LOCATION(s->where);
 	switch (s->kind) {
-	case STMT_DECLS:
-		arr_foreach(&s->decls, Declaration, decl) {
-			if (decl != s->decls.data) {
-				fprintf(out, ", ");
-			}
-			decl_fprint(out, decl);
-		}
+	case STMT_DECL:
+		decl_fprint(out, &s->decl);
 		fprintf(out, ";\n");
 		break;
 	}
