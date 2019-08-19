@@ -20,6 +20,7 @@ typedef enum {
 
 
 typedef struct {
+	Location where;
 	TypeKind kind;
 	union {
 	    BuiltinType builtin;
@@ -27,52 +28,84 @@ typedef struct {
 } Type;
 
 typedef enum {
-			  EXPR_INT_CONST,
-			  EXPR_FLOAT_CONST
+			  EXPR_INT_LITERAL,
+			  EXPR_FLOAT_LITERAL,
+			  EXPR_BINARY_OP,
+			  EXPR_UNARY_OP
 } ExprKind;
 
-typedef struct {
+typedef enum {
+			  UNARY_MINUS
+} UnaryOp;
+
+typedef enum {
+			  BINARY_PLUS,
+			  BINARY_MINUS
+} BinaryOp;
+
+#define EXPR_FLAG_FLEXIBLE 0x01
+
+typedef struct Expression {
+	Location where;
 	ExprKind kind;
 	Type type;
-	bool is_flexible_num:1; /* expressions like 5 or 7*8+3 can be any numerical type */
+	uint16_t flags;
 	union {
-		FloatConst floatc;
-		IntConst intc;
+		FloatLiteral floatl;
+		IntLiteral intl;
+		struct {
+			UnaryOp op;
+			struct Expression *of;
+		} unary;
+		struct {
+			BinaryOp op;
+			struct Expression *lhs;
+			struct Expression *rhs;
+		} binary;
 	};
 } Expression;
 
+#define DECL_FLAG_INFER_TYPE 0x01
+#define DECL_FLAG_CONST 0x02
+#define DECL_FLAG_HAS_EXPR 0x04
 typedef struct {
 	Location where;
 	Identifier var;
 	Type type;
 	Expression expr;
-	bool infer_type:1;
-	bool is_const:1;
-	bool has_expr:1;
+	uint16_t flags;
 } Declaration;
 
 /* OPTIM: Instead of using dynamic arrays, do two passes. */
-
-arr_declaration(Declarations, Declaration, decls_)
 
 typedef enum {
 			  STMT_DECLS
 } StatementKind;
 	
 typedef struct {
-	StatementKind kind;
 	Location where;
+	StatementKind kind;
 	union {
-		Declarations decls;
+		Array decls;
 	};
 } Statement;
 
-arr_declaration(Statements, Statement, stmts_)
-
 typedef struct {
-	Statements stmts;
+	Array stmts;
 } ParsedFile;
 
+typedef struct {
+	Tokenizer *tokr;
+	BlockArr exprs; /* a dynamic array of expressions, so that we don't need to call malloc every time we make an expression */
+} Parser;
+
+/* 
+allocate a new expression.
+IMPORTANT: This invalidates all other parser-allocated Expression pointers.
+ */
+static Expression *parser_new_expr(Parser *p) {
+	return block_arr_add(&p->exprs);
+}
 
 /* returns BUILTIN_TYPE_COUNT on failure */
 static BuiltinType kw_to_builtin_type(Keyword kw) {
@@ -93,7 +126,29 @@ static BuiltinType kw_to_builtin_type(Keyword kw) {
 	}
 }
 
-static bool parse_type(Type *type, Tokenizer *t) {
+static Keyword builtin_type_to_kw(BuiltinType t) {
+	switch (t) {
+	case BUILTIN_INT: return KW_INT;
+	case BUILTIN_I8: return KW_I8;
+	case BUILTIN_I16: return KW_I16;
+	case BUILTIN_I32: return KW_I32;
+	case BUILTIN_I64: return KW_I64;
+	case BUILTIN_U8: return KW_U8;
+	case BUILTIN_U16: return KW_U16;
+	case BUILTIN_U32: return KW_U32;
+	case BUILTIN_U64: return KW_U64;
+	case BUILTIN_FLOAT: return KW_FLOAT;
+	case BUILTIN_F32: return KW_F32;
+	case BUILTIN_F64: return KW_F64;
+	case BUILTIN_TYPE_COUNT: break;
+	}
+	assert(0);
+	return KW_COUNT;
+}
+
+static bool type_parse(Type *type, Parser *p) {
+	Tokenizer *t = p->tokr;
+	type->where = t->token->where;
 	switch (t->token->kind) {
 	case TOKEN_KW:
 		type->kind = TYPE_BUILTIN;
@@ -112,27 +167,45 @@ static bool parse_type(Type *type, Tokenizer *t) {
 	return false;
 }
 
-static bool parse_expr(Expression *e, Tokenizer *t, Token *end) {
+#define NOT_AN_OP -1
+static int op_precedence(Keyword op) {
+	switch (op) {
+	case KW_PLUS:
+		return 10;
+	case KW_MINUS:
+		return 20;
+	default:
+		return NOT_AN_OP;
+	}
+}
+
+static bool expr_parse(Expression *e, Parser *p, Token *end) {
+	Tokenizer *t = p->tokr;
 	if (end == NULL) return false;
-	memset(e, 0, sizeof *e);
+	e->flags = 0;
+	e->where = t->token->where;
+	if (end <= t->token) {
+		tokr_err(t, "Empty expression.");
+		return false;
+	}
 	if (end - t->token == 1) {
 		/* 1-token expression */
 		switch (t->token->kind) {
-		case TOKEN_NUM_CONST: {
-			NumConst *num = &t->token->num;
+		case TOKEN_NUM_LITERAL: {
+			NumLiteral *num = &t->token->num;
 			switch (num->kind) {
-			case NUM_CONST_FLOAT:
-				e->kind = EXPR_FLOAT_CONST;
+			case NUM_LITERAL_FLOAT:
+				e->kind = EXPR_FLOAT_LITERAL;
 				e->type.kind = TYPE_BUILTIN;
 				e->type.builtin = BUILTIN_FLOAT;
-				e->floatc = num->floatval;
+				e->floatl = num->floatval;
 				break;
-			case NUM_CONST_INT:
-				e->kind = EXPR_INT_CONST;
-				e->is_flexible_num = true;
+			case NUM_LITERAL_INT:
+				e->kind = EXPR_INT_LITERAL;
+				e->flags |= EXPR_FLAG_FLEXIBLE;
 				e->type.kind = TYPE_BUILTIN;
 				e->type.builtin = BUILTIN_INT; /* TODO: if it's too big, use a u64 instead. */
-				e->floatc = num->intval;
+				e->intl = num->intval;
 				break;
 			}
 		} break;
@@ -143,9 +216,104 @@ static bool parse_expr(Expression *e, Tokenizer *t, Token *end) {
 		t->token = end;
 		return true;
 	}
-	/* TODO */
-	tokr_err(t, "multi-token exprs not supported yet.");
-	return false;
+	/* Find the lowest-precedence operator not in parentheses */
+	int paren_level = 0;
+	int lowest_precedence = NOT_AN_OP;
+	Token *lowest_precedence_op;
+	for (Token *token = t->token; token < end; token++) {
+		if (token->kind == TOKEN_KW) {
+			switch (token->kw) {
+			case KW_LPAREN:
+				paren_level++;
+				break;
+			case KW_RPAREN:
+				paren_level--;
+				if (paren_level < 0) {
+					t->token = token;
+					tokr_err(t, "Excessive closing parenthesis.");
+				}
+				break;
+			default: { /* OPTIM: use individual cases for each op */
+				int precedence = op_precedence(token->kw);
+				if (precedence == NOT_AN_OP) break; /* nvm it's not an operator */
+				if (lowest_precedence == NOT_AN_OP || precedence <= lowest_precedence) {
+					lowest_precedence = precedence;
+					lowest_precedence_op = token;
+				}
+			} break;
+			}
+		}
+	}
+	if (lowest_precedence == NOT_AN_OP) {
+		/* function calls, array accesses, etc. OR
+		 something like (5+3)*/
+		tokr_err(t, "Not implemented yet.");
+		return false;
+	}
+	
+	/* This is a unary op not a binary one. */
+	while (lowest_precedence_op != t->token
+		   && lowest_precedence_op[-1].kind == TOKEN_KW
+		   && op_precedence(lowest_precedence_op[-1].kw) != NOT_AN_OP) {
+		lowest_precedence_op--;
+	}
+
+	/* Unary */
+	if (lowest_precedence_op == t->token) {
+		UnaryOp op;
+		bool is_unary;
+		switch (lowest_precedence_op->kw) {
+		case KW_PLUS:
+			/* unary + is ignored entirely */
+			t->token++;
+			/* re-parse this expression without + */
+			return expr_parse(e, p, end);
+		case KW_MINUS:
+			is_unary = true;
+			op = UNARY_MINUS;
+			break;
+		default:
+			is_unary = false;
+			break;
+		}
+		if (!is_unary) {
+			tokr_err(t, "%s is not a unary operator.", keywords[lowest_precedence_op->kw]);
+			return false;
+		}
+		e->unary.op = op;
+		e->kind = EXPR_UNARY_OP;
+		t->token++;
+		Expression *of = parser_new_expr(p);
+		e->unary.of = of;
+		return expr_parse(of, p, end);
+	}
+	
+	
+	BinaryOp op; 
+	switch (lowest_precedence_op->kw) {
+	case KW_PLUS:
+		op = BINARY_PLUS;
+		break;
+	case KW_MINUS:
+		op = BINARY_MINUS;
+		break;
+	default: assert(0); break;
+	}
+	e->binary.op = op;
+	e->kind = EXPR_BINARY_OP;
+
+	Expression *lhs = parser_new_expr(p);
+	e->binary.lhs = lhs;
+	if (!expr_parse(lhs, p, lowest_precedence_op))
+		return false;
+	
+	Expression *rhs = parser_new_expr(p);
+	t->token = lowest_precedence_op + 1;
+	e->binary.rhs = rhs;
+	if (!expr_parse(rhs, p, end))
+		return false;
+	
+	return true;
 }
 
 /*
@@ -156,7 +324,8 @@ typedef enum {
 	  EXPR_END_RPAREN_OR_COMMA,
 	  EXPR_END_SEMICOLON
 } ExprEndKind;
-static Token *expr_find_end(Tokenizer *t, ExprEndKind ends_with) {
+static Token *expr_find_end(Parser *p, ExprEndKind ends_with) {
+	Tokenizer *t = p->tokr;
 	long bracket_level = 0;
 	Token *token = t->token;
 	while (1) {
@@ -187,7 +356,7 @@ static Token *expr_find_end(Tokenizer *t, ExprEndKind ends_with) {
 				return NULL;
 			case EXPR_END_RPAREN_OR_COMMA:
 				if (bracket_level > 0) {
-					tokr_err(t, "Mismatched parentheses."); /* FEATURE: Find out where this is */
+					tokr_err(t, "Opening parenthesis was never closed."); /* FEATURE: Find out where this is */
 					return NULL;
 				} else {
 					tokr_err(t, "Could not find ')' or ',' at end of expression.");
@@ -200,17 +369,19 @@ static Token *expr_find_end(Tokenizer *t, ExprEndKind ends_with) {
 	}
 }
 
-static bool parse_decls(Declarations *ds, Tokenizer *t) {
-	decls_create(ds);
+static bool decls_parse(Array *ds, Parser *p) {
+	Tokenizer *t = p->tokr;
+	arr_create(ds, sizeof(Declaration));
 	while (1) {
-		Declaration decl = {0};
+		Declaration *decl = arr_add(ds);
 		if (t->token->kind != TOKEN_IDENT) {
 			tokr_err(t, "Cannot declare non-identifier.");
 			return false;
 		}
 
-		decl.where = t->token->where;
-		decl.var = t->token->ident;
+		decl->where = t->token->where;
+		decl->var = t->token->ident;
+		decl->flags = 0;
 		t->token++;
 
 		if (!token_is_kw(t->token, KW_COLON)) {
@@ -222,33 +393,31 @@ static bool parse_decls(Declarations *ds, Tokenizer *t) {
 		if (!token_is_kw(t->token, KW_MINUS)
 			&& !token_is_kw(t->token, KW_EQ)
 			&& !token_is_kw(t->token, KW_SEMICOLON)) {
-			if (!parse_type(&decl.type, t))
+			if (!type_parse(&decl->type, p))
 				return false;
 		} else {
-			decl.infer_type = true;
+			decl->flags |= DECL_FLAG_INFER_TYPE;
 		}
 		
 		if (token_is_kw(t->token, KW_SEMICOLON)) {
-			if (decl.infer_type) {
+			if (decl->flags & DECL_FLAG_INFER_TYPE) {
 				tokr_err(t, "Cannot infer type without expression.");
 				return false;
 			}
 		} else if (token_is_kw(t->token, KW_EQ)) {
 			t->token++;
-			if (!parse_expr(&decl.expr, t, expr_find_end(t, EXPR_END_SEMICOLON)))
+			if (!expr_parse(&decl->expr, p, expr_find_end(p, EXPR_END_SEMICOLON)))
 				return false;
-			decl.has_expr = true;
+			decl->flags |= DECL_FLAG_HAS_EXPR;
 		} else if (token_is_kw(t->token, KW_MINUS)) {
 			t->token++;
-			if (!parse_expr(&decl.expr, t, expr_find_end(t, EXPR_END_SEMICOLON)))
+			if (!expr_parse(&decl->expr, p, expr_find_end(p, EXPR_END_SEMICOLON)))
 				return false;
-			decl.has_expr = true;
-			decl.is_const = true;
+			decl->flags |= DECL_FLAG_HAS_EXPR | DECL_FLAG_CONST;
 		} else {
 			tokr_err(t, "Expected ';', '=', or '-' in delaration.");
 			return false;
 		}
-		decls_add(ds, &decl);
 		if (token_is_kw(t->token, KW_SEMICOLON)) {
 			t->token++;
 			break;
@@ -262,49 +431,103 @@ static bool parse_decls(Declarations *ds, Tokenizer *t) {
 	return true;
 }
 
-static bool parse_stmt(Statement *s, Tokenizer *t) {
+static bool stmt_parse(Statement *s, Parser *p) {
+	Tokenizer *t = p->tokr;
+	s->where = t->token->where;
 	if (token_is_kw(t->token + 1, KW_COLON)) {
-		return parse_decls(&s->decls, t);
+		s->kind = STMT_DECLS;
+		return decls_parse(&s->decls, p);
 	} else {
 		tokr_err(t, "Unreocgnized statement.");
 		return false;
 	}
 }
 
-static bool parse_file(ParsedFile *f, Tokenizer *t) {
-	stmts_create(&f->stmts);
+static void parser_from_tokenizer(Parser *p, Tokenizer *t) {
+	p->tokr = t;
+	block_arr_create(&p->exprs, 10, sizeof(Expression)); /* block size = 1024 */
+}
+
+static bool file_parse(ParsedFile *f, Parser *p) {
+	Tokenizer *t = p->tokr;
+	arr_create(&f->stmts, sizeof(Statement));
 	bool ret = true;
 	while (t->token->kind != TOKEN_EOF) {
-		Statement stmt = {0};
-		if (!parse_stmt(&stmt, t))
+		Statement *stmt = arr_add(&f->stmts);
+		if (!stmt_parse(stmt, p))
 			ret = false;
-		stmts_add(&f->stmts, &stmt);
 	}
 	return ret;
 }
 
+#define PARSE_PRINT_LOCATION(l) //fprintf(out, "[l%lu]", (unsigned long)(l).line);
+
 static void expr_fprint(FILE *out, Expression *e) {
-	/* TODO */
-/* 	switch (e->kind) { */
-/* 	case : */
-/* 	} */
+	PARSE_PRINT_LOCATION(e->where);
+	switch (e->kind) {
+	case EXPR_INT_LITERAL:
+		fprintf(out, "%lld", (long long)e->intl);
+		break;
+	case EXPR_FLOAT_LITERAL:
+		fprintf(out, "%f", (double)e->floatl);
+		break;
+	case EXPR_BINARY_OP:
+		switch (e->binary.op) {
+		case BINARY_PLUS:
+			fprintf(out, "add");
+			break;
+		case BINARY_MINUS:
+			fprintf(out, "subtract");
+			break;
+		}
+		fprintf(out, "(");
+		expr_fprint(out, e->binary.lhs);
+		fprintf(out, ",");
+		expr_fprint(out, e->binary.rhs);
+		fprintf(out, ")");
+		break;
+	case EXPR_UNARY_OP:
+		switch (e->unary.op) {
+		case UNARY_MINUS:
+			fprintf(out, "negate");
+			break;
+		}
+		fprintf(out, "(");
+		expr_fprint(out, e->unary.of);
+		fprintf(out, ")");
+	}
+}
+
+static void type_fprint(FILE *out, Type *t) {
+	PARSE_PRINT_LOCATION(t->where);
+	switch (t->kind) {
+	case TYPE_BUILTIN:
+		fprintf(out, "%s", keywords[builtin_type_to_kw(t->builtin)]);
+		break;
+	}
 }
 
 static void decl_fprint(FILE *out, Declaration *d) {
-	fprintf(out, "l%lu:", (unsigned long)d->where.line);
+	PARSE_PRINT_LOCATION(d->where);
 	ident_fprint(out, d->var);
-	if (d->is_const) {
+	if (d->flags & DECL_FLAG_CONST) {
 		fprintf(out, "[const]");
 	}
-	if (d->has_expr) {
+	fprintf(out, ":");
+	if (!(d->flags & DECL_FLAG_INFER_TYPE)) {
+		type_fprint(out, &d->type);
+	}
+	if (d->flags & DECL_FLAG_HAS_EXPR) {
 		fprintf(out, "=");
+		expr_fprint(out, &d->expr);
 	}
 }
 
 static void stmt_fprint(FILE *out, Statement *s) {
+	PARSE_PRINT_LOCATION(s->where);
 	switch (s->kind) {
 	case STMT_DECLS:
-		arr_foreach(s->decls, Declaration, decl) {
+		arr_foreach(&s->decls, Declaration, decl) {
 			if (decl != s->decls.data) {
 				fprintf(out, ", ");
 			}
@@ -316,7 +539,9 @@ static void stmt_fprint(FILE *out, Statement *s) {
 }
 
 static void parsed_file_fprint(FILE *out, ParsedFile *f) {
-	arr_foreach(f->stmts, Statement, stmt) {
+	arr_foreach(&f->stmts, Statement, stmt) {
 		stmt_fprint(out, stmt);
 	}
 }
+
+/* TODO: Freeing parser */

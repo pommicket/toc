@@ -47,14 +47,15 @@ static void err_print_footer_(const char *context) {
 }
 
 /* Write nicely-formatted errors to the error file */
-static void err_print(LineNo line, const char *context, const char *fmt, ...) {
-	err_print_header_(line);
-	va_list args;
-	va_start(args, fmt);
-	err_vfprint(fmt, args);
-	va_end(args);
-	err_print_footer_(context);
-}
+
+/* static void err_print(LineNo line, const char *context, const char *fmt, ...) { */
+/* 	err_print_header_(line); */
+/* 	va_list args; */
+/* 	va_start(args, fmt); */
+/* 	err_vfprint(fmt, args); */
+/* 	va_end(args); */
+/* 	err_print_footer_(context); */
+/* } */
 
 static void err_vprint(LineNo line, const char *context, const char *fmt, va_list args) {
 	err_print_header_(line);

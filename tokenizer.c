@@ -1,9 +1,9 @@
 typedef enum {
 			  TOKEN_KW,
 			  TOKEN_IDENT,
-			  TOKEN_NUM_CONST,
-			  TOKEN_CHAR_CONST,
-			  TOKEN_STR_CONST,
+			  TOKEN_NUM_LITERAL,
+			  TOKEN_CHAR_LITERAL,
+			  TOKEN_STR_LITERAL,
 			  TOKEN_EOF
 } TokenKind;
 
@@ -21,6 +21,7 @@ typedef enum {
 			  KW_LT,
 			  KW_LE,			  
 			  KW_MINUS,
+			  KW_PLUS,
 			  KW_INT,
 			  KW_I8,
 			  KW_I16,
@@ -37,7 +38,7 @@ typedef enum {
 } Keyword;
 
 static const char *keywords[KW_COUNT] =
-	{";", "=", ":", ",", "fn", "(", ")", "{", "}", "==", "<", "<=", "-",
+	{";", "=", ":", ",", "fn", "(", ")", "{", "}", "==", "<", "<=", "-", "+",
 	 "int", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "float", "f32",
 	 "f64"};
 
@@ -54,29 +55,26 @@ static Keyword tokenize_keyword(char **s) {
 	return KW_COUNT;
 }
 
-#define TOKR_USE_LLONG 1
-
-typedef unsigned long long IntConst;
-
-typedef long double FloatConst; /* OPTIM: Switch to double */
+typedef unsigned long long IntLiteral;
+typedef long double FloatLiteral; /* OPTIM: Switch to double */
 
 typedef enum {
-			  NUM_CONST_INT,
-			  NUM_CONST_FLOAT
-} NumConstKind;
+			  NUM_LITERAL_INT,
+			  NUM_LITERAL_FLOAT
+} NumLiteralKind;
 
 typedef struct {
-	NumConstKind kind;
+	NumLiteralKind kind;
 	union {
-		IntConst intval;
-		FloatConst floatval;
+		IntLiteral intval;
+		FloatLiteral floatval;
 	};
-} NumConst;
+} NumLiteral;
 
 typedef struct {
 	char *str;
 	size_t len;
-} StrConst;
+} StrLiteral;
 
 typedef struct {
 	LineNo line;
@@ -90,16 +88,14 @@ typedef struct {
 	union {
 		Keyword kw;
 		Identifier ident;
-		NumConst num;
+		NumLiteral num;
 		char chr;
-		StrConst str;
+		StrLiteral str;
 	};
 } Token;
 
-arr_declaration(Tokens, Token, tokens_)
-
 typedef struct {
-	Tokens tokens;
+	Array tokens;
 	char *s; /* string being parsed */
 	LineNo line;
 	Token *token; /* token currently being processed */
@@ -121,21 +117,21 @@ static void token_fprint(FILE *out, Token *t) {
 		fprintf(out, "identifier: %ld:", t->ident->id);
 		ident_fprint(out, t->ident);
 		break;
-	case TOKEN_NUM_CONST:
+	case TOKEN_NUM_LITERAL:
 		fprintf(out, "number: ");
 		switch (t->num.kind) {
-		case NUM_CONST_INT:
+		case NUM_LITERAL_INT:
 			fprintf(out, "%llu", t->num.intval);
 			break;
-		case NUM_CONST_FLOAT:
+		case NUM_LITERAL_FLOAT:
 			fprintf(out, "%g", (double)t->num.floatval);
 			break;
 		}
 		break;
-	case TOKEN_CHAR_CONST:
+	case TOKEN_CHAR_LITERAL:
 		fprintf(out, "char: '%c' (%d)", t->chr, t->chr);
 		break;
-	case TOKEN_STR_CONST:
+	case TOKEN_STR_LITERAL:
 		fprintf(out, "str: \"%s\"", t->str.str);
 		break;
 	case TOKEN_EOF:
@@ -144,12 +140,11 @@ static void token_fprint(FILE *out, Token *t) {
 	}
 }
 
-static void tokr_add(Tokenizer *t, Token *token) {
-	if (!token->where.line)
-		token->where.line = t->line;
-	if (!token->where.code)
-		token->where.code = t->s;
-	tokens_add(&t->tokens, token);
+static Token *tokr_add(Tokenizer *t) {
+	Token *token = arr_add(&t->tokens);
+	token->where.line = t->line;
+	token->where.code = t->s;
+	return token;
 }
 
 static void tokr_nextchar(Tokenizer *t) {
@@ -224,8 +219,8 @@ static void tokr_get_location(Tokenizer *tokr, Token *t) {
 static bool tokenize_string(Tokenizer *tokr, char *str) {
 	int has_err = 0;
 	Tokenizer t;
-	tokens_create(&t.tokens);
-	tokens_reserve(&t.tokens, 256);
+	arr_create(&t.tokens, sizeof(Token));
+	arr_reserve(&t.tokens, 256);
 	t.s = str;
 	t.line = 1;
 	
@@ -274,14 +269,13 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 			if (is_comment) continue;
 		}
 		{
-			Token token = {0};
-			tokr_put_location(&t, &token);
 			Keyword kw = tokenize_keyword(&t.s);
 			if (kw != KW_COUNT) {
 				/* it's a keyword */
-				token.kind = TOKEN_KW;
-				token.kw = kw;
-				tokr_add(&t, &token);
+				Token *token = tokr_add(&t);
+				tokr_put_location(&t, token);
+				token->kind = TOKEN_KW;
+				token->kw = kw;
 				continue;
 			}
 		}
@@ -289,14 +283,14 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 		/* check if it's a number */
 
 		if (isdigit(*t.s)) {
-			/* it's a numeric constant */
+			/* it's a numeric literal */
 			int base = 10;
-			FloatConst decimal_pow10;
-			NumConst n;
-			n.kind = NUM_CONST_INT;
+			FloatLiteral decimal_pow10;
+			NumLiteral n;
+			n.kind = NUM_LITERAL_INT;
 			n.intval = 0;
-			Token token = {0};
-			tokr_put_location(&t, &token);
+			Token *token = tokr_add(&t);
+			tokr_put_location(&t, token);
 			if (*t.s == '0') {
 				tokr_nextchar(&t);
 				/* octal/hexadecimal/binary (or zero) */
@@ -322,7 +316,7 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 
 			while (1) {
 				if (*t.s == '.') {
-					if (n.kind == NUM_CONST_FLOAT) {
+					if (n.kind == NUM_LITERAL_FLOAT) {
 						tokenization_err(&t, "Double . in number.");
 						goto err;
 					}
@@ -330,16 +324,16 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 						tokenization_err(&t, "Decimal point in non base 10 number.");
 						goto err;
 					}
-				    n.kind = NUM_CONST_FLOAT;
+				    n.kind = NUM_LITERAL_FLOAT;
 					decimal_pow10 = 0.1;
-					n.floatval = (FloatConst)n.intval;
+					n.floatval = (FloatLiteral)n.intval;
 					tokr_nextchar(&t);
 					continue;
 				} else if (*t.s == 'e') {
 					tokr_nextchar(&t);
-					if (n.kind == NUM_CONST_INT) {
-						n.kind = NUM_CONST_FLOAT;
-						n.floatval = (FloatConst)n.intval;
+					if (n.kind == NUM_LITERAL_INT) {
+						n.kind = NUM_LITERAL_FLOAT;
+						n.floatval = (FloatLiteral)n.intval;
 					}
 					/* TODO: check if exceeding maximum exponent */
 					int exponent = 0;
@@ -382,38 +376,37 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 						tokenization_err(&t, "Digit %d cannot appear in a base %d number.", digit, base);
 						goto err;
 					}
-					/* end of numeric constant */
+					/* end of numeric literal */
 					break;
 				}
 				switch (n.kind) {
-				case NUM_CONST_INT:
-					if (n.intval > ULLONG_MAX / (IntConst)base ||
-						n.intval * (IntConst)base > ULLONG_MAX - (IntConst)digit) {
+				case NUM_LITERAL_INT:
+					if (n.intval > ULLONG_MAX / (IntLiteral)base ||
+						n.intval * (IntLiteral)base > ULLONG_MAX - (IntLiteral)digit) {
 						/* too big! */
-						tokenization_err(&t, "Number too big to fit in a numeric constant.");
+						tokenization_err(&t, "Number too big to fit in a numeric literal.");
 						goto err;
 					}
-					n.intval *= (IntConst)base;
-					n.intval += (IntConst)digit;
+					n.intval *= (IntLiteral)base;
+					n.intval += (IntLiteral)digit;
 					break;
-				case NUM_CONST_FLOAT:
-					n.floatval += decimal_pow10 * (FloatConst)digit;
+				case NUM_LITERAL_FLOAT:
+					n.floatval += decimal_pow10 * (FloatLiteral)digit;
 					decimal_pow10 /= 10;
 					break;
 				}
 				tokr_nextchar(&t);
 			}
-			token.kind = TOKEN_NUM_CONST;
-			token.num = n;
-			tokr_add(&t, &token);
+			token->kind = TOKEN_NUM_LITERAL;
+			token->num = n;
 			continue;
 		}
 
 		if (*t.s == '\'') {
-			/* it's a character constant! */
+			/* it's a character literal! */
 			tokr_nextchar(&t);
-			Token token = {0};
-			tokr_put_location(&t, &token);
+			Token *token = tokr_add(&t);
+			tokr_put_location(&t, token);
 			char c;
 			if (*t.s == '\\') {
 				/* escape sequence */
@@ -428,20 +421,19 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 				tokr_nextchar(&t);
 			}
 			if (*t.s != '\'') {
-				tokenization_err(&t, "End of character constant expected.");
+				tokenization_err(&t, "End of character literal expected.");
 				goto err;
 			}
 			tokr_nextchar(&t);
-			token.kind = TOKEN_CHAR_CONST;
-			token.chr = c;
-			tokr_add(&t, &token);
+			token->kind = TOKEN_CHAR_LITERAL;
+			token->chr = c;
 			continue;
 		}
 
 		if (*t.s == '"') {
-			/* it's a string constant! */
-			Token token;
-			tokr_put_location(&t, &token);
+			/* it's a string literal! */
+			Token *token = tokr_add(&t);
+			tokr_put_location(&t, token);
 			tokr_nextchar(&t);
 			size_t len = 0;
 			size_t backslashes = 0;
@@ -450,7 +442,7 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 					backslashes++;
 				} else if (*t.s == 0) {
 					/* return t to opening " so that we go to the next line */
-					tokr_get_location(&t, &token);
+					tokr_get_location(&t, token);
 					tokenization_err(&t, "No matching \" found.");
 					goto err;
 				} else {
@@ -461,7 +453,7 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 			}
 			char *str = malloc(len + 1);
 		    char *strptr = str;
-			tokr_get_location(&t, &token);
+			tokr_get_location(&t, token);
 			tokr_nextchar(&t); /* past opening " */
 			while (*t.s != '"') {
 				assert(*t.s);
@@ -479,31 +471,28 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 				}
 			}
 			*strptr = 0;
-			token.kind = TOKEN_STR_CONST;
-			token.str.len = len;
-			token.str.str = str;
-			tokr_add(&t, &token);
+			token->kind = TOKEN_STR_LITERAL;
+			token->str.len = len;
+			token->str.str = str;
 			tokr_nextchar(&t); /* move past closing " */
 			continue;
 		}
 		
 		if (isidentstart(*t.s)) {
 			/* it's an identifier */
-			Token token = {0};
-			tokr_put_location(&t, &token);
+			Token *token = tokr_add(&t);
+			tokr_put_location(&t, token);
 			Identifier ident = ident_insert(&t.s);
-			token.kind = TOKEN_IDENT;
-			token.ident = ident;
-			tokr_add(&t, &token);
+			token->kind = TOKEN_IDENT;
+			token->ident = ident;
 			continue;
 		}		
 		tokenization_err(&t, "Token not recognized");
 	err:
 		has_err = 1;
 	}
-	Token token = {0};
-	token.kind = TOKEN_EOF;
-	tokr_add(&t, &token);
+	Token *token = tokr_add(&t);
+	token->kind = TOKEN_EOF;
 	
 	t.token = t.tokens.data;
 	*tokr = t;
@@ -511,13 +500,13 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 }
 
 static void tokr_free(Tokenizer *t) {
-	arr_foreach(t->tokens, Token, token) {
+	arr_foreach(&t->tokens, Token, token) {
 		switch (token->kind) {
-		case TOKEN_STR_CONST:
+		case TOKEN_STR_LITERAL:
 			free(token->str.str);
 			break;
 		default: break;
 		}
 	}
-	tokens_clear(&t->tokens);
+	arr_clear(&t->tokens);
 }

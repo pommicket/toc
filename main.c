@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include "util/err.c"
 #include "util/arr.c"
+#include "util/blockarr.c"
 #include "identifiers.c"
 #include "tokenizer.c"
 #include "parse.c"
@@ -50,15 +51,16 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 	
-	arr_foreach(t.tokens, Token, token) {
+	arr_foreach(&t.tokens, Token, token) {
 		if (token != t.tokens.data)
 			printf("    ");
 		token_fprint(stdout, token);
 	}
 	printf("\n");
-	
+	Parser p;
+	parser_from_tokenizer(&p, &t);
    	ParsedFile f;
-	if (!parse_file(&f, &t)) {
+	if (!file_parse(&f, &p)) {
 		err_fprint(TEXT_IMPORTANT("Errors occured while parsing.\n"));
 		return EXIT_FAILURE;
 	}
