@@ -8,7 +8,7 @@ typedef struct {
 	void *data;
 	size_t n; /* number of things in this block so far */
     void *last; /* last one of them */
-} Block;
+} ArrBlock;
 
 typedef struct {
 	size_t item_sz;
@@ -22,15 +22,15 @@ Note: the block size must be a power of 2, to use right shifting instead of divi
 (for optimization)!
 */
 void block_arr_create(BlockArr *arr, int lg_block_sz, size_t item_sz) {
-	arr_create(&arr->blocks, sizeof(Block));
+	arr_create(&arr->blocks, sizeof(ArrBlock));
 	arr->item_sz = item_sz;
 	arr->lg_block_sz = lg_block_sz;
 }
 
 void *block_arr_add(BlockArr *arr) {
 	if (arr->blocks.data == NULL ||
-		(unsigned long)((Block*)arr->blocks.last)->n >= (1UL << arr->lg_block_sz)) {
-		Block *block;
+		(unsigned long)((ArrBlock*)arr->blocks.last)->n >= (1UL << arr->lg_block_sz)) {
+		ArrBlock *block;
 		/* no blocks yet / ran out of blocks*/
 		block = arr_add(&arr->blocks);
 		block->data = malloc(arr->item_sz << arr->lg_block_sz);
@@ -38,7 +38,7 @@ void *block_arr_add(BlockArr *arr) {
 		block->last = block->data;
 		return block->data;
 	} else {
-	Block *last_block;
+		ArrBlock *last_block;
 		last_block = arr->blocks.last;
 		last_block->last = (char*)last_block->last + arr->item_sz;
 		return last_block->last;
@@ -51,7 +51,7 @@ void *block_arr_add(BlockArr *arr) {
 /* } */
 
 void block_arr_free(BlockArr *arr) {
-	arr_foreach(&arr->blocks, Block, block) {
+	arr_foreach(&arr->blocks, ArrBlock, block) {
 		free(block->data);
 	}
 	arr_free(&arr->blocks);

@@ -1,4 +1,5 @@
 typedef enum {
+			  TYPE_VOID,
 			  TYPE_BUILTIN
 } TypeKind;
 
@@ -33,10 +34,14 @@ typedef struct {
 } Param;
 
 typedef struct {
+	Array stmts;
+} Block;
+
+typedef struct {
 	Array params;
 	Type ret_type;
-	Array stmts;
-} FnExpr;	/* an expression such as fn(x: int) int {return 2 * x;} */
+	Block body;
+} FnExpr; /* an expression such as fn(x: int) int {return 2 * x;} */
 
 typedef enum {
 			  EXPR_INT_LITERAL,
@@ -182,6 +187,53 @@ static bool type_parse(Type *type, Parser *p) {
 	return false;
 }
 
+static bool param_parse(Param *p, Parser *parser) {
+	Tokenizer *t = parser->tokr;
+	if (t->token->kind != TOKEN_IDENT) {
+		tokr_err(t, "Expected parameter name.");
+		return false;
+	}
+	p->name = t->token->ident;
+	t->token++;
+	if (!token_is_kw(t->token, KW_COLON)) {
+		tokr_err(t, "Expected ':' between parameter name and type.");
+		return false;
+	}
+	t->token++;
+	if (!type_parse(&p->type, parser))
+		return false;
+	return true;
+}
+
+static bool stmt_parse(Statement *s, Parser *p);
+
+static bool block_parse(Block *b, Parser *p) {
+	Tokenizer *t = p->tokr;
+	if (!token_is_kw(t->token, KW_LBRACE)) {
+		tokr_err(t, "Expected '{' to open block.");
+		return false;
+	}
+	t->token++;	/* move past { */
+	arr_create(&b->stmts, sizeof(Statement));
+	
+	if (!token_is_kw(t->token, KW_RBRACE)) {
+		/* non-empty function body */
+		while (1) {
+			Statement *stmt = arr_add(&b->stmts);
+			if (!stmt_parse(stmt, p))
+				return false;
+			if (token_is_kw(t->token, KW_RBRACE)) break;
+			if (t->token->kind == TOKEN_EOF) {
+				tokr_err(t, "Expected '}' to close function body.");
+				return false;
+			}
+		}
+	}
+	
+	t->token++;	/* move past } */
+	return true;
+}
+
 static bool fn_expr_parse(FnExpr *f, Parser *p) {
 	Tokenizer *t = p->tokr;
 	/* only called when token is fn */
@@ -191,24 +243,36 @@ static bool fn_expr_parse(FnExpr *f, Parser *p) {
 		tokr_err(t, "Expected '(' after 'fn'.");
 		return false;
 	}
+	arr_create(&f->params, sizeof(Param));
 	
 	t->token++;
+	
 	if (!token_is_kw(t->token, KW_RPAREN)) {
-		tokr_err(t, "Expected ')' at end of parameter list.");
-		return false;
+		/* non-empty parameter list */
+		while (1) {
+			Param *param = arr_add(&f->params);
+			if (!param_parse(param, p))
+				return false;
+			if (token_is_kw(t->token, KW_RPAREN)) break;
+			if (token_is_kw(t->token, KW_COMMA)) {
+				t->token++;
+				continue;
+			}
+			tokr_err(t, "Expected ',' or ')' to continue or end parameter list.");
+			return false;
+		}
 	}
-	t->token++;
-	if (!token_is_kw(t->token, KW_LBRACE)) {
-		tokr_err(t, "Expected '{' to open function body.");
-		return false;
+	
+	t->token++;	/* move past ) */
+	if (token_is_kw(t->token, KW_LBRACE)) {
+		/* void function */
+		f->ret_type.kind = TYPE_VOID;
+	} else {
+		if (!type_parse(&f->ret_type, p)) {
+			return false;
+		}
 	}
-	t->token++;
-	if (!token_is_kw(t->token, KW_RBRACE)) {
-		tokr_err(t, "Expected '}' to close function body.");
-		return false;
-	}
-	t->token++;
-	return true;
+	return block_parse(&f->body, p);
 }
 
 #define NOT_AN_OP -1
@@ -223,7 +287,7 @@ static int op_precedence(Keyword op) {
 	}
 }
 
-static bool expr_parse(Expression *e, Parser *p, Token *end) {
+static bool expr_parse(Expression *e, Parser *p, Token *end) {	
 	Tokenizer *t = p->tokr;
 	if (end == NULL) return false;
 	e->flags = 0;
@@ -264,6 +328,21 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 		t->token = end;
 		return true;
 	}
+	if (token_is_kw(t->token, KW_FN)) {
+		/* this is a function */
+		e->kind = EXPR_FN;
+		if (!fn_expr_parse(&e->fn, p)) {
+			t->token = end + 1; /* move token past end for further parsing */
+			return false;
+		}
+		if (t->token != end) {
+			tokr_err(t, "Direct function calling in an expression is not supported yet.");
+			/* TODO */
+			return false;
+		}
+		return true;
+	}
+			
 	/* Find the lowest-precedence operator not in parentheses */
 	int paren_level = 0;
 	int lowest_precedence = NOT_AN_OP;
@@ -318,18 +397,7 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 	}
 	if (lowest_precedence == NOT_AN_OP) {
 		/* function calls, array accesses, etc. */
-		if (token_is_kw(t->token, KW_FN)) {
-			/* this is a function */
-			e->kind = EXPR_FN;
-			if (!fn_expr_parse(&e->fn, p))
-				return false;
-			if (t->token != end) {
-				tokr_err(t, "Direct function calling in an expression is not supported yet.");
-				/* TODO */
-				return false;
-			}
-			return true;
-		}
+		tokr_err(t, "Not implemented yet.");
 		return false;
 	}
 	
@@ -408,34 +476,64 @@ typedef enum {
 } ExprEndKind;
 static Token *expr_find_end(Parser *p, ExprEndKind ends_with) {
 	Tokenizer *t = p->tokr;
-	long bracket_level = 0;
+	int bracket_level = 0;
+	int brace_level = 0;
 	Token *token = t->token;
 	while (1) {
 		switch (ends_with) {
 		case EXPR_END_RPAREN_OR_COMMA:
 			if (token->kind == TOKEN_KW) {
-				if (token->kw == KW_COMMA && bracket_level == 0)
-					return token;
-				if (token->kw == KW_LPAREN)
-					bracket_level++;
-				if (token->kw == KW_RPAREN) {
-					bracket_level--;
-					if (bracket_level == 0) {
+				switch (token->kw) {
+				case KW_COMMA:
+					if (bracket_level == 0)
 						return token;
-					}
+					break;
+				case KW_LPAREN:
+					bracket_level++;
+					break;
+				case KW_RPAREN:
+					bracket_level--;
+					if (bracket_level == 0)
+						return token;
+					break;
+				default: break;
 				}
 			}
 			break;
 		case EXPR_END_SEMICOLON:
-			if (token_is_kw(token, KW_SEMICOLON))
-				return token;
+			if (token->kind == TOKEN_KW) {
+				switch (token->kw) {
+				case KW_SEMICOLON:
+					/* ignore semicolons inside braces {} */
+					if (brace_level == 0)
+						return token;
+					break;
+				case KW_LBRACE:
+					brace_level++;
+					break;
+				case KW_RBRACE:
+					brace_level--;
+					if (brace_level < 0) {
+						t->token = token;
+						tokr_err(t, "Closing '}' without matching opening '{'.");
+						return NULL;
+					}
+					break;
+				default: break;
+				}
+			}
 			break;
 		}
 		if (token->kind == TOKEN_EOF) {
 			switch (ends_with) {
 			case EXPR_END_SEMICOLON:
-				tokr_err(t, "Could not find ';' at end of expression.");
-				return NULL;
+				if (brace_level > 0) {
+					tokr_err(t, "Opening brace was never closed."); /* FEATURE: Find out where this is */
+					return NULL;
+				} else {
+					tokr_err(t, "Could not find ';' at end of expression.");
+					return NULL;
+				}
 			case EXPR_END_RPAREN_OR_COMMA:
 				if (bracket_level > 0) {
 					tokr_err(t, "Opening parenthesis was never closed."); /* FEATURE: Find out where this is */
@@ -444,7 +542,6 @@ static Token *expr_find_end(Parser *p, ExprEndKind ends_with) {
 					tokr_err(t, "Could not find ')' or ',' at end of expression.");
 					return NULL;
 				}
-				return NULL;
 			}
 		}
 		token++;
@@ -550,6 +647,49 @@ static bool file_parse(ParsedFile *f, Parser *p) {
 
 #define PARSE_PRINT_LOCATION(l) //fprintf(out, "[l%lu]", (unsigned long)(l).line);
 
+
+static void type_fprint(FILE *out, Type *t) {
+	PARSE_PRINT_LOCATION(t->where);
+	switch (t->kind) {
+	case TYPE_BUILTIN:
+		fprintf(out, "%s", keywords[builtin_type_to_kw(t->builtin)]);
+		break;
+	case TYPE_VOID:
+		fprintf(out, "void");
+		break;
+	}
+}
+
+static void param_fprint(FILE *out, Param *p) {
+	ident_fprint(out, p->name);
+	fprintf(out, ": ");
+	type_fprint(out, &p->type);
+}
+
+static void stmt_fprint(FILE *out, Statement *s);
+
+static void block_fprint(FILE *out, Block *b) {
+	fprintf(out, "{\n");
+	arr_foreach(&b->stmts, Statement, stmt) {
+		stmt_fprint(out, stmt);
+	}
+	fprintf(out, "}");
+
+}
+
+static void fn_expr_fprint(FILE *out, FnExpr *f) {
+	fprintf(out, "fn (");
+	arr_foreach(&f->params, Param, param) {
+		if (param != f->params.data)
+			fprintf(out, ", ");
+		param_fprint(out, param);
+	}
+	fprintf(out, ") ");
+	type_fprint(out, &f->ret_type);
+	fprintf(out, " ");
+	block_fprint(out, &f->body);
+}
+
 static void expr_fprint(FILE *out, Expression *e) {
 	PARSE_PRINT_LOCATION(e->where);
 	switch (e->kind) {
@@ -588,19 +728,11 @@ static void expr_fprint(FILE *out, Expression *e) {
 		fprintf(out, ")");
 		break;
 	case EXPR_FN:
-		fprintf(out, "function!");
+		fn_expr_fprint(out, &e->fn);
 		break;
 	}
 }
 
-static void type_fprint(FILE *out, Type *t) {
-	PARSE_PRINT_LOCATION(t->where);
-	switch (t->kind) {
-	case TYPE_BUILTIN:
-		fprintf(out, "%s", keywords[builtin_type_to_kw(t->builtin)]);
-		break;
-	}
-}
 
 static void decl_fprint(FILE *out, Declaration *d) {
 	PARSE_PRINT_LOCATION(d->where);
