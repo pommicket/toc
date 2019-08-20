@@ -1,12 +1,1 @@
-foo:i8=3;
-foo:i8=3-+++-a--+b++c---3;
-a:float-4;
-
-baskjfm := bar;
-
-X :- 4 ; y :- 5;
-x, y, z : float = 3;
-
-foo, bar, baz := 0;
-
-
+x :- 3 + 4 - (3 + ((-3--b-5)+6++8)---+a+-4);	

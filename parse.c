@@ -225,6 +225,8 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 	/* Find the lowest-precedence operator not in parentheses */
 	int paren_level = 0;
 	int lowest_precedence = NOT_AN_OP;
+	/* e.g. (5+3) */
+	bool entirely_within_parentheses = token_is_kw(t->token, KW_LPAREN);
 	Token *lowest_precedence_op;
 	for (Token *token = t->token; token < end; token++) {
 		if (token->kind == TOKEN_KW) {
@@ -234,25 +236,46 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 				break;
 			case KW_RPAREN:
 				paren_level--;
+				if (paren_level == 0 && token != end - 1)
+					entirely_within_parentheses = false;
 				if (paren_level < 0) {
 					t->token = token;
 					tokr_err(t, "Excessive closing parenthesis.");
+					return false;
 				}
 				break;
 			default: { /* OPTIM: use individual cases for each op */
-				int precedence = op_precedence(token->kw);
-				if (precedence == NOT_AN_OP) break; /* nvm it's not an operator */
-				if (lowest_precedence == NOT_AN_OP || precedence <= lowest_precedence) {
-					lowest_precedence = precedence;
-					lowest_precedence_op = token;
+				if (paren_level == 0) {
+					int precedence = op_precedence(token->kw);
+					if (precedence == NOT_AN_OP) break; /* nvm it's not an operator */
+					if (lowest_precedence == NOT_AN_OP || precedence <= lowest_precedence) {
+						lowest_precedence = precedence;
+						lowest_precedence_op = token;
+					}
 				}
 			} break;
 			}
 		}
 	}
+	if (paren_level > 0) {
+		tokr_err(t, "Too many opening parentheses.");
+		return false;
+	}
+	if (paren_level < 0) {
+		tokr_err(t, "Too many closing parentheses.");
+		return false;
+	}
+	
+	if (entirely_within_parentheses) {
+		t->token++;	/* move past opening ( */
+		Token *new_end = end - 1; /* parse to ending ) */
+		if (!expr_parse(e, p, new_end))
+			return false;
+		t->token++;	/* move past closing ) */
+		return true;
+	}
 	if (lowest_precedence == NOT_AN_OP) {
-		/* function calls, array accesses, etc. OR
-		   something like (5+3)*/
+		/* function calls, array accesses, etc. */
 		tokr_err(t, "Not implemented yet.");
 		return false;
 	}

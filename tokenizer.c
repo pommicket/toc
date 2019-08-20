@@ -269,11 +269,13 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 			if (is_comment) continue;
 		}
 		{
+			char *start_s = t.s;
 			Keyword kw = tokenize_keyword(&t.s);
 			if (kw != KW_COUNT) {
 				/* it's a keyword */
 				Token *token = tokr_add(&t);
-				tokr_put_location(&t, token);
+				token->where.line = t.line;
+				token->where.code = start_s;
 				token->kind = TOKEN_KW;
 				token->kw = kw;
 				continue;
