@@ -27,12 +27,24 @@ typedef struct {
 	};
 } Type;
 
+typedef struct {
+	Identifier name;
+	Type type;
+} Param;
+
+typedef struct {
+	Array params;
+	Type ret_type;
+	Array stmts;
+} FnExpr;	/* an expression such as fn(x: int) int {return 2 * x;} */
+
 typedef enum {
 			  EXPR_INT_LITERAL,
 			  EXPR_FLOAT_LITERAL,
 			  EXPR_IDENT, /* variable or constant */
 			  EXPR_BINARY_OP,
-			  EXPR_UNARY_OP
+			  EXPR_UNARY_OP,
+			  EXPR_FN
 } ExprKind;
 
 typedef enum {
@@ -64,6 +76,7 @@ typedef struct Expression {
 			struct Expression *rhs;
 		} binary;
 		Identifier ident;
+		FnExpr fn;
 	};
 } Expression;
 
@@ -167,6 +180,35 @@ static bool type_parse(Type *type, Parser *p) {
 	}
 	tokr_err(t, "Unrecognized type.");
 	return false;
+}
+
+static bool fn_expr_parse(FnExpr *f, Parser *p) {
+	Tokenizer *t = p->tokr;
+	/* only called when token is fn */
+	assert(token_is_kw(t->token, KW_FN));
+	t->token++;
+	if (!token_is_kw(t->token, KW_LPAREN)) {
+		tokr_err(t, "Expected '(' after 'fn'.");
+		return false;
+	}
+	
+	t->token++;
+	if (!token_is_kw(t->token, KW_RPAREN)) {
+		tokr_err(t, "Expected ')' at end of parameter list.");
+		return false;
+	}
+	t->token++;
+	if (!token_is_kw(t->token, KW_LBRACE)) {
+		tokr_err(t, "Expected '{' to open function body.");
+		return false;
+	}
+	t->token++;
+	if (!token_is_kw(t->token, KW_RBRACE)) {
+		tokr_err(t, "Expected '}' to close function body.");
+		return false;
+	}
+	t->token++;
+	return true;
 }
 
 #define NOT_AN_OP -1
@@ -276,7 +318,18 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 	}
 	if (lowest_precedence == NOT_AN_OP) {
 		/* function calls, array accesses, etc. */
-		tokr_err(t, "Not implemented yet.");
+		if (token_is_kw(t->token, KW_FN)) {
+			/* this is a function */
+			e->kind = EXPR_FN;
+			if (!fn_expr_parse(&e->fn, p))
+				return false;
+			if (t->token != end) {
+				tokr_err(t, "Direct function calling in an expression is not supported yet.");
+				/* TODO */
+				return false;
+			}
+			return true;
+		}
 		return false;
 	}
 	
@@ -533,6 +586,9 @@ static void expr_fprint(FILE *out, Expression *e) {
 		fprintf(out, "(");
 		expr_fprint(out, e->unary.of);
 		fprintf(out, ")");
+		break;
+	case EXPR_FN:
+		fprintf(out, "function!");
 		break;
 	}
 }
