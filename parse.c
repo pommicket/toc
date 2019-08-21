@@ -426,24 +426,10 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 		t->token = end;
 		return true;
 	}
-	if (token_is_kw(t->token, KW_FN)) {
-		/* this is a function */
-		e->kind = EXPR_FN;
-		if (!fn_expr_parse(&e->fn, p)) {
-			t->token = end + 1; /* move token past end for further parsing */
-			return false;
-		}
-		if (t->token != end) {
-			tokr_err(t, "Direct function calling in an expression is not supported yet.\nYou can wrap the function in parentheses.");
-			/* TODO */
-			t->token = end + 1;
-			return false;
-		}
-		return true;
-	}
 			
-	/* Find the lowest-precedence operator not in parentheses */
+	/* Find the lowest-precedence operator not in parentheses/braces */
 	int paren_level = 0;
+	int brace_level = 0;
 	int lowest_precedence = NOT_AN_OP;
 	/* e.g. (5+3) */
 	bool entirely_within_parentheses = token_is_kw(t->token, KW_LPAREN);
@@ -461,11 +447,24 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 				if (paren_level < 0) {
 					t->token = token;
 					tokr_err(t, "Excessive closing parenthesis.");
+					t->token = end + 1;
+					return false;
+				}
+				break;
+			case KW_LBRACE:
+				brace_level++;
+				break;
+			case KW_RBRACE:
+				brace_level--;
+				if (brace_level < 0) {
+					t->token = token;
+					tokr_err(t, "Excessive closing brace.");
+					t->token = end + 1;
 					return false;
 				}
 				break;
 			default: { /* OPTIM: use individual cases for each op */
-				if (paren_level == 0) {
+				if (paren_level == 0 && brace_level == 0) {
 					int precedence = op_precedence(token->kw);
 					if (precedence == NOT_AN_OP) break; /* nvm it's not an operator */
 					if (lowest_precedence == NOT_AN_OP || precedence <= lowest_precedence) {
@@ -486,8 +485,8 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 		t->token = end + 1;
 		return false;
 	}
-	if (paren_level < 0) {
-		tokr_err(t, "Too many closing parentheses.");
+	if (brace_level > 0) {
+		tokr_err(t, "Too many opening braces.");
 		t->token = end + 1;
 		return false;
 	}
@@ -502,8 +501,25 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 		t->token++;	/* move past closing ) */
 		return true;
 	}
+	
 	if (lowest_precedence == NOT_AN_OP) {
-		/* function calls, array accesses, etc. */
+		/* functions, function calls, array accesses, etc. */
+		if (token_is_kw(t->token, KW_FN)) {
+			/* this is a function */
+			e->kind = EXPR_FN;
+			if (!fn_expr_parse(&e->fn, p)) {
+				t->token = end + 1; /* move token past end for further parsing */
+				return false;
+			}
+			if (t->token != end) {
+				tokr_err(t, "Direct function calling in an expression is not supported yet.\nYou can wrap the function in parentheses.");
+				/* TODO */
+				t->token = end + 1;
+				return false;
+			}
+			return true;
+		}
+		
 		/* try a function call */
 		Token *token = t->token;
 		/* 
@@ -551,6 +567,7 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 					}
 					if (token_is_kw(t->token, KW_RPAREN))
 						break;
+					t->token++;	/* move past , */
 				}
 			}
 			t->token++;	/* move past ) */
