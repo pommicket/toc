@@ -455,8 +455,8 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 				len++;
 				tokr_nextchar(&t);
 			}
-			char *str = malloc(len + 1);
-		    char *strptr = str;
+			char *strlit = malloc(len + 1);
+		    char *strptr = strlit;
 			tokr_get_location(&t, token);
 			tokr_nextchar(&t); /* past opening " */
 			while (*t.s != '"') {
@@ -477,7 +477,7 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 			*strptr = 0;
 			token->kind = TOKEN_STR_LITERAL;
 			token->str.len = len;
-			token->str.str = str;
+			token->str.str = strlit;
 			tokr_nextchar(&t); /* move past closing " */
 			continue;
 		}

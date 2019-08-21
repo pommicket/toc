@@ -46,10 +46,12 @@ typedef struct {
 typedef enum {
 			  EXPR_INT_LITERAL,
 			  EXPR_FLOAT_LITERAL,
+			  EXPR_STR_LITERAL,
 			  EXPR_IDENT, /* variable or constant */
 			  EXPR_BINARY_OP,
 			  EXPR_UNARY_OP,
-			  EXPR_FN
+			  EXPR_FN,
+			  EXPR_CALL
 } ExprKind;
 
 typedef enum {
@@ -71,6 +73,7 @@ typedef struct Expression {
 	union {
 		FloatLiteral floatl;
 		IntLiteral intl;
+		StrLiteral strl;
 		struct {
 			UnaryOp op;
 			struct Expression *of;
@@ -80,6 +83,10 @@ typedef struct Expression {
 			struct Expression *lhs;
 			struct Expression *rhs;
 		} binary;
+		struct {
+			struct Expression *fn;
+			Array args;	/* of expression */
+		} call;
 		Identifier ident;
 		FnExpr fn;
 	};
@@ -99,7 +106,8 @@ typedef struct {
 /* OPTIM: Instead of using dynamic arrays, do two passes. */
 
 typedef enum {
-			  STMT_DECL
+			  STMT_DECL,
+			  STMT_EXPR
 } StatementKind;
 	
 typedef struct {
@@ -107,6 +115,7 @@ typedef struct {
 	StatementKind kind;
 	union {
 		Declaration decl;
+		Expression expr;
 	};
 } Statement;
 
@@ -287,184 +296,6 @@ static int op_precedence(Keyword op) {
 	}
 }
 
-static bool expr_parse(Expression *e, Parser *p, Token *end) {	
-	Tokenizer *t = p->tokr;
-	if (end == NULL) return false;
-	e->flags = 0;
-	e->where = t->token->where;
-	if (end <= t->token) {
-		tokr_err(t, "Empty expression.");
-		return false;
-	}
-	if (end - t->token == 1) {
-		/* 1-token expression */
-		switch (t->token->kind) {
-		case TOKEN_NUM_LITERAL: {
-			NumLiteral *num = &t->token->num;
-			switch (num->kind) {
-			case NUM_LITERAL_FLOAT:
-				e->kind = EXPR_FLOAT_LITERAL;
-				e->type.kind = TYPE_BUILTIN;
-				e->type.builtin = BUILTIN_FLOAT;
-				e->floatl = num->floatval;
-				break;
-			case NUM_LITERAL_INT:
-				e->kind = EXPR_INT_LITERAL;
-				e->flags |= EXPR_FLAG_FLEXIBLE;
-				e->type.kind = TYPE_BUILTIN;
-				e->type.builtin = BUILTIN_INT; /* TODO: if it's too big, use a u64 instead. */
-				e->intl = num->intval;
-				break;
-			}
-		} break;
-		case TOKEN_IDENT:
-			e->kind = EXPR_IDENT;
-			e->ident = t->token->ident;
-			break;
-		default:
-			tokr_err(t, "Unrecognized expression.");
-			return false;
-		}
-		t->token = end;
-		return true;
-	}
-	if (token_is_kw(t->token, KW_FN)) {
-		/* this is a function */
-		e->kind = EXPR_FN;
-		if (!fn_expr_parse(&e->fn, p)) {
-			t->token = end + 1; /* move token past end for further parsing */
-			return false;
-		}
-		if (t->token != end) {
-			tokr_err(t, "Direct function calling in an expression is not supported yet.");
-			/* TODO */
-			return false;
-		}
-		return true;
-	}
-			
-	/* Find the lowest-precedence operator not in parentheses */
-	int paren_level = 0;
-	int lowest_precedence = NOT_AN_OP;
-	/* e.g. (5+3) */
-	bool entirely_within_parentheses = token_is_kw(t->token, KW_LPAREN);
-	Token *lowest_precedence_op;
-	for (Token *token = t->token; token < end; token++) {
-		if (token->kind == TOKEN_KW) {
-			switch (token->kw) {
-			case KW_LPAREN:
-				paren_level++;
-				break;
-			case KW_RPAREN:
-				paren_level--;
-				if (paren_level == 0 && token != end - 1)
-					entirely_within_parentheses = false;
-				if (paren_level < 0) {
-					t->token = token;
-					tokr_err(t, "Excessive closing parenthesis.");
-					return false;
-				}
-				break;
-			default: { /* OPTIM: use individual cases for each op */
-				if (paren_level == 0) {
-					int precedence = op_precedence(token->kw);
-					if (precedence == NOT_AN_OP) break; /* nvm it's not an operator */
-					if (lowest_precedence == NOT_AN_OP || precedence <= lowest_precedence) {
-						lowest_precedence = precedence;
-						lowest_precedence_op = token;
-					}
-				}
-			} break;
-			}
-		}
-	}
-	if (paren_level > 0) {
-		tokr_err(t, "Too many opening parentheses.");
-		return false;
-	}
-	if (paren_level < 0) {
-		tokr_err(t, "Too many closing parentheses.");
-		return false;
-	}
-	
-	if (entirely_within_parentheses) {
-		t->token++;	/* move past opening ( */
-		Token *new_end = end - 1; /* parse to ending ) */
-		if (!expr_parse(e, p, new_end))
-			return false;
-		t->token++;	/* move past closing ) */
-		return true;
-	}
-	if (lowest_precedence == NOT_AN_OP) {
-		/* function calls, array accesses, etc. */
-		tokr_err(t, "Not implemented yet.");
-		return false;
-	}
-	
-	/* This is a unary op not a binary one. */
-	while (lowest_precedence_op != t->token
-		   && lowest_precedence_op[-1].kind == TOKEN_KW
-		   && op_precedence(lowest_precedence_op[-1].kw) != NOT_AN_OP) {
-		lowest_precedence_op--;
-	}
-
-	/* Unary */
-	if (lowest_precedence_op == t->token) {
-		UnaryOp op;
-		bool is_unary;
-		switch (lowest_precedence_op->kw) {
-		case KW_PLUS:
-			/* unary + is ignored entirely */
-			t->token++;
-			/* re-parse this expression without + */
-			return expr_parse(e, p, end);
-		case KW_MINUS:
-			is_unary = true;
-			op = UNARY_MINUS;
-			break;
-		default:
-			is_unary = false;
-			break;
-		}
-		if (!is_unary) {
-			tokr_err(t, "%s is not a unary operator.", keywords[lowest_precedence_op->kw]);
-			return false;
-		}
-		e->unary.op = op;
-		e->kind = EXPR_UNARY_OP;
-		t->token++;
-		Expression *of = parser_new_expr(p);
-		e->unary.of = of;
-		return expr_parse(of, p, end);
-	}
-	
-	
-	BinaryOp op; 
-	switch (lowest_precedence_op->kw) {
-	case KW_PLUS:
-		op = BINARY_PLUS;
-		break;
-	case KW_MINUS:
-		op = BINARY_MINUS;
-		break;
-	default: assert(0); break;
-	}
-	e->binary.op = op;
-	e->kind = EXPR_BINARY_OP;
-
-	Expression *lhs = parser_new_expr(p);
-	e->binary.lhs = lhs;
-	if (!expr_parse(lhs, p, lowest_precedence_op))
-		return false;
-	
-	Expression *rhs = parser_new_expr(p);
-	t->token = lowest_precedence_op + 1;
-	e->binary.rhs = rhs;
-	if (!expr_parse(rhs, p, end))
-		return false;
-	
-	return true;
-}
 
 /*
   ends_with = which keyword does this expression end with?
@@ -474,7 +305,7 @@ typedef enum {
 			  EXPR_END_RPAREN_OR_COMMA,
 			  EXPR_END_SEMICOLON
 } ExprEndKind;
-static Token *expr_find_end(Parser *p, ExprEndKind ends_with) {
+static Token *expr_find_end(Parser *p, ExprEndKind ends_with)  {
 	Tokenizer *t = p->tokr;
 	int bracket_level = 0;
 	int brace_level = 0;
@@ -493,7 +324,7 @@ static Token *expr_find_end(Parser *p, ExprEndKind ends_with) {
 					break;
 				case KW_RPAREN:
 					bracket_level--;
-					if (bracket_level == 0)
+					if (bracket_level < 0)
 						return token;
 					break;
 				default: break;
@@ -546,6 +377,259 @@ static Token *expr_find_end(Parser *p, ExprEndKind ends_with) {
 		}
 		token++;
 	}
+}
+
+static bool expr_parse(Expression *e, Parser *p, Token *end) {
+	Tokenizer *t = p->tokr;
+	if (end == NULL) return false;
+	e->flags = 0;
+	e->where = t->token->where;
+	if (end <= t->token) {
+		tokr_err(t, "Empty expression.");
+		t->token = end + 1;
+		return false;
+	}
+	if (end - t->token == 1) {
+		/* 1-token expression */
+		switch (t->token->kind) {
+		case TOKEN_NUM_LITERAL: {
+			NumLiteral *num = &t->token->num;
+			switch (num->kind) {
+			case NUM_LITERAL_FLOAT:
+				e->kind = EXPR_FLOAT_LITERAL;
+				e->type.kind = TYPE_BUILTIN;
+				e->type.builtin = BUILTIN_FLOAT;
+				e->floatl = num->floatval;
+				break;
+			case NUM_LITERAL_INT:
+				e->kind = EXPR_INT_LITERAL;
+				e->flags |= EXPR_FLAG_FLEXIBLE;
+				e->type.kind = TYPE_BUILTIN;
+				e->type.builtin = BUILTIN_INT; /* TODO: if it's too big, use a u64 instead. */
+				e->intl = num->intval;
+				break;
+			}
+		} break;
+		case TOKEN_IDENT:
+			e->kind = EXPR_IDENT;
+			e->ident = t->token->ident;
+			break;
+		case TOKEN_STR_LITERAL:
+			e->kind = EXPR_STR_LITERAL;
+			e->strl = t->token->str;
+	    	break;
+		default:
+			tokr_err(t, "Unrecognized expression.");
+			t->token = end + 1;
+			return false;
+		}
+		t->token = end;
+		return true;
+	}
+	if (token_is_kw(t->token, KW_FN)) {
+		/* this is a function */
+		e->kind = EXPR_FN;
+		if (!fn_expr_parse(&e->fn, p)) {
+			t->token = end + 1; /* move token past end for further parsing */
+			return false;
+		}
+		if (t->token != end) {
+			tokr_err(t, "Direct function calling in an expression is not supported yet.\nYou can wrap the function in parentheses.");
+			/* TODO */
+			t->token = end + 1;
+			return false;
+		}
+		return true;
+	}
+			
+	/* Find the lowest-precedence operator not in parentheses */
+	int paren_level = 0;
+	int lowest_precedence = NOT_AN_OP;
+	/* e.g. (5+3) */
+	bool entirely_within_parentheses = token_is_kw(t->token, KW_LPAREN);
+	Token *lowest_precedence_op;
+	for (Token *token = t->token; token < end; token++) {
+		if (token->kind == TOKEN_KW) {
+			switch (token->kw) {
+			case KW_LPAREN:
+				paren_level++;
+				break;
+			case KW_RPAREN:
+				paren_level--;
+				if (paren_level == 0 && token != end - 1)
+					entirely_within_parentheses = false;
+				if (paren_level < 0) {
+					t->token = token;
+					tokr_err(t, "Excessive closing parenthesis.");
+					return false;
+				}
+				break;
+			default: { /* OPTIM: use individual cases for each op */
+				if (paren_level == 0) {
+					int precedence = op_precedence(token->kw);
+					if (precedence == NOT_AN_OP) break; /* nvm it's not an operator */
+					if (lowest_precedence == NOT_AN_OP || precedence <= lowest_precedence) {
+						lowest_precedence = precedence;
+						lowest_precedence_op = token;
+					}
+				}
+			} break;
+			}
+		}
+	}
+
+	/* TODO: These errors are bad for functions, since they can be very long,
+	   and this will only point to the end. 
+	*/
+	if (paren_level > 0) {
+		tokr_err(t, "Too many opening parentheses.");
+		t->token = end + 1;
+		return false;
+	}
+	if (paren_level < 0) {
+		tokr_err(t, "Too many closing parentheses.");
+		t->token = end + 1;
+		return false;
+	}
+	
+	if (entirely_within_parentheses) {
+		t->token++;	/* move past opening ( */
+		Token *new_end = end - 1; /* parse to ending ) */
+		if (!expr_parse(e, p, new_end)) {
+			t->token = end + 1;
+			return false;
+		}
+		t->token++;	/* move past closing ) */
+		return true;
+	}
+	if (lowest_precedence == NOT_AN_OP) {
+		/* function calls, array accesses, etc. */
+		/* try a function call */
+		Token *token = t->token;
+		/* 
+		   can't call at start, e.g. in (fn() {})(), it is not the empty function ""
+		   being called with fn() {} as an argument
+		 */
+		if (token_is_kw(t->token, KW_LPAREN)) {
+			paren_level++;
+			token++;
+		}
+		for (; token < end; token++) {
+			if (token->kind == TOKEN_KW) {
+				if (token->kw == KW_LPAREN) {
+					if (paren_level == 0)
+						break; /* this left parenthesis opens the function call */
+					paren_level++;
+				}
+				if (token->kw == KW_RPAREN) {
+					paren_level--;
+				}
+			}
+		}
+		if (token != t->token && token != end) {
+			/* it's a function call! */
+			e->kind = EXPR_CALL;
+			e->call.fn = parser_new_expr(p);
+			if (!expr_parse(e->call.fn, p, token)) { /* parse up to ( as function */
+				t->token = end + 1;
+				return false;
+			}
+			arr_create(&e->call.args, sizeof(Expression));
+			t->token = token + 1; /* move past ( */
+			if (!token_is_kw(t->token, KW_RPAREN)) {
+				/* non-empty arg list */
+				while (1) {
+					if (t->token->kind == TOKEN_EOF) {
+						tokr_err(t, "Expected argument list to continue.");
+						t->token = end + 1;
+						return false;
+					}
+					Expression *arg = arr_add(&e->call.args);
+					if (!expr_parse(arg, p, expr_find_end(p, EXPR_END_RPAREN_OR_COMMA))) {
+						t->token = end + 1;
+						return false;
+					}
+					if (token_is_kw(t->token, KW_RPAREN))
+						break;
+				}
+			}
+			t->token++;	/* move past ) */
+			return true;
+		}
+		/* array accesses, etc. */
+		tokr_err(t, "Not implemented yet.");
+		t->token = end + 1;
+		return false;
+	}
+	
+	/* This is a unary op not a binary one. */
+	while (lowest_precedence_op != t->token
+		   && lowest_precedence_op[-1].kind == TOKEN_KW
+		   && op_precedence(lowest_precedence_op[-1].kw) != NOT_AN_OP) {
+		lowest_precedence_op--;
+	}
+
+	/* Unary */
+	if (lowest_precedence_op == t->token) {
+		UnaryOp op;
+		bool is_unary;
+		switch (lowest_precedence_op->kw) {
+		case KW_PLUS:
+			/* unary + is ignored entirely */
+			t->token++;
+			/* re-parse this expression without + */
+			return expr_parse(e, p, end);
+		case KW_MINUS:
+			is_unary = true;
+			op = UNARY_MINUS;
+			break;
+		default:
+			is_unary = false;
+			break;
+		}
+		if (!is_unary) {
+			tokr_err(t, "%s is not a unary operator.", keywords[lowest_precedence_op->kw]);
+			t->token = end + 1;
+			return false;
+		}
+		e->unary.op = op;
+		e->kind = EXPR_UNARY_OP;
+		t->token++;
+		Expression *of = parser_new_expr(p);
+		e->unary.of = of;
+		return expr_parse(of, p, end);
+	}
+	
+	
+	BinaryOp op; 
+	switch (lowest_precedence_op->kw) {
+	case KW_PLUS:
+		op = BINARY_PLUS;
+		break;
+	case KW_MINUS:
+		op = BINARY_MINUS;
+		break;
+	default: assert(0); break;
+	}
+	e->binary.op = op;
+	e->kind = EXPR_BINARY_OP;
+
+	Expression *lhs = parser_new_expr(p);
+	e->binary.lhs = lhs;
+	if (!expr_parse(lhs, p, lowest_precedence_op)) {
+		t->token = end + 1;
+		return false;
+	}
+	
+	Expression *rhs = parser_new_expr(p);
+	t->token = lowest_precedence_op + 1;
+	e->binary.rhs = rhs;
+	if (!expr_parse(rhs, p, end)) {
+		t->token = end + 1;
+		return false;
+	}
+	
+	return true;
 }
 
 static bool decl_parse(Declaration *d, Parser *p) {
@@ -608,12 +692,14 @@ static bool decl_parse(Declaration *d, Parser *p) {
 		t->token++;
 		return true;
 	}
-	tokr_err(t, "Expected ';'"); /* should never happen in theory right now */
+	tokr_err(t, "Expected ';' at end of expression"); /* should never happen in theory right now */
 	return false;
 }
 
 static bool stmt_parse(Statement *s, Parser *p) {
 	Tokenizer *t = p->tokr;
+	if (t->token->kind == TOKEN_EOF)
+		tokr_err(t, "Expected statement.");
 	s->where = t->token->where;
 	/* 
 	   NOTE: This may cause problems in the future! Other statements might have comma
@@ -623,8 +709,15 @@ static bool stmt_parse(Statement *s, Parser *p) {
 		s->kind = STMT_DECL;
 		return decl_parse(&s->decl, p);
 	} else {
-		tokr_err(t, "Unreocgnized statement.");
-		return false;
+		s->kind = STMT_EXPR;
+		if (!expr_parse(&s->expr, p, expr_find_end(p, EXPR_END_SEMICOLON)))
+			return false;
+		if (!token_is_kw(t->token, KW_SEMICOLON)) {
+			tokr_err(t, "Expected ';' at end of statement.");
+			return false;
+		}
+		t->token++;	/* move past ; */
+		return true;
 	}
 }
 
@@ -699,6 +792,9 @@ static void expr_fprint(FILE *out, Expression *e) {
 	case EXPR_FLOAT_LITERAL:
 		fprintf(out, "%f", (double)e->floatl);
 		break;
+	case EXPR_STR_LITERAL:
+		fprintf(out, "\"%s\"", e->strl.str);
+		break;
 	case EXPR_IDENT:
 		ident_fprint(out, e->ident);
 		break;
@@ -730,6 +826,15 @@ static void expr_fprint(FILE *out, Expression *e) {
 	case EXPR_FN:
 		fn_expr_fprint(out, &e->fn);
 		break;
+	case EXPR_CALL:
+		expr_fprint(out, e->call.fn);
+		fprintf(out, "(");
+		arr_foreach(&e->call.args, Expression, arg) {
+			if (arg != e->call.args.data) fprintf(out, ", ");
+			expr_fprint(out, arg);
+		}
+		fprintf(out, ")");
+		break;
 	}
 }
 
@@ -760,6 +865,10 @@ static void stmt_fprint(FILE *out, Statement *s) {
 		decl_fprint(out, &s->decl);
 		fprintf(out, ";\n");
 		break;
+	case STMT_EXPR:
+		expr_fprint(out, &s->expr);
+		fprintf(out, ";\n");
+		break;
 	}
 }
 
@@ -769,4 +878,4 @@ static void parsed_file_fprint(FILE *out, ParsedFile *f) {
 	}
 }
 
-/* TODO: Freeing parser */
+/* TODO: Freeing parser (remember to free args) */

@@ -1,8 +1,5 @@
-main :- fn () {
-	 bar := fn (x: int, y: int, z: float) float {
-	 
-	 foo :- fn () {
-	 x:=7+y;
-	 };
-	 };
+main :- fn(){
+	(fn(x: int, y: float) int {
+	printf("Hello!\n");
+	})(3, 7.3);
 };
