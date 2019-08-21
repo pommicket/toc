@@ -1,5 +1,5 @@
 main :- fn(){
-	(fn(x: int, y: float) int {
+	1+fn(x: int, y: float) int {
 	printf("Hello!\n");
-	})(3, 7.3);
+	};
 };
