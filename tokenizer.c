@@ -76,12 +76,7 @@ typedef struct {
 	size_t len;
 } StrLiteral;
 
-typedef struct {
-	LineNo line;
-	char *code;
-} Location;
-
-/* NOTE: LineNo is typedef'd in util/err.c */
+/* NOTE: Location is typedef'd in util/err.c */
 typedef struct {
 	TokenKind kind;
 	Location where;
@@ -178,10 +173,10 @@ static char tokr_esc_seq(Tokenizer *t) {
 /* to be used during tokenization */
 static void tokenization_err(Tokenizer *t, const char *fmt, ...) {
 	va_list args;
+	Location where = {t->line, t->s};
 	va_start(args, fmt);
-	err_vprint(t->line, t->s, fmt, args);
+	err_vprint(where, fmt, args);
 	va_end(args);
-	
 	char *end_of_line = strchr(t->s, '\n');
 	if (end_of_line) {
 		t->s = end_of_line;
@@ -194,12 +189,12 @@ static void tokenization_err(Tokenizer *t, const char *fmt, ...) {
 
 /* to be used after tokenization */
 static void tokr_err_(const char *src_file, int src_line, Tokenizer *t, const char *fmt, ...) {
-	LineNo line = t->token->where.line;
 	err_fprint("At line %d of %s:\n", src_line, src_file); /* RELEASE: Remove this */
 	va_list args;
 	va_start(args, fmt);
-	err_vprint(line, t->token->where.code, fmt, args);
+	err_vprint(t->token->where, fmt, args);
 	va_end(args);
+	LineNo line = t->token->where.line;
 	while (1) {
 		if (t->token->where.line != line) break;
 		if (t->token->kind == TOKEN_EOF) break;

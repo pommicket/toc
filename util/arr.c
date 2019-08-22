@@ -29,6 +29,11 @@ void *arr_add(Array *arr) {
 	return item;
 }
 
+void arr_remove_last(Array *arr) {
+	arr->len--;
+	/* OPTIM (memory): Shorten array. */
+}
+
 void arr_free(Array *arr) {
 	free(arr->data);
 }

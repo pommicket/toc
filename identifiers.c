@@ -16,13 +16,19 @@ static int ident_char_index(int c) {
 
 /* can this character be used in an identifier? */
 static int isident(int c) {
-	return ident_char_index(c) != -1; /* OPTIM: Write separate function */
+	/* NOTE: . is only used internally in identifiers */
+	return ident_char_index(c) != -1 && c != '.'; /* OPTIM: Write separate function */
 }
 
 /* can this character be used as the first character in an identifier? */
 static int isidentstart(int c) {
-	return isident(c) && c != '.';
+	return isident(c);
 }
+
+typedef struct {
+	struct Block *scope; /* NULL for file scope */
+	struct Declaration *decl;
+} IdentDecl;
 
 typedef struct IdentTree {
 	/* zero value is an empty trie */
@@ -30,6 +36,7 @@ typedef struct IdentTree {
 	int len; /* length of identifier = depth in tree */
 	struct IdentTree *children;
 	struct IdentTree *parent;
+	Array decls; /* array of declarations of this identifier */
 } IdentTree;
 
 typedef IdentTree *Identifier;

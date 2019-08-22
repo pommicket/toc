@@ -1,3 +1,9 @@
+/* 
+   TODO: 
+   all of these functions should leave the tokenizer at a "reasonable" place 
+   for parsing to continue.
+*/
+
 typedef enum {
 			  TYPE_VOID,
 			  TYPE_BUILTIN
@@ -33,7 +39,7 @@ typedef struct {
 	Type type;
 } Param;
 
-typedef struct {
+typedef struct Block {
 	Array stmts;
 } Block;
 
@@ -95,15 +101,15 @@ typedef struct Expression {
 #define DECL_FLAG_INFER_TYPE 0x01
 #define DECL_FLAG_CONST 0x02
 #define DECL_FLAG_HAS_EXPR 0x04
-typedef struct {
+
+/* OPTIM: Instead of using dynamic arrays, do two passes. */
+typedef struct Declaration {
 	Location where;
 	Array idents;
 	Type type;
 	Expression expr;
 	uint16_t flags;
 } Declaration;
-
-/* OPTIM: Instead of using dynamic arrays, do two passes. */
 
 typedef enum {
 			  STMT_DECL,
@@ -126,6 +132,7 @@ typedef struct {
 typedef struct {
 	Tokenizer *tokr;
 	BlockArr exprs; /* a dynamic array of expressions, so that we don't need to call malloc every time we make an expression */
+	Block *block; /* which block are we in? NULL = file scope */
 } Parser;
 
 /* 
@@ -218,19 +225,23 @@ static bool stmt_parse(Statement *s, Parser *p);
 
 static bool block_parse(Block *b, Parser *p) {
 	Tokenizer *t = p->tokr;
+	Block *prev_block = p->block;
+	p->block = b;
 	if (!token_is_kw(t->token, KW_LBRACE)) {
 		tokr_err(t, "Expected '{' to open block.");
 		return false;
 	}
 	t->token++;	/* move past { */
 	arr_create(&b->stmts, sizeof(Statement));
-	
+	bool ret = true;
 	if (!token_is_kw(t->token, KW_RBRACE)) {
 		/* non-empty function body */
 		while (1) {
 			Statement *stmt = arr_add(&b->stmts);
-			if (!stmt_parse(stmt, p))
-				return false;
+			if (!stmt_parse(stmt, p)) {
+				ret = false;
+				continue;
+			}
 			if (token_is_kw(t->token, KW_RBRACE)) break;
 			if (t->token->kind == TOKEN_EOF) {
 				tokr_err(t, "Expected '}' to close function body.");
@@ -240,7 +251,8 @@ static bool block_parse(Block *b, Parser *p) {
 	}
 	
 	t->token++;	/* move past } */
-	return true;
+	p->block = prev_block;
+	return ret;
 }
 
 static bool fn_expr_parse(FnExpr *f, Parser *p) {
@@ -652,6 +664,7 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 static bool decl_parse(Declaration *d, Parser *p) {
 	Tokenizer *t = p->tokr;
 	/* OPTIM: Maybe don't use a dynamic array or use parser allocator. */
+	d->where = t->token->where;
 	arr_create(&d->idents, sizeof(Identifier));
 	
 	while (1) {
@@ -661,6 +674,24 @@ static bool decl_parse(Declaration *d, Parser *p) {
 			return false;
 		}
 		*ident = t->token->ident;
+		/* 
+		   only keep track of file scoped declarations---
+		   blocks.c will handle the rest
+		*/
+		if (p->block == NULL) {
+			if ((*ident)->decls.len) {
+				/* this was already declared! */
+				IdentDecl *prev = (*ident)->decls.data;
+				tokr_err(t, "Re-declaration of identifier in global scope.");
+				info_print(prev->decl->where, "Previous declaration was here.");
+				return false;
+			}
+			assert(!(*ident)->decls.item_sz);
+			arr_create(&(*ident)->decls, sizeof(IdentDecl));
+			IdentDecl *ident_decl = arr_add(&(*ident)->decls);
+			ident_decl->decl = d;
+			ident_decl->scope = NULL;
+		}
 		t->token++;
 		if (token_is_kw(t->token, KW_COMMA)) {
 			t->token++;
@@ -670,7 +701,8 @@ static bool decl_parse(Declaration *d, Parser *p) {
 			t->token++;
 			break;
 		}
-		tokr_err(t, "Expected ',' to continue listing variables or ':' to indicate type."); 
+		tokr_err(t, "Expected ',' to continue listing variables or ':' to indicate type.");
+		return false;
 	}
 	
 	d->flags = 0;
@@ -724,13 +756,29 @@ static bool stmt_parse(Statement *s, Parser *p) {
 	*/
 	if (token_is_kw(t->token + 1, KW_COLON) || token_is_kw(t->token + 1, KW_COMMA)) {
 		s->kind = STMT_DECL;
-		return decl_parse(&s->decl, p);
+		if (!decl_parse(&s->decl, p)) {
+			/* move to next statement */
+			/* TODO: This might cause unhelpful errors if the first semicolon is inside a block, etc. */
+			while (!token_is_kw(t->token, KW_SEMICOLON)) {
+				if (t->token->kind == TOKEN_EOF) {
+					/* don't bother continuing */
+					return false;
+				}
+				t->token++;
+			}
+			return false;
+		}
+		return true;
 	} else {
 		s->kind = STMT_EXPR;
-		if (!expr_parse(&s->expr, p, expr_find_end(p, EXPR_END_SEMICOLON)))
+		Token *end = expr_find_end(p, EXPR_END_SEMICOLON);
+		if (!expr_parse(&s->expr, p, end)) {
+			t->token = end;
 			return false;
+		}
 		if (!token_is_kw(t->token, KW_SEMICOLON)) {
 			tokr_err(t, "Expected ';' at end of statement.");
+			t->token = end;
 			return false;
 		}
 		t->token++;	/* move past ; */
@@ -740,6 +788,7 @@ static bool stmt_parse(Statement *s, Parser *p) {
 
 static void parser_from_tokenizer(Parser *p, Tokenizer *t) {
 	p->tokr = t;
+	p->block = NULL;
 	block_arr_create(&p->exprs, 10, sizeof(Expression)); /* block size = 1024 */
 }
 

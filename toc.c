@@ -15,3 +15,4 @@
 #include "identifiers.c"
 #include "tokenizer.c"
 #include "parse.c"
+#include "blocks.c"
