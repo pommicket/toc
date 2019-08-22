@@ -3,10 +3,12 @@
 #if USE_COLORED_TEXT
 #define TEXT_ERROR(x) "\x1b[91m" x "\x1b[0m"
 #define TEXT_INFO(x) "\x1b[94m" x "\x1b[0m"
+#define TEXT_WARN(x) "\x1b[93m" x "\x1b[0m"
 #define TEXT_IMPORTANT(x) "\x1b[1m" x "\x1b[0m"
 #else
 #define TEXT_ERROR(x) x
 #define TEXT_INFO(x) x
+#define TEXT_WARN(x) x
 #define TEXT_IMPORTANT(x) x
 #endif
 
@@ -42,6 +44,10 @@ static void err_print_header_(LineNo line) {
 
 static void info_print_header_(LineNo line) {
 	err_fprint(TEXT_INFO("info:") " at line %lu of %s:\n", (unsigned long)line, err_filename);
+}
+
+static void warn_print_header_(LineNo line) {
+	err_fprint(TEXT_WARN("warning:") " at line %lu of %s:\n", (unsigned long)line, err_filename);
 }
 
 static void err_print_footer_(const char *context) {
@@ -82,6 +88,14 @@ static void info_print(Location where, const char *fmt, ...) {
 	va_end(args);
 }
 
+static void warn_print(Location where, const char *fmt, ...) {
+	va_list args;
+	va_start(args, fmt);
+	warn_print_header_(where.line);
+	err_vfprint(fmt, args);
+	err_print_footer_(where.code);
+	va_end(args);
+}
 
 static void *err_malloc(size_t size) {
 	void *ret = malloc(size);

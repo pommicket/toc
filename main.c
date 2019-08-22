@@ -54,6 +54,17 @@ int main(int argc, char **argv) {
 	parsed_file_fprint(stdout, &f);
 	
 	tokr_free(&t);
+
+	const char *out_filename = "out.c";
+
+	FILE *out = fopen(out_filename, "w");
+	CGenerator cgen;
+	cgen_create(&cgen, out);
+	if (!file_cgen(&f, &cgen)) {
+		err_fprint(TEXT_IMPORTANT("Errors occured while generating C code.\n"));
+		return EXIT_FAILURE;
+	}
+	
 	free(contents);
 	
 	fclose(in);

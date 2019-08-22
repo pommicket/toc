@@ -11,8 +11,8 @@ typedef enum {
 			  KW_SEMICOLON,
 			  KW_EQ,
 			  KW_COLON,
+			  KW_AT,
 			  KW_COMMA,
-			  KW_FN,
 			  KW_LPAREN,
 			  KW_RPAREN,
 			  KW_LBRACE,
@@ -22,6 +22,8 @@ typedef enum {
 			  KW_LE,			  
 			  KW_MINUS,
 			  KW_PLUS,
+			  KW_LAST_SYMBOL = KW_PLUS, /* last one entirely consisting of symbols */
+			  KW_FN,
 			  KW_INT,
 			  KW_I8,
 			  KW_I16,
@@ -38,16 +40,24 @@ typedef enum {
 } Keyword;
 
 static const char *keywords[KW_COUNT] =
-	{";", "=", ":", ",", "fn", "(", ")", "{", "}", "==", "<", "<=", "-", "+",
+	{";", "=", ":", "@", ",", "(", ")", "{", "}", "==", "<", "<=", "-", "+", "fn",
 	 "int", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "float", "f32",
 	 "f64"};
 
 /* Returns KW_COUNT if it's not a keyword */
 /* OPTIM: don't use strncmp so much */
-static Keyword tokenize_keyword(char **s) {
+static Keyword tokenize_kw(char **s) {
 	for (Keyword k = 0; k < KW_COUNT; k++) {
 		size_t len = strlen(keywords[k]);
 		if (strncmp(*s, keywords[k], len) == 0) {
+			if (k > KW_LAST_SYMBOL) {
+				/* 
+				   it's not a symbol, so we need to check if it's something like "intfoo"
+				 */
+				if (isident((*s)[len])) {
+					return KW_COUNT;
+				}
+			}
 			*s += len;
 			return k;
 		}
@@ -194,12 +204,6 @@ static void tokr_err_(const char *src_file, int src_line, Tokenizer *t, const ch
 	va_start(args, fmt);
 	err_vprint(t->token->where, fmt, args);
 	va_end(args);
-	LineNo line = t->token->where.line;
-	while (1) {
-		if (t->token->where.line != line) break;
-		if (t->token->kind == TOKEN_EOF) break;
-		t->token++;
-	}
 }
 #define tokr_err(...) tokr_err_(__FILE__, __LINE__, __VA_ARGS__)
 
@@ -267,7 +271,7 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 		}
 		{
 			char *start_s = t.s;
-			Keyword kw = tokenize_keyword(&t.s);
+			Keyword kw = tokenize_kw(&t.s);
 			if (kw != KW_COUNT) {
 				/* it's a keyword */
 				Token *token = tokr_add(&t);
@@ -498,14 +502,7 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 	return !has_err;
 }
 
+/* Does NOT free string literals!!! */
 static void tokr_free(Tokenizer *t) {
-	arr_foreach(&t->tokens, Token, token) {
-		switch (token->kind) {
-		case TOKEN_STR_LITERAL:
-			free(token->str.str);
-			break;
-		default: break;
-		}
-	}
 	arr_clear(&t->tokens);
 }

@@ -1,9 +1,3 @@
-/* 
-   TODO: 
-   all of these functions should leave the tokenizer at a "reasonable" place 
-   for parsing to continue.
-*/
-
 typedef enum {
 			  TYPE_VOID,
 			  TYPE_BUILTIN
@@ -398,7 +392,6 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 	e->where = t->token->where;
 	if (end <= t->token) {
 		tokr_err(t, "Empty expression.");
-		t->token = end + 1;
 		return false;
 	}
 	if (end - t->token == 1) {
@@ -432,7 +425,6 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 	    	break;
 		default:
 			tokr_err(t, "Unrecognized expression.");
-			t->token = end + 1;
 			return false;
 		}
 		t->token = end;
@@ -471,7 +463,6 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 				if (brace_level < 0) {
 					t->token = token;
 					tokr_err(t, "Excessive closing brace.");
-					t->token = end + 1;
 					return false;
 				}
 				break;
@@ -494,22 +485,18 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 	*/
 	if (paren_level > 0) {
 		tokr_err(t, "Too many opening parentheses.");
-		t->token = end + 1;
 		return false;
 	}
 	if (brace_level > 0) {
 		tokr_err(t, "Too many opening braces.");
-		t->token = end + 1;
 		return false;
 	}
 	
 	if (entirely_within_parentheses) {
 		t->token++;	/* move past opening ( */
 		Token *new_end = end - 1; /* parse to ending ) */
-		if (!expr_parse(e, p, new_end)) {
-			t->token = end + 1;
+		if (!expr_parse(e, p, new_end))
 			return false;
-		}
 		t->token++;	/* move past closing ) */
 		return true;
 	}
@@ -519,14 +506,12 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 		if (token_is_kw(t->token, KW_FN)) {
 			/* this is a function */
 			e->kind = EXPR_FN;
-			if (!fn_expr_parse(&e->fn, p)) {
-				t->token = end + 1; /* move token past end for further parsing */
+			if (!fn_expr_parse(&e->fn, p))
 				return false;
-			}
+			
 			if (t->token != end) {
 				tokr_err(t, "Direct function calling in an expression is not supported yet.\nYou can wrap the function in parentheses.");
 				/* TODO */
-				t->token = end + 1;
 				return false;
 			}
 			return true;
@@ -559,7 +544,6 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 			e->kind = EXPR_CALL;
 			e->call.fn = parser_new_expr(p);
 			if (!expr_parse(e->call.fn, p, token)) { /* parse up to ( as function */
-				t->token = end + 1;
 				return false;
 			}
 			arr_create(&e->call.args, sizeof(Expression));
@@ -569,12 +553,10 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 				while (1) {
 					if (t->token->kind == TOKEN_EOF) {
 						tokr_err(t, "Expected argument list to continue.");
-						t->token = end + 1;
 						return false;
 					}
 					Expression *arg = arr_add(&e->call.args);
 					if (!expr_parse(arg, p, expr_find_end(p, EXPR_END_RPAREN_OR_COMMA))) {
-						t->token = end + 1;
 						return false;
 					}
 					if (token_is_kw(t->token, KW_RPAREN))
@@ -587,7 +569,6 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 		}
 		/* array accesses, etc. */
 		tokr_err(t, "Not implemented yet.");
-		t->token = end + 1;
 		return false;
 	}
 	
@@ -618,7 +599,6 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 		}
 		if (!is_unary) {
 			tokr_err(t, "%s is not a unary operator.", keywords[lowest_precedence_op->kw]);
-			t->token = end + 1;
 			return false;
 		}
 		e->unary.op = op;
@@ -646,7 +626,6 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 	Expression *lhs = parser_new_expr(p);
 	e->binary.lhs = lhs;
 	if (!expr_parse(lhs, p, lowest_precedence_op)) {
-		t->token = end + 1;
 		return false;
 	}
 	
@@ -654,7 +633,6 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 	t->token = lowest_precedence_op + 1;
 	e->binary.rhs = rhs;
 	if (!expr_parse(rhs, p, end)) {
-		t->token = end + 1;
 		return false;
 	}
 	
@@ -666,6 +644,8 @@ static bool decl_parse(Declaration *d, Parser *p) {
 	/* OPTIM: Maybe don't use a dynamic array or use parser allocator. */
 	d->where = t->token->where;
 	arr_create(&d->idents, sizeof(Identifier));
+	
+	d->flags = 0;
 	
 	while (1) {
 		Identifier *ident = arr_add(&d->idents);
@@ -701,48 +681,50 @@ static bool decl_parse(Declaration *d, Parser *p) {
 			t->token++;
 			break;
 		}
-		tokr_err(t, "Expected ',' to continue listing variables or ':' to indicate type.");
+		if (token_is_kw(t->token, KW_AT)) {
+			d->flags |= DECL_FLAG_CONST;
+			t->token++;
+			break;
+		}
+		tokr_err(t, "Expected ',' to continue listing variables or ':' / '@' to indicate type.");
 		return false;
 	}
 	
-	d->flags = 0;
 	
-	
-
-	if (!token_is_kw(t->token, KW_MINUS)
-		&& !token_is_kw(t->token, KW_EQ)
-		&& !token_is_kw(t->token, KW_SEMICOLON)) {
-		if (!type_parse(&d->type, p))
-			return false;
-	} else {
-		d->flags |= DECL_FLAG_INFER_TYPE;
-	}
-		
 	if (token_is_kw(t->token, KW_SEMICOLON)) {
-		if (d->flags & DECL_FLAG_INFER_TYPE) {
-			tokr_err(t, "Cannot infer type without expression.");
+		/* e.g. foo :; */
+		tokr_err(t, "Cannot infer type without expression.");
+		return false;
+	}
+	
+	if (token_is_kw(t->token, KW_EQ)) {
+		/* := / @= */
+		d->flags |= DECL_FLAG_INFER_TYPE;
+	} else {
+		if (!type_parse(&d->type, p)) {
 			return false;
 		}
-	} else if (token_is_kw(t->token, KW_EQ)) {
+	}
+
+	/* OPTIM: switch */
+    if (token_is_kw(t->token, KW_EQ)) {
 		t->token++;
 		if (!expr_parse(&d->expr, p, expr_find_end(p, EXPR_END_SEMICOLON)))
 			return false;
 		d->flags |= DECL_FLAG_HAS_EXPR;
-	} else if (token_is_kw(t->token, KW_MINUS)) {
-		t->token++;
-		if (!expr_parse(&d->expr, p, expr_find_end(p, EXPR_END_SEMICOLON)))
-			return false;
-		d->flags |= DECL_FLAG_HAS_EXPR | DECL_FLAG_CONST;
-	} else {
-		tokr_err(t, "Expected ';', '=', or '-' in delaration.");
+		if (token_is_kw(t->token, KW_SEMICOLON)) {
+			t->token++;
+			return true;
+		}
+		tokr_err(t, "Expected ';' at end of expression"); /* should never happen in theory right now */
 		return false;
-	}
-	if (token_is_kw(t->token, KW_SEMICOLON)) {
+	} else if (token_is_kw(t->token, KW_SEMICOLON)) {
 		t->token++;
 		return true;
+	} else {
+		tokr_err(t, "Expected ';' or '=' at end of delaration.");
+		return false;
 	}
-	tokr_err(t, "Expected ';' at end of expression"); /* should never happen in theory right now */
-	return false;
 }
 
 static bool stmt_parse(Statement *s, Parser *p) {
@@ -754,7 +736,8 @@ static bool stmt_parse(Statement *s, Parser *p) {
 	   NOTE: This may cause problems in the future! Other statements might have comma
 	   as the second token.
 	*/
-	if (token_is_kw(t->token + 1, KW_COLON) || token_is_kw(t->token + 1, KW_COMMA)) {
+	if (token_is_kw(t->token + 1, KW_COLON) || token_is_kw(t->token + 1, KW_COMMA)
+		|| token_is_kw(t->token + 1, KW_AT)) {
 		s->kind = STMT_DECL;
 		if (!decl_parse(&s->decl, p)) {
 			/* move to next statement */
@@ -762,23 +745,30 @@ static bool stmt_parse(Statement *s, Parser *p) {
 			while (!token_is_kw(t->token, KW_SEMICOLON)) {
 				if (t->token->kind == TOKEN_EOF) {
 					/* don't bother continuing */
+					tokr_err(t, "No semicolon found at end of declaration.");
 					return false;
 				}
 				t->token++;
 			}
+			t->token++;	/* move past ; */
 			return false;
 		}
 		return true;
 	} else {
 		s->kind = STMT_EXPR;
 		Token *end = expr_find_end(p, EXPR_END_SEMICOLON);
+		if (!end) {
+			tokr_err(t, "No semicolon found at end of statement.");
+			while (t->token->kind != TOKEN_EOF) t->token++; /* move to end of file */
+			return false;
+		}
 		if (!expr_parse(&s->expr, p, end)) {
-			t->token = end;
+			t->token = end + 1;
 			return false;
 		}
 		if (!token_is_kw(t->token, KW_SEMICOLON)) {
 			tokr_err(t, "Expected ';' at end of statement.");
-			t->token = end;
+			t->token = end + 1;
 			return false;
 		}
 		t->token++;	/* move past ; */

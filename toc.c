@@ -16,3 +16,4 @@
 #include "tokenizer.c"
 #include "parse.c"
 #include "blocks.c"
+#include "cgen.c"
