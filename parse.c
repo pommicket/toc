@@ -178,7 +178,7 @@ static Keyword builtin_type_to_kw(BuiltinType t) {
 	return KW_COUNT;
 }
 
-static bool type_parse(Type *type, Parser *p) {
+static bool parse_type(Parser *p, Type *type) {
 	Tokenizer *t = p->tokr;
 	type->where = t->token->where;
 	switch (t->token->kind) {
@@ -199,7 +199,7 @@ static bool type_parse(Type *type, Parser *p) {
 	return false;
 }
 
-static bool param_parse(Param *p, Parser *parser) {
+static bool parse_param(Parser *parser, Param *p) {
 	Tokenizer *t = parser->tokr;
 	if (t->token->kind != TOKEN_IDENT) {
 		tokr_err(t, "Expected parameter name.");
@@ -212,14 +212,14 @@ static bool param_parse(Param *p, Parser *parser) {
 		return false;
 	}
 	t->token++;
-	if (!type_parse(&p->type, parser))
+	if (!parse_type(parser, &p->type))
 		return false;
 	return true;
 }
 
-static bool stmt_parse(Statement *s, Parser *p);
+static bool parse_stmt(Parser *p, Statement *s);
 
-static bool block_parse(Block *b, Parser *p) {
+static bool parse_block(Parser *p, Block *b) {
 	Tokenizer *t = p->tokr;
 	Block *prev_block = p->block;
 	p->block = b;
@@ -234,7 +234,7 @@ static bool block_parse(Block *b, Parser *p) {
 		/* non-empty function body */
 		while (1) {
 			Statement *stmt = arr_add(&b->stmts);
-			if (!stmt_parse(stmt, p)) {
+			if (!parse_stmt(p, stmt)) {
 				ret = false;
 				continue;
 			}
@@ -251,7 +251,7 @@ static bool block_parse(Block *b, Parser *p) {
 	return ret;
 }
 
-static bool fn_expr_parse(FnExpr *f, Parser *p) {
+static bool parse_fn_expr(Parser *p, FnExpr *f) {
 	Tokenizer *t = p->tokr;
 	/* only called when token is fn */
 	assert(token_is_kw(t->token, KW_FN));
@@ -268,7 +268,7 @@ static bool fn_expr_parse(FnExpr *f, Parser *p) {
 		/* non-empty parameter list */
 		while (1) {
 			Param *param = arr_add(&f->params);
-			if (!param_parse(param, p))
+			if (!parse_param(p, param))
 				return false;
 			if (token_is_kw(t->token, KW_RPAREN)) break;
 			if (token_is_kw(t->token, KW_COMMA)) {
@@ -285,11 +285,11 @@ static bool fn_expr_parse(FnExpr *f, Parser *p) {
 		/* void function */
 		f->ret_type.kind = TYPE_VOID;
 	} else {
-		if (!type_parse(&f->ret_type, p)) {
+		if (!parse_type(p, &f->ret_type)) {
 			return false;
 		}
 	}
-	return block_parse(&f->body, p);
+	return parse_block(p, &f->body);
 }
 
 #define NOT_AN_OP -1
@@ -387,7 +387,7 @@ static Token *expr_find_end(Parser *p, ExprEndKind ends_with)  {
 	}
 }
 
-static bool expr_parse(Expression *e, Parser *p, Token *end) {
+static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	Tokenizer *t = p->tokr;
 	if (end == NULL) return false;
 	e->flags = 0;
@@ -497,7 +497,7 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 	if (entirely_within_parentheses) {
 		t->token++;	/* move past opening ( */
 		Token *new_end = end - 1; /* parse to ending ) */
-		if (!expr_parse(e, p, new_end))
+		if (!parse_expr(p, e, new_end))
 			return false;
 		t->token++;	/* move past closing ) */
 		return true;
@@ -508,7 +508,7 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 		if (token_is_kw(t->token, KW_FN)) {
 			/* this is a function */
 			e->kind = EXPR_FN;
-			if (!fn_expr_parse(&e->fn, p))
+			if (!parse_fn_expr(p, &e->fn))
 				return false;
 			
 			if (t->token != end) {
@@ -545,7 +545,7 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 			/* it's a function call! */
 			e->kind = EXPR_CALL;
 			e->call.fn = parser_new_expr(p);
-			if (!expr_parse(e->call.fn, p, token)) { /* parse up to ( as function */
+			if (!parse_expr(p, e->call.fn, token)) { /* parse up to ( as function */
 				return false;
 			}
 			arr_create(&e->call.args, sizeof(Expression));
@@ -558,7 +558,7 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 						return false;
 					}
 					Expression *arg = arr_add(&e->call.args);
-					if (!expr_parse(arg, p, expr_find_end(p, EXPR_END_RPAREN_OR_COMMA))) {
+					if (!parse_expr(p, arg, expr_find_end(p, EXPR_END_RPAREN_OR_COMMA))) {
 						return false;
 					}
 					if (token_is_kw(t->token, KW_RPAREN))
@@ -590,7 +590,7 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 			/* unary + is ignored entirely */
 			t->token++;
 			/* re-parse this expression without + */
-			return expr_parse(e, p, end);
+			return parse_expr(p, e, end);
 		case KW_MINUS:
 			is_unary = true;
 			op = UNARY_MINUS;
@@ -608,7 +608,7 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 		t->token++;
 		Expression *of = parser_new_expr(p);
 		e->unary.of = of;
-		return expr_parse(of, p, end);
+		return parse_expr(p, of, end);
 	}
 	
 	
@@ -627,14 +627,14 @@ static bool expr_parse(Expression *e, Parser *p, Token *end) {
 
 	Expression *lhs = parser_new_expr(p);
 	e->binary.lhs = lhs;
-	if (!expr_parse(lhs, p, lowest_precedence_op)) {
+	if (!parse_expr(p, lhs, lowest_precedence_op)) {
 		return false;
 	}
 	
 	Expression *rhs = parser_new_expr(p);
 	t->token = lowest_precedence_op + 1;
 	e->binary.rhs = rhs;
-	if (!expr_parse(rhs, p, end)) {
+	if (!parse_expr(p, rhs, end)) {
 		return false;
 	}
 	
@@ -703,7 +703,7 @@ static bool decl_parse(Declaration *d, Parser *p) {
 		/* := / @= */
 		d->flags |= DECL_FLAG_INFER_TYPE;
 	} else {
-		if (!type_parse(&d->type, p)) {
+		if (!parse_type(p, &d->type)) {
 			return false;
 		}
 	}
@@ -711,7 +711,7 @@ static bool decl_parse(Declaration *d, Parser *p) {
 	/* OPTIM: switch */
     if (token_is_kw(t->token, KW_EQ)) {
 		t->token++;
-		if (!expr_parse(&d->expr, p, expr_find_end(p, EXPR_END_SEMICOLON)))
+		if (!parse_expr(p, &d->expr, expr_find_end(p, EXPR_END_SEMICOLON)))
 			return false;
 		d->flags |= DECL_FLAG_HAS_EXPR;
 		if (token_is_kw(t->token, KW_SEMICOLON)) {
@@ -729,7 +729,7 @@ static bool decl_parse(Declaration *d, Parser *p) {
 	}
 }
 
-static bool stmt_parse(Statement *s, Parser *p) {
+static bool parse_stmt(Parser *p, Statement *s) {
 	Tokenizer *t = p->tokr;
 	if (t->token->kind == TOKEN_EOF)
 		tokr_err(t, "Expected statement.");
@@ -764,7 +764,7 @@ static bool stmt_parse(Statement *s, Parser *p) {
 			while (t->token->kind != TOKEN_EOF) t->token++; /* move to end of file */
 			return false;
 		}
-		if (!expr_parse(&s->expr, p, end)) {
+		if (!parse_expr(p, &s->expr, end)) {
 			t->token = end + 1;
 			return false;
 		}
@@ -784,13 +784,13 @@ static void parser_from_tokenizer(Parser *p, Tokenizer *t) {
 	block_arr_create(&p->exprs, 10, sizeof(Expression)); /* block size = 1024 */
 }
 
-static bool file_parse(ParsedFile *f, Parser *p) {
+static bool parse_file(Parser *p, ParsedFile *f) {
 	Tokenizer *t = p->tokr;
 	arr_create(&f->stmts, sizeof(Statement));
 	bool ret = true;
 	while (t->token->kind != TOKEN_EOF) {
 		Statement *stmt = arr_add(&f->stmts);
-		if (!stmt_parse(stmt, p))
+		if (!parse_stmt(p, stmt))
 			ret = false;
 	}
 	return ret;
@@ -799,7 +799,7 @@ static bool file_parse(ParsedFile *f, Parser *p) {
 #define PARSE_PRINT_LOCATION(l) //fprintf(out, "[l%lu]", (unsigned long)(l).line);
 
 
-static void type_fprint(FILE *out, Type *t) {
+static void fprint_type(FILE *out, Type *t) {
 	PARSE_PRINT_LOCATION(t->where);
 	switch (t->kind) {
 	case TYPE_BUILTIN:
@@ -811,37 +811,37 @@ static void type_fprint(FILE *out, Type *t) {
 	}
 }
 
-static void param_fprint(FILE *out, Param *p) {
-	ident_fprint(out, p->name);
+static void fprint_param(FILE *out, Param *p) {
+	fprint_ident(out, p->name);
 	fprintf(out, ": ");
-	type_fprint(out, &p->type);
+	fprint_type(out, &p->type);
 }
 
-static void stmt_fprint(FILE *out, Statement *s);
+static void fprint_stmt(FILE *out, Statement *s);
 
-static void block_fprint(FILE *out, Block *b) {
+static void fprint_block(FILE *out, Block *b) {
 	fprintf(out, "{\n");
 	arr_foreach(&b->stmts, Statement, stmt) {
-		stmt_fprint(out, stmt);
+		fprint_stmt(out, stmt);
 	}
 	fprintf(out, "}");
 
 }
 
-static void fn_expr_fprint(FILE *out, FnExpr *f) {
+static void fprint_fn_expr(FILE *out, FnExpr *f) {
 	fprintf(out, "fn (");
 	arr_foreach(&f->params, Param, param) {
 		if (param != f->params.data)
 			fprintf(out, ", ");
-		param_fprint(out, param);
+		fprint_param(out, param);
 	}
 	fprintf(out, ") ");
-	type_fprint(out, &f->ret_type);
+	fprint_type(out, &f->ret_type);
 	fprintf(out, " ");
-	block_fprint(out, &f->body);
+	fprint_block(out, &f->body);
 }
 
-static void expr_fprint(FILE *out, Expression *e) {
+static void fprint_expr(FILE *out, Expression *e) {
 	PARSE_PRINT_LOCATION(e->where);
 	switch (e->kind) {
 	case EXPR_INT_LITERAL:
@@ -854,7 +854,7 @@ static void expr_fprint(FILE *out, Expression *e) {
 		fprintf(out, "\"%s\"", e->strl.str);
 		break;
 	case EXPR_IDENT:
-		ident_fprint(out, e->ident);
+		fprint_ident(out, e->ident);
 		break;
 	case EXPR_BINARY_OP:
 		switch (e->binary.op) {
@@ -866,9 +866,9 @@ static void expr_fprint(FILE *out, Expression *e) {
 			break;
 		}
 		fprintf(out, "(");
-		expr_fprint(out, e->binary.lhs);
+		fprint_expr(out, e->binary.lhs);
 		fprintf(out, ",");
-		expr_fprint(out, e->binary.rhs);
+		fprint_expr(out, e->binary.rhs);
 		fprintf(out, ")");
 		break;
 	case EXPR_UNARY_OP:
@@ -878,18 +878,18 @@ static void expr_fprint(FILE *out, Expression *e) {
 			break;
 		}
 		fprintf(out, "(");
-		expr_fprint(out, e->unary.of);
+		fprint_expr(out, e->unary.of);
 		fprintf(out, ")");
 		break;
 	case EXPR_FN:
-		fn_expr_fprint(out, &e->fn);
+		fprint_fn_expr(out, &e->fn);
 		break;
 	case EXPR_CALL:
-		expr_fprint(out, e->call.fn);
+		fprint_expr(out, e->call.fn);
 		fprintf(out, "(");
 		arr_foreach(&e->call.args, Expression, arg) {
 			if (arg != e->call.args.data) fprintf(out, ", ");
-			expr_fprint(out, arg);
+			fprint_expr(out, arg);
 		}
 		fprintf(out, ")");
 		break;
@@ -897,42 +897,42 @@ static void expr_fprint(FILE *out, Expression *e) {
 }
 
 
-static void decl_fprint(FILE *out, Declaration *d) {
+static void fprint_decl(FILE *out, Declaration *d) {
 	PARSE_PRINT_LOCATION(d->where);
 	arr_foreach(&d->idents, Identifier, ident) {
 		if (ident != d->idents.data) fprintf(out, ", ");
-		ident_fprint(out, *ident);
+		fprint_ident(out, *ident);
 	}
 	if (d->flags & DECL_FLAG_CONST) {
 		fprintf(out, "[const]");
 	}
 	fprintf(out, ":");
 	if (!(d->flags & DECL_FLAG_INFER_TYPE)) {
-		type_fprint(out, &d->type);
+		fprint_type(out, &d->type);
 	}
 	if (d->flags & DECL_FLAG_HAS_EXPR) {
 		fprintf(out, "=");
-		expr_fprint(out, &d->expr);
+		fprint_expr(out, &d->expr);
 	}
 }
 
-static void stmt_fprint(FILE *out, Statement *s) {
+static void fprint_stmt(FILE *out, Statement *s) {
 	PARSE_PRINT_LOCATION(s->where);
 	switch (s->kind) {
 	case STMT_DECL:
-		decl_fprint(out, &s->decl);
+		fprint_decl(out, &s->decl);
 		fprintf(out, ";\n");
 		break;
 	case STMT_EXPR:
-		expr_fprint(out, &s->expr);
+		fprint_expr(out, &s->expr);
 		fprintf(out, ";\n");
 		break;
 	}
 }
 
-static void parsed_file_fprint(FILE *out, ParsedFile *f) {
+static void fprint_parsed_file(FILE *out, ParsedFile *f) {
 	arr_foreach(&f->stmts, Statement, stmt) {
-		stmt_fprint(out, stmt);
+		fprint_stmt(out, stmt);
 	}
 }
 

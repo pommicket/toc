@@ -50,7 +50,7 @@ static void cgen_create(CGenerator *g, FILE *out) {
 }
 
 static void cgen_ident(CGenerator *g, Identifier i) {
-	ident_fprint(g->out, i);
+	fprint_ident(g->out, i);
 }
 
 static const char *builtin_type_to_str(BuiltinType b) {

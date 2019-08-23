@@ -18,7 +18,7 @@ typedef IdentTree *Identifier;
 
 static IdentTree ident_base_tree;
 static long ident_curr_id; /* NOTE: you should eventually add something to reset this */
-static char identifier_chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.";
+static char identifier_chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
 
 #define NIDENTIFIER_CHARS ((int)((sizeof identifier_chars) - 1)) /* -1 for null char */
 
@@ -31,19 +31,12 @@ static int ident_char_index(int c) {
 	if (c >= '0' && c <= '9')
 		return c - '0' + 52;
 	if (c == '_') return 62;
-	if (c == '.') return 63;
 	return -1;
 }
 
 /* can this character be used in an identifier? */
 static int isident(int c) {
-	/* NOTE: . is only used internally in identifiers */
-	return ident_char_index(c) != -1 && c != '.'; /* OPTIM: Write separate function */
-}
-
-/* can this character be used as the first character in an identifier? */
-static int isidentstart(int c) {
-	return isident(c);
+	return ident_char_index(c) != -1; /* OPTIM: Write separate function */
 }
 
 /* moves s to the char after the identifier */
@@ -73,10 +66,10 @@ static Identifier ident_insert(char **s) {
 }
 
 
-static void ident_fprint(FILE *out, Identifier id) {
+static void fprint_ident(FILE *out, Identifier id) {
 	if (id->parent == NULL) return; /* at root */
 	/* OPTIM: Use malloc(id->len)???? */
-	ident_fprint(out, id->parent);
+	fprint_ident(out, id->parent);
 	fputc(identifier_chars[id - id->parent->children /* index of self in parent */], out);
 }
 

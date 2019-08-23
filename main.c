@@ -46,12 +46,12 @@ int main(int argc, char **argv) {
 	Parser p;
 	parser_from_tokenizer(&p, &t);
    	ParsedFile f;
-	if (!file_parse(&f, &p)) {
+	if (!parse_file(&p, &f)) {
 		err_fprint(TEXT_IMPORTANT("Errors occured while parsing.\n"));
 		return EXIT_FAILURE;
 	}
 
-	parsed_file_fprint(stdout, &f);
+	fprint_parsed_file(stdout, &f);
 	
 	tokr_free(&t);
 

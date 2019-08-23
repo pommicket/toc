@@ -120,7 +120,7 @@ static void token_fprint(FILE *out, Token *t) {
 		break;
 	case TOKEN_IDENT:
 		fprintf(out, "identifier: %ld:", t->ident->id);
-		ident_fprint(out, t->ident);
+		fprint_ident(out, t->ident);
 		break;
 	case TOKEN_NUM_LITERAL:
 		fprintf(out, "number: ");
@@ -481,7 +481,7 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 			continue;
 		}
 		
-		if (isidentstart(*t.s)) {
+		if (isident(*t.s)) {
 			/* it's an identifier */
 			Token *token = tokr_add(&t);
 			tokr_put_location(&t, token);
