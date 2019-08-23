@@ -60,7 +60,7 @@ int main(int argc, char **argv) {
 	FILE *out = fopen(out_filename, "w");
 	CGenerator cgen;
 	cgen_create(&cgen, out);
-	if (!file_cgen(&f, &cgen)) {
+	if (!cgen_file(&cgen, &f)) {
 		err_fprint(TEXT_IMPORTANT("Errors occured while generating C code.\n"));
 		return EXIT_FAILURE;
 	}

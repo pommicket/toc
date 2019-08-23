@@ -1,3 +1,15 @@
 /* toc */
-"\x48\x65\x6c\x6c\x6f\x20\x74\x68\x65\x72\x65";
-((5+(((3-34)-134)-(-(-(-(-(-(-(-164423)))))))))+(235443-(-543)));
+void xasfd();
+void a__();
+void a__1(int64_t y);
+double foo(int64_t x, int64_t y, uint64_t z);
+void xasfd() {
+}
+void a__() {
+}
+void a__1(int64_t y) {
+}
+double foo(int64_t x, int64_t y, uint64_t z) {
+(3+5);
+(5+6);
+}

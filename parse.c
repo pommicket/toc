@@ -1,3 +1,4 @@
+/* TODO: stmt_parse -> parse_stmt, etc. */
 typedef enum {
 			  TYPE_VOID,
 			  TYPE_BUILTIN
@@ -41,6 +42,7 @@ typedef struct {
 	Array params;
 	Type ret_type;
 	Block body;
+	unsigned long id; /* this is used to keep track of local vs global/other local functions (there might be multiple functions called "foo") */
 } FnExpr; /* an expression such as fn(x: int) int {return 2 * x;} */
 
 typedef enum {

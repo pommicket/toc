@@ -1,4 +1,25 @@
+typedef struct {
+	struct Block *scope; /* NULL for file scope */
+	struct Declaration *decl;
+} IdentDecl;
+
+/* OPTIM: This is not ideal. There should be one dynamic array of tree nodes. */
+typedef struct IdentTree {
+	/* zero value is an empty trie */
+	long id;
+	int len; /* length of identifier = depth in tree */
+	struct IdentTree *children;
+	struct IdentTree *parent;
+	Array decls; /* array of declarations of this identifier */
+	unsigned long c_fn_reps; /* number of repetitions of this identifier in the C output--only used for functions */
+} IdentTree;
+
+typedef IdentTree *Identifier;
+
+static IdentTree ident_base_tree;
+static long ident_curr_id; /* NOTE: you should eventually add something to reset this */
 static char identifier_chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.";
+
 #define NIDENTIFIER_CHARS ((int)((sizeof identifier_chars) - 1)) /* -1 for null char */
 
 /* returns -1 if c is not a valid identifier character, its index in identifier_chars otherwise */
@@ -24,25 +45,6 @@ static int isident(int c) {
 static int isidentstart(int c) {
 	return isident(c);
 }
-
-typedef struct {
-	struct Block *scope; /* NULL for file scope */
-	struct Declaration *decl;
-} IdentDecl;
-
-typedef struct IdentTree {
-	/* zero value is an empty trie */
-	long id;
-	int len; /* length of identifier = depth in tree */
-	struct IdentTree *children;
-	struct IdentTree *parent;
-	Array decls; /* array of declarations of this identifier */
-} IdentTree;
-
-typedef IdentTree *Identifier;
-
-static IdentTree ident_base_tree;
-static long ident_curr_id; /* NOTE: you should eventually add something to reset this */
 
 /* moves s to the char after the identifier */
 static Identifier ident_tree_insert(IdentTree *t, char **s) {

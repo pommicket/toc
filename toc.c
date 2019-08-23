@@ -1,5 +1,4 @@
 /* Includes all of toc's files */
-
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,5 +14,5 @@
 #include "identifiers.c"
 #include "tokenizer.c"
 #include "parse.c"
-#include "blocks.c"
+#include "infer.c"
 #include "cgen.c"
