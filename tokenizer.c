@@ -34,15 +34,13 @@ typedef enum {
 			  KW_U32,
 			  KW_U64,
 			  KW_FLOAT,
-			  KW_F32,
-			  KW_F64,
+			  KW_DOUBLE,
 			  KW_COUNT
 } Keyword;
 
 static const char *keywords[KW_COUNT] =
 	{";", "=", ":", "@", ",", "(", ")", "{", "}", "==", "<", "<=", "-", "+", "fn",
-	 "int", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "float", "f32",
-	 "f64"};
+	 "int", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "float", "double"};
 
 /* Returns KW_COUNT if it's not a keyword */
 /* OPTIM: don't use strncmp so much */

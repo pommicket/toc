@@ -1,92 +1,3 @@
-/* the generation of C code */
-/* TODO: check ferror */
-typedef struct {
-	FILE *out;
-	unsigned long anon_fn_count;
-} CGenerator;
-
-
-static void cgen_vwrite(CGenerator *g, const char *fmt, va_list args) {
-	vfprintf(g->out, fmt, args);
-}
-
-static void cgen_write(CGenerator *g, const char *fmt, ...) {
-	va_list args;
-	va_start(args, fmt);
-	cgen_vwrite(g, fmt, args);
-	va_end(args);
-}
-
-static void cgen_writeln(CGenerator *g, const char *fmt, ...) {
-	va_list args;
-	va_start(args, fmt);
-	cgen_vwrite(g, fmt, args);
-	va_end(args);
-	cgen_write(g, "\n");
-}
-	
-static void cgen_write_comment(CGenerator *g, const char *fmt, ...) {
-	cgen_write(g, "/* ");
-	va_list args;
-	va_start(args, fmt);
-	cgen_vwrite(g, fmt, args);
-	va_end(args);
-	cgen_write(g, " */");
-}
-
-static void cgen_write_line_comment(CGenerator *g, const char *fmt, ...) {
-	/* could switch to // for c99 */
-	cgen_write(g, "/* ");
-	va_list args;
-	va_start(args, fmt);
-	cgen_vwrite(g, fmt, args);
-	va_end(args);
-	cgen_write(g, " */\n");
-}
-
-static void cgen_create(CGenerator *g, FILE *out) {
-	g->out = out;
-	g->anon_fn_count = 0;
-}
-
-static void cgen_ident(CGenerator *g, Identifier i) {
-	fprint_ident(g->out, i);
-}
-
-static const char *builtin_type_to_str(BuiltinType b) {
-	/* TODO: make this return int/long/etc. if stdint.h is not available */
-	switch (b) {
-	case BUILTIN_INT: return "int64_t";
-	case BUILTIN_I8: return "int8_t";
-	case BUILTIN_I16: return "int16_t";
-	case BUILTIN_I32: return "int32_t";
-	case BUILTIN_I64: return "int64_t";
-	case BUILTIN_U8: return "uint8_t";
-	case BUILTIN_U16: return "uint16_t";
-	case BUILTIN_U32: return "uint32_t";
-	case BUILTIN_U64: return "uint64_t";
-	case BUILTIN_FLOAT: return "float";
-	case BUILTIN_F32: return "float";
-	case BUILTIN_F64: return "double";
-	case BUILTIN_TYPE_COUNT: break;
-	}
-	assert(0);
-	return NULL;
-}
-
-/* NOTE: this will eventually be split into two functions when functions/arrays are added */
-static bool cgen_type(CGenerator *g, Type *t) {
-	switch (t->kind) {
-	case TYPE_VOID:
-		cgen_write(g, "void");
-		break;
-	case TYPE_BUILTIN:
-		cgen_write(g, "%s", builtin_type_to_str(t->builtin));
-		break;
-	}
-	return true;
-}
-
 static bool cgen_expr(CGenerator *g, Expression *e) {
 	switch (e->kind) {
 	case EXPR_INT_LITERAL:
@@ -134,71 +45,57 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		cgen_write(g, ")");
 		break;
 	case EXPR_FN:
-		err_print(e->where, "Function expression not part of declaration or call.");
-		return false;
+		cgen_fn_name(g, &e->fn);
+		break;
+	case EXPR_CALL:
+		cgen_expr(g, e->call.fn);
+		cgen_write(g, "(");
+		arr_foreach(&e->call.args, Expression, arg) {
+			if (arg != e->call.args.data) {
+				cgen_write(g, ",");
+				cgen_write_space(g);
+			}
+			cgen_expr(g, arg);
+		}
+		cgen_write(g, ")");
+		break;
 	}
 	return true;
 }
 
-/* b = NULL => file */
-static bool cgen_block_enter(Array stmts, Block *b) {
-	bool ret = true;
-	
-	arr_foreach(&stmts, Statement, stmt) {
-		if (stmt->kind == STMT_DECL) {
-			Declaration *decl = &stmt->decl;
-			arr_foreach(&decl->idents, Identifier, ident) {
-				Array *decls = &(*ident)->decls;
-				if (decls->item_sz) {
-					/* check that it hasn't been declared in this block */
-					IdentDecl *prev = decls->last;
-					if (prev->scope == b) {
-						err_print(decl->where, "Re-declaration of identifier in the same block.");
-						info_print(prev->decl->where, "Previous declaration was here.");
-						ret = false;
-						continue;
-					}
-				} else {
-					/* array not initialized yet */
-					arr_create(&(*ident)->decls, sizeof(IdentDecl));
-				}
-				if (infer_decl(decl)) {
-					IdentDecl *ident_decl = arr_add(decls);
-					ident_decl->decl = decl;
-					ident_decl->scope = b;
-				} else {
-					ret = false;
-				}
-			}
-			if (decl->expr.kind == EXPR_FN) {
-				/* TODO */
-			}
-		}
-	}
-	return ret;
-}
+static bool cgen_stmt(CGenerator *g, Statement *s);
 
-static bool cgen_block_exit(Array stmts, Block *b) {
-	/* OPTIM: figure out some way of not re-iterating over everything */
+/* Generates the definition of a function, not just the identifier */
+static bool cgen_fn(CGenerator *g, FnExpr *f) {
+	if (!cgen_fn_header(g, f)) return false;
 	bool ret = true;
-	arr_foreach(&stmts, Statement, stmt) {
-		if (stmt->kind == STMT_DECL) {
-			Declaration *decl = &stmt->decl;
-			arr_foreach(&decl->idents, Identifier, ident) {
-				Array *decls = &(*ident)->decls;
-				assert(decls->item_sz);
-				IdentDecl *last_decl = decls->last;
-				if (last_decl->scope == b)
-					arr_remove_last(decls); /* remove that declaration */
-				
-			}
-		}
+	cgen_write_space(g);
+	cgen_writeln(g, "{");
+	g->indent_level++;
+	Block *prev_block = g->block;
+	cgen_block_enter(g, &f->body);
+	arr_foreach(&f->body.stmts, Statement, s) {
+		if (!cgen_stmt(g, s))
+			ret = false;
 	}
+	cgen_block_exit(g, prev_block);
+	g->indent_level--;
+	cgen_writeln(g, "}");
 	return ret;
 }
 
 static bool cgen_decl(CGenerator *g, Declaration *d) {
-	/* TODO */
+	arr_foreach(&d->idents, Identifier, ident) {
+		cgen_type(g, &d->type);
+		cgen_write(g, " ");
+		cgen_ident(g, *ident);
+		cgen_write_space(g);
+		cgen_write(g, "=");
+		cgen_write_space(g);
+		cgen_expr(g, &d->expr);
+		cgen_write(g, "; ");
+	}
+	cgen_writeln(g, "");
 	return true;
 }
 
@@ -209,95 +106,48 @@ static bool cgen_stmt(CGenerator *g, Statement *s) {
 			return false;
 		cgen_writeln(g, ";");
 		break;
-	case STMT_DECL:
+	case STMT_DECL: {
+		Declaration *d = &s->decl;
+		if ((d->flags & DECL_FLAG_HAS_EXPR) && (d->flags & DECL_FLAG_CONST))
+			if (d->expr.kind == EXPR_FN)
+				return true; /* already dealt with below */
+			
 		return cgen_decl(g, &s->decl);
 	}
+	}
 	return true;
 }
 
-/* 
+static bool cgen_fns_in_stmt(CGenerator *g, Statement *s);
 
-because functions can have circular dependencies, we need two passes:
-one declares the functions, and one defines them.
-
-*/
-
-static bool cgen_fns_stmt(CGenerator *g, Statement *s, bool def);
-
-static bool cgen_fns_expr(CGenerator *g, Expression *e, Identifier fn_name, bool def) {
+static bool cgen_fns_in_expr(CGenerator *g, Expression *e) {
 	switch (e->kind) {
-	case EXPR_FN: {
-		bool ret = true;
-		FnExpr *f = &e->fn;
-		cgen_type(g, &f->ret_type);
-		if (!def) {
-			/* get id for function */
-			if (fn_name) {
-				f->id = fn_name->c_fn_reps++;
-			} else {
-				f->id = g->anon_fn_count++;
-			}
+	case EXPR_FN:
+		cgen_fn(g, &e->fn);
+		arr_foreach(&e->fn.body.stmts, Statement, stmt) {
+			cgen_fns_in_stmt(g, stmt);
 		}
-		cgen_write(g, " ");
-		if (fn_name) {
-			cgen_ident(g, fn_name);
-		} else {
-			cgen_write(g, "a__");
-		}
-		if (f->id != 0)
-			cgen_write(g, "%lu", f->id);
-		cgen_write(g, "(");
-		arr_foreach(&f->params, Param, p) {
-			if (p != f->params.data)
-				cgen_write(g, ", ");
-			cgen_type(g, &p->type);
-			cgen_write(g, " ");
-			cgen_ident(g, p->name);
-		}
-		cgen_write(g, ")");
-		if (def) {
-			cgen_writeln(g, " {");
-			arr_foreach(&f->body.stmts, Statement, s) {
-				if (!cgen_stmt(g, s)) ret = false;
-			}
-			cgen_writeln(g, "}");
-		} else {
-			cgen_writeln(g, ";");
-		}
-
-		arr_foreach(&f->body.stmts, Statement, s) {
-			if (!cgen_fns_stmt(g, s, def))
-				ret = false;
-		}
-		return ret;
-	}
+		return true;
 	case EXPR_CALL:
-		cgen_fns_expr(g, e->call.fn, NULL, def);
-		break;
-	default: break;
+		return cgen_fns_in_expr(g, e->call.fn); 
+	default: return true;
 	}
-	return true;
 }
 
-static bool cgen_fns_stmt(CGenerator *g, Statement *s, bool def) {
+static bool cgen_fns_in_stmt(CGenerator *g, Statement *s) {
 	switch (s->kind) {
 	case STMT_EXPR:
-		if (!cgen_fns_expr(g, &s->expr, NULL, def)) return false;
-		break;
-	case STMT_DECL:
-		if (s->decl.flags & DECL_FLAG_HAS_EXPR) {
-			if (!cgen_fns_expr(g, &s->decl.expr, *(Identifier*)s->decl.idents.data, def))
-				return false;
+		if (s->expr.kind == EXPR_FN) {
+			warn_print(s->where, "Statement of function has no effect (try assigning the function to a variable).");
+		} else {
+			return cgen_fns_in_expr(g, &s->expr);
 		}
 		break;
-			
-	}
-	return true;
-}
-
-static bool cgen_fns(ParsedFile *f, CGenerator *g, bool def) {
-	arr_foreach(&f->stmts, Statement, s) {
-		cgen_fns_stmt(g, s, def);
+	case STMT_DECL: {
+		Declaration *d = &s->decl;
+		if (d->flags & DECL_FLAG_HAS_EXPR)
+			cgen_fns_in_expr(g, &d->expr);
+	} break;
 	}
 	return true;
 }
@@ -305,15 +155,9 @@ static bool cgen_fns(ParsedFile *f, CGenerator *g, bool def) {
 static bool cgen_file(CGenerator *g, ParsedFile *f) {
 	cgen_write_line_comment(g, "toc");
 	bool ret = true;
-	if (!cgen_fns(f, g, false)) return false;
-	if (!cgen_fns(f, g, true)) return false;
-	arr_foreach(&f->stmts, Statement, stmt) {
-		if (stmt->kind == STMT_EXPR) {
-			/* TODO: eventually make this an error / compile-time statement */
-			warn_print(stmt->where, "Expression statement at top level.");
-		}
-		if (!cgen_stmt(g, stmt))
-			ret = false;
+	if (!cgen_types(g, f)) return false;
+	arr_foreach(&f->stmts, Statement, s) {
+		if (!cgen_fns_in_stmt(g, s)) return false;
 	}
 	return ret;
 }

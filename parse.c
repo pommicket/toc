@@ -15,8 +15,7 @@ typedef enum {
 			  BUILTIN_U32,
 			  BUILTIN_U64,
 			  BUILTIN_FLOAT,
-			  BUILTIN_F32,
-			  BUILTIN_F64,
+			  BUILTIN_DOUBLE,
 			  BUILTIN_TYPE_COUNT
 } BuiltinType;
 
@@ -42,6 +41,7 @@ typedef struct {
 	Array params;
 	Type ret_type;
 	Block body;
+	Identifier name; /* NULL if the function is anonymous (set to NULL by parse.c, set to actual value by types_cgen.c) */
 	unsigned long id; /* this is used to keep track of local vs global/other local functions (there might be multiple functions called "foo") */
 } FnExpr; /* an expression such as fn(x: int) int {return 2 * x;} */
 
@@ -152,8 +152,7 @@ static BuiltinType kw_to_builtin_type(Keyword kw) {
 	case KW_U32: return BUILTIN_U32;
 	case KW_U64: return BUILTIN_U64;
 	case KW_FLOAT: return BUILTIN_FLOAT;
-	case KW_F32: return BUILTIN_F32;
-	case KW_F64: return BUILTIN_F64;
+	case KW_DOUBLE: return BUILTIN_DOUBLE;
 	default: return BUILTIN_TYPE_COUNT;
 	}
 }
@@ -170,8 +169,7 @@ static Keyword builtin_type_to_kw(BuiltinType t) {
 	case BUILTIN_U32: return KW_U32;
 	case BUILTIN_U64: return KW_U64;
 	case BUILTIN_FLOAT: return KW_FLOAT;
-	case BUILTIN_F32: return KW_F32;
-	case BUILTIN_F64: return KW_F64;
+	case BUILTIN_DOUBLE: return KW_DOUBLE;
 	case BUILTIN_TYPE_COUNT: break;
 	}
 	assert(0);
@@ -255,6 +253,7 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 	Tokenizer *t = p->tokr;
 	/* only called when token is fn */
 	assert(token_is_kw(t->token, KW_FN));
+	f->name = NULL;
 	t->token++;
 	if (!token_is_kw(t->token, KW_LPAREN)) {
 		tokr_err(t, "Expected '(' after 'fn'.");
@@ -658,7 +657,7 @@ static bool decl_parse(Declaration *d, Parser *p) {
 		*ident = t->token->ident;
 		/* 
 		   only keep track of file scoped declarations---
-		   blocks.c will handle the rest
+		   block enter/exit code will handle the rest
 		*/
 		if (p->block == NULL) {
 			if ((*ident)->decls.len) {

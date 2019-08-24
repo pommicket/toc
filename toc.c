@@ -15,4 +15,6 @@
 #include "tokenizer.c"
 #include "parse.c"
 #include "infer.c"
+#include "base_cgen.c"
+#include "types_cgen.c"
 #include "cgen.c"

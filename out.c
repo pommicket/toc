@@ -1,15 +1,12 @@
+#include "out.h"
+#include <stdint.h>
+
 /* toc */
-void xasfd();
-void a__();
-void a__1(int64_t y);
-double foo(int64_t x, int64_t y, uint64_t z);
-void xasfd() {
+static void bar();
+void main() {
+	int64_t x = ((12+(-(-3)))+3); 
 }
-void a__() {
+int8_t foo(int64_t x, float y, double z) {
 }
-void a__1(int64_t y) {
-}
-double foo(int64_t x, int64_t y, uint64_t z) {
-(3+5);
-(5+6);
+void bar() {
 }

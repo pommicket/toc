@@ -29,6 +29,7 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "Error reading input file: %s.\n", argv[1]);
 		return EXIT_FAILURE;
 	}
+	fclose(in);
 
 	err_filename = in_filename;
 	Tokenizer t;
@@ -55,11 +56,12 @@ int main(int argc, char **argv) {
 	
 	tokr_free(&t);
 
-	const char *out_filename = "out.c";
-
-	FILE *out = fopen(out_filename, "w");
+	const char *c_out_filename = "out.c";
+	const char *h_out_filename = "out.h";
+	FILE *c_out = fopen(c_out_filename, "w");
+	FILE *h_out = fopen(h_out_filename, "w");
 	CGenerator cgen;
-	cgen_create(&cgen, out);
+	cgen_create(&cgen, c_out, h_out, h_out_filename);
 	if (!cgen_file(&cgen, &f)) {
 		err_fprint(TEXT_IMPORTANT("Errors occured while generating C code.\n"));
 		return EXIT_FAILURE;
@@ -67,6 +69,7 @@ int main(int argc, char **argv) {
 	
 	free(contents);
 	
-	fclose(in);
+	fclose(c_out);
+	fclose(h_out);
 	idents_free();
 }

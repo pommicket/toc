@@ -1,11 +1,8 @@
-xasfd @ int = fn () {
-  x @= (fn( ) {
-  	x @= (fn(y: int) {
-	})(3);
-  })();
-};
-
-foo @= fn (x: int, y: int, z: u64) f64 {
-	3+5;
-	5+6;
+main @= fn() {
+	 foo @= fn(x: int, y: float, z: double) i8 {
+	 };
+	 bar @= fn() {
+	 
+	 };
+	 x : int = 12 + --3 + 3;
 };
