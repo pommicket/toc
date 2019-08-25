@@ -1,15 +1,8 @@
 #include "out.h"
 
 /* toc */
-static void bar();
-void asfdhjfdsaf() {
-}
 void main__(void) {
-	int64_t x = ((12+(-(-3)))+3); 
-}
-int8_t foo(int64_t x, float y, double z) {
-}
-void bar() {
+printf	("\x48\x65\x6c\x6c\x6f\x2c\x20\x57\x6f\x72\x6c\x64\x21\x0a\x00");
 }
 
 int main(void) {

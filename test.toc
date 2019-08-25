@@ -1,11 +1,3 @@
-asfdhjfdsaf @= fn() {
-};
-
-main @= fn() {
-	 foo @= fn(x: int, y: float, z: double) i8 {
-	 };
-	 bar @= fn() {
-	 
-	 };
-	 x : int = 12 + --3 + 3;
+main @ fn (int) fn(fn() fn()) = fn() {
+	 printf("Hello, World!\n");
 };

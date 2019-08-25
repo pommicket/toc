@@ -1,7 +1,8 @@
 /* TODO: stmt_parse -> parse_stmt, etc. */
 typedef enum {
 			  TYPE_VOID,
-			  TYPE_BUILTIN
+			  TYPE_BUILTIN,
+			  TYPE_FN
 } TypeKind;
 
 typedef enum {
@@ -25,6 +26,9 @@ typedef struct {
 	TypeKind kind;
 	union {
 	    BuiltinType builtin;
+		struct {
+			Array types; /* [0] = ret_type, [1..] = param_types */
+		} fn;
 	};
 } Type;
 
@@ -184,8 +188,45 @@ static bool parse_type(Parser *p, Type *type) {
 		type->kind = TYPE_BUILTIN;
 		type->builtin = kw_to_builtin_type(t->token->kw);
 		if (type->builtin == BUILTIN_TYPE_COUNT) {
-			tokr_err(t, "Expected type.");
-			return false;
+			/* Not a builtin */
+			if (t->token->kw == KW_FN) {
+				/* function type */
+				type->kind = TYPE_FN;
+				arr_create(&type->fn.types, sizeof(Type));
+				t->token++;
+				if (!token_is_kw(t->token, KW_LPAREN)) {
+					tokr_err(t, "Expected ( for function type.");
+					return false;
+				}
+				Type *ret_type = arr_add(&type->fn.types);
+				t->token++;
+				if (!token_is_kw(t->token, KW_RPAREN)) {
+					while (1) {
+						Type *param_type = arr_add(&type->fn.types);
+						if (!parse_type(p, param_type)) return false;
+						if (token_is_kw(t->token, KW_RPAREN))
+							break;
+						if (!token_is_kw(t->token, KW_COMMA)) {
+							tokr_err(t, "Expected , to continue function type parameter list.");
+							return false;
+						}
+						t->token++; /* move past , */
+					}
+				}
+				t->token++;	/* move past ) */
+
+				/* if there's a symbol, that can't be the start of a type */
+				if (t->token->kind == TOKEN_KW
+					&& t->token->kw <= KW_LAST_SYMBOL) {
+					ret_type->kind = TYPE_VOID;
+				} else {
+					if (!parse_type(p, ret_type))
+						return false;
+				}
+				return true;
+			}
+			
+			break;
 		} else {
 			t->token++;
 			return true;
@@ -807,6 +848,16 @@ static void fprint_type(FILE *out, Type *t) {
 	case TYPE_VOID:
 		fprintf(out, "void");
 		break;
+	case TYPE_FN: {
+		Type *types = t->fn.types.data;
+		fprintf(out, "fn (");
+		for (size_t i = 1; i < t->fn.types.len; i++){ 
+			fprint_type(out, &types[i]);
+			fprintf(out, ",");
+		}
+		fprintf(out, ") ");
+		fprint_type(out, &types[0]);
+	} break;
 	}
 }
 
