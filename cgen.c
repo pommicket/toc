@@ -159,5 +159,11 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 	arr_foreach(&f->stmts, Statement, s) {
 		if (!cgen_fns_in_stmt(g, s)) return false;
 	}
+	g->writing_to = CGEN_WRITING_TO_C;
+	/* write actual main function */
+	cgen_write(g, "\nint main(void) {\n"
+			   "\tmain__();\n"
+			   "\treturn 0;\n"
+			   "}\n");
 	return ret;
 }

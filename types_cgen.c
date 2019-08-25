@@ -57,9 +57,14 @@ static bool cgen_types_stmt(CGenerator *g, Statement *s) {
 			/* e.g. foo @= fn() {}; (we want to set the function's name to "foo") */
 			if (d->expr.kind == EXPR_FN) {
 				d->expr.fn.name = *(Identifier*)d->idents.data;
+				if (ident_eq_str(d->expr.fn.name, "main") && g->block != NULL) {
+					/* TODO (eventually): Consider just renaming the function */
+					err_print(d->where, "main function defined in local scope.");
+					return false;
+				}
 			}
 		}
-		cgen_types_expr(g, &d->expr);
+		return cgen_types_expr(g, &d->expr);
 	} break;
 			
 	}
@@ -68,7 +73,9 @@ static bool cgen_types_stmt(CGenerator *g, Statement *s) {
 
 static bool cgen_types(CGenerator *g, ParsedFile *f) {
 	arr_foreach(&f->stmts, Statement, s) {
-		cgen_types_stmt(g, s);
+		if (!cgen_types_stmt(g, s)) {
+			return false;
+		}
 	}
 	return true;
 }

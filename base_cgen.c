@@ -81,11 +81,13 @@ static void cgen_create(CGenerator *g, FILE *c_out, FILE *h_out, const char *h_f
 	g->anon_fn_count = 0;
 	g->indent_level = 0;
 	g->block = NULL;
-	g->writing_to = CGEN_WRITING_TO_C;
-	g->indent_next = true;
+    g->indent_next = true;
 	
-	cgen_write(g, "#include \"%s\"\n", h_filename);
+	g->writing_to = CGEN_WRITING_TO_H;
 	cgen_write(g, "#include <stdint.h>\n");
+	
+	g->writing_to = CGEN_WRITING_TO_C;
+	cgen_write(g, "#include \"%s\"\n", h_filename);
 	cgen_writeln(g, ""); /* extra newline between includes and code */
 }
 
@@ -138,6 +140,11 @@ static void cgen_fn_name(CGenerator *g, FnExpr *f) {
 
 static bool cgen_fn_header(CGenerator *g, FnExpr *f) {
 	CGenWritingTo writing_to_before = g->writing_to;
+	if (ident_eq_str(f->name, "main")) {
+		/* don't use actual main function */
+		cgen_write(g, "void main__(void)");
+		return true;
+	}
 	if (!f->name || g->block != NULL) {
 		cgen_write(g, "static "); /* anonymous functions only exist in this translation unit */
 	}

@@ -12,6 +12,7 @@ typedef struct IdentTree {
 	struct IdentTree *parent;
 	Array decls; /* array of declarations of this identifier */
 	unsigned long c_fn_reps; /* number of repetitions of this identifier in the C output--only used for functions */
+	size_t depth;
 } IdentTree;
 
 typedef IdentTree *Identifier;
@@ -51,8 +52,10 @@ static Identifier ident_tree_insert(IdentTree *t, char **s) {
 		if (!t->children) {
 			/* allocate children */
 			t->children = err_calloc(NIDENTIFIER_CHARS, sizeof *t->children);
-			for (int i = 0; i < NIDENTIFIER_CHARS; i++)
+			for (int i = 0; i < NIDENTIFIER_CHARS; i++) {
 				t->children[i].parent = t; /* child's parent = self */
+				t->children[i].depth = t->depth + 1;
+			}
 		}
 		t = &t->children[ident_char_index(c)];
 		(*s)++;
@@ -71,6 +74,20 @@ static void fprint_ident(FILE *out, Identifier id) {
 	/* OPTIM: Use malloc(id->len)???? */
 	fprint_ident(out, id->parent);
 	fputc(identifier_chars[id - id->parent->children /* index of self in parent */], out);
+}
+
+static bool ident_eq_str(Identifier i, const char *s) {
+	size_t len = strlen(s);
+	if (i->depth != len) return false;
+	s += len - 1;
+	while (i->parent != NULL) {
+		if (identifier_chars[i - i->parent->children /* index of self in parent */] != *s)
+			return false;
+		i = i->parent;
+		if (i->parent != NULL)
+			s--;
+	}
+	return true;
 }
 
 static void idents_free_tree(IdentTree *tree) {

@@ -1,3 +1,6 @@
+asfdhjfdsaf @= fn() {
+};
+
 main @= fn() {
 	 foo @= fn(x: int, y: float, z: double) i8 {
 	 };

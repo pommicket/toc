@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
 	fprint_parsed_file(stdout, &f);
 	
 	tokr_free(&t);
-
+	/* TODO (eventually): use a tmp file (don't overwrite old output if there's an error) */
 	const char *c_out_filename = "out.c";
 	const char *h_out_filename = "out.h";
 	FILE *c_out = fopen(c_out_filename, "w");
