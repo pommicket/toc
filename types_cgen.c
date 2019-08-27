@@ -26,6 +26,8 @@ static bool cgen_types_expr(CGenerator *g, Expression *e) {
 	case EXPR_FN: {
 		if (e->fn.name && g->block == NULL) { /* write named function prototypes in global scope to header file */
 			g->writing_to = CGEN_WRITING_TO_H;
+		} else {
+			g->writing_to = CGEN_WRITING_TO_C;
 		}
 		if (!cgen_types_fn(g, &e->fn, e->where))
 			return false;

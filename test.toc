@@ -1,5 +1,8 @@
 main @= fn() {
 
-	 foo @ int = fn() {foo();};
-	 
+	 foo @ fn() = fn() {x : fn() = bar;};
+	 bar : fn() = fn( ){};
+
+	 foo();
+	 bar();
 };

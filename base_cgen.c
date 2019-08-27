@@ -177,11 +177,15 @@ static bool cgen_type_post(CGenerator *g, Type *t) {
 		assert(t->fn.types.len > 0);
 		size_t nparams = t->fn.types.len-1;
 		cgen_write(g, ")(");
-		for (size_t i = 0; i < nparams; i++) {
-			if (!cgen_type_pre(g, &param_types[i])) return true;
-			if (!cgen_type_post(g, &param_types[i])) return true;
-			cgen_write(g, ",");
-			cgen_write_space(g);
+		if (nparams) {
+			for (size_t i = 0; i < nparams; i++) {
+				if (!cgen_type_pre(g, &param_types[i])) return true;
+				if (!cgen_type_post(g, &param_types[i])) return true;
+				cgen_write(g, ",");
+				cgen_write_space(g);
+			}
+		} else {
+			cgen_write(g, "void");
 		}
 		cgen_write(g, ")");
 		if (!cgen_type_post(g, ret_type)) return false;
@@ -205,8 +209,7 @@ static bool cgen_fn_name(CGenerator *g, FnExpr *f, Location *where) {
 	return true;
 }
 
-static bool cgen_fn_header(CGenerator *g, FnExpr *f) {
-	CGenWritingTo writing_to_before = g->writing_to;
+static bool cgen_fn_header(CGenerator *g, FnExpr *f) {	
 	if (!f->name || g->block != NULL) {
 		cgen_write(g, "static "); /* anonymous functions only exist in this translation unit */
 	}
@@ -214,19 +217,22 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f) {
 	cgen_fn_name(g, f, NULL);
 	if (!cgen_type_post(g, &f->ret_type)) return false;
 	cgen_write(g, "(");
-	arr_foreach(&f->params, Param, p) {
-		if (p != f->params.data) {
-			cgen_write(g, ",");
-			cgen_write_space(g);
+	if (f->params.len) {
+		arr_foreach(&f->params, Param, p) {
+			if (p != f->params.data) {
+				cgen_write(g, ",");
+				cgen_write_space(g);
+			}
+			if (!cgen_type_pre(g, &p->type))
+				return false;
+			cgen_ident(g, p->name, NULL);
+			if (!cgen_type_post(g, &p->type))
+				return false;
 		}
-		if (!cgen_type_pre(g, &p->type))
-			return false;
-		cgen_ident(g, p->name, NULL);
-		if (!cgen_type_post(g, &p->type))
-			return false;
+	} else {
+		cgen_write(g, "void");
 	}
 	cgen_write(g, ")");
-	g->writing_to = writing_to_before;
 	return true;
 }
 

@@ -1,7 +1,20 @@
 #include "out.h"
 
 /* toc */
-void main__() {
+static void foo(void);
+static void a___(void);
+void main__(void) {
+	void (*bar)(void) = a___; 
+	foo();
+	a___();
 }
-void foo() {
+static void foo(void) {
+	void (*x)(void) = a___; 
+}
+static void a___(void) {
+}
+
+int main(void) {
+	main__();
+	return 0;
 }

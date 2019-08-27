@@ -64,24 +64,6 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 
 static bool cgen_stmt(CGenerator *g, Statement *s);
 
-/* Generates the definition of a function, not just the identifier */
-static bool cgen_fn(CGenerator *g, FnExpr *f) {
-	if (!cgen_fn_header(g, f)) return false;
-	bool ret = true;
-	cgen_write_space(g);
-	cgen_writeln(g, "{");
-	g->indent_level++;
-	Block *prev_block = g->block;
-	cgen_block_enter(g, &f->body);
-	arr_foreach(&f->body.stmts, Statement, s) {
-		if (!cgen_stmt(g, s))
-			ret = false;
-	}
-	cgen_block_exit(g, prev_block);
-	g->indent_level--;
-	cgen_writeln(g, "}");
-	return ret;
-}
 
 static bool cgen_decl(CGenerator *g, Declaration *d) {
 	arr_foreach(&d->idents, Identifier, ident) {
@@ -121,15 +103,35 @@ static bool cgen_stmt(CGenerator *g, Statement *s) {
 
 static bool cgen_fns_in_stmt(CGenerator *g, Statement *s);
 
+/* Generates function definition, and the definitions of all functions inside this */
+static bool cgen_fn(CGenerator *g, FnExpr *f) {
+	if (!cgen_fn_header(g, f)) return false;
+	Block *prev_block = g->block;
+	cgen_block_enter(g, &f->body);
+	bool ret = true;
+	cgen_write_space(g);
+	cgen_writeln(g, "{");
+	g->indent_level++;
+	arr_foreach(&f->body.stmts, Statement, s) {
+		if (!cgen_stmt(g, s))
+			ret = false;
+	}
+	g->indent_level--;
+	cgen_writeln(g, "}");
+	if (ret) {
+		arr_foreach(&f->body.stmts, Statement, stmt) {
+			if (!cgen_fns_in_stmt(g, stmt)) ret = false;
+		}
+	}
+	cgen_block_exit(g, prev_block);
+	return ret;
+}
+
 static bool cgen_fns_in_expr(CGenerator *g, Expression *e) {
 	switch (e->kind) {
-	case EXPR_FN:
-		if (!cgen_fn(g, &e->fn)) return false;
-		bool ret = true;
-		arr_foreach(&e->fn.body.stmts, Statement, stmt) {
-			ret = ret && cgen_fns_in_stmt(g, stmt);
-		}
-		return ret;
+	case EXPR_FN: {
+		return cgen_fn(g, &e->fn);
+	}
 	case EXPR_CALL:
 		return cgen_fns_in_expr(g, e->call.fn); 
 	default: return true;
