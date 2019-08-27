@@ -17,12 +17,11 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		cgen_write(g, "\"");
 		break;
 	case EXPR_IDENT:
-		/* TODO: check if declared */
-		cgen_ident(g, e->ident); 
+		if (!cgen_ident(g, e->ident, &e->where)) return false;
 		break;
 	case EXPR_BINARY_OP:
 		cgen_write(g, "(");
-		cgen_expr(g, e->binary.lhs);
+		if (!cgen_expr(g, e->binary.lhs)) return false;
 		switch (e->binary.op) {
 		case BINARY_PLUS:
 			cgen_write(g, "+");
@@ -31,7 +30,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			cgen_write(g, "-");
 			break;
 		}
-		cgen_expr(g, e->binary.rhs);
+		if (!cgen_expr(g, e->binary.rhs)) return false;
 		cgen_write(g, ")");
 		break;
 	case EXPR_UNARY_OP:
@@ -41,21 +40,21 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			cgen_write(g, "-");
 			break;
 		}
-		cgen_expr(g, e->unary.of);
+		if (!cgen_expr(g, e->unary.of)) return false;
 		cgen_write(g, ")");
 		break;
 	case EXPR_FN:
-		cgen_fn_name(g, &e->fn);
+		if (!cgen_fn_name(g, &e->fn, &e->where)) return false;
 		break;
 	case EXPR_CALL:
-		cgen_expr(g, e->call.fn);
+		if (!cgen_expr(g, e->call.fn)) return false;
 		cgen_write(g, "(");
 		arr_foreach(&e->call.args, Expression, arg) {
 			if (arg != e->call.args.data) {
 				cgen_write(g, ",");
 				cgen_write_space(g);
 			}
-			cgen_expr(g, arg);
+			if (!cgen_expr(g, arg)) return false;
 		}
 		cgen_write(g, ")");
 		break;
@@ -87,12 +86,14 @@ static bool cgen_fn(CGenerator *g, FnExpr *f) {
 static bool cgen_decl(CGenerator *g, Declaration *d) {
 	arr_foreach(&d->idents, Identifier, ident) {
 		cgen_type_pre(g, &d->type);
-		cgen_ident(g, *ident);
+		cgen_ident(g, *ident, NULL);
 		cgen_type_post(g, &d->type);
 		cgen_write_space(g);
 		cgen_write(g, "=");
 		cgen_write_space(g);
-		cgen_expr(g, &d->expr);
+		if (!cgen_expr(g, &d->expr)) {
+			return false;
+		}
 		cgen_write(g, "; ");
 	}
 	cgen_writeln(g, "");
@@ -123,11 +124,12 @@ static bool cgen_fns_in_stmt(CGenerator *g, Statement *s);
 static bool cgen_fns_in_expr(CGenerator *g, Expression *e) {
 	switch (e->kind) {
 	case EXPR_FN:
-		cgen_fn(g, &e->fn);
+		if (!cgen_fn(g, &e->fn)) return false;
+		bool ret = true;
 		arr_foreach(&e->fn.body.stmts, Statement, stmt) {
-			cgen_fns_in_stmt(g, stmt);
+			ret = ret && cgen_fns_in_stmt(g, stmt);
 		}
-		return true;
+		return ret;
 	case EXPR_CALL:
 		return cgen_fns_in_expr(g, e->call.fn); 
 	default: return true;
@@ -146,7 +148,7 @@ static bool cgen_fns_in_stmt(CGenerator *g, Statement *s) {
 	case STMT_DECL: {
 		Declaration *d = &s->decl;
 		if (d->flags & DECL_FLAG_HAS_EXPR)
-			cgen_fns_in_expr(g, &d->expr);
+			return cgen_fns_in_expr(g, &d->expr);
 	} break;
 	}
 	return true;

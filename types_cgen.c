@@ -1,5 +1,5 @@
 static bool cgen_types_stmt(CGenerator *g, Statement *s);
-static bool cgen_types_fn(CGenerator *g, FnExpr *f) {
+static bool cgen_types_fn(CGenerator *g, FnExpr *f, Location where) {
 	bool ret = true;
 	/* assign an ID to the function */
 	if (f->name) {
@@ -27,7 +27,7 @@ static bool cgen_types_expr(CGenerator *g, Expression *e) {
 		if (e->fn.name && g->block == NULL) { /* write named function prototypes in global scope to header file */
 			g->writing_to = CGEN_WRITING_TO_H;
 		}
-		if (!cgen_types_fn(g, &e->fn))
+		if (!cgen_types_fn(g, &e->fn, e->where))
 			return false;
 		g->writing_to = CGEN_WRITING_TO_C;
 	} break;

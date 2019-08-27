@@ -21,7 +21,7 @@ typedef enum {
 } BuiltinType;
 
 
-typedef struct {
+typedef struct Type {
 	Location where;
 	TypeKind kind;
 	union {
@@ -275,7 +275,6 @@ static bool parse_block(Parser *p, Block *b) {
 			Statement *stmt = arr_add(&b->stmts);
 			if (!parse_stmt(p, stmt)) {
 				ret = false;
-				continue;
 			}
 			if (token_is_kw(t->token, KW_RBRACE)) break;
 			if (t->token->kind == TOKEN_EOF) {

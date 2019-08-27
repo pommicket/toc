@@ -1,2 +1,3 @@
 #include <stdint.h>
-void main__(void);
+void main__();
+static void foo();

@@ -25,12 +25,16 @@ static FILE *cgen_writing_to(CGenerator *g) {
 	return NULL;
 }
 
-static void cgen_vwrite(CGenerator *g, const char *fmt, va_list args) {
+static void cgen_indent(CGenerator *g) {
 	if (g->indent_next) {
 		for (int i = 0; i < g->indent_level; i++)
 			fprintf(cgen_writing_to(g), "\t");
 		g->indent_next = false;
 	}
+}
+
+static void cgen_vwrite(CGenerator *g, const char *fmt, va_list args) {
+	cgen_indent(g);
 	vfprintf(cgen_writing_to(g), fmt, args);
 }
 
@@ -91,8 +95,36 @@ static void cgen_create(CGenerator *g, FILE *c_out, FILE *h_out, const char *h_f
 	cgen_writeln(g, ""); /* extra newline between includes and code */
 }
 
-static void cgen_ident(CGenerator *g, Identifier i) {
+
+/* Pass NULL for where if you don't want to check if it's declared */
+static bool cgen_fn_name(CGenerator *g, FnExpr *f, Location *where);
+static bool cgen_ident(CGenerator *g, Identifier i, Location *where) {
+	if (where) {
+		IdentDecl *id_decl = ident_decl(i);
+		if (!id_decl) {
+			err_print(*where, "Identifier undeclared: %s", ident_to_str(i));
+			return false;
+		}
+		Declaration *decl = id_decl->decl;
+		if (decl->expr.kind == EXPR_FN) {
+			cgen_fn_name(g, &decl->expr.fn, NULL);
+			return true;
+		}
+		if (decl->where.line == where->line) {
+			/* e.g. x: int = x; */
+			err_print(*where, "Use of identifier \"%s\" in its own declaration.", ident_to_str(i));
+			return false;
+		} else if (decl->where.line > where->line) {
+			/* x used before declared */
+			char *str = ident_to_str(i);
+			err_print(*where, "Use of identifier \"%s\" before its declaration.", str);
+			info_print(decl->where, "%s will be declared here.", str);
+			return false;
+		}
+	}
+	cgen_indent(g);
 	fprint_ident(cgen_writing_to(g), i);
+	return true;
 }
 
 static const char *builtin_type_to_str(BuiltinType b) {
@@ -158,28 +190,28 @@ static bool cgen_type_post(CGenerator *g, Type *t) {
 	return true;
 }
 
-static void cgen_fn_name(CGenerator *g, FnExpr *f) {
-	if (f->name)
-		cgen_ident(g, f->name);
-	else
+static bool cgen_fn_name(CGenerator *g, FnExpr *f, Location *where) {
+	if (f->name) {
+		if (ident_eq_str(f->name, "main"))
+			cgen_write(g, "main__");
+		else
+			return cgen_ident(g, f->name, where);
+	} else {
 		cgen_write(g, "a___");
+	}
 	
 	if (f->id != 0)
 		cgen_write(g, "%lu", f->id);
+	return true;
 }
 
 static bool cgen_fn_header(CGenerator *g, FnExpr *f) {
 	CGenWritingTo writing_to_before = g->writing_to;
-	if (ident_eq_str(f->name, "main")) {
-		/* don't use actual main function */
-		cgen_write(g, "void main__(void)");
-		return true;
-	}
 	if (!f->name || g->block != NULL) {
 		cgen_write(g, "static "); /* anonymous functions only exist in this translation unit */
 	}
 	if (!cgen_type_pre(g, &f->ret_type)) return false;
-	cgen_fn_name(g, f);
+	cgen_fn_name(g, f, NULL);
 	if (!cgen_type_post(g, &f->ret_type)) return false;
 	cgen_write(g, "(");
 	arr_foreach(&f->params, Param, p) {
@@ -189,7 +221,7 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f) {
 		}
 		if (!cgen_type_pre(g, &p->type))
 			return false;
-		cgen_ident(g, p->name);
+		cgen_ident(g, p->name, NULL);
 		if (!cgen_type_post(g, &p->type))
 			return false;
 	}
