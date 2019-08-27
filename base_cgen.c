@@ -115,15 +115,45 @@ static const char *builtin_type_to_str(BuiltinType b) {
 	return NULL;
 }
 
-/* NOTE: this will eventually be split into two functions when functions/arrays are added */
-static bool cgen_type(CGenerator *g, Type *t) {
+static bool cgen_type_pre(CGenerator *g, Type *t) {
 	switch (t->kind) {
 	case TYPE_VOID:
-		cgen_write(g, "void");
+		cgen_write(g, "void ");
 		break;
 	case TYPE_BUILTIN:
-		cgen_write(g, "%s", builtin_type_to_str(t->builtin));
+		cgen_write(g, "%s ", builtin_type_to_str(t->builtin));
 		break;
+	case TYPE_FN: {
+		Type *types = t->fn.types.data;
+		Type *ret_type = &types[0];
+		if (!cgen_type_pre(g, ret_type)) return false;
+		cgen_write(g, "(*");
+	} break;
+	}
+	return true;
+}
+
+static bool cgen_type_post(CGenerator *g, Type *t) {
+	switch (t->kind) {
+	case TYPE_VOID:
+	case TYPE_BUILTIN:
+		break;
+	case TYPE_FN: {
+		Type *types = t->fn.types.data;
+		Type *ret_type = &types[0];
+		Type *param_types = types + 1;
+		assert(t->fn.types.len > 0);
+		size_t nparams = t->fn.types.len-1;
+		cgen_write(g, ")(");
+		for (size_t i = 0; i < nparams; i++) {
+			if (!cgen_type_pre(g, &param_types[i])) return true;
+			if (!cgen_type_post(g, &param_types[i])) return true;
+			cgen_write(g, ",");
+			cgen_write_space(g);
+		}
+		cgen_write(g, ")");
+		if (!cgen_type_post(g, ret_type)) return false;
+	} break;
 	}
 	return true;
 }
@@ -148,19 +178,20 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f) {
 	if (!f->name || g->block != NULL) {
 		cgen_write(g, "static "); /* anonymous functions only exist in this translation unit */
 	}
-	if (!cgen_type(g, &f->ret_type)) return false;
-	cgen_write(g, " ");
+	if (!cgen_type_pre(g, &f->ret_type)) return false;
 	cgen_fn_name(g, f);
+	if (!cgen_type_post(g, &f->ret_type)) return false;
 	cgen_write(g, "(");
 	arr_foreach(&f->params, Param, p) {
 		if (p != f->params.data) {
 			cgen_write(g, ",");
 			cgen_write_space(g);
 		}
-		if (!cgen_type(g, &p->type))
+		if (!cgen_type_pre(g, &p->type))
 			return false;
-		cgen_write(g, " ");
 		cgen_ident(g, p->name);
+		if (!cgen_type_post(g, &p->type))
+			return false;
 	}
 	cgen_write(g, ")");
 	g->writing_to = writing_to_before;

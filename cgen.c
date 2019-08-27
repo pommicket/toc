@@ -86,9 +86,9 @@ static bool cgen_fn(CGenerator *g, FnExpr *f) {
 
 static bool cgen_decl(CGenerator *g, Declaration *d) {
 	arr_foreach(&d->idents, Identifier, ident) {
-		cgen_type(g, &d->type);
-		cgen_write(g, " ");
+		cgen_type_pre(g, &d->type);
 		cgen_ident(g, *ident);
+		cgen_type_post(g, &d->type);
 		cgen_write_space(g);
 		cgen_write(g, "=");
 		cgen_write_space(g);

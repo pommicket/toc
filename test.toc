@@ -1,3 +1,4 @@
-main @ fn (int) fn(fn() fn()) = fn() {
-	 printf("Hello, World!\n");
+main @= fn() {
+	 foo : int = 3;
+	 bar : fn() = 0;
 };

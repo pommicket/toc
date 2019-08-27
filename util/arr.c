@@ -21,7 +21,7 @@ static void arr_reserve(Array *arr, size_t n) {
 
 static void *arr_add(Array *arr) {
 	if (arr->len >= arr->cap) {
-		arr_reserve(arr, (arr->cap + 2) * 2);
+		arr_reserve(arr, (arr->cap + 1) * 2);
 	}
 	arr->len++;
 	arr->last = (char*)arr->last + arr->item_sz;
