@@ -5,7 +5,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		break;
 	case EXPR_FLOAT_LITERAL:
 		/* TODO: more precision */
-		cgen_write(g, "%f", e->floatl);
+		cgen_write(g, "%f", (double)e->floatl);
 		break;
 	case EXPR_STR_LITERAL:
 		cgen_write(g, "\"");

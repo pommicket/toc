@@ -7,6 +7,8 @@ void main__(void) {
 	void (*bar)(void) = a___; 
 	foo();
 	a___();
+	int64_t r = 12; 
+	float p = 13.800000; 
 }
 static void foo(void) {
 	void (*x)(void) = a___; 

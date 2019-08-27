@@ -69,7 +69,7 @@ typedef enum {
 			  BINARY_MINUS
 } BinaryOp;
 
-#define EXPR_FLAG_FLEXIBLE 0x01
+#define EXPR_FLAG_FLEXIBLE 0x01	/* e.g. 4 => float/i32/etc. */
 
 typedef struct Expression {
 	Location where;
@@ -101,6 +101,7 @@ typedef struct Expression {
 #define DECL_FLAG_INFER_TYPE 0x01
 #define DECL_FLAG_CONST 0x02
 #define DECL_FLAG_HAS_EXPR 0x04
+#define DECL_FLAG_FOUND_TYPE 0x08
 
 /* OPTIM: Instead of using dynamic arrays, do two passes. */
 typedef struct Declaration {
@@ -446,6 +447,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				e->type.kind = TYPE_BUILTIN;
 				e->type.builtin = BUILTIN_FLOAT;
 				e->floatl = num->floatval;
+				printf("%g\n",(double)e->floatl);
 				break;
 			case NUM_LITERAL_INT:
 				e->kind = EXPR_INT_LITERAL;
