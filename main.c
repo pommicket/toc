@@ -55,7 +55,10 @@ int main(int argc, char **argv) {
 	fprint_parsed_file(stdout, &f);
 	
 	tokr_free(&t);
-	types_file(&f);
+	if (!types_file(&f)) {
+		err_fprint(TEXT_IMPORTANT("Errors occured while determining types.\n"));
+		return EXIT_FAILURE;
+	}
 	
 	/* TODO (eventually): use a tmp file (don't overwrite old output if there's an error) */
 	const char *c_out_filename = "out.c";

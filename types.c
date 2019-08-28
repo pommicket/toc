@@ -1,3 +1,4 @@
+/* pass NULL for file */
 static bool block_enter(Block *b) {
 	bool ret = true;
 	arr_foreach(&b->stmts, Statement, stmt) {
@@ -71,7 +72,7 @@ static size_t type_to_string(Type *a, char *buffer, size_t bufsize) {
 		}
 		written += str_copy(buffer + written, bufsize - written, ")");
 		if (ret_type->kind != TYPE_VOID) {
-		written += str_copy(buffer + written, bufsize - written, " ");
+			written += str_copy(buffer + written, bufsize - written, " ");
 			written += type_to_string(ret_type, buffer + written, bufsize - written);
 		}
 		return written;
@@ -86,11 +87,21 @@ static size_t type_to_string(Type *a, char *buffer, size_t bufsize) {
 static bool type_eq(Type *a, Type *b) {
 	if (a->kind != b->kind) return false;
 	switch (a->kind) {
+	case TYPE_VOID: return true;
 	case TYPE_BUILTIN:
 		return a->builtin == b->builtin;
-		 /* TODO */
+	case TYPE_FN: {
+		
+		if (a->fn.types.len != b->fn.types.len) return false;
+		Type *a_types = a->fn.types.data, *b_types = b->fn.types.data;
+		for (size_t i = 0; i < a->fn.types.len; i++)
+			if (!type_eq(&a_types[i], &b_types[i]))
+				return false;
+		return true;
 	}
-	return true;
+	}
+	assert(0);
+	return false;
 }
 
 /* expected must equal got, or an error will be produced */
@@ -107,6 +118,8 @@ static bool type_must_eq(Location where, Type *expected, Type *got) {
 }
 
 static bool types_stmt(Statement *s);
+static bool types_decl(Declaration *d);
+
 
 static bool types_expr(Expression *e) {
 	Type *t = &e->type;
@@ -121,7 +134,12 @@ static bool types_expr(Expression *e) {
 			Type *param_type = arr_add(&t->fn.types);
 			*param_type = param->type;
 		}
-		
+		block_enter(&f->body);
+		arr_foreach(&f->body.stmts, Statement, s) {
+			if (!types_stmt(s))
+				return false;
+		}
+		block_exit(&f->body);
 	} break;
 	case EXPR_INT_LITERAL:
 	    t->kind = TYPE_BUILTIN;
@@ -131,11 +149,34 @@ static bool types_expr(Expression *e) {
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_FLOAT;
 		break;
+	case EXPR_IDENT: {
+		IdentDecl *decl = ident_decl(e->ident);
+		if (!decl) {
+			char *s = ident_to_str(e->ident);
+			err_print(e->where, "Undeclared identifier: %s", s);
+			free(s);
+		}
+		*t = decl->decl->type;
+	} break;
 		/* TODO */
 	}
 	return true;
 }
 
+static bool types_decl(Declaration *d) {
+	if (d->flags & DECL_FLAG_FOUND_TYPE) return true;
+	if (!types_expr(&d->expr)) return false;
+	if (d->flags & DECL_FLAG_INFER_TYPE) {
+		d->type = d->expr.type;
+	} else {
+		if (!type_must_eq(d->expr.where, &d->type, &d->expr.type)) {
+			return false;
+		}
+	}
+	d->flags |= DECL_FLAG_FOUND_TYPE;
+		
+	return types_expr(&d->expr);
+}
 
 static bool types_stmt(Statement *s) {
 	switch (s->kind) {
@@ -143,23 +184,10 @@ static bool types_stmt(Statement *s) {
 		if (!types_expr(&s->expr))
 			return false;
 		break;
-	case STMT_DECL: {
-		Declaration *d = &s->decl;
-		
-		if (d->flags & DECL_FLAG_FOUND_TYPE) return true;
-		if (!types_expr(&d->expr)) return false;
-		if (d->flags & DECL_FLAG_INFER_TYPE) {
-			d->type = d->expr.type;
-		} else {
-			if (!type_must_eq(d->expr.where, &d->type, &d->expr.type)) {
-				return false;
-			}
-		}
-		d->flags |= DECL_FLAG_FOUND_TYPE;
-		
-		return types_expr(&d->expr);
-	} break;
-			
+	case STMT_DECL:
+		if (!types_decl(&s->decl))
+			return false;
+		break;
 	}
 	return true;
 }

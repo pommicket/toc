@@ -1,5 +1,5 @@
 /* C declarations of functions and global variables */
-static bool cgen_decl_fn(CGenerator *g, FnExpr *f, Location where) {
+static bool cgen_decl_fn(CGenerator *g, FnExpr *f) {
 	/* assign an ID to the function */
 	if (f->name && g->block == NULL) {
 		f->id = f->name->c_fn_reps++;
@@ -23,7 +23,7 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 		} else {
 			g->writing_to = CGEN_WRITING_TO_C;
 		}
-		if (!cgen_decl_fn(g, f, e->where))
+		if (!cgen_decl_fn(g, f))
 			return false;
 		g->writing_to = CGEN_WRITING_TO_C;
 

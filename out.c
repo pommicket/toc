@@ -9,9 +9,12 @@ void main__(void) {
 	void (*bar)(void)  = a___1; 
 	a___();
 	a___1();
+	int64_t a = 5; 
+	float b = 32.300000; 
+	int64_t c = a; 
+	int64_t blah = 32; 
 }
 static void a___(void) {
-	void (*x)(void)  = a___1; 
 }
 static void a___1(void) {
 }

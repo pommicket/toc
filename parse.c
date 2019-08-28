@@ -199,7 +199,7 @@ static bool parse_type(Parser *p, Type *type) {
 					tokr_err(t, "Expected ( for function type.");
 					return false;
 				}
-				Type *ret_type = arr_add(&type->fn.types);
+				arr_add(&type->fn.types); /* add return type */
 				t->token++;
 				if (!token_is_kw(t->token, KW_RPAREN)) {
 					while (1) {
@@ -215,7 +215,7 @@ static bool parse_type(Parser *p, Type *type) {
 					}
 				}
 				t->token++;	/* move past ) */
-
+				Type *ret_type = type->fn.types.data;
 				/* if there's a symbol, that can't be the start of a type */
 				if (t->token->kind == TOKEN_KW
 					&& t->token->kw <= KW_LAST_SYMBOL) {
@@ -447,7 +447,6 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				e->type.kind = TYPE_BUILTIN;
 				e->type.builtin = BUILTIN_FLOAT;
 				e->floatl = num->floatval;
-				printf("%g\n",(double)e->floatl);
 				break;
 			case NUM_LITERAL_INT:
 				e->kind = EXPR_INT_LITERAL;
