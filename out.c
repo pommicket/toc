@@ -13,6 +13,8 @@ void main__(void) {
 	float b = 32.300000; 
 	int64_t c = a; 
 	int64_t blah = 32; 
+	float asfdljk = 12.300000; 
+	int8_t asdkfjhakj = 1332948; 
 }
 static void a___(void) {
 }

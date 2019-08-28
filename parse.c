@@ -6,7 +6,6 @@ typedef enum {
 } TypeKind;
 
 typedef enum {
-			  BUILTIN_INT,
 			  BUILTIN_I8,
 			  BUILTIN_I16,
 			  BUILTIN_I32,
@@ -20,10 +19,13 @@ typedef enum {
 			  BUILTIN_TYPE_COUNT
 } BuiltinType;
 
+#define TYPE_FLAG_FLEXIBLE 0x01
+
 
 typedef struct Type {
 	Location where;
 	TypeKind kind;
+	unsigned short flags;
 	union {
 	    BuiltinType builtin;
 		struct {
@@ -75,7 +77,6 @@ typedef struct Expression {
 	Location where;
 	ExprKind kind;
 	Type type;
-	unsigned short flags;
 	union {
 		FloatLiteral floatl;
 		IntLiteral intl;
@@ -147,11 +148,11 @@ static Expression *parser_new_expr(Parser *p) {
 /* returns BUILTIN_TYPE_COUNT on failure */
 static BuiltinType kw_to_builtin_type(Keyword kw) {
 	switch (kw) {
-	case KW_INT: return BUILTIN_INT;
 	case KW_I8: return BUILTIN_I8;
 	case KW_I16: return BUILTIN_I16;
 	case KW_I32: return BUILTIN_I32;
 	case KW_I64: return BUILTIN_I64;
+	case KW_INT: return BUILTIN_I64;
 	case KW_U8: return BUILTIN_U8;
 	case KW_U16: return BUILTIN_U16;
 	case KW_U32: return BUILTIN_U32;
@@ -164,7 +165,6 @@ static BuiltinType kw_to_builtin_type(Keyword kw) {
 
 static Keyword builtin_type_to_kw(BuiltinType t) {
 	switch (t) {
-	case BUILTIN_INT: return KW_INT;
 	case BUILTIN_I8: return KW_I8;
 	case BUILTIN_I16: return KW_I16;
 	case BUILTIN_I32: return KW_I32;
@@ -184,6 +184,7 @@ static Keyword builtin_type_to_kw(BuiltinType t) {
 static bool parse_type(Parser *p, Type *type) {
 	Tokenizer *t = p->tokr;
 	type->where = t->token->where;
+	type->flags = 0;
 	switch (t->token->kind) {
 	case TOKEN_KW:
 		type->kind = TYPE_BUILTIN;
@@ -220,6 +221,7 @@ static bool parse_type(Parser *p, Type *type) {
 				if (t->token->kind == TOKEN_KW
 					&& t->token->kw <= KW_LAST_SYMBOL) {
 					ret_type->kind = TYPE_VOID;
+					ret_type->flags = 0;
 				} else {
 					if (!parse_type(p, ret_type))
 						return false;
@@ -430,7 +432,6 @@ static Token *expr_find_end(Parser *p, ExprEndKind ends_with)  {
 static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	Tokenizer *t = p->tokr;
 	if (end == NULL) return false;
-	e->flags = 0;
 	e->where = t->token->where;
 	if (end <= t->token) {
 		tokr_err(t, "Empty expression.");
@@ -450,9 +451,8 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				break;
 			case NUM_LITERAL_INT:
 				e->kind = EXPR_INT_LITERAL;
-				e->flags |= EXPR_FLAG_FLEXIBLE;
 				e->type.kind = TYPE_BUILTIN;
-				e->type.builtin = BUILTIN_INT; /* TODO: if it's too big, use a u64 instead. */
+				e->type.builtin = BUILTIN_I64; /* TODO: if it's too big, use a u64 instead. */
 				e->intl = num->intval;
 				break;
 			}

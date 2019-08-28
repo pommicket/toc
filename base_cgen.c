@@ -130,7 +130,6 @@ static bool cgen_ident(CGenerator *g, Identifier i, Location *where) {
 static const char *builtin_type_to_str(BuiltinType b) {
 	/* TODO: make this return int/long/etc. if stdint.h is not available */
 	switch (b) {
-	case BUILTIN_INT: return "int64_t";
 	case BUILTIN_I8: return "int8_t";
 	case BUILTIN_I16: return "int16_t";
 	case BUILTIN_I32: return "int32_t";

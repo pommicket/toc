@@ -83,9 +83,47 @@ static size_t type_to_string(Type *a, char *buffer, size_t bufsize) {
 	return 0;
 }
 
+static bool type_builtin_is_floating(BuiltinType b) {
+	switch (b) {
+	case BUILTIN_FLOAT:
+	case BUILTIN_DOUBLE:
+		return true;
+	default: return false;
+	}
+}
+
+static bool type_builtin_is_numerical(BuiltinType b) {
+	switch (b) {
+	case BUILTIN_FLOAT:
+	case BUILTIN_DOUBLE:
+	case BUILTIN_I8:
+	case BUILTIN_I16:
+	case BUILTIN_I32:
+	case BUILTIN_I64:
+	case BUILTIN_U8:
+	case BUILTIN_U16:
+	case BUILTIN_U32:
+	case BUILTIN_U64:
+		return true;
+	default: return false;
+	}
+}
 
 static bool type_eq(Type *a, Type *b) {
 	if (a->kind != b->kind) return false;
+	if (a->flags & TYPE_FLAG_FLEXIBLE) {
+		if (b->flags & TYPE_FLAG_FLEXIBLE) return true;
+		assert(a->kind == TYPE_BUILTIN);
+		
+		if (a->builtin == BUILTIN_FLOAT) {
+			return type_builtin_is_floating(b->builtin);
+		}
+		assert(a->builtin == BUILTIN_I64);
+		return type_builtin_is_numerical(b->builtin);
+	}
+	if (b->flags & TYPE_FLAG_FLEXIBLE) {
+		return type_eq(b, a); /* OPTIM? */
+	}
 	switch (a->kind) {
 	case TYPE_VOID: return true;
 	case TYPE_BUILTIN:
@@ -123,6 +161,7 @@ static bool types_decl(Declaration *d);
 
 static bool types_expr(Expression *e) {
 	Type *t = &e->type;
+	t->flags = 0;
 	switch (e->kind) {
 	case EXPR_FN: {
 		FnExpr *f = &e->fn;
@@ -144,10 +183,12 @@ static bool types_expr(Expression *e) {
 	case EXPR_INT_LITERAL:
 	    t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_I64;
+		t->flags |= TYPE_FLAG_FLEXIBLE;
 		break;
 	case EXPR_FLOAT_LITERAL:
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_FLOAT;
+		t->flags |= TYPE_FLAG_FLEXIBLE;
 		break;
 	case EXPR_IDENT: {
 		IdentDecl *decl = ident_decl(e->ident);

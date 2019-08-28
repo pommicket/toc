@@ -7,8 +7,10 @@ main @= fn() {
 	 bar();
 	 a : i64 = 5;
 	 b : float = 32.3;
-	 c : i64 = a;
+	 c : int = a;
 	 blah := 32;
+	 asfdljk: float = 12.3;
+	 asdkfjhakj : i8 = 1332948;
 };
 
 
