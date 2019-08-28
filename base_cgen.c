@@ -179,15 +179,18 @@ static bool cgen_type_post(CGenerator *g, Type *t) {
 		cgen_write(g, ")(");
 		if (nparams) {
 			for (size_t i = 0; i < nparams; i++) {
+				if (i) {
+					cgen_write(g, ",");
+					cgen_write_space(g);
+				}
 				if (!cgen_type_pre(g, &param_types[i])) return true;
 				if (!cgen_type_post(g, &param_types[i])) return true;
-				cgen_write(g, ",");
-				cgen_write_space(g);
 			}
 		} else {
 			cgen_write(g, "void");
 		}
 		cgen_write(g, ")");
+		cgen_write_space(g);
 		if (!cgen_type_post(g, ret_type)) return false;
 	} break;
 	}
@@ -195,7 +198,7 @@ static bool cgen_type_post(CGenerator *g, Type *t) {
 }
 
 static bool cgen_fn_name(CGenerator *g, FnExpr *f, Location *where) {
-	if (f->name) {
+	if (f->name && g->block == NULL) {
 		if (ident_eq_str(f->name, "main"))
 			cgen_write(g, "main__");
 		else
@@ -237,58 +240,13 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f) {
 }
 
 static bool cgen_block_enter(CGenerator *g, Block *b) {
-	bool ret = true;
 	g->block = b;
-	arr_foreach(&b->stmts, Statement, stmt) {
-		if (stmt->kind == STMT_DECL) {
-			Declaration *decl = &stmt->decl;
-			arr_foreach(&decl->idents, Identifier, ident) {
-				Array *decls = &(*ident)->decls;
-				if (decls->len) {
-					/* check that it hasn't been declared in this block */
-					IdentDecl *prev = decls->last;
-					if (prev->scope == b) {
-						err_print(decl->where, "Re-declaration of identifier in the same block.");
-						info_print(prev->decl->where, "Previous declaration was here.");
-						ret = false;
-						continue;
-					}
-				} else {
-					/* array not initialized yet */
-					arr_create(&(*ident)->decls, sizeof(IdentDecl));
-				}
-				if (infer_decl(decl)) {
-					IdentDecl *ident_decl = arr_add(decls);
-					ident_decl->decl = decl;
-					ident_decl->scope = b;
-				} else {
-					ret = false;
-				}
-			}
-		}
-	}
-	return ret;
+	return block_enter(b);
 }
 
 static bool cgen_block_exit(CGenerator *g, Block *into) {
-	/* OPTIM: figure out some way of not re-iterating over everything */
-	bool ret = true;
 	Block *b = g->block;
 	g->block = into;
-	arr_foreach(&b->stmts, Statement, stmt) {
-		if (stmt->kind == STMT_DECL) {
-			Declaration *decl = &stmt->decl;
-			arr_foreach(&decl->idents, Identifier, ident) {
-				Array *decls = &(*ident)->decls;
-				assert(decls->item_sz);
-				IdentDecl *last_decl = decls->last;
-				if (last_decl->scope == b) {
-					arr_remove_last(decls); /* remove that declaration */
-				}
-				
-			}
-		}
-	}
-	return ret;
+	return block_exit(b);
 }
 

@@ -159,7 +159,7 @@ static bool cgen_fns_in_stmt(CGenerator *g, Statement *s) {
 static bool cgen_file(CGenerator *g, ParsedFile *f) {
 	cgen_write_line_comment(g, "toc");
 	bool ret = true;
-	if (!cgen_types(g, f)) return false;
+	if (!cgen_decls_file(g, f)) return false;
 	arr_foreach(&f->stmts, Statement, s) {
 		if (!cgen_fns_in_stmt(g, s)) return false;
 	}

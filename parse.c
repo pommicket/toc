@@ -75,7 +75,7 @@ typedef struct Expression {
 	Location where;
 	ExprKind kind;
 	Type type;
-	uint16_t flags;
+	unsigned short flags;
 	union {
 		FloatLiteral floatl;
 		IntLiteral intl;
@@ -109,7 +109,7 @@ typedef struct Declaration {
 	Array idents;
 	Type type;
 	Expression expr;
-	uint16_t flags;
+	unsigned short flags;
 } Declaration;
 
 typedef enum {
@@ -474,6 +474,20 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		return true;
 	}
 			
+	if (token_is_kw(t->token, KW_FN)) {
+		/* this is a function */
+		e->kind = EXPR_FN;
+		if (!parse_fn_expr(p, &e->fn))
+			return false;
+			
+		if (t->token != end) {
+			tokr_err(t, "Direct function calling in an expression is not supported yet.\nYou can wrap the function in parentheses.");
+			/* TODO */
+			return false;
+		}
+		return true;
+	}
+	
 	/* Find the lowest-precedence operator not in parentheses/braces */
 	int paren_level = 0;
 	int brace_level = 0;
@@ -545,20 +559,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	}
 	
 	if (lowest_precedence == NOT_AN_OP) {
-		/* functions, function calls, array accesses, etc. */
-		if (token_is_kw(t->token, KW_FN)) {
-			/* this is a function */
-			e->kind = EXPR_FN;
-			if (!parse_fn_expr(p, &e->fn))
-				return false;
-			
-			if (t->token != end) {
-				tokr_err(t, "Direct function calling in an expression is not supported yet.\nYou can wrap the function in parentheses.");
-				/* TODO */
-				return false;
-			}
-			return true;
-		}
+		/* function calls, array accesses, etc. */
 		
 		/* try a function call */
 		Token *token = t->token;
