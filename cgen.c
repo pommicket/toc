@@ -68,6 +68,11 @@ static bool cgen_stmt(CGenerator *g, Statement *s);
 static bool cgen_decl(CGenerator *g, Declaration *d) {
 	arr_foreach(&d->idents, Identifier, ident) {
 		cgen_type_pre(g, &d->type);
+		if (d->flags & DECL_FLAG_CONST) {
+			cgen_write_space(g);
+			cgen_write(g, "const");
+			cgen_write_space(g);
+		}
 		cgen_ident(g, *ident, NULL);
 		cgen_type_post(g, &d->type);
 		if (d->flags & DECL_FLAG_HAS_EXPR) {

@@ -1,5 +1,7 @@
 main @= fn() {
-	 foo : [3]fn()fn([42]fn());
-	 bar : [3]fn([37]fn(int)int);
-	 foo + bar;
+	 N @= 5;
+	 FOO @= 1928;
+	 BAR @= 5;
+	 foo : [N+FOO-3--BAR]int;
+	 bar : [fn(){}]int;
 };

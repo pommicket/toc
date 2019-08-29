@@ -35,7 +35,7 @@ typedef struct Type {
 		struct {
 			struct Type *of;
 			union {
-				IntLiteral n; /* this is NOT set by parse_type; it will be handled by types.c */
+				UInteger n; /* this is NOT set by parse_type; it will be handled by types.c */
 				struct Expression *n_expr;
 			};
 		} arr;
@@ -86,8 +86,8 @@ typedef struct Expression {
 	ExprKind kind;
 	Type type;
 	union {
-		FloatLiteral floatl;
-		IntLiteral intl;
+		Floating floatl;
+		UInteger intl;
 		StrLiteral strl;
 		struct {
 			UnaryOp op;
@@ -145,13 +145,34 @@ typedef struct {
 	Block *block; /* which block are we in? NULL = file scope */
 } Parser;
 
-/* 
-   allocate a new expression.
-   IMPORTANT: This invalidates all other parser-allocated Expression pointers.
-*/
-static Expression *parser_new_expr(Parser *p) {
-	return block_arr_add(&p->exprs);
+static bool type_builtin_is_integer(BuiltinType b) {
+	switch (b) {
+	case BUILTIN_I8:
+	case BUILTIN_I16:
+	case BUILTIN_I32:
+	case BUILTIN_I64:
+	case BUILTIN_U8:
+	case BUILTIN_U16:
+	case BUILTIN_U32:
+	case BUILTIN_U64:
+		return true;
+	default: return false;
+	}
 }
+
+static bool type_builtin_is_floating(BuiltinType b) {
+	switch (b) {
+	case BUILTIN_FLOAT:
+	case BUILTIN_DOUBLE:
+		return true;
+	default: return false;
+	}
+}
+
+static bool type_builtin_is_numerical(BuiltinType b) {
+	return type_builtin_is_integer(b) || type_builtin_is_floating(b);
+}
+
 
 /* returns BUILTIN_TYPE_COUNT on failure */
 static BuiltinType kw_to_builtin_type(Keyword kw) {
@@ -189,7 +210,58 @@ static Keyword builtin_type_to_kw(BuiltinType t) {
 	return KW_COUNT;
 }
 
+/* returns the number of characters written, not including the null character */
+static size_t type_to_str(Type *t, char *buffer, size_t bufsize) {
+	switch (t->kind) {
+	case TYPE_VOID:
+		return str_copy(buffer, bufsize, "void");
+	case TYPE_BUILTIN: {
+		const char *s = keywords[builtin_type_to_kw(t->builtin)];
+		return str_copy(buffer, bufsize, s);
+	}
+	case TYPE_FN: {
+		/* number of chars written */
+		size_t written = str_copy(buffer, bufsize, "fn (");
+		Type *ret_type = t->fn.types.data;
+		Type *param_types = ret_type + 1;
+		size_t nparams = t->fn.types.len - 1;
+		for (size_t i = 0; i < nparams; i++) {
+			if (i > 0)
+				written += str_copy(buffer + written, bufsize - written, ", ");
+			written += type_to_str(&param_types[i], buffer + written, bufsize - written);
+		}
+		written += str_copy(buffer + written, bufsize - written, ")");
+		if (ret_type->kind != TYPE_VOID) {
+			written += str_copy(buffer + written, bufsize - written, " ");
+			written += type_to_str(ret_type, buffer + written, bufsize - written);
+		}
+		return written;
+	} break;
+	case TYPE_ARR: {
+		size_t written = str_copy(buffer, bufsize, "[");
+		if (t->flags & TYPE_FLAG_RESOLVED) {
+			snprintf(buffer + written, bufsize - written, UINTEGER_FMT, t->arr.n);
+			written += strlen(buffer + written);
+		} else {
+			written += str_copy(buffer + written, bufsize - written, "N");
+		}
+		written += str_copy(buffer + written, bufsize - written, "]");
+		written += type_to_str(t->arr.of, buffer + written, bufsize - written);
+		return written;
+	} break;
+	}
 
+	assert(0);
+	return 0;
+}
+
+/* 
+   allocate a new expression.
+   IMPORTANT: This invalidates all other parser-allocated Expression pointers.
+*/
+static Expression *parser_new_expr(Parser *p) {
+	return block_arr_add(&p->exprs);
+}
 
 #define NOT_AN_OP -1
 static int op_precedence(Keyword op) {
@@ -905,7 +977,7 @@ static void fprint_type(FILE *out, Type *t) {
 	case TYPE_ARR:
 		fprintf(out, "[");
 		if (t->flags & TYPE_FLAG_RESOLVED) {
-			fprintf(out, INT_LITERAL_FMT, t->arr.n);
+			fprintf(out, INTEGER_FMT, t->arr.n);
 		} else {
 			fprint_expr(out, t->arr.n_expr);
 		}

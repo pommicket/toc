@@ -65,10 +65,6 @@ static Keyword tokenize_kw(char **s) {
 	return KW_COUNT;
 }
 
-typedef unsigned long long IntLiteral;
-typedef long double FloatLiteral; /* OPTIM: Switch to double */
-#define INT_LITERAL_FMT "%llu"
-
 typedef enum {
 			  NUM_LITERAL_INT,
 			  NUM_LITERAL_FLOAT
@@ -77,8 +73,8 @@ typedef enum {
 typedef struct {
 	NumLiteralKind kind;
 	union {
-		IntLiteral intval;
-		FloatLiteral floatval;
+		UInteger intval;
+		Floating floatval;
 	};
 } NumLiteral;
 
@@ -127,7 +123,7 @@ static void token_fprint(FILE *out, Token *t) {
 		fprintf(out, "number: ");
 		switch (t->num.kind) {
 		case NUM_LITERAL_INT:
-			fprintf(out, INT_LITERAL_FMT, t->num.intval);
+			fprintf(out, INTEGER_FMT, t->num.intval);
 			break;
 		case NUM_LITERAL_FLOAT:
 			fprintf(out, "%g", (double)t->num.floatval);
@@ -289,7 +285,7 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 		if (isdigit(*t.s)) {
 			/* it's a numeric literal */
 			int base = 10;
-			FloatLiteral decimal_pow10;
+			Floating decimal_pow10;
 			NumLiteral n;
 			n.kind = NUM_LITERAL_INT;
 			n.intval = 0;
@@ -330,14 +326,14 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 					}
 				    n.kind = NUM_LITERAL_FLOAT;
 					decimal_pow10 = 0.1;
-					n.floatval = (FloatLiteral)n.intval;
+					n.floatval = (Floating)n.intval;
 					tokr_nextchar(&t);
 					continue;
 				} else if (*t.s == 'e') {
 					tokr_nextchar(&t);
 					if (n.kind == NUM_LITERAL_INT) {
 						n.kind = NUM_LITERAL_FLOAT;
-						n.floatval = (FloatLiteral)n.intval;
+						n.floatval = (Floating)n.intval;
 					}
 					/* TODO: check if exceeding maximum exponent */
 					int exponent = 0;
@@ -385,17 +381,17 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 				}
 				switch (n.kind) {
 				case NUM_LITERAL_INT:
-					if (n.intval > ULLONG_MAX / (IntLiteral)base ||
-						n.intval * (IntLiteral)base > ULLONG_MAX - (IntLiteral)digit) {
+					if (n.intval > ULLONG_MAX / (UInteger)base ||
+						n.intval * (UInteger)base > ULLONG_MAX - (UInteger)digit) {
 						/* too big! */
 						tokenization_err(&t, "Number too big to fit in a numeric literal.");
 						goto err;
 					}
-					n.intval *= (IntLiteral)base;
-					n.intval += (IntLiteral)digit;
+					n.intval *= (UInteger)base;
+					n.intval += (UInteger)digit;
 					break;
 				case NUM_LITERAL_FLOAT:
-					n.floatval += decimal_pow10 * (FloatLiteral)digit;
+					n.floatval += decimal_pow10 * (Floating)digit;
 					decimal_pow10 /= 10;
 					break;
 				}

@@ -2,7 +2,11 @@
 
 /* toc */
 void main__(void) {
-	void (*(*foo[3])(void) )(void (*[3])(void) ) ; 
+	int64_t  const N = 5; 
+	int64_t  const FOO = 1928; 
+	int64_t  const BAR = 5; 
+	int64_t foo[1935]; 
+	int64_t bar[11]; 
 }
 
 int main(void) {
