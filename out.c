@@ -1,18 +1,8 @@
 #include "out.h"
 
 /* toc */
-static void a___(void);
-static void a___1(void);
 void main__(void) {
-	void (*foo)(void)  = a___; 
-	void (*bar)(void)  = a___1; 
-}
-static void a___(void) {
-	a___1();
-	float x = ((-3)-(-3.200000)); 
-}
-static void a___1(void) {
-	a___();
+	void (*(*foo[3])(void) )(void (*[3])(void) ) ; 
 }
 
 int main(void) {

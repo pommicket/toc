@@ -70,11 +70,13 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 		cgen_type_pre(g, &d->type);
 		cgen_ident(g, *ident, NULL);
 		cgen_type_post(g, &d->type);
-		cgen_write_space(g);
-		cgen_write(g, "=");
-		cgen_write_space(g);
-		if (!cgen_expr(g, &d->expr)) {
-			return false;
+		if (d->flags & DECL_FLAG_HAS_EXPR) {
+			cgen_write_space(g);
+			cgen_write(g, "=");
+			cgen_write_space(g);
+			if (!cgen_expr(g, &d->expr)) {
+				return false;
+			}
 		}
 		cgen_write(g, "; ");
 	}

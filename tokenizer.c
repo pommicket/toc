@@ -17,6 +17,8 @@ typedef enum {
 			  KW_RPAREN,
 			  KW_LBRACE,
 			  KW_RBRACE,
+			  KW_LSQUARE,
+			  KW_RSQUARE,
 			  KW_EQEQ,
 			  KW_LT,
 			  KW_LE,			  
@@ -39,7 +41,7 @@ typedef enum {
 } Keyword;
 
 static const char *keywords[KW_COUNT] =
-	{";", "=", ":", "@", ",", "(", ")", "{", "}", "==", "<", "<=", "-", "+", "fn",
+	{";", "=", ":", "@", ",", "(", ")", "{", "}", "[", "]", "==", "<", "<=", "-", "+", "fn",
 	 "int", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "float", "double"};
 
 /* Returns KW_COUNT if it's not a keyword */
@@ -65,6 +67,7 @@ static Keyword tokenize_kw(char **s) {
 
 typedef unsigned long long IntLiteral;
 typedef long double FloatLiteral; /* OPTIM: Switch to double */
+#define INT_LITERAL_FMT "%llu"
 
 typedef enum {
 			  NUM_LITERAL_INT,
@@ -124,7 +127,7 @@ static void token_fprint(FILE *out, Token *t) {
 		fprintf(out, "number: ");
 		switch (t->num.kind) {
 		case NUM_LITERAL_INT:
-			fprintf(out, "%llu", t->num.intval);
+			fprintf(out, INT_LITERAL_FMT, t->num.intval);
 			break;
 		case NUM_LITERAL_FLOAT:
 			fprintf(out, "%g", (double)t->num.floatval);

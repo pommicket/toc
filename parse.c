@@ -2,7 +2,8 @@
 typedef enum {
 			  TYPE_VOID,
 			  TYPE_BUILTIN,
-			  TYPE_FN
+			  TYPE_FN,
+			  TYPE_ARR /* e.g. [5]int */
 } TypeKind;
 
 typedef enum {
@@ -20,7 +21,7 @@ typedef enum {
 } BuiltinType;
 
 #define TYPE_FLAG_FLEXIBLE 0x01
-
+#define TYPE_FLAG_RESOLVED 0x02
 
 typedef struct Type {
 	Location where;
@@ -31,6 +32,13 @@ typedef struct Type {
 		struct {
 			Array types; /* [0] = ret_type, [1..] = param_types */
 		} fn;
+		struct {
+			struct Type *of;
+			union {
+				IntLiteral n; /* this is NOT set by parse_type; it will be handled by types.c */
+				struct Expression *n_expr;
+			};
+		} arr;
 	};
 } Type;
 
@@ -181,6 +189,119 @@ static Keyword builtin_type_to_kw(BuiltinType t) {
 	return KW_COUNT;
 }
 
+
+
+#define NOT_AN_OP -1
+static int op_precedence(Keyword op) {
+	switch (op) {
+	case KW_PLUS:
+		return 10;
+	case KW_MINUS:
+		return 20;
+	default:
+		return NOT_AN_OP;
+	}
+}
+
+
+/*
+  ends_with = which keyword does this expression end with?
+  if it's KW_RPAREN, this will match parentheses properly.
+*/
+typedef enum {
+			  EXPR_END_RPAREN_OR_COMMA,
+			  EXPR_END_RSQUARE,
+			  EXPR_END_SEMICOLON
+} ExprEndKind;
+static Token *expr_find_end(Parser *p, ExprEndKind ends_with)  {
+	Tokenizer *t = p->tokr;
+	int bracket_level = 0; /* if ends_with = EXPR_END_RSQUARE, used for square brackets,
+							  if ends_with = EXPR_END_RPAREN_OR_COMMA, used for parens */
+	int brace_level = 0;
+	Token *token = t->token;
+	while (1) {
+		switch (ends_with) {
+		case EXPR_END_RPAREN_OR_COMMA:
+			if (token->kind == TOKEN_KW) {
+				switch (token->kw) {
+				case KW_COMMA:
+					if (bracket_level == 0)
+						return token;
+					break;
+				case KW_LPAREN:
+					bracket_level++;
+					break;
+				case KW_RPAREN:
+					bracket_level--;
+					if (bracket_level < 0)
+						return token;
+					break;
+				default: break;
+				}
+			}
+			break;
+		case EXPR_END_RSQUARE:
+			if (token->kind == TOKEN_KW) {
+				switch (token->kw) {
+				case KW_LSQUARE:
+					bracket_level++;
+					break;
+				case KW_RSQUARE:
+					bracket_level--;
+					if (bracket_level < 0)
+						return token;
+					break;
+				default: break;
+				}
+			}
+			break;
+		case EXPR_END_SEMICOLON:
+			if (token->kind == TOKEN_KW) {
+				switch (token->kw) {
+				case KW_SEMICOLON:
+					/* ignore semicolons inside braces {} */
+					if (brace_level == 0)
+						return token;
+					break;
+				case KW_LBRACE:
+					brace_level++;
+					break;
+				case KW_RBRACE:
+					brace_level--;
+					if (brace_level < 0) {
+						t->token = token;
+						tokr_err(t, "Closing '}' without matching opening '{'.");
+						return NULL;
+					}
+					break;
+				default: break;
+				}
+			}
+			break;
+		}
+		if (token->kind == TOKEN_EOF) {
+			switch (ends_with) {
+			case EXPR_END_SEMICOLON:
+				if (brace_level > 0) {
+					tokr_err(t, "Opening brace was never closed."); /* FEATURE: Find out where this is */
+					return NULL;
+				} else {
+					tokr_err(t, "Could not find ';' at end of expression.");
+					return NULL;
+				}
+			case EXPR_END_RPAREN_OR_COMMA:
+				tokr_err(t, "Opening ( was never closed.");
+				return NULL;
+			case EXPR_END_RSQUARE:
+				tokr_err(t, "Opening [ was never closed.");
+				return NULL;
+			}
+		}
+		token++;
+	}
+}
+
+static bool parse_expr(Parser *p, Expression *e, Token *end);
 static bool parse_type(Parser *p, Type *type) {
 	Tokenizer *t = p->tokr;
 	type->where = t->token->where;
@@ -189,50 +310,66 @@ static bool parse_type(Parser *p, Type *type) {
 	case TOKEN_KW:
 		type->kind = TYPE_BUILTIN;
 		type->builtin = kw_to_builtin_type(t->token->kw);
-		if (type->builtin == BUILTIN_TYPE_COUNT) {
-			/* Not a builtin */
-			if (t->token->kw == KW_FN) {
-				/* function type */
-				type->kind = TYPE_FN;
-				arr_create(&type->fn.types, sizeof(Type));
-				t->token++;
-				if (!token_is_kw(t->token, KW_LPAREN)) {
-					tokr_err(t, "Expected ( for function type.");
-					return false;
-				}
-				arr_add(&type->fn.types); /* add return type */
-				t->token++;
-				if (!token_is_kw(t->token, KW_RPAREN)) {
-					while (1) {
-						Type *param_type = arr_add(&type->fn.types);
-						if (!parse_type(p, param_type)) return false;
-						if (token_is_kw(t->token, KW_RPAREN))
-							break;
-						if (!token_is_kw(t->token, KW_COMMA)) {
-							tokr_err(t, "Expected , to continue function type parameter list.");
-							return false;
-						}
-						t->token++; /* move past , */
-					}
-				}
-				t->token++;	/* move past ) */
-				Type *ret_type = type->fn.types.data;
-				/* if there's a symbol, that can't be the start of a type */
-				if (t->token->kind == TOKEN_KW
-					&& t->token->kw <= KW_LAST_SYMBOL) {
-					ret_type->kind = TYPE_VOID;
-					ret_type->flags = 0;
-				} else {
-					if (!parse_type(p, ret_type))
-						return false;
-				}
-				return true;
-			}
-			
-			break;
-		} else {
+		if (type->builtin != BUILTIN_TYPE_COUNT) {
 			t->token++;
 			return true;
+		}
+		/* Not a builtin */
+		switch (t->token->kw) {
+		case KW_FN: {
+			/* function type */
+			type->kind = TYPE_FN;
+			arr_create(&type->fn.types, sizeof(Type));
+			t->token++;
+			if (!token_is_kw(t->token, KW_LPAREN)) {
+				tokr_err(t, "Expected ( for function type.");
+				return false;
+			}
+			arr_add(&type->fn.types); /* add return type */
+			t->token++;
+			if (!token_is_kw(t->token, KW_RPAREN)) {
+				while (1) {
+					Type *param_type = arr_add(&type->fn.types);
+					if (!parse_type(p, param_type)) return false;
+					if (token_is_kw(t->token, KW_RPAREN))
+						break;
+					if (!token_is_kw(t->token, KW_COMMA)) {
+						tokr_err(t, "Expected , to continue function type parameter list.");
+						return false;
+					}
+					t->token++; /* move past , */
+				}
+			}
+			t->token++;	/* move past ) */
+			Type *ret_type = type->fn.types.data;
+			/* if there's a symbol that isn't [, that can't be the start of a type */
+			if (t->token->kind == TOKEN_KW
+				&& t->token->kw <= KW_LAST_SYMBOL
+				&& t->token->kw != KW_LSQUARE) {
+				ret_type->kind = TYPE_VOID;
+				ret_type->flags = 0;
+			} else {
+				if (!parse_type(p, ret_type))
+					return false;
+			}
+			return true;
+		}
+		case KW_LSQUARE: {
+			/* array type */
+			Token *start = t->token;
+			type->kind = TYPE_ARR;
+			t->token++;	/* move past [ */
+			Token *end = expr_find_end(p, EXPR_END_RSQUARE);
+			type->arr.n_expr = parser_new_expr(p);
+			if (!parse_expr(p, type->arr.n_expr, end)) return false;
+			t->token = end + 1;	/* go past ] */
+			type->arr.of = err_malloc(sizeof *type->arr.of); /* OPTIM */
+			if (!parse_type(p, type->arr.of)) return false;
+			type->flags = 0;
+			type->where = start->where;
+			return true;
+		}
+		default: break;
 		}
 		break;
 	default: break;
@@ -333,101 +470,6 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 		}
 	}
 	return parse_block(p, &f->body);
-}
-
-#define NOT_AN_OP -1
-static int op_precedence(Keyword op) {
-	switch (op) {
-	case KW_PLUS:
-		return 10;
-	case KW_MINUS:
-		return 20;
-	default:
-		return NOT_AN_OP;
-	}
-}
-
-
-/*
-  ends_with = which keyword does this expression end with?
-  if it's KW_RPAREN, this will match parentheses properly.
-*/
-typedef enum {
-			  EXPR_END_RPAREN_OR_COMMA,
-			  EXPR_END_SEMICOLON
-} ExprEndKind;
-static Token *expr_find_end(Parser *p, ExprEndKind ends_with)  {
-	Tokenizer *t = p->tokr;
-	int bracket_level = 0;
-	int brace_level = 0;
-	Token *token = t->token;
-	while (1) {
-		switch (ends_with) {
-		case EXPR_END_RPAREN_OR_COMMA:
-			if (token->kind == TOKEN_KW) {
-				switch (token->kw) {
-				case KW_COMMA:
-					if (bracket_level == 0)
-						return token;
-					break;
-				case KW_LPAREN:
-					bracket_level++;
-					break;
-				case KW_RPAREN:
-					bracket_level--;
-					if (bracket_level < 0)
-						return token;
-					break;
-				default: break;
-				}
-			}
-			break;
-		case EXPR_END_SEMICOLON:
-			if (token->kind == TOKEN_KW) {
-				switch (token->kw) {
-				case KW_SEMICOLON:
-					/* ignore semicolons inside braces {} */
-					if (brace_level == 0)
-						return token;
-					break;
-				case KW_LBRACE:
-					brace_level++;
-					break;
-				case KW_RBRACE:
-					brace_level--;
-					if (brace_level < 0) {
-						t->token = token;
-						tokr_err(t, "Closing '}' without matching opening '{'.");
-						return NULL;
-					}
-					break;
-				default: break;
-				}
-			}
-			break;
-		}
-		if (token->kind == TOKEN_EOF) {
-			switch (ends_with) {
-			case EXPR_END_SEMICOLON:
-				if (brace_level > 0) {
-					tokr_err(t, "Opening brace was never closed."); /* FEATURE: Find out where this is */
-					return NULL;
-				} else {
-					tokr_err(t, "Could not find ';' at end of expression.");
-					return NULL;
-				}
-			case EXPR_END_RPAREN_OR_COMMA:
-				if (bracket_level > 0) {
-					tokr_err(t, "Opening parenthesis was never closed."); /* FEATURE: Find out where this is */
-					return NULL;
-				} else {
-					tokr_err(t, "Could not find ')' or ',' at end of expression.");
-					return NULL;
-				}
-			}
-		}
-		token++;
-	}
 }
 
 static bool parse_expr(Parser *p, Expression *e, Token *end) {
@@ -840,7 +882,7 @@ static bool parse_file(Parser *p, ParsedFile *f) {
 
 #define PARSE_PRINT_LOCATION(l) //fprintf(out, "[l%lu]", (unsigned long)(l).line);
 
-
+static void fprint_expr(FILE *out, Expression *e);
 static void fprint_type(FILE *out, Type *t) {
 	PARSE_PRINT_LOCATION(t->where);
 	switch (t->kind) {
@@ -860,6 +902,16 @@ static void fprint_type(FILE *out, Type *t) {
 		fprintf(out, ") ");
 		fprint_type(out, &types[0]);
 	} break;
+	case TYPE_ARR:
+		fprintf(out, "[");
+		if (t->flags & TYPE_FLAG_RESOLVED) {
+			fprintf(out, INT_LITERAL_FMT, t->arr.n);
+		} else {
+			fprint_expr(out, t->arr.n_expr);
+		}
+		fprintf(out, "]");
+		fprint_type(out, t->arr.of);
+		break;
 	}
 }
 

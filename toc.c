@@ -15,6 +15,7 @@
 #include "identifiers.c"
 #include "tokenizer.c"
 #include "parse.c"
+#include "eval.c"
 #include "types.c"
 #include "base_cgen.c"
 #include "decls_cgen.c"

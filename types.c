@@ -50,20 +50,20 @@ static bool block_exit(Block *b) {
 
 
 /* returns the number of characters written, not including the null character */
-static size_t type_to_str(Type *a, char *buffer, size_t bufsize) {
-	switch (a->kind) {
+static size_t type_to_str(Type *t, char *buffer, size_t bufsize) {
+	switch (t->kind) {
 	case TYPE_VOID:
 		return str_copy(buffer, bufsize, "void");
 	case TYPE_BUILTIN: {
-		const char *s = keywords[builtin_type_to_kw(a->builtin)];
+		const char *s = keywords[builtin_type_to_kw(t->builtin)];
 		return str_copy(buffer, bufsize, s);
 	}
 	case TYPE_FN: {
 		/* number of chars written */
 		size_t written = str_copy(buffer, bufsize, "fn (");
-		Type *ret_type = a->fn.types.data;
+		Type *ret_type = t->fn.types.data;
 		Type *param_types = ret_type + 1;
-		size_t nparams = a->fn.types.len - 1;
+		size_t nparams = t->fn.types.len - 1;
 		for (size_t i = 0; i < nparams; i++) {
 			if (i > 0)
 				written += str_copy(buffer + written, bufsize - written, ", ");
@@ -74,6 +74,18 @@ static size_t type_to_str(Type *a, char *buffer, size_t bufsize) {
 			written += str_copy(buffer + written, bufsize - written, " ");
 			written += type_to_str(ret_type, buffer + written, bufsize - written);
 		}
+		return written;
+	} break;
+	case TYPE_ARR: {
+		size_t written = str_copy(buffer, bufsize, "[");
+		if (t->flags & TYPE_FLAG_RESOLVED) {
+			snprintf(buffer + written, bufsize - written, INT_LITERAL_FMT, t->arr.n);
+			written += strlen(buffer + written);
+		} else {
+			written += str_copy(buffer + written, bufsize - written, "N");
+		}
+		written += str_copy(buffer + written, bufsize - written, "]");
+		written += type_to_str(t->arr.of, buffer + written, bufsize - written);
 		return written;
 	} break;
 	}
@@ -138,6 +150,9 @@ static bool type_eq(Type *a, Type *b) {
 		}
 		return true;
 	}
+	case TYPE_ARR:
+		if (a->arr.n != b->arr.n) return false;
+		return type_eq(a->arr.of, b->arr.of);
 	}
 	assert(0);
 	return false;
@@ -274,19 +289,41 @@ static bool type_of_expr(Expression *e, Type *t) {
 			if (!match) {
 				char s1[128], s2[128];
 				type_to_str(lhs_type, s1, sizeof s1);
-				type_to_str(lhs_type, s2, sizeof s2);
+				type_to_str(rhs_type, s2, sizeof s2);
 				const char *op;
 				switch (e->binary.op) {
 				case BINARY_PLUS: op = "+"; break;
 				case BINARY_MINUS: op = "-"; break;
 				}
 				err_print(e->where, "Mismatched types to operator %s: %s and %s", op, s1, s2);
+				return false;
 			}
 			return true;
 		}
 		}
 	} break;
 	}
+	return true;
+}
+
+/* fixes the type (replaces [5+3]int with [8]int, etc.) */
+static bool type_resolve(Type *t) {
+	if (t->flags & TYPE_FLAG_RESOLVED) return true;
+	switch (t->kind) {
+	case TYPE_ARR:
+		/* it's an array */
+		if (!type_resolve(t->arr.of)) return false; /* resolve inner type */
+		if (!eval_expr_as_int(t->arr.n_expr, &t->arr.n)) return false; /* resolve N */
+		break;
+	case TYPE_FN:
+		arr_foreach(&t->fn.types, Type, child_type) {
+			if (!type_resolve(child_type))
+				return false;
+		}
+		break;
+	default: break;
+	}
+	t->flags |= TYPE_FLAG_RESOLVED;
 	return true;
 }
 
@@ -304,11 +341,10 @@ static bool types_block(Block *b) {
 
 static bool types_expr(Expression *e) {
 	Type *t = &e->type;
-	type_of_expr(e, t);
+	if (!type_of_expr(e, t)) return false;
 	switch (e->kind) {
-	case EXPR_FN: {
-		types_block(&e->fn.body);
-	} break;
+	case EXPR_FN:
+		return types_block(&e->fn.body);
 	case EXPR_CALL: {
 		bool ret = true;
 		arr_foreach(&e->call.args, Expression, arg) {
@@ -323,13 +359,19 @@ static bool types_expr(Expression *e) {
 
 
 static bool types_decl(Declaration *d) {
-	if (!types_expr(&d->expr)) return false;
 	if (d->flags & DECL_FLAG_FOUND_TYPE) return true;
-	if (d->flags & DECL_FLAG_INFER_TYPE) {
-		d->type = d->expr.type;
-	} else {
-		if (!type_must_eq(d->expr.where, &d->type, &d->expr.type)) {
+	if (!(d->flags & DECL_FLAG_INFER_TYPE)) {
+		/* type supplied */
+		if (!type_resolve(&d->type))
 			return false;
+	}
+	if (d->flags & DECL_FLAG_HAS_EXPR) {
+		if (!types_expr(&d->expr)) return false;
+		if (d->flags & DECL_FLAG_INFER_TYPE) {
+			d->type = d->expr.type;
+		} else {
+			if (!type_must_eq(d->expr.where, &d->type, &d->expr.type))
+				return false;
 		}
 	}
 	d->flags |= DECL_FLAG_FOUND_TYPE;
@@ -339,8 +381,9 @@ static bool types_decl(Declaration *d) {
 static bool types_stmt(Statement *s) {
 	switch (s->kind) {
 	case STMT_EXPR:
-		if (!types_expr(&s->expr))
+		if (!types_expr(&s->expr)) {
 			return false;
+		}
 		break;
 	case STMT_DECL:
 		if (!types_decl(&s->decl))

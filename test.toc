@@ -1,11 +1,5 @@
 main @= fn() {
-
-	 foo := fn() {
-	 	 bar();
-		 x := -3--3.2;
-	 };
-
-	 bar := fn() {
-	 	 foo();
-	 };
+	 foo : [3]fn()fn([42]fn());
+	 bar : [3]fn([37]fn(int)int);
+	 foo + bar;
 };
