@@ -106,9 +106,11 @@ static bool cgen_ident(CGenerator *g, Identifier i, Location *where) {
 			return false;
 		}
 		Declaration *decl = id_decl->decl;
-		if (decl->expr.kind == EXPR_FN) {
-			cgen_fn_name(g, &decl->expr.fn, NULL);
-			return true;
+		if (decl->flags & DECL_FLAG_HAS_EXPR) {
+			if (decl->expr.kind == EXPR_FN) {
+				cgen_fn_name(g, &decl->expr.fn, NULL);
+				return true;
+			}
 		}
 	}
 	cgen_indent(g);

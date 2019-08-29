@@ -75,6 +75,7 @@ typedef enum {
 } UnaryOp;
 
 typedef enum {
+			  BINARY_SET, /* e.g. x = y */
 			  BINARY_PLUS,
 			  BINARY_MINUS
 } BinaryOp;
@@ -144,6 +145,16 @@ typedef struct {
 	BlockArr exprs; /* a dynamic array of expressions, so that we don't need to call malloc every time we make an expression */
 	Block *block; /* which block are we in? NULL = file scope */
 } Parser;
+
+static const char *binary_op_to_str(BinaryOp b) {
+	switch (b) {
+	case BINARY_PLUS: return "+";
+	case BINARY_MINUS: return "-";
+	case BINARY_SET: return "=";
+	}
+	assert(0);
+	return "";
+}
 
 static bool type_builtin_is_integer(BuiltinType b) {
 	switch (b) {
@@ -266,6 +277,8 @@ static Expression *parser_new_expr(Parser *p) {
 #define NOT_AN_OP -1
 static int op_precedence(Keyword op) {
 	switch (op) {
+	case KW_EQ:
+		return 0;
 	case KW_PLUS:
 		return 10;
 	case KW_MINUS:
@@ -776,6 +789,9 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	case KW_MINUS:
 		op = BINARY_MINUS;
 		break;
+	case KW_EQ:
+		op = BINARY_SET;
+		break;
 	default: assert(0); break;
 	}
 	e->binary.op = op;
@@ -1039,6 +1055,9 @@ static void fprint_expr(FILE *out, Expression *e) {
 			break;
 		case BINARY_MINUS:
 			fprintf(out, "subtract");
+			break;
+		case BINARY_SET:
+			fprintf(out, "set");
 			break;
 		}
 		fprintf(out, "(");

@@ -52,8 +52,12 @@ static bool eval_expr_as_int(Expression *e, Integer *i) {
 			case BINARY_MINUS:
 				*i = lhs - rhs;
 				return true;
+			default: assert(0); return false;
 			}
 		}
+	    case BINARY_SET:
+			err_print(e->where, "Expected operator which returns an integer, but got %s", binary_op_to_str(e->binary.op));
+			return false;
 		}
 	} break;
 	case EXPR_IDENT: {

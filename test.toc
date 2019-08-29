@@ -3,5 +3,7 @@ main @= fn() {
 	 FOO @= 1928;
 	 BAR @= 5;
 	 foo : [N+FOO-3--BAR]int;
-	 bar : [fn(){}]int;
+	 bar : [77]int;
+	 x : int;
+	 x = 13;
 };

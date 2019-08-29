@@ -29,6 +29,9 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		case BINARY_MINUS:
 			cgen_write(g, "-");
 			break;
+		case BINARY_SET:
+			cgen_write(g, "=");
+			break;
 		}
 		if (!cgen_expr(g, e->binary.rhs)) return false;
 		cgen_write(g, ")");

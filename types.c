@@ -185,7 +185,8 @@ static bool type_of_expr(Expression *e, Type *t) {
 	case EXPR_BINARY_OP: {
 		switch (e->binary.op) {
 		case BINARY_PLUS:
-		case BINARY_MINUS: {
+		case BINARY_MINUS:
+		case BINARY_SET: {
 			Type *lhs_type = &e->binary.lhs->type;
 			Type *rhs_type = &e->binary.rhs->type;
 			if (!type_of_expr(e->binary.lhs, lhs_type)
@@ -199,6 +200,11 @@ static bool type_of_expr(Expression *e, Type *t) {
 			} else if (!type_builtin_is_numerical(lhs_type->builtin) || !type_builtin_is_numerical(rhs_type->builtin)) {
 				match = false;
 			} else {
+				if (e->binary.op == BINARY_SET) {
+					/* type of x = y is always void */
+					t->kind = TYPE_VOID;
+					return true; 
+				}
 				int lhs_is_flexible = lhs_type->flags & TYPE_FLAG_FLEXIBLE;
 				int rhs_is_flexible = rhs_type->flags & TYPE_FLAG_FLEXIBLE;
 				if (lhs_is_flexible && rhs_is_flexible) {
@@ -218,11 +224,7 @@ static bool type_of_expr(Expression *e, Type *t) {
 				char s1[128], s2[128];
 				type_to_str(lhs_type, s1, sizeof s1);
 				type_to_str(rhs_type, s2, sizeof s2);
-				const char *op;
-				switch (e->binary.op) {
-				case BINARY_PLUS: op = "+"; break;
-				case BINARY_MINUS: op = "-"; break;
-				}
+				const char *op = binary_op_to_str(e->binary.op);
 				err_print(e->where, "Mismatched types to operator %s: %s and %s", op, s1, s2);
 				return false;
 			}
