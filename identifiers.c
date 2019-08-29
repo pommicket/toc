@@ -13,7 +13,6 @@ typedef struct IdentTree {
 	Array decls; /* array of declarations of this identifier */
 	unsigned long c_fn_reps; /* number of repetitions of this identifier in the C output--only used for functions */
 	size_t depth;
-	struct Type *type;
 } IdentTree;
 
 typedef IdentTree *Identifier;
@@ -104,7 +103,7 @@ static char *ident_to_str(Identifier i) {
 }
 
 static IdentDecl *ident_decl(Identifier i) {
-	return (IdentDecl*)i->decls.last;
+	return (IdentDecl*)arr_last(&i->decls);
 }
 
 static void idents_free_tree(IdentTree *tree) {

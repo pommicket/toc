@@ -109,8 +109,8 @@ typedef struct Declaration {
 	Location where;
 	Array idents;
 	Type type;
-	Expression expr;
 	unsigned short flags;
+	Expression expr;
 } Declaration;
 
 typedef enum {
@@ -326,6 +326,7 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 	if (token_is_kw(t->token, KW_LBRACE)) {
 		/* void function */
 		f->ret_type.kind = TYPE_VOID;
+		f->ret_type.flags = 0;
 	} else {
 		if (!parse_type(p, &f->ret_type)) {
 			return false;

@@ -28,8 +28,11 @@ void block_arr_create(BlockArr *arr, int lg_block_sz, size_t item_sz) {
 }
 
 void *block_arr_add(BlockArr *arr) {
+	ArrBlock *last_block;
+	last_block = arr_last(&arr->blocks);
+		
 	if (arr->blocks.data == NULL ||
-		(unsigned long)((ArrBlock*)arr->blocks.last)->n >= (1UL << arr->lg_block_sz)) {
+		(unsigned long)last_block->n >= (1UL << arr->lg_block_sz)) {
 		ArrBlock *block;
 		/* no blocks yet / ran out of blocks*/
 		block = arr_add(&arr->blocks);
@@ -38,8 +41,6 @@ void *block_arr_add(BlockArr *arr) {
 		block->last = block->data;
 		return block->data;
 	} else {
-		ArrBlock *last_block;
-		last_block = arr->blocks.last;
 		last_block->last = (char*)last_block->last + arr->item_sz;
 		return last_block->last;
 	}

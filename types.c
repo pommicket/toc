@@ -1,4 +1,3 @@
-/* pass NULL for file */
 static bool block_enter(Block *b) {
 	bool ret = true;
 	arr_foreach(&b->stmts, Statement, stmt) {
@@ -8,7 +7,7 @@ static bool block_enter(Block *b) {
 				Array *decls = &(*ident)->decls;
 				if (decls->len) {
 					/* check that it hasn't been declared in this block */
-					IdentDecl *prev = decls->last;
+					IdentDecl *prev = arr_last(decls);
 					if (prev->scope == b) {
 						err_print(decl->where, "Re-declaration of identifier in the same block.");
 						info_print(prev->decl->where, "Previous declaration was here.");
@@ -38,7 +37,7 @@ static bool block_exit(Block *b) {
 			arr_foreach(&decl->idents, Identifier, ident) {
 				Array *decls = &(*ident)->decls;
 				assert(decls->item_sz);
-				IdentDecl *last_decl = decls->last;
+				IdentDecl *last_decl = arr_last(decls);
 				if (last_decl->scope == b) {
 					arr_remove_last(decls); /* remove that declaration */
 				}
@@ -51,7 +50,7 @@ static bool block_exit(Block *b) {
 
 
 /* returns the number of characters written, not including the null character */
-static size_t type_to_string(Type *a, char *buffer, size_t bufsize) {
+static size_t type_to_str(Type *a, char *buffer, size_t bufsize) {
 	switch (a->kind) {
 	case TYPE_VOID:
 		return str_copy(buffer, bufsize, "void");
@@ -68,12 +67,12 @@ static size_t type_to_string(Type *a, char *buffer, size_t bufsize) {
 		for (size_t i = 0; i < nparams; i++) {
 			if (i > 0)
 				written += str_copy(buffer + written, bufsize - written, ", ");
-			written += type_to_string(&param_types[i], buffer + written, bufsize - written);
+			written += type_to_str(&param_types[i], buffer + written, bufsize - written);
 		}
 		written += str_copy(buffer + written, bufsize - written, ")");
 		if (ret_type->kind != TYPE_VOID) {
 			written += str_copy(buffer + written, bufsize - written, " ");
-			written += type_to_string(ret_type, buffer + written, bufsize - written);
+			written += type_to_str(ret_type, buffer + written, bufsize - written);
 		}
 		return written;
 	} break;
@@ -132,9 +131,11 @@ static bool type_eq(Type *a, Type *b) {
 		
 		if (a->fn.types.len != b->fn.types.len) return false;
 		Type *a_types = a->fn.types.data, *b_types = b->fn.types.data;
-		for (size_t i = 0; i < a->fn.types.len; i++)
+		for (size_t i = 0; i < a->fn.types.len; i++) {
 			if (!type_eq(&a_types[i], &b_types[i]))
 				return false;
+			
+		}
 		return true;
 	}
 	}
@@ -147,21 +148,18 @@ static bool type_must_eq(Location where, Type *expected, Type *got) {
 	if (!type_eq(expected, got)) {
 		char str_ex[128];
 		char str_got[128];
-		type_to_string(expected, str_ex, sizeof str_ex);
-		type_to_string(got, str_got, sizeof str_got);
+		type_to_str(expected, str_ex, sizeof str_ex);
+		type_to_str(got, str_got, sizeof str_got);
 		err_print(where, "Type mismatch: expected %s, but got %s.", str_ex, str_got);
 		return false;
 	}
 	return true;
 }
 
-static bool types_stmt(Statement *s);
-static bool types_decl(Declaration *d);
 
-
-static bool types_expr(Expression *e) {
-	Type *t = &e->type;
+static bool type_of_expr(Expression *e, Type *t) {
 	t->flags = 0;
+	
 	switch (e->kind) {
 	case EXPR_FN: {
 		FnExpr *f = &e->fn;
@@ -173,12 +171,6 @@ static bool types_expr(Expression *e) {
 			Type *param_type = arr_add(&t->fn.types);
 			*param_type = param->type;
 		}
-		block_enter(&f->body);
-		arr_foreach(&f->body.stmts, Statement, s) {
-			if (!types_stmt(s))
-				return false;
-		}
-		block_exit(&f->body);
 	} break;
 	case EXPR_INT_LITERAL:
 	    t->kind = TYPE_BUILTIN;
@@ -197,16 +189,85 @@ static bool types_expr(Expression *e) {
 			err_print(e->where, "Undeclared identifier: %s", s);
 			free(s);
 		}
-		*t = decl->decl->type;
+		Declaration *d = decl->decl;
+		/* TODO: Check self-referential declarations */
+		if (d->where.code > e->where.code) {
+			char *s = ident_to_str(e->ident);
+			err_print(e->where, "Use of identifier %s before its declaration.", s);
+			info_print(d->where, "%s will be declared here.", s);
+			free(s);
+		}
+		*t = d->type;
 	} break;
+	case EXPR_CALL: {
+		Expression *f = e->call.fn;
+		Type fn_type;
+		if (f->kind == EXPR_IDENT) {
+			/* allow calling a function before declaring it */
+			IdentDecl *decl = ident_decl(f->ident);
+			if (!decl) {
+				char *s = ident_to_str(e->ident);
+				err_print(e->where, "Undeclared identifier: %s", s);
+				free(s);
+			}
+			if (!type_of_expr(&decl->decl->expr, &fn_type)) return false;
+		} else {
+			if (!type_of_expr(e->call.fn, &fn_type)) return false;
+		}
+		if (fn_type.kind != TYPE_FN) {
+			char type[128];
+			type_to_str(&fn_type, type, sizeof type);
+			err_print(e->where, "Calling non-function (type %s).", type);
+			return false;
+		}
+		/* TODO: Make sure args match fn type */
+		*t = *(Type*)fn_type.fn.types.data;
+		break;
 		/* TODO */
+	}
 	}
 	return true;
 }
 
+static bool types_stmt(Statement *s);
+
+static bool types_block(Block *b) {
+	bool ret = true;
+	block_enter(b);
+	arr_foreach(&b->stmts, Statement, s) {
+		if (!types_stmt(s)) ret = false;
+	}
+	block_exit(b);
+	return ret;
+}
+
+static bool types_expr(Expression *e) {
+	Type *t = &e->type;
+	type_of_expr(e, t);
+	switch (e->kind) {
+	case EXPR_FN: {
+		types_block(&e->fn.body);
+	} break;
+	case EXPR_CALL: {
+		bool ret = true;
+		arr_foreach(&e->call.args, Expression, arg) {
+			if (!types_expr(arg)) ret = false;
+		}
+	    return ret;
+	}
+	case EXPR_BINARY_OP:
+		return types_expr(e->binary.lhs)
+		    && types_expr(e->binary.rhs);
+	case EXPR_UNARY_OP:
+		return types_expr(e->unary.of);
+	}
+	return true;
+}
+
+
 static bool types_decl(Declaration *d) {
-	if (d->flags & DECL_FLAG_FOUND_TYPE) return true;
 	if (!types_expr(&d->expr)) return false;
+	if (d->flags & DECL_FLAG_FOUND_TYPE) return true;
 	if (d->flags & DECL_FLAG_INFER_TYPE) {
 		d->type = d->expr.type;
 	} else {
@@ -215,8 +276,7 @@ static bool types_decl(Declaration *d) {
 		}
 	}
 	d->flags |= DECL_FLAG_FOUND_TYPE;
-		
-	return types_expr(&d->expr);
+	return true;
 }
 
 static bool types_stmt(Statement *s) {

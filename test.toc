@@ -1,18 +1,10 @@
 main @= fn() {
 
-	 foo @ fn() = fn() {};
-	 bar : fn() = fn() {};
+	 foo := fn() {
+	 	 bar();
+	 };
 
-	 foo();
-	 bar();
-	 a : i64 = 5;
-	 b : float = 32.3;
-	 c : int = a;
-	 blah := 32;
-	 asfdljk: float = 12.3;
-	 asdkfjhakj : i8 = 1332948;
-};
-
-
-asdkfh := fn(x: int) {
+	 bar := fn() {
+	 	 foo();
+	 };
 };

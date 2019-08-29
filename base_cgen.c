@@ -110,17 +110,6 @@ static bool cgen_ident(CGenerator *g, Identifier i, Location *where) {
 			cgen_fn_name(g, &decl->expr.fn, NULL);
 			return true;
 		}
-		if (decl->where.line == where->line) {
-			/* e.g. x: int = x; */
-			err_print(*where, "Use of identifier \"%s\" in its own declaration.", ident_to_str(i));
-			return false;
-		} else if (decl->where.line > where->line) {
-			/* x used before declared */
-			char *str = ident_to_str(i);
-			err_print(*where, "Use of identifier \"%s\" before its declaration.", str);
-			info_print(decl->where, "%s will be declared here.", str);
-			return false;
-		}
 	}
 	cgen_indent(g);
 	fprint_ident(cgen_writing_to(g), i);

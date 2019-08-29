@@ -1,6 +1,5 @@
 typedef struct {
 	void *data;
-	void *last;
 	size_t len;
 	size_t cap;
 	size_t item_sz;
@@ -10,13 +9,19 @@ static void arr_create(Array *arr, size_t item_sz) {
 	arr->len = arr->cap = 0;
 	arr->item_sz = item_sz;
 	arr->data = NULL;
-	arr->last = NULL;
 }
 
 static void arr_reserve(Array *arr, size_t n) {
 	arr->cap = n;
 	arr->data = realloc(arr->data, arr->item_sz * arr->cap);
-	arr->last = (void*)((char*)arr->data + arr->item_sz * (arr->len - 1));
+
+}
+
+static void *arr_last(Array *arr) {
+	if (arr->data)
+		return (void*)((char*)arr->data + arr->item_sz * (arr->len - 1));
+	else
+		return NULL;
 }
 
 static void *arr_add(Array *arr) {
@@ -24,24 +29,19 @@ static void *arr_add(Array *arr) {
 		arr_reserve(arr, (arr->cap + 1) * 2);
 	}
 	arr->len++;
-	arr->last = (char*)arr->last + arr->item_sz;
-	void *item = arr->last;
-	return item;
+	return (void*)((char*)arr->data + arr->item_sz * (arr->len - 1));
 }
 
 static void arr_clear(Array *arr) {
 	free(arr->data);
 	arr->len = arr->cap = 0;
 	arr->data = NULL;
-	arr->last = NULL;
 }
 
 static void arr_remove_last(Array *arr) {
 	/* OPTIM (memory): Shorten array. */
 	arr->len--;
-	if (arr->len) {
-		arr->last = (char*)arr->last - arr->item_sz;
-    } else {
+	if (!arr->len) {
 		arr_clear(arr);
 	}
 	
@@ -51,4 +51,4 @@ static void arr_free(Array *arr) {
 	free(arr->data);
 }
 
-#define arr_foreach(arr, type, var) for (type *var = (arr)->data; var; var == (arr)->last ? var = NULL : var++)
+#define arr_foreach(arr, type, var) for (type *var = (arr)->data, *var##_foreach_last = arr_last(arr); var; var == var##_foreach_last ? var = NULL : var++)
