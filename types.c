@@ -156,7 +156,7 @@ static bool type_must_eq(Location where, Type *expected, Type *got) {
 	return true;
 }
 
-
+/* NOTE: this does descend into un/binary ops, etc. but NOT into functions  */
 static bool type_of_expr(Expression *e, Type *t) {
 	t->flags = 0;
 	
@@ -223,8 +223,69 @@ static bool type_of_expr(Expression *e, Type *t) {
 		/* TODO: Make sure args match fn type */
 		*t = *(Type*)fn_type.fn.types.data;
 		break;
-		/* TODO */
 	}
+	case EXPR_UNARY_OP: {
+		Type *of_type = &e->unary.of->type;
+	    if (!type_of_expr(e->unary.of, of_type)) return false;
+		switch (e->unary.op) {
+		case UNARY_MINUS:
+			if (of_type->kind != TYPE_BUILTIN || !type_builtin_is_numerical(of_type->builtin)) {
+				char s[128];
+				type_to_str(of_type, s, sizeof s);
+				err_print(e->where, "Cannot apply unary - to non-numerical type %s.", s);
+				return false;
+			}
+			*t = *of_type;
+			break;
+		}
+	} break;
+	case EXPR_BINARY_OP: {
+		switch (e->binary.op) {
+		case BINARY_PLUS:
+		case BINARY_MINUS: {
+			Type *lhs_type = &e->binary.lhs->type;
+			Type *rhs_type = &e->binary.rhs->type;
+			if (!type_of_expr(e->binary.lhs, lhs_type)
+				|| !type_of_expr(e->binary.rhs, rhs_type))
+				return false;
+			bool match = true;
+			if (lhs_type->kind != rhs_type->kind) {
+				match = false;
+			} else if (lhs_type->kind != TYPE_BUILTIN) {
+				match = false;
+			} else if (!type_builtin_is_numerical(lhs_type->builtin) || !type_builtin_is_numerical(rhs_type->builtin)) {
+				match = false;
+			} else {
+				int lhs_is_flexible = lhs_type->flags & TYPE_FLAG_FLEXIBLE;
+				int rhs_is_flexible = rhs_type->flags & TYPE_FLAG_FLEXIBLE;
+				if (lhs_is_flexible && rhs_is_flexible) {
+					*t = *lhs_type;
+					if (rhs_type->builtin == BUILTIN_FLOAT) {
+						/* promote to float */
+						t->builtin = BUILTIN_FLOAT;
+					}
+				} else if (type_eq(lhs_type, rhs_type)) {
+					if (!lhs_is_flexible)
+						*t = *lhs_type;
+					else
+						*t = *rhs_type;
+				}
+			}
+			if (!match) {
+				char s1[128], s2[128];
+				type_to_str(lhs_type, s1, sizeof s1);
+				type_to_str(lhs_type, s2, sizeof s2);
+				const char *op;
+				switch (e->binary.op) {
+				case BINARY_PLUS: op = "+"; break;
+				case BINARY_MINUS: op = "-"; break;
+				}
+				err_print(e->where, "Mismatched types to operator %s: %s and %s", op, s1, s2);
+			}
+			return true;
+		}
+		}
+	} break;
 	}
 	return true;
 }
@@ -254,12 +315,8 @@ static bool types_expr(Expression *e) {
 			if (!types_expr(arg)) ret = false;
 		}
 	    return ret;
-	}
-	case EXPR_BINARY_OP:
-		return types_expr(e->binary.lhs)
-		    && types_expr(e->binary.rhs);
-	case EXPR_UNARY_OP:
-		return types_expr(e->unary.of);
+	} break;
+	default: break;
 	}
 	return true;
 }

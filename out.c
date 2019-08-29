@@ -9,6 +9,7 @@ void main__(void) {
 }
 static void a___(void) {
 	a___1();
+	float x = ((-3)-(-3.200000)); 
 }
 static void a___1(void) {
 	a___();
