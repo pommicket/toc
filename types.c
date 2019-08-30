@@ -41,7 +41,6 @@ static bool block_exit(Block *b) {
 				if (last_decl->scope == b) {
 					arr_remove_last(decls); /* remove that declaration */
 				}
-				
 			}
 		}
 	}
@@ -78,6 +77,14 @@ static bool type_eq(Type *a, Type *b) {
 		}
 		return true;
 	}
+	case TYPE_TUPLE:
+		if (a->tuple.len != b->tuple.len) return false;
+		Type *a_types = a->tuple.data, *b_types = b->tuple.data;
+		for (size_t i = 0; i < a->tuple.len; i++) {
+			if (!type_eq(&a_types[i], &b_types[i]))
+				return false;
+		}
+		return true;
 	case TYPE_ARR:
 		if (a->arr.n != b->arr.n) return false;
 		return type_eq(a->arr.of, b->arr.of);
@@ -369,6 +376,11 @@ static bool types_decl(Declaration *d) {
 			if (!type_must_eq(d->expr.where, &d->type, &d->expr.type))
 				return false;
 		} else {
+			if (d->expr.type.kind == TYPE_VOID) {
+				/* e.g. x := (fn(){})(); */
+				err_print(d->expr.where, "Used return value of function which does not return anything.");
+				return false;
+			}
 			d->type = d->expr.type;
 		}
 	}

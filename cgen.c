@@ -86,6 +86,9 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 		cgen_zero_value(g, t->arr.of);
 		cgen_write(g, "}");
 		break;
+	case TYPE_TUPLE:
+		assert(0);
+		break;
 	case TYPE_BUILTIN:
 		if (type_builtin_is_numerical(t->builtin)) {
 			cgen_write(g, "0");

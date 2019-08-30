@@ -3,6 +3,7 @@ typedef enum {
 			  TYPE_VOID,
 			  TYPE_BUILTIN,
 			  TYPE_FN,
+			  TYPE_TUPLE,
 			  TYPE_ARR /* e.g. [5]int */
 } TypeKind;
 
@@ -32,6 +33,7 @@ typedef struct Type {
 		struct {
 			Array types; /* [0] = ret_type, [1..] = param_types */
 		} fn;
+		Array tuple;
 		struct {
 			struct Type *of;
 			union {
@@ -262,6 +264,16 @@ static size_t type_to_str(Type *t, char *buffer, size_t bufsize) {
 		written += type_to_str(t->arr.of, buffer + written, bufsize - written);
 		return written;
 	} break;
+	case TYPE_TUPLE: {
+		size_t written = str_copy(buffer, bufsize, "(");
+		arr_foreach(&t->tuple, Type, child) {
+			if (child != t->tuple.data)
+				written += str_copy(buffer + written, bufsize - written, ", ");
+			written += type_to_str(child, buffer + written, bufsize - written);
+		}
+		written += str_copy(buffer + written, bufsize - written, ")");
+		return written;
+	}
 	}
 
 	assert(0);
@@ -878,14 +890,19 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	return true;
 }
 
-static bool decl_parse(Declaration *d, Parser *p) {
+/* 
+parses
+x : int, y : float; 
+^^this^^
+then recursively calls itself to parse the rest
+NOTE: this function actually parses all types in the declaration, but it just
+calls itself to do that.
+
+*/
+static bool parse_single_type_in_decl(Parser *p, Declaration *d) {
 	Tokenizer *t = p->tokr;
 	/* OPTIM: Maybe don't use a dynamic array or use parser allocator. */
-	d->where = t->token->where;
-	arr_create(&d->idents, sizeof(Identifier));
-	
-	d->flags = 0;
-	
+	size_t n_idents_with_this_type = 1;
 	while (1) {
 		Identifier *ident = arr_add(&d->idents);
 		if (t->token->kind != TOKEN_IDENT) {
@@ -914,6 +931,7 @@ static bool decl_parse(Declaration *d, Parser *p) {
 		t->token++;
 		if (token_is_kw(t->token, KW_COMMA)) {
 			t->token++;
+			n_idents_with_this_type++;
 			continue;
 		}
 		if (token_is_kw(t->token, KW_COLON)) {
@@ -935,15 +953,50 @@ static bool decl_parse(Declaration *d, Parser *p) {
 		tokr_err(t, "Cannot infer type without expression.");
 		return false;
 	}
-	
-	if (!token_is_kw(t->token, KW_EQ)) {
+
+	bool annotates_type = !token_is_kw(t->token, KW_EQ) && !token_is_kw(t->token, KW_COMMA);
+	if (d->type.kind != TYPE_VOID /* multiple types in one declaration */
+		&& (!!(d->flags & DECL_FLAG_ANNOTATES_TYPE)) != annotates_type) { /* annotation on one decl but not the other */
+		/* e.g. x: int, y := 3, 5;*/
+		tokr_err(t, "You must specify either all types or no types in a single declaration.");
+		return false;
+	}
+	printf("%lu\n",n_idents_with_this_type);
+	if (annotates_type) {
 		d->flags |= DECL_FLAG_ANNOTATES_TYPE;
-		if (!parse_type(p, &d->type)) {
+		Type type;
+		if (!parse_type(p, &type)) {
 			return false;
+		}
+		if (n_idents_with_this_type == 1 && d->type.kind == TYPE_VOID) {
+			d->type = type;
+		} else if (d->type.kind == TYPE_TUPLE) {
+			/* add to tuple */
+			for (size_t i = 0; i < n_idents_with_this_type; i++) {
+				*(Type*)arr_add(&d->type.tuple) = type;
+			}
+		} else {
+			/* construct tuple */
+			Array tup_arr;
+			arr_create(&tup_arr, sizeof(Type));
+			if (d->type.kind != TYPE_VOID) {
+				*(Type*)arr_add(&tup_arr) = d->type; /* add current type */
+			}
+			d->type.kind = TYPE_TUPLE;
+			d->type.tuple = tup_arr;
+			for (size_t i = 0; i < n_idents_with_this_type; i++) {
+				*(Type*)arr_add(&d->type.tuple) = type;
+			}
 		}
 	}
 
-	/* OPTIM: switch */
+	if (token_is_kw(t->token, KW_COMMA)) {
+		/* next type in declaration */
+		t->token++;	/* move past , */
+		return parse_single_type_in_decl(p, d);
+	}
+	
+	/* OPTIM: switch t->token->kw ? */
     if (token_is_kw(t->token, KW_EQ)) {
 		t->token++;
 		if (!parse_expr(p, &d->expr, expr_find_end(p, EXPR_END_SEMICOLON)))
@@ -964,6 +1017,15 @@ static bool decl_parse(Declaration *d, Parser *p) {
 	}
 }
 
+static bool parse_decl(Parser *p, Declaration *d) {
+	d->type.kind = TYPE_VOID;
+	d->where = p->tokr->token->where;
+	arr_create(&d->idents, sizeof(Identifier));
+	
+	d->flags = 0;
+	return parse_single_type_in_decl(p, d); /* recursively calls itself to parse all types */
+}
+
 static bool parse_stmt(Parser *p, Statement *s) {
 	Tokenizer *t = p->tokr;
 	if (t->token->kind == TOKEN_EOF)
@@ -976,7 +1038,7 @@ static bool parse_stmt(Parser *p, Statement *s) {
 	if (token_is_kw(t->token + 1, KW_COLON) || token_is_kw(t->token + 1, KW_COMMA)
 		|| token_is_kw(t->token + 1, KW_AT)) {
 		s->kind = STMT_DECL;
-		if (!decl_parse(&s->decl, p)) {
+		if (!parse_decl(p, &s->decl)) {
 			/* move to next statement */
 			/* TODO: This might cause unhelpful errors if the first semicolon is inside a block, etc. */
 			while (!token_is_kw(t->token, KW_SEMICOLON)) {
@@ -1052,6 +1114,16 @@ static void fprint_type(FILE *out, Type *t) {
 		}
 		fprintf(out, ") ");
 		fprint_type(out, &types[0]);
+	} break;
+	case TYPE_TUPLE: {
+		fprintf(out, "(");
+		arr_foreach(&t->tuple, Type, child) {
+			if (child != t->tuple.data) {
+				fprintf(out, ", ");
+			}
+			fprint_type(out, child);
+		}
+		fprintf(out, ")");
 	} break;
 	case TYPE_ARR:
 		fprintf(out, "[");

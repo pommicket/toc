@@ -152,6 +152,9 @@ static bool cgen_type_pre(CGenerator *g, Type *t) {
 		if (!cgen_type_pre(g, ret_type)) return false;
 		cgen_write(g, "(*");
 	} break;
+	case TYPE_TUPLE:
+		assert(0);
+		return false;
 	case TYPE_ARR:
 		cgen_type_pre(g, t->arr.of);
 		break;
@@ -187,6 +190,9 @@ static bool cgen_type_post(CGenerator *g, Type *t) {
 		cgen_write_space(g);
 		if (!cgen_type_post(g, ret_type)) return false;
 	} break;
+	case TYPE_TUPLE:
+		assert(0);
+		return false;
 	case TYPE_ARR:
 		cgen_write(g, "[%lu]", t->arr.n);
 		cgen_type_post(g, t->arr.of);

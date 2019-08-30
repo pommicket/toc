@@ -1,16 +1,5 @@
 main @= fn() {
-	 bar : [3]fn();
-	 foo := fn() {};
-	 bar[1] = foo;
-	 bar[2] = foo;
-	 bar[0] = foo;
-	 i := 0;
-	 x := bar[i];
-	 x();
-	 i = i + 1;
-	 x = bar[i];
-	 x();
-	 i = i + 1;
-	 x = bar[i];
-	 x();
+	 foo , bar, basdf, asdf,ksdja ,dfa : int, kasjdfk, dasfjkfha , sdf, sad : fn() = 3;
+	 x,y,z:int=3,3,3;
+	 abc := bar;
 };
