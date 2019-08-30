@@ -968,7 +968,6 @@ static bool parse_single_type_in_decl(Parser *p, Declaration *d) {
 		tokr_err(t, "You must specify either all types or no types in a single declaration.");
 		return false;
 	}
-	printf("%lu\n",n_idents_with_this_type);
 	if (annotates_type) {
 		d->flags |= DECL_FLAG_ANNOTATES_TYPE;
 		Type type;

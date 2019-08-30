@@ -108,11 +108,16 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 	/* because , is left-associative, we want to go backwards */
 	arr_foreach_reverse(&d->idents, Identifier, ident) {
 		Type *type;
-		if (d->type.kind == TYPE_TUPLE) {
+		if (d->idents.len > 1) {
 			/* it's a tuple! */
 			type = &(((Type*)d->type.tuple.data)[--i]);
 		} else {
 			type = &d->type;
+			if (type->kind == TYPE_TUPLE) {
+				/* TODO */
+				err_print(d->where, "Direct declaration of tuples is not supported yet.");
+				return false;
+			}
 		}
 		cgen_type_pre(g, type);
 		if (d->flags & DECL_FLAG_CONST) { /* TODO: remove this */
@@ -127,7 +132,7 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 		if (d->flags & DECL_FLAG_HAS_EXPR) {
 			cgen_write_space(g);
 			
-			if (d->type.kind == TYPE_TUPLE) {
+			if (d->idents.len > 1) {
 				if (expr->kind == EXPR_BINARY_OP && expr->binary.op == BINARY_COMMA) {
 					if (!cgen_expr(g, expr->binary.rhs)) return false;
 					expr = expr->binary.lhs; /* ((3,4),5),6 => (3,4),5 */
