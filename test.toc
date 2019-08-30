@@ -1,9 +1,15 @@
 main @= fn() {
-	 N @= 5;
-	 FOO @= 1928;
-	 BAR @= 5;
-	 foo : [N+FOO-3--BAR]int;
-	 bar : [77]int;
-	 x : int;
-	 x = 13;
+	 bar : [3]fn();
+	 i := 0;
+	 x := bar[i];
+	 x();
+	 i = i + 1;
+	 x = bar[i];
+	 x();
+	 i = i + 1;
+	 x = bar[i];
+	 x();
+	 i = i + 1;
+	 x = bar[i];
+	 x();
 };

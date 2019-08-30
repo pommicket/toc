@@ -32,8 +32,14 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		case BINARY_SET:
 			cgen_write(g, "=");
 			break;
+		case BINARY_AT_INDEX:
+			cgen_write(g, "[");
+			break;
 		}
 		if (!cgen_expr(g, e->binary.rhs)) return false;
+		if (e->binary.op == BINARY_AT_INDEX) {
+			cgen_write(g, "]");
+		}
 		cgen_write(g, ")");
 		break;
 	case EXPR_UNARY_OP:
@@ -67,6 +73,28 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 
 static bool cgen_stmt(CGenerator *g, Statement *s);
 
+static void cgen_zero_value(CGenerator *g, Type *t) {
+	switch (t->kind) {
+	case TYPE_VOID:	/* we should never need this */
+		assert(0);
+		break;
+	case TYPE_FN:
+		cgen_write(g, "NULL");
+		break;
+	case TYPE_ARR:
+		cgen_write(g, "{");
+		cgen_zero_value(g, t->arr.of);
+		cgen_write(g, "}");
+		break;
+	case TYPE_BUILTIN:
+		if (type_builtin_is_numerical(t->builtin)) {
+			cgen_write(g, "0");
+		} else {
+			assert(0);
+		}
+		break;
+	}
+}
 
 static bool cgen_decl(CGenerator *g, Declaration *d) {
 	arr_foreach(&d->idents, Identifier, ident) {
@@ -78,13 +106,16 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 		}
 		cgen_ident(g, *ident, NULL);
 		cgen_type_post(g, &d->type);
+		cgen_write_space(g);
+		cgen_write(g, "=");
 		if (d->flags & DECL_FLAG_HAS_EXPR) {
-			cgen_write_space(g);
-			cgen_write(g, "=");
 			cgen_write_space(g);
 			if (!cgen_expr(g, &d->expr)) {
 				return false;
 			}
+		} else {
+			cgen_write_space(g);
+			cgen_zero_value(g, &d->type);
 		}
 		cgen_write(g, "; ");
 	}

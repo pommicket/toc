@@ -99,6 +99,39 @@ static bool type_must_eq(Location where, Type *expected, Type *got) {
 	return true;
 }
 
+/* Prints an error and returns false if the given expression is not an l-value */
+static bool expr_must_lval(Expression *e) {
+	switch (e->kind) {
+	case EXPR_IDENT: {
+		IdentDecl *id_decl = ident_decl(e->ident);
+		if (!id_decl)
+			err_print(e->where, "Undeclared identifier.");
+		Declaration *d = id_decl->decl;
+		if (d->flags & DECL_FLAG_CONST) {
+			char *istr = ident_to_str(e->ident);
+			err_print(e->where, "Use of constant %s as a non-constant expression.", istr);
+			info_print(d->where, "%s was declared here.", istr);
+			return false;
+		}
+		
+		return true;
+	}
+	default:
+		err_print(e->where, "Cannot assign to non-lvalue."); 
+		return false;
+	}
+}
+
+static bool type_of_expr(Expression *e, Type *t);
+static bool type_of_decl(Declaration *d, Type *t) {
+	if (d->flags & DECL_FLAG_ANNOTATES_TYPE) {
+		*t = d->type;
+		return true;
+	} else {
+		return type_of_expr(&d->expr, t);
+	}
+}
+
 /* NOTE: this does descend into un/binary ops, etc. but NOT into functions  */
 static bool type_of_expr(Expression *e, Type *t) {
 	t->flags = 0;
@@ -131,31 +164,36 @@ static bool type_of_expr(Expression *e, Type *t) {
 			char *s = ident_to_str(e->ident);
 			err_print(e->where, "Undeclared identifier: %s", s);
 			free(s);
+			return false;
 		}
 		Declaration *d = decl->decl;
-		/* TODO: Check self-referential declarations */
+		/* TODO: Check self-referential declarations but allow f @= fn() { foo := f; foo(); } */
 		if (d->where.code > e->where.code) {
 			char *s = ident_to_str(e->ident);
 			err_print(e->where, "Use of identifier %s before its declaration.", s);
 			info_print(d->where, "%s will be declared here.", s);
 			free(s);
+			return false;
 		}
-		*t = d->type;
+		if (!type_of_decl(d, t)) return false;
+				
 	} break;
 	case EXPR_CALL: {
 		Expression *f = e->call.fn;
 		Type fn_type;
 		if (f->kind == EXPR_IDENT) {
 			/* allow calling a function before declaring it */
-			IdentDecl *decl = ident_decl(f->ident);
-			if (!decl) {
+			IdentDecl *id_decl = ident_decl(f->ident);
+			if (!id_decl) {
 				char *s = ident_to_str(e->ident);
 				err_print(e->where, "Undeclared identifier: %s", s);
 				free(s);
 			}
-			if (!type_of_expr(&decl->decl->expr, &fn_type)) return false;
+			Declaration *d = id_decl->decl;
+			if (!type_of_decl(d, &fn_type)) return false;
+					
 		} else {
-			if (!type_of_expr(e->call.fn, &fn_type)) return false;
+			if (!type_of_expr(f, &fn_type)) return false;
 		}
 		if (fn_type.kind != TYPE_FN) {
 			char type[128];
@@ -183,27 +221,33 @@ static bool type_of_expr(Expression *e, Type *t) {
 		}
 	} break;
 	case EXPR_BINARY_OP: {
+		Type *lhs_type = &e->binary.lhs->type;
+		Type *rhs_type = &e->binary.rhs->type;
+		if (!type_of_expr(e->binary.lhs, lhs_type)
+			|| !type_of_expr(e->binary.rhs, rhs_type))
+			return false;
 		switch (e->binary.op) {
+		case BINARY_SET:
+			if (!expr_must_lval(e->binary.lhs)) return false;
+			/* fallthrough */
 		case BINARY_PLUS:
-		case BINARY_MINUS:
-		case BINARY_SET: {
-			Type *lhs_type = &e->binary.lhs->type;
-			Type *rhs_type = &e->binary.rhs->type;
-			if (!type_of_expr(e->binary.lhs, lhs_type)
-				|| !type_of_expr(e->binary.rhs, rhs_type))
-				return false;
+		case BINARY_MINUS: {
 			bool match = true;
-			if (lhs_type->kind != rhs_type->kind) {
-				match = false;
-			} else if (lhs_type->kind != TYPE_BUILTIN) {
-				match = false;
-			} else if (!type_builtin_is_numerical(lhs_type->builtin) || !type_builtin_is_numerical(rhs_type->builtin)) {
-				match = false;
-			} else {
+			if (e->binary.op != BINARY_SET) {
+				/* numerical binary ops */
+				if (lhs_type->kind != rhs_type->kind) {
+					match = false;
+				} else if (lhs_type->kind != TYPE_BUILTIN) {
+					match = false;
+				} else if (!type_builtin_is_numerical(lhs_type->builtin) || !type_builtin_is_numerical(rhs_type->builtin)) {
+					match = false;
+				}
+			}
+			if (match) {
 				if (e->binary.op == BINARY_SET) {
 					/* type of x = y is always void */
 					t->kind = TYPE_VOID;
-					return true; 
+					break;
 				}
 				int lhs_is_flexible = lhs_type->flags & TYPE_FLAG_FLEXIBLE;
 				int rhs_is_flexible = rhs_type->flags & TYPE_FLAG_FLEXIBLE;
@@ -218,6 +262,8 @@ static bool type_of_expr(Expression *e, Type *t) {
 						*t = *lhs_type;
 					else
 						*t = *rhs_type;
+				} else {
+					match = false;
 				}
 			}
 			if (!match) {
@@ -228,8 +274,20 @@ static bool type_of_expr(Expression *e, Type *t) {
 				err_print(e->where, "Mismatched types to operator %s: %s and %s", op, s1, s2);
 				return false;
 			}
-			return true;
+			break;
 		}
+		case BINARY_AT_INDEX:
+			/* TODO(eventually): support non-builtin numerical (or even perhaps non-numerical) indices */
+			if (rhs_type->kind != TYPE_BUILTIN || !type_builtin_is_numerical(rhs_type->builtin)) {
+				err_print(e->where, "The index of an array must be a builtin numerical type.");
+				return false;
+			}
+			if (lhs_type->kind != TYPE_ARR) {
+				err_print(e->where, "Trying to take index of non-array.");
+				return false;
+			}
+			*t = *lhs_type->arr.of;
+			break;
 		}
 	} break;
 	}
@@ -265,11 +323,11 @@ static bool types_stmt(Statement *s);
 
 static bool types_block(Block *b) {
 	bool ret = true;
-	block_enter(b);
+	if (!block_enter(b)) return false;
 	arr_foreach(&b->stmts, Statement, s) {
 		if (!types_stmt(s)) ret = false;
 	}
-	block_exit(b);
+	if (!block_exit(b)) return false;
 	return ret;
 }
 
@@ -294,18 +352,20 @@ static bool types_expr(Expression *e) {
 
 static bool types_decl(Declaration *d) {
 	if (d->flags & DECL_FLAG_FOUND_TYPE) return true;
-	if (!(d->flags & DECL_FLAG_INFER_TYPE)) {
+	if (d->flags & DECL_FLAG_ANNOTATES_TYPE) {
 		/* type supplied */
 		if (!type_resolve(&d->type))
 			return false;
 	}
 	if (d->flags & DECL_FLAG_HAS_EXPR) {
-		if (!types_expr(&d->expr)) return false;
-		if (d->flags & DECL_FLAG_INFER_TYPE) {
-			d->type = d->expr.type;
-		} else {
+		if (!types_expr(&d->expr)) {
+			return false;
+		}
+		if (d->flags & DECL_FLAG_ANNOTATES_TYPE) {
 			if (!type_must_eq(d->expr.where, &d->type, &d->expr.type))
 				return false;
+		} else {
+			d->type = d->expr.type;
 		}
 	}
 	d->flags |= DECL_FLAG_FOUND_TYPE;

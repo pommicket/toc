@@ -77,7 +77,8 @@ typedef enum {
 typedef enum {
 			  BINARY_SET, /* e.g. x = y */
 			  BINARY_PLUS,
-			  BINARY_MINUS
+			  BINARY_MINUS,
+			  BINARY_AT_INDEX /* e.g. x[i] */
 } BinaryOp;
 
 #define EXPR_FLAG_FLEXIBLE 0x01	/* e.g. 4 => float/i32/etc. */
@@ -108,7 +109,7 @@ typedef struct Expression {
 	};
 } Expression;
 
-#define DECL_FLAG_INFER_TYPE 0x01
+#define DECL_FLAG_ANNOTATES_TYPE 0x01
 #define DECL_FLAG_CONST 0x02
 #define DECL_FLAG_HAS_EXPR 0x04
 #define DECL_FLAG_FOUND_TYPE 0x08
@@ -151,6 +152,7 @@ static const char *binary_op_to_str(BinaryOp b) {
 	case BINARY_PLUS: return "+";
 	case BINARY_MINUS: return "-";
 	case BINARY_SET: return "=";
+	case BINARY_AT_INDEX: return "[]";
 	}
 	assert(0);
 	return "";
@@ -268,7 +270,6 @@ static size_t type_to_str(Type *t, char *buffer, size_t bufsize) {
 
 /* 
    allocate a new expression.
-   IMPORTANT: This invalidates all other parser-allocated Expression pointers.
 */
 static Expression *parser_new_expr(Parser *p) {
 	return block_arr_add(&p->exprs);
@@ -600,6 +601,8 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		t->token = end;
 		return true;
 	}
+
+	Token *start = t->token;
 			
 	if (token_is_kw(t->token, KW_FN)) {
 		/* this is a function */
@@ -615,9 +618,10 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		return true;
 	}
 	
-	/* Find the lowest-precedence operator not in parentheses/braces */
+	/* Find the lowest-precedence operator not in parentheses/braces/square brackets */
 	int paren_level = 0;
 	int brace_level = 0;
+	int square_level = 0;
 	int lowest_precedence = NOT_AN_OP;
 	/* e.g. (5+3) */
 	bool entirely_within_parentheses = token_is_kw(t->token, KW_LPAREN);
@@ -634,7 +638,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					entirely_within_parentheses = false;
 				if (paren_level < 0) {
 					t->token = token;
-					tokr_err(t, "Excessive closing parenthesis.");
+					tokr_err(t, "Excessive closing ).");
 					t->token = end + 1;
 					return false;
 				}
@@ -646,12 +650,22 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				brace_level--;
 				if (brace_level < 0) {
 					t->token = token;
-					tokr_err(t, "Excessive closing brace.");
+					tokr_err(t, "Excessive closing }.");
+					return false;
+				}
+				break;
+			case KW_LSQUARE:
+				square_level++;
+				break;
+			case KW_RSQUARE:
+				square_level--;
+				if (square_level < 0) {
+					tokr_err(t, "Excessive closing ].");
 					return false;
 				}
 				break;
 			default: { /* OPTIM: use individual cases for each op */
-				if (paren_level == 0 && brace_level == 0) {
+				if (paren_level == 0 && brace_level == 0 && square_level == 0) {
 					int precedence = op_precedence(token->kw);
 					if (precedence == NOT_AN_OP) break; /* nvm it's not an operator */
 					if (lowest_precedence == NOT_AN_OP || precedence <= lowest_precedence) {
@@ -664,15 +678,19 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		}
 	}
 
-	/* TODO: These errors are bad for functions, since they can be very long,
-	   and this will only point to the end. 
-	*/
 	if (paren_level > 0) {
-		tokr_err(t, "Too many opening parentheses.");
+		t->token = start;
+		tokr_err(t, "Too many opening parentheses (.");
 		return false;
 	}
 	if (brace_level > 0) {
-		tokr_err(t, "Too many opening braces.");
+		t->token = start;
+		tokr_err(t, "Too many opening braces {.");
+		return false;
+	}
+	if (square_level > 0) {
+		t->token = start;
+		tokr_err(t, "Too many opening square brackets [.");
 		return false;
 	}
 	
@@ -688,8 +706,9 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	if (lowest_precedence == NOT_AN_OP) {
 		/* function calls, array accesses, etc. */
 		
-		/* try a function call */
+		/* try a function call or array access */
 		Token *token = t->token;
+		/* currently unnecessary: paren_level = square_level = 0; */
 		/* 
 		   can't call at start, e.g. in (fn() {})(), it is not the empty function ""
 		   being called with fn() {} as an argument
@@ -698,47 +717,93 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			paren_level++;
 			token++;
 		}
+		/* which opening bracket starts the call/array access */
+		Token *opening_bracket = NULL;
 		for (; token < end; token++) {
 			if (token->kind == TOKEN_KW) {
-				if (token->kw == KW_LPAREN) {
-					if (paren_level == 0)
-						break; /* this left parenthesis opens the function call */
+				switch (token->kw) {
+				case KW_LPAREN:
+					if (square_level == 0 && paren_level == 0)
+						opening_bracket = token; /* maybe this left parenthesis opens the function call */
 					paren_level++;
-				}
-				if (token->kw == KW_RPAREN) {
+					break;
+				case KW_LSQUARE:
+					if (square_level == 0 && paren_level == 0)
+						opening_bracket = token; /* ^^ (array access) */
+					square_level++;
+					break;
+				case KW_RPAREN:
 					paren_level--;
+					break;
+				case KW_RSQUARE:
+					square_level--;
+					break;
+				default: break;
 				}
+				
+			} else if (token->kind == TOKEN_EOF) {
+				if (paren_level > 0) {
+					tokr_err(t, "Unmatched ( parenthesis.");
+					return false;
+				}
+				if (square_level > 0) {
+					tokr_err(t, "Unmatched [ square bracket.");
+					return false;
+				}
+				break;
 			}
 		}
-		if (token != t->token && token != end) {
-			/* it's a function call! */
-			e->kind = EXPR_CALL;
-			e->call.fn = parser_new_expr(p);
-			if (!parse_expr(p, e->call.fn, token)) { /* parse up to ( as function */
+		if (opening_bracket) {
+			switch (opening_bracket->kw) {
+			case KW_LPAREN: {
+				/* it's a function call! */
+				e->kind = EXPR_CALL;
+				e->call.fn = parser_new_expr(p);
+				if (!parse_expr(p, e->call.fn, opening_bracket)) { /* parse up to ( as function */
+					return false;
+				}
+				arr_create(&e->call.args, sizeof(Expression));
+				t->token = opening_bracket + 1; /* move past ( */
+				if (!token_is_kw(t->token, KW_RPAREN)) {
+					/* non-empty arg list */
+					while (1) {
+						if (t->token->kind == TOKEN_EOF) {
+							tokr_err(t, "Expected argument list to continue.");
+							return false;
+						}
+						Expression *arg = arr_add(&e->call.args);
+						if (!parse_expr(p, arg, expr_find_end(p, EXPR_END_RPAREN_OR_COMMA))) {
+							return false;
+						}
+						if (token_is_kw(t->token, KW_RPAREN))
+							break;
+						t->token++;	/* move past , */
+					}
+				}
+				t->token++;	/* move past ) */
+				return true;
+			}
+			case KW_LSQUARE: {
+				/* it's an array access */
+				e->kind = EXPR_BINARY_OP;
+				e->binary.op = BINARY_AT_INDEX;
+				e->binary.lhs = parser_new_expr(p);
+				e->binary.rhs = parser_new_expr(p);
+				/* parse array */
+				if (!parse_expr(p, e->binary.lhs, opening_bracket)) return false;
+				/* parse index */
+				t->token = opening_bracket + 1;
+				Token *index_end = expr_find_end(p, EXPR_END_RSQUARE);
+				if (!parse_expr(p, e->binary.rhs, index_end))
+					return false;
+				t->token++;	/* move past ] */
+			    return true;
+			}
+			default:
+				assert(0);
 				return false;
 			}
-			arr_create(&e->call.args, sizeof(Expression));
-			t->token = token + 1; /* move past ( */
-			if (!token_is_kw(t->token, KW_RPAREN)) {
-				/* non-empty arg list */
-				while (1) {
-					if (t->token->kind == TOKEN_EOF) {
-						tokr_err(t, "Expected argument list to continue.");
-						return false;
-					}
-					Expression *arg = arr_add(&e->call.args);
-					if (!parse_expr(p, arg, expr_find_end(p, EXPR_END_RPAREN_OR_COMMA))) {
-						return false;
-					}
-					if (token_is_kw(t->token, KW_RPAREN))
-						break;
-					t->token++;	/* move past , */
-				}
-			}
-			t->token++;	/* move past ) */
-			return true;
 		}
-		/* array accesses, etc. */
 		tokr_err(t, "Not implemented yet.");
 		return false;
 	}
@@ -871,10 +936,8 @@ static bool decl_parse(Declaration *d, Parser *p) {
 		return false;
 	}
 	
-	if (token_is_kw(t->token, KW_EQ)) {
-		/* := / @= */
-		d->flags |= DECL_FLAG_INFER_TYPE;
-	} else {
+	if (!token_is_kw(t->token, KW_EQ)) {
+		d->flags |= DECL_FLAG_ANNOTATES_TYPE;
 		if (!parse_type(p, &d->type)) {
 			return false;
 		}
@@ -1059,6 +1122,9 @@ static void fprint_expr(FILE *out, Expression *e) {
 		case BINARY_SET:
 			fprintf(out, "set");
 			break;
+		case BINARY_AT_INDEX:
+			fprintf(out, "at");
+			break;
 		}
 		fprintf(out, "(");
 		fprint_expr(out, e->binary.lhs);
@@ -1102,7 +1168,7 @@ static void fprint_decl(FILE *out, Declaration *d) {
 		fprintf(out, "[const]");
 	}
 	fprintf(out, ":");
-	if (!(d->flags & DECL_FLAG_INFER_TYPE)) {
+	if (d->flags & DECL_FLAG_ANNOTATES_TYPE) {
 		fprint_type(out, &d->type);
 	}
 	if (d->flags & DECL_FLAG_HAS_EXPR) {

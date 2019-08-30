@@ -58,6 +58,9 @@ static bool eval_expr_as_int(Expression *e, Integer *i) {
 	    case BINARY_SET:
 			err_print(e->where, "Expected operator which returns an integer, but got %s", binary_op_to_str(e->binary.op));
 			return false;
+		case BINARY_AT_INDEX:
+			err_print(e->where, "Cannot get index of array at compile time yet.");
+			return false;
 		}
 	} break;
 	case EXPR_IDENT: {

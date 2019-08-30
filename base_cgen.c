@@ -60,14 +60,14 @@ static void cgen_writeln(CGenerator *g, const char *fmt, ...) {
 	g->indent_next = true;
 }
 	
-static void cgen_write_comment(CGenerator *g, const char *fmt, ...) {
-	cgen_write(g, "/* ");
-	va_list args;
-	va_start(args, fmt);
-	cgen_vwrite(g, fmt, args);
-	va_end(args);
-	cgen_write(g, " */");
-}
+/* static void cgen_write_comment(CGenerator *g, const char *fmt, ...) { */
+/* 	cgen_write(g, "/\* "); */
+/* 	va_list args; */
+/* 	va_start(args, fmt); */
+/* 	cgen_vwrite(g, fmt, args); */
+/* 	va_end(args); */
+/* 	cgen_write(g, " *\/"); */
+/* } */
 
 static void cgen_write_line_comment(CGenerator *g, const char *fmt, ...) {
 	/* could switch to // for c99 */
@@ -88,7 +88,8 @@ static void cgen_create(CGenerator *g, FILE *c_out, FILE *h_out, const char *h_f
     g->indent_next = true;
 	
 	g->writing_to = CGEN_WRITING_TO_H;
-	cgen_write(g, "#include <stdint.h>\n");
+	cgen_write(g, "#include <stddef.h>\n"
+			   "#include <stdint.h>\n");
 	
 	g->writing_to = CGEN_WRITING_TO_C;
 	cgen_write(g, "#include \"%s\"\n", h_filename);
