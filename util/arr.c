@@ -52,3 +52,4 @@ static void arr_free(Array *arr) {
 }
 
 #define arr_foreach(arr, type, var) for (type *var = (arr)->data, *var##_foreach_last = arr_last(arr); var; var == var##_foreach_last ? var = NULL : var++)
+#define arr_foreach_reverse(arr, type, var) for (type *var = arr_last(arr); var; var == (arr)->data ? var = NULL : var--)

@@ -1,5 +1,3 @@
 main @= fn() {
-	 foo , bar, basdf, asdf,ksdja ,dfa : int, kasjdfk, dasfjkfha , sdf, sad : fn() = 3;
-	 x,y,z:int=3,3,3;
-	 abc := bar;
+	 foo, bar, baz  : int, something : float, salkdfj : int = 3, 4, 5, 6.32, 123;
 };

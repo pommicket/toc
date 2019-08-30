@@ -134,12 +134,50 @@ static bool expr_must_lval(Expression *e) {
 }
 
 static bool type_of_expr(Expression *e, Type *t);
-static bool type_of_decl(Declaration *d, Type *t) {
+static bool type_of_ident(Location where, Identifier i, Type *t, bool allow_use_before_decl) {
+	IdentDecl *decl = ident_decl(i);
+	if (!decl) {
+		char *s = ident_to_str(i);
+		err_print(where, "Undeclared identifier: %s", s);
+		free(s);
+		return false;
+	}
+	Declaration *d = decl->decl;
+	if (!allow_use_before_decl) {
+		/* TODO: Check self-referential declarations  */
+		if (d->where.code > where.code) {
+			char *s = ident_to_str(i);
+			err_print(where, "Use of identifier %s before its declaration.", s);
+			info_print(d->where, "%s will be declared here.", s);
+			free(s);
+			return false;
+		}
+	}
+
+	/* OPTIM: you don't always need to do so much copying */
+	Type decl_type;
 	if (d->flags & DECL_FLAG_ANNOTATES_TYPE) {
-		*t = d->type;
-		return true;
+		decl_type = d->type;
 	} else {
-		return type_of_expr(&d->expr, t);
+		if (!type_of_expr(&d->expr, &decl_type))
+			return false;
+	}
+	
+	if (d->idents.len > 1) {
+		/* it's a tuple! */
+		
+		arr_foreach(&d->idents, Identifier, decl_i) {
+			if (*decl_i == i) {
+				long index = (long)(decl_i - (Identifier*)d->idents.data);
+				*t = ((Type*)d->type.tuple.data)[index];
+				return true;
+			}
+		}
+		assert(0);
+		return false;
+	} else {
+		*t = decl_type;
+		return true;
 	}
 }
 
@@ -170,23 +208,7 @@ static bool type_of_expr(Expression *e, Type *t) {
 		t->flags |= TYPE_FLAG_FLEXIBLE;
 		break;
 	case EXPR_IDENT: {
-		IdentDecl *decl = ident_decl(e->ident);
-		if (!decl) {
-			char *s = ident_to_str(e->ident);
-			err_print(e->where, "Undeclared identifier: %s", s);
-			free(s);
-			return false;
-		}
-		Declaration *d = decl->decl;
-		/* TODO: Check self-referential declarations but allow f @= fn() { foo := f; foo(); } */
-		if (d->where.code > e->where.code) {
-			char *s = ident_to_str(e->ident);
-			err_print(e->where, "Use of identifier %s before its declaration.", s);
-			info_print(d->where, "%s will be declared here.", s);
-			free(s);
-			return false;
-		}
-		if (!type_of_decl(d, t)) return false;
+		if (!type_of_ident(e->where, e->ident, t, false)) return false;
 				
 	} break;
 	case EXPR_CALL: {
@@ -194,15 +216,7 @@ static bool type_of_expr(Expression *e, Type *t) {
 		Type fn_type;
 		if (f->kind == EXPR_IDENT) {
 			/* allow calling a function before declaring it */
-			IdentDecl *id_decl = ident_decl(f->ident);
-			if (!id_decl) {
-				char *s = ident_to_str(e->ident);
-				err_print(e->where, "Undeclared identifier: %s", s);
-				free(s);
-			}
-			Declaration *d = id_decl->decl;
-			if (!type_of_decl(d, &fn_type)) return false;
-					
+			if (!type_of_ident(e->where, e->ident, t, true)) return false;
 		} else {
 			if (!type_of_expr(f, &fn_type)) return false;
 		}
@@ -299,6 +313,28 @@ static bool type_of_expr(Expression *e, Type *t) {
 			}
 			*t = *lhs_type->arr.of;
 			break;
+		case BINARY_COMMA: {
+			t->kind = TYPE_TUPLE;
+			Array *tup_types = &t->tuple;
+			arr_create(tup_types, sizeof(Type));
+			if (lhs_type->kind == TYPE_TUPLE) {
+				/* tuple, x => tuple */
+				arr_foreach(&lhs_type->tuple, Type, child) {
+					*(Type*)arr_add(tup_types) = *child;
+				}
+			} else {
+				*(Type*)arr_add(tup_types) = *lhs_type;
+			}
+			
+			if (rhs_type->kind == TYPE_TUPLE) {
+				/* x, tuple => tuple */
+				arr_foreach(&rhs_type->tuple, Type, child) {
+					*(Type*)arr_add(tup_types) = *child;
+				}
+			} else {
+				*(Type*)arr_add(tup_types) = *rhs_type;
+			}
+		} break;
 		}
 	} break;
 	}
@@ -365,6 +401,7 @@ static bool types_decl(Declaration *d) {
 	if (d->flags & DECL_FLAG_FOUND_TYPE) return true;
 	if (d->flags & DECL_FLAG_ANNOTATES_TYPE) {
 		/* type supplied */
+		assert(d->type.kind != TYPE_VOID); /* there's no way to annotate void */
 		if (!type_resolve(&d->type))
 			return false;
 	}

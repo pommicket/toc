@@ -1,4 +1,3 @@
-/* TODO: don't allow setting things to void */
 /* TODO: don't eval consts in C */
 /* TODO: array assignment (x : [3]int = y;) */
 /* TODO: Functions returning fixed-length arrays */

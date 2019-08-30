@@ -80,6 +80,7 @@ typedef enum {
 			  BINARY_SET, /* e.g. x = y */
 			  BINARY_PLUS,
 			  BINARY_MINUS,
+			  BINARY_COMMA,
 			  BINARY_AT_INDEX /* e.g. x[i] */
 } BinaryOp;
 
@@ -154,6 +155,7 @@ static const char *binary_op_to_str(BinaryOp b) {
 	case BINARY_PLUS: return "+";
 	case BINARY_MINUS: return "-";
 	case BINARY_SET: return "=";
+	case BINARY_COMMA: return ",";
 	case BINARY_AT_INDEX: return "[]";
 	}
 	assert(0);
@@ -292,6 +294,8 @@ static int op_precedence(Keyword op) {
 	switch (op) {
 	case KW_EQ:
 		return 0;
+	case KW_COMMA:
+		return 5;
 	case KW_PLUS:
 		return 10;
 	case KW_MINUS:
@@ -869,6 +873,9 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	case KW_EQ:
 		op = BINARY_SET;
 		break;
+	case KW_COMMA:
+		op = BINARY_COMMA;
+		break;
 	default: assert(0); break;
 	}
 	e->binary.op = op;
@@ -982,6 +989,7 @@ static bool parse_single_type_in_decl(Parser *p, Declaration *d) {
 			if (d->type.kind != TYPE_VOID) {
 				*(Type*)arr_add(&tup_arr) = d->type; /* add current type */
 			}
+			d->type.flags = 0;
 			d->type.kind = TYPE_TUPLE;
 			d->type.tuple = tup_arr;
 			for (size_t i = 0; i < n_idents_with_this_type; i++) {
@@ -1196,6 +1204,9 @@ static void fprint_expr(FILE *out, Expression *e) {
 			break;
 		case BINARY_AT_INDEX:
 			fprintf(out, "at");
+			break;
+		case BINARY_COMMA:
+			fprintf(out, "tuple");
 			break;
 		}
 		fprintf(out, "(");

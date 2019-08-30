@@ -35,6 +35,9 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		case BINARY_AT_INDEX:
 			cgen_write(g, "[");
 			break;
+		case BINARY_COMMA:
+			assert(0);
+			return false;
 		}
 		if (!cgen_expr(g, e->binary.rhs)) return false;
 		if (e->binary.op == BINARY_AT_INDEX) {
@@ -100,25 +103,45 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 }
 
 static bool cgen_decl(CGenerator *g, Declaration *d) {
-	arr_foreach(&d->idents, Identifier, ident) {
-		cgen_type_pre(g, &d->type);
-		if (d->flags & DECL_FLAG_CONST) {
+	size_t i = d->idents.len;
+	Expression *expr = &d->expr;
+	/* because , is left-associative, we want to go backwards */
+	arr_foreach_reverse(&d->idents, Identifier, ident) {
+		Type *type;
+		if (d->type.kind == TYPE_TUPLE) {
+			/* it's a tuple! */
+			type = &(((Type*)d->type.tuple.data)[--i]);
+		} else {
+			type = &d->type;
+		}
+		cgen_type_pre(g, type);
+		if (d->flags & DECL_FLAG_CONST) { /* TODO: remove this */
 			cgen_write_space(g);
 			cgen_write(g, "const");
 			cgen_write_space(g);
 		}
 		cgen_ident(g, *ident, NULL);
-		cgen_type_post(g, &d->type);
+		cgen_type_post(g, type);
 		cgen_write_space(g);
 		cgen_write(g, "=");
 		if (d->flags & DECL_FLAG_HAS_EXPR) {
 			cgen_write_space(g);
-			if (!cgen_expr(g, &d->expr)) {
-				return false;
+			
+			if (d->type.kind == TYPE_TUPLE) {
+				if (expr->kind == EXPR_BINARY_OP && expr->binary.op == BINARY_COMMA) {
+					if (!cgen_expr(g, expr->binary.rhs)) return false;
+					expr = expr->binary.lhs; /* ((3,4),5),6 => (3,4),5 */
+				} else {
+					/* last iteration */
+					if (!cgen_expr(g, expr)) return false;
+				}
+
+			} else {
+				if (!cgen_expr(g, expr)) return false;
 			}
 		} else {
 			cgen_write_space(g);
-			cgen_zero_value(g, &d->type);
+			cgen_zero_value(g, type);
 		}
 		cgen_write(g, "; ");
 	}

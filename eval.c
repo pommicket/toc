@@ -56,6 +56,7 @@ static bool eval_expr_as_int(Expression *e, Integer *i) {
 			}
 		}
 	    case BINARY_SET:
+		case BINARY_COMMA:
 			err_print(e->where, "Expected operator which returns an integer, but got %s", binary_op_to_str(e->binary.op));
 			return false;
 		case BINARY_AT_INDEX:
