@@ -116,10 +116,14 @@ static bool expr_must_lval(Expression *e) {
 		
 		return true;
 	}
+	case EXPR_BINARY_OP:
+		if (e->binary.op == BINARY_AT_INDEX) return true;
+		break;
 	default:
-		err_print(e->where, "Cannot assign to non-lvalue."); 
-		return false;
+		break;
 	}
+	err_print(e->where, "Cannot assign to non-lvalue."); 
+	return false;
 }
 
 static bool type_of_expr(Expression *e, Type *t);

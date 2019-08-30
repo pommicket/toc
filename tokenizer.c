@@ -105,7 +105,7 @@ typedef struct {
 
 
 
-static bool token_is_kw(Token *t, Keyword kw) {
+static inline bool token_is_kw(Token *t, Keyword kw) {
 	return t->kind == TOKEN_KW && t->kw == kw;
 }
 
@@ -149,7 +149,7 @@ static Token *tokr_add(Tokenizer *t) {
 	return token;
 }
 
-static void tokr_nextchar(Tokenizer *t) {
+static inline void tokr_nextchar(Tokenizer *t) {
 	if (*(t->s) == '\n') {
 		t->line++;
 	}

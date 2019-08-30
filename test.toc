@@ -1,10 +1,11 @@
 main @= fn() {
 	 bar : [3]fn();
+	 foo := fn() {};
+	 bar[1] = foo;
+	 bar[2] = foo;
+	 bar[0] = foo;
 	 i := 0;
 	 x := bar[i];
-	 x();
-	 i = i + 1;
-	 x = bar[i];
 	 x();
 	 i = i + 1;
 	 x = bar[i];

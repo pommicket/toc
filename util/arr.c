@@ -11,13 +11,13 @@ static void arr_create(Array *arr, size_t item_sz) {
 	arr->data = NULL;
 }
 
-static void arr_reserve(Array *arr, size_t n) {
+static inline void arr_reserve(Array *arr, size_t n) {
 	arr->cap = n;
 	arr->data = realloc(arr->data, arr->item_sz * arr->cap);
 
 }
 
-static void *arr_last(Array *arr) {
+static inline void *arr_last(Array *arr) {
 	if (arr->data)
 		return (void*)((char*)arr->data + arr->item_sz * (arr->len - 1));
 	else

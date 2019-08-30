@@ -107,7 +107,7 @@ static bool cgen_ident(CGenerator *g, Identifier i, Location *where) {
 			return false;
 		}
 		Declaration *decl = id_decl->decl;
-		if (decl->flags & DECL_FLAG_HAS_EXPR) {
+		if ((decl->flags & DECL_FLAG_HAS_EXPR) && (decl->flags & DECL_FLAG_CONST)) {
 			if (decl->expr.kind == EXPR_FN) {
 				cgen_fn_name(g, &decl->expr.fn, NULL);
 				return true;
@@ -196,7 +196,7 @@ static bool cgen_type_post(CGenerator *g, Type *t) {
 }
 
 static bool cgen_fn_name(CGenerator *g, FnExpr *f, Location *where) {
-	if (f->name && g->block == NULL) {
+	if (f->name) {
 		if (ident_eq_str(f->name, "main"))
 			cgen_write(g, "main__");
 		else
