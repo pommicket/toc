@@ -1,3 +1,4 @@
-main @= fn() {
-	 foo, bar, baz  : int, something : float, salkdfj : int;
+main @ fn() = fn() {
+	 asdkofhj : fn() (int, int);
+	 foo, bar, baz  : int, something : float, salkdfj : int= 2, 2, 2, 2, 2;
 };

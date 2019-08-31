@@ -414,7 +414,7 @@ static bool parse_type(Parser *p, Type *type) {
 		type->builtin = kw_to_builtin_type(t->token->kw);
 		if (type->builtin != BUILTIN_TYPE_COUNT) {
 			t->token++;
-			return true;
+			break;
 		}
 		/* Not a builtin */
 		switch (t->token->kw) {
@@ -444,17 +444,18 @@ static bool parse_type(Parser *p, Type *type) {
 			}
 			t->token++;	/* move past ) */
 			Type *ret_type = type->fn.types.data;
-			/* if there's a symbol that isn't [, that can't be the start of a type */
+			/* if there's a symbol that isn't [ or (, that can't be the start of a type */
 			if (t->token->kind == TOKEN_KW
 				&& t->token->kw <= KW_LAST_SYMBOL
-				&& t->token->kw != KW_LSQUARE) {
+				&& t->token->kw != KW_LSQUARE
+				&& t->token->kw != KW_LPAREN) {
 				ret_type->kind = TYPE_VOID;
 				ret_type->flags = 0;
 			} else {
 				if (!parse_type(p, ret_type))
 					return false;
 			}
-			return true;
+			break;
 		}
 		case KW_LSQUARE: {
 			/* array type */
@@ -469,15 +470,40 @@ static bool parse_type(Parser *p, Type *type) {
 			if (!parse_type(p, type->arr.of)) return false;
 			type->flags = 0;
 			type->where = start->where;
-			return true;
+			break;
 		}
-		default: break;
+		case KW_LPAREN:
+			/* tuple! */
+			type->kind = TYPE_TUPLE;
+			arr_create(&type->tuple, sizeof(Type));
+			t->token++;	/* move past ( */
+			while (1) {
+				Type *child = arr_add(&type->tuple);
+				parse_type(p, child);
+				if (token_is_kw(t->token, KW_RPAREN)) { /* we're done with the tuple */
+					t->token++;	/* move past ) */
+					break;
+				}
+				if (token_is_kw(t->token, KW_COMMA)) {
+					t->token++;	/* move past , */
+					continue;
+				} else {
+					tokr_err(t, "Expected , to list next tuple type or ) to end tuple type.");
+					return false;
+				}
+			}
+			break;
+		default:
+			tokr_err(t, "Unrecognized type.");
+			return false;
 		}
 		break;
-	default: break;
+	default:
+		tokr_err(t, "Unrecognized type.");
+		return false;
 	}
-	tokr_err(t, "Unrecognized type.");
-	return false;
+	return true;
+	
 }
 
 static bool parse_param(Parser *parser, Param *p) {
