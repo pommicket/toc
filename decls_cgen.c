@@ -1,4 +1,4 @@
-/* C declarations of functions and global variables */
+/* C declarations of functions and global variables. e must be a function expression */
 static bool cgen_decl_fn(CGenerator *g, FnExpr *f) {
 	/* assign an ID to the function */
 	if (f->name && g->block == NULL) {
@@ -75,9 +75,9 @@ static bool cgen_decls_stmt(CGenerator *g, Statement *s) {
 			if (g->block == NULL) {
 				/* declare this/these global variable(s) */
 				arr_foreach(&d->idents, Identifier, i) {
-					if (!cgen_type_pre(g, &d->type)) return false;
+					cgen_type_pre(g, &d->type);
 					cgen_ident(g, *i, NULL);
-					if (!cgen_type_post(g, &d->type)) return false;
+					cgen_type_post(g, &d->type);
 					if (d->flags & DECL_FLAG_HAS_EXPR) { /* TODO: check if expr is const */
 						cgen_write_space(g);
 						cgen_write(g, "=");

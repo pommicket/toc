@@ -138,7 +138,18 @@ static const char *builtin_type_to_str(BuiltinType b) {
 	return NULL;
 }
 
-static bool cgen_type_pre(CGenerator *g, Type *t) {
+/* will this function use a pointer parameter for output? (e.g. fn()[3]int => void(int (*x)[3]) */
+static bool fn_uses_out_param(Type *fn_ret_type) {
+	switch (fn_ret_type->kind) {
+	case TYPE_TUPLE:
+	case TYPE_ARR:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static void cgen_type_pre(CGenerator *g, Type *t) {
 	switch (t->kind) {
 	case TYPE_VOID:
 		cgen_write(g, "void ");
@@ -149,20 +160,63 @@ static bool cgen_type_pre(CGenerator *g, Type *t) {
 	case TYPE_FN: {
 		Type *types = t->fn.types.data;
 		Type *ret_type = &types[0];
-		if (!cgen_type_pre(g, ret_type)) return false;
+		if (fn_uses_out_param(ret_type)) {
+			cgen_write(g, "void ");
+		} else {
+			cgen_type_pre(g, ret_type);
+		}
 		cgen_write(g, "(*");
 	} break;
 	case TYPE_TUPLE:
 		assert(0);
-		return false;
+		return;
 	case TYPE_ARR:
 		cgen_type_pre(g, t->arr.of);
 		break;
 	}
-	return true;
 }
 
-static bool cgen_type_post(CGenerator *g, Type *t) {
+static void cgen_type_post(CGenerator *g, Type *t);
+/* either pass NULL for param_types (x)or for params */
+static void cgen_fn_params(CGenerator *g, Type *param_types, Param *params, size_t nparams, Type *ret_type) {
+	bool uses_out_param = fn_uses_out_param(ret_type);
+	   
+	cgen_write(g, "(");
+	if (nparams) {
+		for (size_t i = 0; i < nparams; i++) {
+			if (i) {
+				cgen_write(g, ",");
+				cgen_write_space(g);
+			}
+			if (param_types) {
+				cgen_type_pre(g, &param_types[i]);
+				cgen_type_post(g, &param_types[i]);
+			} else {
+				Param *p = &params[i];
+				cgen_type_pre(g, &p->type);
+				cgen_ident(g, p->name, NULL);
+				cgen_type_post(g, &p->type);
+			}
+		}
+	} else {
+		if (!uses_out_param)
+			cgen_write(g, "void");
+	}
+	if (uses_out_param) {
+		if (nparams) {
+			cgen_write(g, ",");
+			cgen_write_space(g);
+		}
+		/* write out param */
+		cgen_type_pre(g, ret_type);
+		cgen_write(g, "(*out__)"); /* TODO: fix this for named return values */
+		cgen_type_post(g, ret_type);
+			
+	}
+	cgen_write(g, ")");
+}
+
+static void cgen_type_post(CGenerator *g, Type *t) {
 	switch (t->kind) {
 	case TYPE_VOID:
 	case TYPE_BUILTIN:
@@ -173,32 +227,22 @@ static bool cgen_type_post(CGenerator *g, Type *t) {
 		Type *param_types = types + 1;
 		assert(t->fn.types.len > 0);
 		size_t nparams = t->fn.types.len-1;
-		cgen_write(g, ")(");
-		if (nparams) {
-			for (size_t i = 0; i < nparams; i++) {
-				if (i) {
-					cgen_write(g, ",");
-					cgen_write_space(g);
-				}
-				if (!cgen_type_pre(g, &param_types[i])) return true;
-				if (!cgen_type_post(g, &param_types[i])) return true;
-			}
-		} else {
-			cgen_write(g, "void");
-		}
+		bool uses_out_param = fn_uses_out_param(ret_type);
 		cgen_write(g, ")");
+		cgen_fn_params(g, param_types, NULL, nparams, ret_type);
+		if (!uses_out_param) {
+			cgen_type_post(g, ret_type);
+		}
 		cgen_write_space(g);
-		if (!cgen_type_post(g, ret_type)) return false;
 	} break;
 	case TYPE_TUPLE:
 		assert(0);
-		return false;
+		return;
 	case TYPE_ARR:
 		cgen_write(g, "[%lu]", t->arr.n);
 		cgen_type_post(g, t->arr.of);
 		break;
 	}
-	return true;
 }
 
 static bool cgen_fn_name(CGenerator *g, FnExpr *f, Location *where) {
@@ -216,30 +260,25 @@ static bool cgen_fn_name(CGenerator *g, FnExpr *f, Location *where) {
 	return true;
 }
 
-static bool cgen_fn_header(CGenerator *g, FnExpr *f) {	
+static bool cgen_fn_header(CGenerator *g, FnExpr *f) {
 	if (!f->name || g->block != NULL) {
 		cgen_write(g, "static "); /* anonymous functions only exist in this translation unit */
 	}
-	if (!cgen_type_pre(g, &f->ret_type)) return false;
-	cgen_fn_name(g, f, NULL);
-	if (!cgen_type_post(g, &f->ret_type)) return false;
-	cgen_write(g, "(");
-	if (f->params.len) {
-		arr_foreach(&f->params, Param, p) {
-			if (p != f->params.data) {
-				cgen_write(g, ",");
-				cgen_write_space(g);
-			}
-			if (!cgen_type_pre(g, &p->type))
-				return false;
-			cgen_ident(g, p->name, NULL);
-			if (!cgen_type_post(g, &p->type))
-				return false;
-		}
+	
+	bool uses_out_param = fn_uses_out_param(&f->ret_type);
+	size_t nparams = f->params.len;
+	if (uses_out_param) {
+		cgen_write(g, "void ");
+		cgen_fn_name(g, f, NULL);
+		cgen_fn_params(g, NULL, (Param*)f->params.data, nparams, &f->ret_type);
+	
 	} else {
-		cgen_write(g, "void");
+	    cgen_type_pre(g, &f->ret_type);
+		cgen_fn_name(g, f, NULL);
+		cgen_fn_params(g, NULL, (Param*)f->params.data, nparams, &f->ret_type);
+		cgen_type_post(g, &f->ret_type);
 	}
-	cgen_write(g, ")");
+	
 	return true;
 }
 

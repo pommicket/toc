@@ -181,6 +181,37 @@ static bool type_of_ident(Location where, Identifier i, Type *t, bool allow_use_
 	}
 }
 
+/* fixes the type (replaces [5+3]int with [8]int, etc.) */
+static bool type_resolve(Type *t) {
+	if (t->flags & TYPE_FLAG_RESOLVED) return true;
+	switch (t->kind) {
+	case TYPE_ARR: {
+		/* it's an array */
+		if (!type_resolve(t->arr.of)) return false; /* resolve inner type */
+		Integer size;
+		if (!eval_expr_as_int(t->arr.n_expr, &size)) return false; /* resolve N */
+		if (size < 0)
+			err_print(t->arr.n_expr->where, "Negative array length (" INTEGER_FMT ")", size);
+		t->arr.n = (UInteger)size;
+	} break;
+	case TYPE_FN:
+		arr_foreach(&t->fn.types, Type, child_type) {
+			if (!type_resolve(child_type))
+				return false;
+		}
+		break;
+	case TYPE_TUPLE:
+		arr_foreach(&t->tuple, Type, child_type) {
+			if (!type_resolve(child_type))
+				return false;
+		}
+		break;
+	default: break;
+	}
+	t->flags |= TYPE_FLAG_RESOLVED;
+	return true;
+}
+
 /* NOTE: this does descend into un/binary ops, etc. but NOT into functions  */
 static bool type_of_expr(Expression *e, Type *t) {
 	t->flags = 0;
@@ -191,9 +222,11 @@ static bool type_of_expr(Expression *e, Type *t) {
 		t->kind = TYPE_FN;
 		arr_create(&t->fn.types, sizeof(Type));
 		Type *ret_type = arr_add(&t->fn.types);
+		type_resolve(&f->ret_type);
 		*ret_type = f->ret_type;
 		arr_foreach(&f->params, Param, param) {
 			Type *param_type = arr_add(&t->fn.types);
+			type_resolve(&param->type);
 			*param_type = param->type;
 		}
 	} break;
@@ -338,31 +371,6 @@ static bool type_of_expr(Expression *e, Type *t) {
 		}
 	} break;
 	}
-	return true;
-}
-
-/* fixes the type (replaces [5+3]int with [8]int, etc.) */
-static bool type_resolve(Type *t) {
-	if (t->flags & TYPE_FLAG_RESOLVED) return true;
-	switch (t->kind) {
-	case TYPE_ARR: {
-		/* it's an array */
-		if (!type_resolve(t->arr.of)) return false; /* resolve inner type */
-		Integer size;
-		if (!eval_expr_as_int(t->arr.n_expr, &size)) return false; /* resolve N */
-		if (size < 0)
-			err_print(t->arr.n_expr->where, "Negative array length (" INTEGER_FMT ")", size);
-		t->arr.n = (UInteger)size;
-	} break;
-	case TYPE_FN:
-		arr_foreach(&t->fn.types, Type, child_type) {
-			if (!type_resolve(child_type))
-				return false;
-		}
-		break;
-	default: break;
-	}
-	t->flags |= TYPE_FLAG_RESOLVED;
 	return true;
 }
 

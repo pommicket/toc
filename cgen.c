@@ -201,9 +201,8 @@ static bool cgen_fn(CGenerator *g, FnExpr *f) {
 
 static bool cgen_fns_in_expr(CGenerator *g, Expression *e) {
 	switch (e->kind) {
-	case EXPR_FN: {
+	case EXPR_FN:
 		return cgen_fn(g, &e->fn);
-	}
 	case EXPR_CALL:
 		return cgen_fns_in_expr(g, e->call.fn); 
 	default: return true;

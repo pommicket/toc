@@ -1,4 +1,6 @@
+foo @= fn(a: [10]float) [3]int {
+};
+
 main @ fn() = fn() {
-	 asdkofhj : fn() (int, int);
-	 foo, bar, baz  : int, something : float, salkdfj : int= 2, 2, 2, 2, 2;
+	 asdkofhj : fn() [3]int;
 };
