@@ -12,6 +12,7 @@ typedef struct {
 	int indent_level;
 	bool indent_next; /* should the next thing written be indented? */
 	CGenWritingTo writing_to;
+	Identifier main_ident;
 } CGenerator;
 
 static FILE *cgen_writing_to(CGenerator *g) {
@@ -77,23 +78,6 @@ static void cgen_write_line_comment(CGenerator *g, const char *fmt, ...) {
 	cgen_vwrite(g, fmt, args);
 	va_end(args);
 	cgen_write(g, " */\n");
-}
-
-static void cgen_create(CGenerator *g, FILE *c_out, FILE *h_out, const char *h_filename) {
-	g->c_out = c_out;
-	g->h_out = h_out;
-	g->anon_fn_count = 0;
-	g->indent_level = 0;
-	g->block = NULL;
-    g->indent_next = true;
-	
-	g->writing_to = CGEN_WRITING_TO_H;
-	cgen_write(g, "#include <stddef.h>\n"
-			   "#include <stdint.h>\n");
-	
-	g->writing_to = CGEN_WRITING_TO_C;
-	cgen_write(g, "#include \"%s\"\n", h_filename);
-	cgen_writeln(g, ""); /* extra newline between includes and code */
 }
 
 
@@ -247,10 +231,11 @@ static void cgen_type_post(CGenerator *g, Type *t) {
 
 static bool cgen_fn_name(CGenerator *g, FnExpr *f, Location *where) {
 	if (f->name) {
-		if (ident_eq_str(f->name, "main"))
+		if (f->name == g->main_ident) {
 			cgen_write(g, "main__");
-		else
+		} else {
 			return cgen_ident(g, f->name, where);
+		}
 	} else {
 		cgen_write(g, "a___");
 	}

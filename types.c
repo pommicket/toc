@@ -4,7 +4,8 @@ static bool block_enter(Block *b) {
 		if (stmt->kind == STMT_DECL) {
 			Declaration *decl = &stmt->decl;
 			arr_foreach(&decl->idents, Identifier, ident) {
-				Array *decls = &(*ident)->decls;
+				IdentTree *id_info = *ident;
+				Array *decls = &id_info->decls;
 				if (decls->len) {
 					/* check that it hasn't been declared in this block */
 					IdentDecl *prev = arr_last(decls);
@@ -16,7 +17,7 @@ static bool block_enter(Block *b) {
 					}
 				} else {
 					/* array not initialized yet */
-					arr_create(&(*ident)->decls, sizeof(IdentDecl));
+					arr_create(decls, sizeof(IdentDecl));
 				}
 				
 				IdentDecl *ident_decl = arr_add(decls);
@@ -35,7 +36,8 @@ static bool block_exit(Block *b) {
 		if (stmt->kind == STMT_DECL) {
 			Declaration *decl = &stmt->decl;
 			arr_foreach(&decl->idents, Identifier, ident) {
-				Array *decls = &(*ident)->decls;
+				IdentTree *id_info = *ident;
+				Array *decls = &id_info->decls;
 				assert(decls->item_sz);
 				IdentDecl *last_decl = arr_last(decls);
 				if (last_decl->scope == b) {
@@ -249,7 +251,7 @@ static bool type_of_expr(Expression *e, Type *t) {
 		Type fn_type;
 		if (f->kind == EXPR_IDENT) {
 			/* allow calling a function before declaring it */
-			if (!type_of_ident(e->where, e->ident, t, true)) return false;
+			if (!type_of_ident(f->where, f->ident, &fn_type, true)) return false;
 		} else {
 			if (!type_of_expr(f, &fn_type)) return false;
 		}

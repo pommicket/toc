@@ -145,7 +145,7 @@ static void fprint_token(FILE *out, Token *t) {
 		fprintf(out, "keyword: %s", keywords[t->kw]);
 		break;
 	case TOKEN_IDENT:
-		fprintf(out, "identifier: %ld:", t->ident->id);
+		fprintf(out, "identifier: %p: ", (void*)t->ident);
 		fprint_ident(out, t->ident);
 		break;
 	case TOKEN_NUM_LITERAL:

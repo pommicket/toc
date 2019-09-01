@@ -561,7 +561,7 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 	Tokenizer *t = p->tokr;
 	/* only called when token is fn */
 	assert(token_is_kw(t->token, KW_FN));
-	f->name = NULL;
+	f->name = 0;
 	t->token++;
 	if (!token_is_kw(t->token, KW_LPAREN)) {
 		tokr_err(t, "Expected '(' after 'fn'.");
@@ -947,17 +947,18 @@ static bool parse_single_type_in_decl(Parser *p, Declaration *d) {
 		   only keep track of file scoped declarations---
 		   block enter/exit code will handle the rest
 		*/
+		IdentTree *ident_info = *ident;
 		if (p->block == NULL) {
-			if ((*ident)->decls.len) {
+			if (ident_info->decls.len) {
 				/* this was already declared! */
-				IdentDecl *prev = (*ident)->decls.data;
+				IdentDecl *prev = ident_info->decls.data;
 				tokr_err(t, "Re-declaration of identifier in global scope.");
 				info_print(prev->decl->where, "Previous declaration was here.");
 				return false;
 			}
-			assert(!(*ident)->decls.item_sz);
-			arr_create(&(*ident)->decls, sizeof(IdentDecl));
-			IdentDecl *ident_decl = arr_add(&(*ident)->decls);
+			assert(!ident_info->decls.item_sz); /* we shouldn't have created this array already */
+			arr_create(&ident_info->decls, sizeof(IdentDecl));
+			IdentDecl *ident_decl = arr_add(&ident_info->decls);
 			ident_decl->decl = d;
 			ident_decl->scope = NULL;
 		}
@@ -1179,7 +1180,7 @@ static void fprint_param(FILE *out, Param *p) {
 
 static void fprint_stmt(FILE *out, Statement *s);
 
-static void fprint_block(FILE *out, Block *b) {
+static void fprint_block(FILE *out,  Block *b) {
 	fprintf(out, "{\n");
 	arr_foreach(&b->stmts, Statement, stmt) {
 		fprint_stmt(out, stmt);

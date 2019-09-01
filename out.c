@@ -1,10 +1,10 @@
 #include "out.h"
 
 /* toc */
-void foo(float a[10], int64_t (*out__)[3]) {
+void foo(void) {
 }
 void main__(void) {
-	void (*asdkofhj)(int64_t (*out__)[3])  = NULL; 
+	foo();
 }
 
 int main(void) {

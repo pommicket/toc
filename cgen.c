@@ -1,3 +1,21 @@
+static void cgen_create(CGenerator *g, Identifiers *ids, FILE *c_out, FILE *h_out, const char *h_filename) {
+	g->c_out = c_out;
+	g->h_out = h_out;
+	g->anon_fn_count = 0;
+	g->indent_level = 0;
+	g->block = NULL;
+    g->indent_next = true;
+	g->main_ident = ident_get(ids, "main");
+	
+	g->writing_to = CGEN_WRITING_TO_H;
+	cgen_write(g, "#include <stddef.h>\n"
+			   "#include <stdint.h>\n");
+	
+	g->writing_to = CGEN_WRITING_TO_C;
+	cgen_write(g, "#include \"%s\"\n", h_filename);
+	cgen_writeln(g, ""); /* extra newline between includes and code */
+}
+
 static bool cgen_expr(CGenerator *g, Expression *e) {
 	switch (e->kind) {
 	case EXPR_INT_LITERAL:

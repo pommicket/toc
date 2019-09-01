@@ -36,7 +36,8 @@ int main(int argc, char **argv) {
 	fclose(in);
 
 	err_filename = in_filename;
-	Identifiers file_idents = {0};
+	Identifiers file_idents;
+	idents_create(&file_idents);
 	Tokenizer t;
 	tokr_create(&t, &file_idents);
 	if (!tokenize_string(&t, contents)) {
@@ -72,7 +73,7 @@ int main(int argc, char **argv) {
 	FILE *c_out = fopen(c_out_filename, "w");
 	FILE *h_out = fopen(h_out_filename, "w");
 	CGenerator cgen;
-	cgen_create(&cgen, c_out, h_out, h_out_filename);
+	cgen_create(&cgen, &file_idents, c_out, h_out, h_out_filename);
 	if (!cgen_file(&cgen, &f)) {
 		err_fprint(TEXT_IMPORTANT("Errors occured while generating C code.\n"));
 		return EXIT_FAILURE;

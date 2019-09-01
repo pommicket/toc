@@ -1,121 +1,155 @@
-/* OPTIM: This is not ideal. There should be one dynamic array of tree nodes. */
-
 typedef struct {
 	struct Block *scope; /* NULL for file scope */
 	struct Declaration *decl;
 } IdentDecl;
 
+/* 
+The way you search an identifier in a tree is:
+root.children[low part of 1st char].children[high part of 1st char]
+.children[low part of 2nd char]...
+
+*/
+
+#define TREE_NCHILDREN 16
 typedef struct IdentTree {
 	/* zero value is an empty trie */
-	long id;
-	int len; /* length of identifier = depth in tree */
-	struct IdentTree *children;
+	uint16_t depth;
+	unsigned char index_in_parent; /* index of this in .parent.children */
 	struct IdentTree *parent;
+	struct IdentTree *children[TREE_NCHILDREN];
 	Array decls; /* array of declarations of this identifier */
 	unsigned long c_fn_reps; /* number of repetitions of this identifier in the C output--only used for functions */
-	size_t depth;
 } IdentTree;
 
 typedef IdentTree *Identifier;
 
-/* MUST be zero-initialized before use */
 typedef struct {
-	IdentTree tree_root;
-	long curr_id;
+	BlockArr trees;
+	IdentTree *root;
 } Identifiers;
 
-static const char identifier_chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
-
-#define NIDENTIFIER_CHARS ((int)((sizeof identifier_chars) - 1)) /* -1 for null char */
-
-/* returns -1 if c is not a valid identifier character, its index in identifier_chars otherwise */
-static int ident_char_index(int c) {
-	if (c >= 'a' && c <= 'z')
-		return c - 'a';	
-	if (c >= 'A' && c <= 'Z')
-		return c - 'A' + 26;
-	if (c >= '0' && c <= '9')
-		return c - '0' + 52;
-	if (c == '_') return 62;
-	return -1;
-}
+#if CHAR_MAX - CHAR_MIN > 255
+#error "Currently only systems with 8-bit characters can compile toc."
+/* TODO: maybe do a run-time error for large characters? */
+#endif
 
 /* can this character be used in an identifier? */
 static int isident(int c) {
-	return ident_char_index(c) != -1; /* OPTIM: Write separate function */
+	if (c >= 'a' && c <= 'z')
+		return 1;	
+	if (c >= 'A' && c <= 'Z')
+		return 1;
+	if (c >= '0' && c <= '9')
+		return 1;
+	if (c == '_') return 1;
+#if CHAR_MIN < 0
+	if (c < 0) /* on systems where char = signed char, UTF-8 characters are probably < 0? */
+		return 1;
+#endif
+	if (c > 127) /* UTF-8 */
+		return 1;
+	return 0;
 }
+
+
+/* used internally to allocate identifiers */
+static Identifier ident_new(Identifiers *ids, Identifier parent, unsigned char index_in_parent) {
+	IdentTree *tree = block_arr_add(&ids->trees);
+	memset(tree, 0, sizeof *tree); /* use zero value of IdentTree */
+#if NONZERO_NULL_PTRS
+	tree->parent = NULL;
+	for (size_t i = 0; i < TREE_NCHILDREN; i++)
+		tree->children[i] = NULL;
+#endif
+	tree->parent = parent;
+	tree->index_in_parent = index_in_parent;
+	return tree;
+}
+
+/* Initialize Identifiers. */
+static void idents_create(Identifiers *ids) {
+	block_arr_create(&ids->trees, 10, sizeof(IdentTree)); /* blocks of 1 << 10 = 1024 */
+	ids->root = ident_new(ids, NULL, 0); /* create root tree */
+}
+
 
 /* moves s to the char after the identifier */
 /* inserts if does not exist. reads until non-ident char is found. */
 /* advances past identifier */
 static Identifier ident_insert(Identifiers *ids, char **s) {
-	IdentTree *t = &ids->tree_root;
+	IdentTree *tree = ids->root;
 	while (1) {
-		char c = **s;
-		if (!isident(c)) {
-			if (t->id == 0) t->id = ++ids->curr_id;
-			return t;
+		if (!isident(**s)) {
+			return tree;
 		}
+		int c = (**s) - CHAR_MIN;
+		assert(c >= 0 && c <= 255);
+		unsigned char c_low = (unsigned char)(c & 0xf);
+		unsigned char c_high = (unsigned char)(c >> 4);
+		if (!tree->children[c_low]) {
+			tree->children[c_low] = ident_new(ids, tree, c_low);
+		}
+		tree = tree->children[c_low];
 		
-		if (!t->children) {
-			/* allocate children */
-			t->children = err_calloc(NIDENTIFIER_CHARS, sizeof *t->children);
-			for (int i = 0; i < NIDENTIFIER_CHARS; i++) {
-				t->children[i].parent = t; /* child's parent = self */
-				t->children[i].depth = t->depth + 1;
-			}
+		if (!tree->children[c_high]) {
+			tree->children[c_high] = ident_new(ids, tree, c_high);
 		}
-		t = &t->children[ident_char_index(c)];
+		tree = tree->children[c_high];
 		(*s)++;
 	}
 }
 
 
 static void fprint_ident(FILE *out, Identifier id) {
+	assert(id);
 	if (id->parent == NULL) return; /* at root */
-	/* OPTIM: Use malloc(id->len)???? would probably use less mem for long idents, but
-	   it's on the heap */
-	fprint_ident(out, id->parent);
-	fputc(identifier_chars[id - id->parent->children /* index of self in parent */], out);
+	fprint_ident(out, id->parent->parent); /* to go up one character, we need to go to the grandparent */
+	int c_low = id->parent->index_in_parent;
+	int c_high = id->index_in_parent;
+	int c = c_low + (c_high << 4) + CHAR_MIN; 
+	fputc(c, out);
 }
 
-static bool ident_eq_str(Identifier i, const char *s) {
-	size_t len = strlen(s);
-	if (i->depth != len) return false;
-	s += len - 1;
-	while (i->parent != NULL) {
-		if (identifier_chars[i - i->parent->children /* index of self in parent */] != *s)
-			return false;
-		i = i->parent;
-		if (i->parent != NULL)
-			s--;
+/* NULL = no such identifier */
+static Identifier ident_get(Identifiers *ids, const char *s) {
+	IdentTree *tree = ids->root;
+	while (*s) {
+		int c = (*s) - CHAR_MIN;
+		assert(c >= 0 && c <= 255);
+		unsigned char c_low = (unsigned char)(c & 0xf);
+		unsigned char c_high = (unsigned char)(c >> 4);
+		tree = tree->children[c_low];
+		if (!tree) return NULL;
+		tree = tree->children[c_high];
+		if (!tree) return NULL;
+		s++;
 	}
-	return true;
+	return tree;
 }
 
 static char *ident_to_str(Identifier i) {
-	char *str = malloc(i->depth + 1);
-	str += i->depth;
+	size_t i_len = (size_t)(i->depth / 2); /* length = depth / 2 */
+	char *str = malloc(i_len + 1);
+	str += i_len;
 	*str = 0;
-	while (i->parent != NULL) {
+	
+	while (i) {
 		str--;
-		*str = identifier_chars[i - i->parent->children];
-		i = i->parent;
+		unsigned char c_high = i->index_in_parent;
+		unsigned char c_low = i->parent->index_in_parent;
+		char c = (char)(CHAR_MIN + (int)(c_low + (c_high << 4)));
+		*str = c;
+		i = i->parent->parent; /* go to grandparent (prev char) */
 	}
+	
 	return str;
 }
 
 static IdentDecl *ident_decl(Identifier i) {
+	assert(i->decls.item_sz);
 	return (IdentDecl*)arr_last(&i->decls);
 }
 
-static void idents_free_tree(IdentTree *tree) {
-	if (!tree->children) return;
-	for (int i = 0; i < NIDENTIFIER_CHARS; i++)
-		idents_free_tree(&tree->children[i]);
-	free(tree->children);
-}
-
 static void idents_free(Identifiers *ids) {
-	idents_free_tree(&ids->tree_root);
+	block_arr_free(&ids->trees);
 }

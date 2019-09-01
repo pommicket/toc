@@ -86,6 +86,7 @@ static bool eval_expr_as_int(Expression *e, Integer *i) {
 			info_print(d->where, "Declaration was here.");
 			return false;
 		}
+		/* TODO: tuples */
 		eval_expr_as_int(&d->expr, i);
 		
 		return true;

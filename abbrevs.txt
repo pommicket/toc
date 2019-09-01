@@ -6,4 +6,5 @@ stmt - statement
 tokr - tokenizer
 str - string
 num - number
+fn - function
 eof - end of file
