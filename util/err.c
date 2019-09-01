@@ -52,7 +52,6 @@ static void warn_print_header_(LineNo line) {
 }
 
 static void err_print_footer_(const char *context) {
-	err_fprint("\n\there --> ");
 	const char *end = strchr(context, '\n');
 	int has_newline = end != NULL;
 	if (!has_newline)

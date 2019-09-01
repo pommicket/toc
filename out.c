@@ -1,10 +1,10 @@
 #include "out.h"
 
 /* toc */
-void foo(void) {
+void Äx__a8(void) {
 }
-void main__(void) {
-	foo();
+void main(void) {
+	Äx__a8();
 }
 
 int main(void) {

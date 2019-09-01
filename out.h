@@ -1,4 +1,4 @@
 #include <stddef.h>
 #include <stdint.h>
-void foo(void);
-void main__(void);
+void Äx__a8(void);
+void main(void);
