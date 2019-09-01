@@ -1,9 +1,10 @@
+/* OPTIM: This is not ideal. There should be one dynamic array of tree nodes. */
+
 typedef struct {
 	struct Block *scope; /* NULL for file scope */
 	struct Declaration *decl;
 } IdentDecl;
 
-/* OPTIM: This is not ideal. There should be one dynamic array of tree nodes. */
 typedef struct IdentTree {
 	/* zero value is an empty trie */
 	long id;
@@ -17,9 +18,13 @@ typedef struct IdentTree {
 
 typedef IdentTree *Identifier;
 
-static IdentTree ident_base_tree;
-static long ident_curr_id; /* NOTE: you should eventually add something to reset this */
-static char identifier_chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
+/* MUST be zero-initialized before use */
+typedef struct {
+	IdentTree tree_root;
+	long curr_id;
+} Identifiers;
+
+static const char identifier_chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
 
 #define NIDENTIFIER_CHARS ((int)((sizeof identifier_chars) - 1)) /* -1 for null char */
 
@@ -41,11 +46,14 @@ static int isident(int c) {
 }
 
 /* moves s to the char after the identifier */
-static Identifier ident_tree_insert(IdentTree *t, char **s) {
+/* inserts if does not exist. reads until non-ident char is found. */
+/* advances past identifier */
+static Identifier ident_insert(Identifiers *ids, char **s) {
+	IdentTree *t = &ids->tree_root;
 	while (1) {
 		char c = **s;
 		if (!isident(c)) {
-			if (t->id == 0) t->id = ++ident_curr_id;
+			if (t->id == 0) t->id = ++ids->curr_id;
 			return t;
 		}
 		
@@ -62,16 +70,11 @@ static Identifier ident_tree_insert(IdentTree *t, char **s) {
 	}
 }
 
-/* inserts if does not exist. reads until non-ident char is found. */
-/* advances past identifier */
-static Identifier ident_insert(char **s) {
-	return ident_tree_insert(&ident_base_tree, s);
-}
-
 
 static void fprint_ident(FILE *out, Identifier id) {
 	if (id->parent == NULL) return; /* at root */
-	/* OPTIM: Use malloc(id->len)???? */
+	/* OPTIM: Use malloc(id->len)???? would probably use less mem for long idents, but
+	   it's on the heap */
 	fprint_ident(out, id->parent);
 	fputc(identifier_chars[id - id->parent->children /* index of self in parent */], out);
 }
@@ -113,6 +116,6 @@ static void idents_free_tree(IdentTree *tree) {
 	free(tree->children);
 }
 
-static void idents_free(void) {
-	idents_free_tree(&ident_base_tree);
+static void idents_free(Identifiers *ids) {
+	idents_free_tree(&ids->tree_root);
 }

@@ -20,6 +20,7 @@ typedef struct {
 } Location;
 
 /* file name of file being processed */
+/* TODO: remove this */
 static const char *err_filename;
 
 /* Write directly to the error file */

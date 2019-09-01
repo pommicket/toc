@@ -36,7 +36,9 @@ int main(int argc, char **argv) {
 	fclose(in);
 
 	err_filename = in_filename;
+	Identifiers file_idents = {0};
 	Tokenizer t;
+	tokr_create(&t, &file_idents);
 	if (!tokenize_string(&t, contents)) {
 		err_fprint(TEXT_IMPORTANT("Errors occured while preprocessing.\n"));
 		return EXIT_FAILURE;
@@ -80,5 +82,5 @@ int main(int argc, char **argv) {
 	
 	fclose(c_out);
 	fclose(h_out);
-	idents_free();
+	idents_free(&file_idents);
 }

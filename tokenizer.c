@@ -101,6 +101,7 @@ typedef struct {
 	char *s; /* string being parsed */
 	LineNo line;
 	Token *token; /* token currently being processed */
+	Identifiers *idents;
 } Tokenizer;
 
 
@@ -214,49 +215,52 @@ static void tokr_get_location(Tokenizer *tokr, Token *t) {
 	tokr->s = t->where.code;
 }
 
-static bool tokenize_string(Tokenizer *tokr, char *str) {
+static void tokr_create(Tokenizer *t, Identifiers *idents) {
+	arr_create(&t->tokens, sizeof(Token));
+	arr_reserve(&t->tokens, 256);
+	t->idents = idents;
+}
+
+static bool tokenize_string(Tokenizer *t, char *str) {
 	int has_err = 0;
-	Tokenizer t;
-	arr_create(&t.tokens, sizeof(Token));
-	arr_reserve(&t.tokens, 256);
-	t.s = str;
-	t.line = 1;
+	t->s = str;
+	t->line = 1;
 	
 	while (1) {
-	    if (*t.s == 0) break;
-		if (isspace(*t.s)) {
-			tokr_nextchar(&t);
+	    if (*t->s == 0) break;
+		if (isspace(*t->s)) {
+			tokr_nextchar(t);
 	    	continue;
 		}
 
-		if (*t.s == '/') {
+		if (*t->s == '/') {
 			/* maybe it's a comment */
 			int is_comment = 1;
-			switch (t.s[1]) {
+			switch (t->s[1]) {
 			case '/': /* single line comment */
-				tokr_nextchar(&t);
-				for (t.s++; *t.s != '\n' && *t.s; t.s++);
-				t.line++;
+				tokr_nextchar(t);
+				for (t->s++; *t->s != '\n' && *t->s; t->s++);
+				t->line++;
 				break;
 			case '*': { /* multi line comment */
-				tokr_nextchar(&t);
+				tokr_nextchar(t);
 				int comment_level = 1; /* allow nested multi-line comments */
-			    while (*t.s) {
-					if (t.s[0] == '*' && t.s[1] == '/') {
-						t.s += 2;
+			    while (*t->s) {
+					if (t->s[0] == '*' && t->s[1] == '/') {
+						t->s += 2;
 						comment_level--;
 						if (comment_level == 0) {
 							break;
 						}
-					} else if (t.s[0] == '/' && t.s[1] == '*') {
-						t.s += 2;
+					} else if (t->s[0] == '/' && t->s[1] == '*') {
+						t->s += 2;
 						comment_level++;
 					} else {
-						tokr_nextchar(&t);
+						tokr_nextchar(t);
 					}
 				}
-				if (*t.s == 0) {
-					tokenization_err(&t, "End of file reached inside multi-line comment.");
+				if (*t->s == 0) {
+					tokenization_err(t, "End of file reached inside multi-line comment.");
 					abort(); /* there won't be any further errors, of course */
 				}
 			} break;
@@ -267,12 +271,12 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 			if (is_comment) continue;
 		}
 		{
-			char *start_s = t.s;
-			Keyword kw = tokenize_kw(&t.s);
+			char *start_s = t->s;
+			Keyword kw = tokenize_kw(&t->s);
 			if (kw != KW_COUNT) {
 				/* it's a keyword */
-				Token *token = tokr_add(&t);
-				token->where.line = t.line;
+				Token *token = tokr_add(t);
+				token->where.line = t->line;
 				token->where.code = start_s;
 				token->kind = TOKEN_KW;
 				token->kw = kw;
@@ -282,30 +286,30 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 		
 		/* check if it's a number */
 
-		if (isdigit(*t.s)) {
+		if (isdigit(*t->s)) {
 			/* it's a numeric literal */
 			int base = 10;
 			Floating decimal_pow10;
 			NumLiteral n;
 			n.kind = NUM_LITERAL_INT;
 			n.intval = 0;
-			Token *token = tokr_add(&t);
-			tokr_put_location(&t, token);
-			if (*t.s == '0') {
-				tokr_nextchar(&t);
+			Token *token = tokr_add(t);
+			tokr_put_location(t, token);
+			if (*t->s == '0') {
+				tokr_nextchar(t);
 				/* octal/hexadecimal/binary (or zero) */
-				char format = *t.s;
+				char format = *t->s;
 				if (isdigit(format)) /* octal */
 					base = 8;
 				else {
 					switch (format) {
 					case 'b':
 						base = 2;
-						tokr_nextchar(&t);
+						tokr_nextchar(t);
 						break;
 					case 'x':
 						base = 16;
-						tokr_nextchar(&t);
+						tokr_nextchar(t);
 						break;
 					default:
 						/* it's 0/0.something etc.  */
@@ -315,39 +319,39 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 			}
 
 			while (1) {
-				if (*t.s == '.') {
+				if (*t->s == '.') {
 					if (n.kind == NUM_LITERAL_FLOAT) {
-						tokenization_err(&t, "Double . in number.");
+						tokenization_err(t, "Double . in number.");
 						goto err;
 					}
 					if (base != 10) {
-						tokenization_err(&t, "Decimal point in non base 10 number.");
+						tokenization_err(t, "Decimal point in non base 10 number.");
 						goto err;
 					}
 				    n.kind = NUM_LITERAL_FLOAT;
 					decimal_pow10 = 0.1;
 					n.floatval = (Floating)n.intval;
-					tokr_nextchar(&t);
+					tokr_nextchar(t);
 					continue;
-				} else if (*t.s == 'e') {
-					tokr_nextchar(&t);
+				} else if (*t->s == 'e') {
+					tokr_nextchar(t);
 					if (n.kind == NUM_LITERAL_INT) {
 						n.kind = NUM_LITERAL_FLOAT;
 						n.floatval = (Floating)n.intval;
 					}
 					/* TODO: check if exceeding maximum exponent */
 					int exponent = 0;
-					if (*t.s == '+')
-						tokr_nextchar(&t); /* ignore + after e */
+					if (*t->s == '+')
+						tokr_nextchar(t); /* ignore + after e */
 					
 					int negative_exponent = 0;
-					if (*t.s == '-') {
-						tokr_nextchar(&t);
+					if (*t->s == '-') {
+						tokr_nextchar(t);
 						negative_exponent = 1;
 					}
-					for (; isdigit(*t.s); tokr_nextchar(&t)) {
+					for (; isdigit(*t->s); tokr_nextchar(t)) {
 						exponent *= 10;
-						exponent += *t.s - '0';
+						exponent += *t->s - '0';
 					}
 					/* OPTIM: Slow for very large exponents (unlikely to happen) */
 					for (int i = 0; i < exponent; i++) {
@@ -361,19 +365,19 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 				}
 				int digit = -1;
 				if (base == 16) {
-					if (*t.s >= 'a' && *t.s <= 'f')
-						digit = 10 + *t.s - 'a';
-					else if (*t.s >= 'A' && *t.s <= 'F')
-						digit = *t.s - 'A';
+					if (*t->s >= 'a' && *t->s <= 'f')
+						digit = 10 + *t->s - 'a';
+					else if (*t->s >= 'A' && *t->s <= 'F')
+						digit = *t->s - 'A';
 				}
 				if (digit == -1) {
-					if (*t.s >= '0' && *t.s <= '9')
-						digit = *t.s - '0';
+					if (*t->s >= '0' && *t->s <= '9')
+						digit = *t->s - '0';
 				}
 				if (digit < 0 || digit >= base) {
-					if (isdigit(*t.s)) {
+					if (isdigit(*t->s)) {
 						/* something like 0b011012 */
-						tokenization_err(&t, "Digit %d cannot appear in a base %d number.", digit, base);
+						tokenization_err(t, "Digit %d cannot appear in a base %d number.", digit, base);
 						goto err;
 					}
 					/* end of numeric literal */
@@ -384,7 +388,7 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 					if (n.intval > ULLONG_MAX / (UInteger)base ||
 						n.intval * (UInteger)base > ULLONG_MAX - (UInteger)digit) {
 						/* too big! */
-						tokenization_err(&t, "Number too big to fit in a numeric literal.");
+						tokenization_err(t, "Number too big to fit in a numeric literal.");
 						goto err;
 					}
 					n.intval *= (UInteger)base;
@@ -395,107 +399,106 @@ static bool tokenize_string(Tokenizer *tokr, char *str) {
 					decimal_pow10 /= 10;
 					break;
 				}
-				tokr_nextchar(&t);
+				tokr_nextchar(t);
 			}
 			token->kind = TOKEN_NUM_LITERAL;
 			token->num = n;
 			continue;
 		}
 
-		if (*t.s == '\'') {
+		if (*t->s == '\'') {
 			/* it's a character literal! */
-			tokr_nextchar(&t);
-			Token *token = tokr_add(&t);
-			tokr_put_location(&t, token);
+			tokr_nextchar(t);
+			Token *token = tokr_add(t);
+			tokr_put_location(t, token);
 			char c;
-			if (*t.s == '\\') {
+			if (*t->s == '\\') {
 				/* escape sequence */
-				tokr_nextchar(&t);
-				c = tokr_esc_seq(&t);
+				tokr_nextchar(t);
+				c = tokr_esc_seq(t);
 				if (c == 0) {
-					tokenization_err(&t, "Unrecognized escape character: '\\%c'.", *t.s);
+					tokenization_err(t, "Unrecognized escape character: '\\%c'.", *t->s);
 					goto err;
 				}
 			} else {
-				c = *t.s;
-				tokr_nextchar(&t);
+				c = *t->s;
+				tokr_nextchar(t);
 			}
-			if (*t.s != '\'') {
-				tokenization_err(&t, "End of character literal expected.");
+			if (*t->s != '\'') {
+				tokenization_err(t, "End of character literal expected.");
 				goto err;
 			}
-			tokr_nextchar(&t);
+			tokr_nextchar(t);
 			token->kind = TOKEN_CHAR_LITERAL;
 			token->chr = c;
 			continue;
 		}
 
-		if (*t.s == '"') {
+		if (*t->s == '"') {
 			/* it's a string literal! */
-			Token *token = tokr_add(&t);
-			tokr_put_location(&t, token);
-			tokr_nextchar(&t);
+			Token *token = tokr_add(t);
+			tokr_put_location(t, token);
+			tokr_nextchar(t);
 			size_t len = 0;
 			size_t backslashes = 0;
-			while (*t.s != '"' || backslashes % 2 == 1) {
-				if (*t.s == '\\') {
+			while (*t->s != '"' || backslashes % 2 == 1) {
+				if (*t->s == '\\') {
 					backslashes++;
-				} else if (*t.s == 0) {
+				} else if (*t->s == 0) {
 					/* return t to opening " so that we go to the next line */
-					tokr_get_location(&t, token);
-					tokenization_err(&t, "No matching \" found.");
+					tokr_get_location(t, token);
+					tokenization_err(t, "No matching \" found.");
 					goto err;
 				} else {
 					backslashes = 0;
 				}
 				len++;
-				tokr_nextchar(&t);
+				tokr_nextchar(t);
 			}
 			char *strlit = malloc(len + 1);
 		    char *strptr = strlit;
-			tokr_get_location(&t, token);
-			tokr_nextchar(&t); /* past opening " */
-			while (*t.s != '"') {
-				assert(*t.s);
-				if (*t.s == '\\') {
-					tokr_nextchar(&t);
-					char c = tokr_esc_seq(&t);
+			tokr_get_location(t, token);
+			tokr_nextchar(t); /* past opening " */
+			while (*t->s != '"') {
+				assert(*t->s);
+				if (*t->s == '\\') {
+					tokr_nextchar(t);
+					char c = tokr_esc_seq(t);
 					if (c == 0) {
-						tokenization_err(&t, "Unrecognized escape character: '\\%c'.", *t.s);
+						tokenization_err(t, "Unrecognized escape character: '\\%c'.", *t->s);
 						goto err;
 					}
 					*strptr++ = c;
 				} else {
-					*strptr++ = *t.s;
-					tokr_nextchar(&t);
+					*strptr++ = *t->s;
+					tokr_nextchar(t);
 				}
 			}
 			*strptr = 0;
 			token->kind = TOKEN_STR_LITERAL;
 			token->str.len = len;
 			token->str.str = strlit;
-			tokr_nextchar(&t); /* move past closing " */
+			tokr_nextchar(t); /* move past closing " */
 			continue;
 		}
 		
-		if (isident(*t.s)) {
+		if (isident(*t->s)) {
 			/* it's an identifier */
-			Token *token = tokr_add(&t);
-			tokr_put_location(&t, token);
-			Identifier ident = ident_insert(&t.s);
+			Token *token = tokr_add(t);
+			tokr_put_location(t, token);
+			Identifier ident = ident_insert(t->idents, &t->s);
 			token->kind = TOKEN_IDENT;
 			token->ident = ident;
 			continue;
 		}		
-		tokenization_err(&t, "Token not recognized");
+		tokenization_err(t, "Token not recognized");
 	err:
 		has_err = 1;
 	}
-	Token *token = tokr_add(&t);
+	Token *token = tokr_add(t);
 	token->kind = TOKEN_EOF;
 	
-	t.token = t.tokens.data;
-	*tokr = t;
+	t->token = t->tokens.data;
 	return !has_err;
 }
 
