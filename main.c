@@ -47,7 +47,7 @@ int main(int argc, char **argv) {
 	arr_foreach(&t.tokens, Token, token) {
 		if (token != t.tokens.data)
 			printf("    ");
-		token_fprint(stdout, token);
+		fprint_token(stdout, token);
 	}
 	printf("\n");
 	Parser p;

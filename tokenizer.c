@@ -1,11 +1,17 @@
 typedef enum {
 			  TOKEN_KW,
 			  TOKEN_IDENT,
+			  TOKEN_DIRECT,
 			  TOKEN_NUM_LITERAL,
 			  TOKEN_CHAR_LITERAL,
 			  TOKEN_STR_LITERAL,
 			  TOKEN_EOF
 } TokenKind;
+
+typedef enum {
+			  DIRECT_C,
+			  DIRECT_COUNT
+} Directive;
 
 typedef enum {
 			  KW_SEMICOLON,
@@ -21,7 +27,7 @@ typedef enum {
 			  KW_RSQUARE,
 			  KW_EQEQ,
 			  KW_LT,
-			  KW_LE,			  
+			  KW_LE,
 			  KW_MINUS,
 			  KW_PLUS,
 			  KW_LAST_SYMBOL = KW_PLUS, /* last one entirely consisting of symbols */
@@ -44,6 +50,10 @@ static const char *keywords[KW_COUNT] =
 	{";", "=", ":", "@", ",", "(", ")", "{", "}", "[", "]", "==", "<", "<=", "-", "+", "fn",
 	 "int", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "float", "double"};
 
+static const char *directives[DIRECT_COUNT] =
+	{"C"};
+
+
 /* Returns KW_COUNT if it's not a keyword */
 /* OPTIM: don't use strncmp so much */
 static Keyword tokenize_kw(char **s) {
@@ -55,7 +65,7 @@ static Keyword tokenize_kw(char **s) {
 				   it's not a symbol, so we need to check if it's something like "intfoo"
 				 */
 				if (isident((*s)[len])) {
-					return KW_COUNT;
+					continue;
 				}
 			}
 			*s += len;
@@ -63,6 +73,23 @@ static Keyword tokenize_kw(char **s) {
 		}
 	}
 	return KW_COUNT;
+}
+
+
+
+/* Returns DIRECT_COUNT if it's not a directive */
+static Directive tokenize_direct(char **s) {
+	for (Directive d = 0; d < DIRECT_COUNT; d++) {
+		size_t len = strlen(directives[d]);
+		if (strncmp(*s, directives[d], len) == 0) {
+			if (isident((*s)[len])) {
+				continue;
+			}
+			*s += len;
+			return d;
+		}
+	}
+	return DIRECT_COUNT;
 }
 
 typedef enum {
@@ -89,6 +116,7 @@ typedef struct {
 	Location where;
 	union {
 		Keyword kw;
+		Directive direct;
 		Identifier ident;
 		NumLiteral num;
 		char chr;
@@ -110,7 +138,7 @@ static inline bool token_is_kw(Token *t, Keyword kw) {
 	return t->kind == TOKEN_KW && t->kw == kw;
 }
 
-static void token_fprint(FILE *out, Token *t) {
+static void fprint_token(FILE *out, Token *t) {
 	fprintf(out, "l%lu-", (unsigned long)t->where.line);
 	switch (t->kind) {
 	case TOKEN_KW:
@@ -136,6 +164,9 @@ static void token_fprint(FILE *out, Token *t) {
 		break;
 	case TOKEN_STR_LITERAL:
 		fprintf(out, "str: \"%s\"", t->str.str);
+		break;
+	case TOKEN_DIRECT:
+		fprintf(out, "directive: #%s", directives[t->direct]);
 		break;
 	case TOKEN_EOF:
 		fprintf(out, "eof");
@@ -270,6 +301,26 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 			}
 			if (is_comment) continue;
 		}
+		
+		if (*t->s == '#') {
+			/* it's a directive */
+			char *start_s = t->s;
+			t->s++;	/* move past # */
+		    Directive direct = tokenize_direct(&t->s);
+			if (direct != DIRECT_COUNT) {
+				/* it's a directive */
+				Token *token = tokr_add(t);
+				token->where.line = t->line;
+				token->where.code = start_s;
+				token->kind = TOKEN_DIRECT;
+				token->direct = direct;
+				continue;
+			}
+			t->s--;	/* go back to # */
+			tokenization_err(t, "Unrecognized directive.");
+			goto err;
+		}
+		
 		{
 			char *start_s = t->s;
 			Keyword kw = tokenize_kw(&t->s);

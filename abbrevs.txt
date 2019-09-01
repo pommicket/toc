@@ -1,0 +1,9 @@
+kw - keyword
+ident - identifier
+direct - directive
+decl - declaration
+stmt - statement
+tokr - tokenizer
+str - string
+num - number
+eof - end of file

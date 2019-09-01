@@ -2,5 +2,6 @@ foo @= fn(a: [10]float) [3]int {
 };
 
 main @ fn() = fn() {
+#C #C #C
 	 asdkofhj : fn() [3]int;
 };
