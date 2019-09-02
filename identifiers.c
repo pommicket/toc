@@ -41,7 +41,7 @@ static int isident(int c) {
 		return 1;
 	if (c >= '0' && c <= '9')
 		return 1;
-	if (c == '_') return 1;
+	if (c == '_' || c == '.') return 1;
 #if CHAR_MIN < 0
 	if (c < 0) /* on systems where char = signed char, UTF-8 characters are probably < 0? */
 		return 1;
@@ -121,17 +121,23 @@ static void fprint_ident(FILE *out, Identifier id) {
 	fputc(c, out);
 }
 
-static void fprint_ident_ascii(FILE *out, Identifier id) {
+/* reduced charset = a-z, A-Z, 0-9, _ */
+static void fprint_ident_reduced_charset(FILE *out, Identifier id) {
 	assert(id);
 	if (id->parent == NULL) return; /* at root */
-	fprint_ident_ascii(out, id->parent->parent); /* to go up one character, we need to go to the grandparent */
+	fprint_ident_reduced_charset(out, id->parent->parent); /* to go up one character, we need to go to the grandparent */
 	int c_low = id->parent->index_in_parent;
 	int c_high = id->index_in_parent;
 	int c = c_low + (c_high << 4);
 	if (c > 127) {
 		fprintf(out, "x__%x",c);
 	} else {
-		fputc(ident_uchar_to_char(c), out);
+		char chr = (char)ident_uchar_to_char(c);
+		if (chr == '.') {
+			fprintf(out, "__");	/* replace . with __ */
+		} else {
+			fputc(chr, out);
+		}
 	}
 }
 

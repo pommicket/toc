@@ -1,9 +1,8 @@
 #C("#include <stdio.h>\n");
-
-ųńĨ @= fn() {
-	  #C("printf(\"Hello, World!\\n\")");
+foo.bar @= fn() {
+	#C("puts(\"Hello!\");\n");
 };
-main @= fn() {
-	 ųńĨ();
 
+main @= fn() {
+	foo.bar(); 
 };

@@ -99,7 +99,7 @@ static bool cgen_ident(CGenerator *g, Identifier i, Location *where) {
 		}
 	}
 	cgen_indent(g);
-	fprint_ident_ascii(cgen_writing_to(g), i);
+	fprint_ident_reduced_charset(cgen_writing_to(g), i);
 	return true;
 }
 
