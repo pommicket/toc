@@ -97,7 +97,6 @@ static Identifier ident_insert(Identifiers *ids, char **s) {
 		assert(c >= 0 && c <= 255);
 		unsigned char c_low = (unsigned char)(c & 0xf);
 		unsigned char c_high = (unsigned char)(c >> 4);
-		printf("inserting %d as %d = %d, %d\n", **s, c, c_low, c_high);
 		if (!tree->children[c_low]) {
 			tree->children[c_low] = ident_new(ids, tree, c_low);
 		}
@@ -125,16 +124,13 @@ static void fprint_ident(FILE *out, Identifier id) {
 static void fprint_ident_ascii(FILE *out, Identifier id) {
 	assert(id);
 	if (id->parent == NULL) return; /* at root */
-	fprint_ident(out, id->parent->parent); /* to go up one character, we need to go to the grandparent */
+	fprint_ident_ascii(out, id->parent->parent); /* to go up one character, we need to go to the grandparent */
 	int c_low = id->parent->index_in_parent;
 	int c_high = id->index_in_parent;
 	int c = c_low + (c_high << 4);
-	printf("Got %d as %d, %d\n", c, c_low, c_high);
 	if (c > 127) {
-		puts("x thing");
 		fprintf(out, "x__%x",c);
 	} else {
-		printf("single char %d\n",c);
 		fputc(ident_uchar_to_char(c), out);
 	}
 }
@@ -143,7 +139,7 @@ static void fprint_ident_ascii(FILE *out, Identifier id) {
 static Identifier ident_get(Identifiers *ids, const char *s) {
 	IdentTree *tree = ids->root;
 	while (*s) {
-		int c = (*s) - CHAR_MIN;
+		int c = ident_char_to_uchar(*s);
 		assert(c >= 0 && c <= 255);
 		unsigned char c_low = (unsigned char)(c & 0xf);
 		unsigned char c_high = (unsigned char)(c >> 4);

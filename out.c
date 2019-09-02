@@ -1,10 +1,10 @@
 #include "out.h"
 
 /* toc */
-void Äx__a8(void) {
+void x__c5x__b3x__c5x__84x__c4x__a8x__f0x__9fx__90x__9f(void) {
 }
-void main(void) {
-	Äx__a8();
+void main__(void) {
+	x__c5x__b3x__c5x__84x__c4x__a8x__f0x__9fx__90x__9f();
 }
 
 int main(void) {
