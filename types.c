@@ -1,6 +1,7 @@
-static bool block_enter(Block *b) {
+/* pass NULL for block for global scope */
+static bool block_enter(Block *b, Array *stmts) {
 	bool ret = true;
-	arr_foreach(&b->stmts, Statement, stmt) {
+	arr_foreach(stmts, Statement, stmt) {
 		if (stmt->kind == STMT_DECL) {
 			Declaration *decl = &stmt->decl;
 			arr_foreach(&decl->idents, Identifier, ident) {
@@ -29,10 +30,10 @@ static bool block_enter(Block *b) {
 	return ret;
 }
 
-static bool block_exit(Block *b) {
+static bool block_exit(Block *b, Array *stmts) {
 	/* OPTIM: figure out some way of not re-iterating over everything */
 	bool ret = true;
-	arr_foreach(&b->stmts, Statement, stmt) {
+	arr_foreach(stmts, Statement, stmt) {
 		if (stmt->kind == STMT_DECL) {
 			Declaration *decl = &stmt->decl;
 			arr_foreach(&decl->idents, Identifier, ident) {
@@ -50,6 +51,8 @@ static bool block_exit(Block *b) {
 }
 
 static bool type_eq(Type *a, Type *b) {
+	if (a->kind == TYPE_UNKNOWN || b->kind == TYPE_UNKNOWN)
+		return true; /* allow things such as 3 + #C("5") */
 	if (a->kind != b->kind) return false;
 	if (a->flags & TYPE_FLAG_FLEXIBLE) {
 		if (b->flags & TYPE_FLAG_FLEXIBLE) return true;
@@ -66,6 +69,7 @@ static bool type_eq(Type *a, Type *b) {
 	}
 	switch (a->kind) {
 	case TYPE_VOID: return true;
+	case TYPE_UNKNOWN: assert(0); return false;
 	case TYPE_BUILTIN:
 		return a->builtin == b->builtin;
 	case TYPE_FN: {
@@ -244,7 +248,6 @@ static bool type_of_expr(Expression *e, Type *t) {
 		break;
 	case EXPR_IDENT: {
 		if (!type_of_ident(e->where, e->ident, t, false)) return false;
-				
 	} break;
 	case EXPR_CALL: {
 		Expression *f = e->call.fn;
@@ -265,6 +268,9 @@ static bool type_of_expr(Expression *e, Type *t) {
 		*t = *(Type*)fn_type.fn.types.data;
 		break;
 	}
+	case EXPR_DIRECT:
+		t->kind = TYPE_UNKNOWN;
+		break;
 	case EXPR_UNARY_OP: {
 		Type *of_type = &e->unary.of->type;
 	    if (!type_of_expr(e->unary.of, of_type)) return false;
@@ -380,11 +386,11 @@ static bool types_stmt(Statement *s);
 
 static bool types_block(Block *b) {
 	bool ret = true;
-	if (!block_enter(b)) return false;
+	if (!block_enter(b, &b->stmts)) return false;
 	arr_foreach(&b->stmts, Statement, s) {
 		if (!types_stmt(s)) ret = false;
 	}
-	if (!block_exit(b)) return false;
+	if (!block_exit(b, &b->stmts)) return false;
 	return ret;
 }
 

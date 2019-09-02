@@ -57,6 +57,7 @@ static void err_print_footer_(const char *context) {
 	if (!has_newline)
 		end = strchr(context, '\0');
 	assert(end);
+	err_fprint("\n\there: --> ");
 	err_fwrite(context, 1, (size_t)(end - context));
 	if (!has_newline)
 		err_fprint("<end of file>");

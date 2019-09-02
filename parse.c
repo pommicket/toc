@@ -1,6 +1,7 @@
 /* TODO: stmt_parse -> parse_stmt, etc. */
 typedef enum {
 			  TYPE_VOID,
+			  TYPE_UNKNOWN,
 			  TYPE_BUILTIN,
 			  TYPE_FN,
 			  TYPE_TUPLE,
@@ -69,7 +70,8 @@ typedef enum {
 			  EXPR_BINARY_OP,
 			  EXPR_UNARY_OP,
 			  EXPR_FN,
-			  EXPR_CALL
+			  EXPR_CALL,
+			  EXPR_DIRECT
 } ExprKind;
 
 typedef enum {
@@ -83,6 +85,12 @@ typedef enum {
 			  BINARY_COMMA,
 			  BINARY_AT_INDEX /* e.g. x[i] */
 } BinaryOp;
+
+typedef struct {
+	Directive which;
+	Array args;	/* of Expression */
+} DirectExpr;
+
 
 #define EXPR_FLAG_FLEXIBLE 0x01	/* e.g. 4 => float/i32/etc. */
 
@@ -105,8 +113,9 @@ typedef struct Expression {
 		} binary;
 		struct {
 			struct Expression *fn;
-			Array args;	/* of expression */
+			Array args;	/* of Expression */
 		} call;
+	    DirectExpr direct;
 		Identifier ident;
 		FnExpr fn;
 	};
@@ -232,6 +241,8 @@ static size_t type_to_str(Type *t, char *buffer, size_t bufsize) {
 	switch (t->kind) {
 	case TYPE_VOID:
 		return str_copy(buffer, bufsize, "void");
+	case TYPE_UNKNOWN:
+		return str_copy(buffer, bufsize, "???");
 	case TYPE_BUILTIN: {
 		const char *s = keywords[builtin_type_to_kw(t->builtin)];
 		return str_copy(buffer, bufsize, s);
@@ -600,6 +611,35 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 	return parse_block(p, &f->body);
 }
 
+/* parses, e.g. "(3, 5, foo)" */
+static bool parse_args(Parser *p, Array *args) {
+	Tokenizer *t = p->tokr;
+	Token *start = t->token;
+	assert(token_is_kw(start, KW_LPAREN));
+	arr_create(args, sizeof(Expression));
+	t->token++; /* move past ( */
+	if (!token_is_kw(t->token, KW_RPAREN)) {
+		/* non-empty arg list */
+		while (1) {
+			if (t->token->kind == TOKEN_EOF) {
+				tokr_err(t, "Expected argument list to continue.");
+				info_print(start->where, "This is where the argument list starts.");
+				return false;
+			}
+			Expression *arg = arr_add(args);
+			if (!parse_expr(p, arg, expr_find_end(p, EXPR_END_RPAREN_OR_COMMA))) {
+				return false;
+			}
+			if (token_is_kw(t->token, KW_RPAREN))
+				break;
+			assert(token_is_kw(t->token, KW_COMMA));
+			t->token++;	/* move past , */
+		}
+	}
+	t->token++;	/* move past ) */
+	return true;
+}
+
 static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	Tokenizer *t = p->tokr;
 	if (end == NULL) return false;
@@ -750,6 +790,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		
 		/* try a function call or array access */
 		Token *token = t->token;
+		
 		/* currently unnecessary: paren_level = square_level = 0; */
 		/* 
 		   can't call at start, e.g. in (fn() {})(), it is not the empty function ""
@@ -765,7 +806,8 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			if (token->kind == TOKEN_KW) {
 				switch (token->kw) {
 				case KW_LPAREN:
-					if (square_level == 0 && paren_level == 0)
+					if (square_level == 0 && paren_level == 0 && token != t->tokens.data
+						&& token[-1].kind != TOKEN_DIRECT /* don't include directives */)
 						opening_bracket = token; /* maybe this left parenthesis opens the function call */
 					paren_level++;
 					break;
@@ -804,26 +846,8 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				if (!parse_expr(p, e->call.fn, opening_bracket)) { /* parse up to ( as function */
 					return false;
 				}
-				arr_create(&e->call.args, sizeof(Expression));
-				t->token = opening_bracket + 1; /* move past ( */
-				if (!token_is_kw(t->token, KW_RPAREN)) {
-					/* non-empty arg list */
-					while (1) {
-						if (t->token->kind == TOKEN_EOF) {
-							tokr_err(t, "Expected argument list to continue.");
-							return false;
-						}
-						Expression *arg = arr_add(&e->call.args);
-						if (!parse_expr(p, arg, expr_find_end(p, EXPR_END_RPAREN_OR_COMMA))) {
-							return false;
-						}
-						if (token_is_kw(t->token, KW_RPAREN))
-							break;
-						t->token++;	/* move past , */
-					}
-				}
-				t->token++;	/* move past ) */
-				return true;
+				t->token = opening_bracket;
+				return parse_args(p, &e->call.args);
 			}
 			case KW_LSQUARE: {
 				/* it's an array access */
@@ -844,6 +868,22 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			default:
 				assert(0);
 				return false;
+			}
+		}
+
+		if (t->token->kind == TOKEN_DIRECT) {
+			/* it's a directive */
+			e->kind = EXPR_DIRECT;
+			e->direct.which = t->token->direct;
+			if (token_is_kw(&t->token[1], KW_LPAREN)) {
+				/* has args (but maybe it's just "#foo()") */
+				t->token++;	/* move to ( */
+				return parse_args(p, &e->direct.args);
+			} else {
+				/* no args */
+				arr_create(&e->direct.args, sizeof(Expression));
+				t->token++;
+				return true;
 			}
 		}
 		tokr_err(t, "Not implemented yet.");
@@ -943,25 +983,6 @@ static bool parse_single_type_in_decl(Parser *p, Declaration *d) {
 			return false;
 		}
 		*ident = t->token->ident;
-		/* 
-		   only keep track of file scoped declarations---
-		   block enter/exit code will handle the rest
-		*/
-		IdentTree *ident_info = *ident;
-		if (p->block == NULL) {
-			if (ident_info->decls.len) {
-				/* this was already declared! */
-				IdentDecl *prev = ident_info->decls.data;
-				tokr_err(t, "Re-declaration of identifier in global scope.");
-				info_print(prev->decl->where, "Previous declaration was here.");
-				return false;
-			}
-			assert(!ident_info->decls.item_sz); /* we shouldn't have created this array already */
-			arr_create(&ident_info->decls, sizeof(IdentDecl));
-			IdentDecl *ident_decl = arr_add(&ident_info->decls);
-			ident_decl->decl = d;
-			ident_decl->scope = NULL;
-		}
 		t->token++;
 		if (token_is_kw(t->token, KW_COMMA)) {
 			t->token++;
@@ -1139,6 +1160,9 @@ static void fprint_type(FILE *out, Type *t) {
 	case TYPE_VOID:
 		fprintf(out, "void");
 		break;
+	case TYPE_UNKNOWN:
+		fprintf(out, "???");
+		break;
 	case TYPE_FN: {
 		Type *types = t->fn.types.data;
 		fprintf(out, "fn (");
@@ -1202,6 +1226,15 @@ static void fprint_fn_expr(FILE *out, FnExpr *f) {
 	fprint_block(out, &f->body);
 }
 
+static void fprint_args(FILE *out, Array *args) {
+	fprintf(out, "(");
+	arr_foreach(args, Expression, arg) {
+		if (arg != args->data) fprintf(out, ", ");
+		fprint_expr(out, arg);
+	}
+	fprintf(out, ")");
+}
+
 static void fprint_expr(FILE *out, Expression *e) {
 	PARSE_PRINT_LOCATION(e->where);
 	switch (e->kind) {
@@ -1256,12 +1289,12 @@ static void fprint_expr(FILE *out, Expression *e) {
 		break;
 	case EXPR_CALL:
 		fprint_expr(out, e->call.fn);
-		fprintf(out, "(");
-		arr_foreach(&e->call.args, Expression, arg) {
-			if (arg != e->call.args.data) fprintf(out, ", ");
-			fprint_expr(out, arg);
-		}
-		fprintf(out, ")");
+		fprint_args(out, &e->call.args);
+		break;
+	case EXPR_DIRECT:
+		fprintf(out, "#");
+		fprintf(out, directives[e->direct.which]);
+		fprint_args(out, &e->direct.args);
 		break;
 	}
 }

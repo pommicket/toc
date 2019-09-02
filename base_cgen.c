@@ -154,6 +154,9 @@ static void cgen_type_pre(CGenerator *g, Type *t) {
 	case TYPE_TUPLE:
 		assert(0);
 		return;
+	case TYPE_UNKNOWN:
+		err_print(t->where, "Type of unknown-typed expression required (x := #C(\"...\") will not work; you need to annotate the type of x).");
+	    abort();
 	case TYPE_ARR:
 		cgen_type_pre(g, t->arr.of);
 		break;
@@ -226,6 +229,9 @@ static void cgen_type_post(CGenerator *g, Type *t) {
 		cgen_write(g, "[%lu]", t->arr.n);
 		cgen_type_post(g, t->arr.of);
 		break;
+	case TYPE_UNKNOWN: /* we should always do pre first */
+		assert(0);
+		break;
 	}
 }
 
@@ -269,12 +275,12 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f) {
 
 static bool cgen_block_enter(CGenerator *g, Block *b) {
 	g->block = b;
-	return block_enter(b);
+	return block_enter(b, &b->stmts);
 }
 
 static bool cgen_block_exit(CGenerator *g, Block *into) {
 	Block *b = g->block;
 	g->block = into;
-	return block_exit(b);
+	return block_exit(b, &b->stmts);
 }
 

@@ -94,6 +94,17 @@ static bool eval_expr_as_int(Expression *e, Integer *i) {
 	case EXPR_FN:
 		err_print(e->where, "Expected integer, but found function.");
 		return false;
+	case EXPR_CALL:
+		err_print(e->where, "Compile time function calling not supported yet."); /* TODO */
+		break;
+	case EXPR_DIRECT:
+		switch (e->direct.which) {
+		case DIRECT_C:
+			err_print(e->where, "Can't run C code at compile time.");
+			return false;
+		case DIRECT_COUNT: assert(0); break;
+		}
+		break;
 	}
 	err_print(e->where, "Not implemented yet");
 	return false;

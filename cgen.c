@@ -16,6 +16,27 @@ static void cgen_create(CGenerator *g, Identifiers *ids, FILE *c_out, FILE *h_ou
 	cgen_writeln(g, ""); /* extra newline between includes and code */
 }
 
+static bool cgen_direct(CGenerator *g, DirectExpr *direct, Location where) {
+	switch (direct->which) {
+	case DIRECT_C: {
+		Expression *args = direct->args.data;
+		size_t nargs = direct->args.len;
+		if (nargs != 1) {
+			err_print(where, "Expected 1 argument to #C directive, but got %lu.", nargs);
+		}
+		/* TODO: compile-time constants */
+		if (args[0].kind != EXPR_STR_LITERAL) {
+			err_print(args[0].where, "Argument to #C directive must be a string literal.");
+		}
+		cgen_write(g, "%s", args[0].strl.str);
+	} break;
+	case DIRECT_COUNT:
+		assert(0);
+		return false;
+	}
+	return true;
+}
+
 static bool cgen_expr(CGenerator *g, Expression *e) {
 	switch (e->kind) {
 	case EXPR_INT_LITERAL:
@@ -88,6 +109,9 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		}
 		cgen_write(g, ")");
 		break;
+	case EXPR_DIRECT:
+		if (!cgen_direct(g, &e->direct, e->where)) return false;
+		break;
 	}
 	return true;
 }
@@ -116,6 +140,9 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 		} else {
 			assert(0);
 		}
+		break;
+	case TYPE_UNKNOWN:
+		assert(0);
 		break;
 	}
 }
@@ -245,12 +272,38 @@ static bool cgen_fns_in_stmt(CGenerator *g, Statement *s) {
 	return true;
 }
 
+/* generate a statement at top level, including any functions in it. */
+static bool cgen_stmt_top(CGenerator *g, Statement *s) {
+	if (!cgen_fns_in_stmt(g, s)) return false;
+	switch (s->kind) {
+	case STMT_EXPR: {
+		Expression *e = &s->expr;
+		bool ignored = true;
+		switch (e->kind) {
+		case EXPR_DIRECT:
+			switch (e->direct.which) {
+			case DIRECT_C:
+				ignored = false;
+				cgen_direct(g, &e->direct, e->where);
+				break;
+			case DIRECT_COUNT: assert(0); break;
+			}
+		default: break;
+		}
+		if (ignored)
+			warn_print(e->where, "Expression at top level currently ignored."); /* TODO */
+	} break;
+	case STMT_DECL: break;
+	}
+	return true;
+}
+
 static bool cgen_file(CGenerator *g, ParsedFile *f) {
 	cgen_write_line_comment(g, "toc");
 	bool ret = true;
 	if (!cgen_decls_file(g, f)) return false;
 	arr_foreach(&f->stmts, Statement, s) {
-		if (!cgen_fns_in_stmt(g, s)) return false;
+		if (!cgen_stmt_top(g, s)) return false;
 	}
 	g->writing_to = CGEN_WRITING_TO_C;
 	/* write actual main function */
