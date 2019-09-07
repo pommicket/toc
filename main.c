@@ -1,5 +1,6 @@
+/* TODO: multi-dimensional arrays are flattened in types.c */
+/* TODO: remove all cgen errors */
 /* TODO: don't eval consts in C */
-/* TODO: array assignment (x : [3]int = y;) */
 /* TODO: Functions returning fixed-length arrays */
 /* TODO: improve error for declaring a keyword, e.g. i8: int = 8123; */
 #include "toc.c"

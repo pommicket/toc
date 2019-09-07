@@ -10,7 +10,8 @@ static void cgen_create(CGenerator *g, Identifiers *ids, FILE *c_out, FILE *h_ou
 	
 	g->writing_to = CGEN_WRITING_TO_H;
 	cgen_write(g, "#include <stddef.h>\n"
-			   "#include <stdint.h>\n");
+			   "#include <stdint.h>\n"
+			   "#include <string.h>\n");
 	
 	g->writing_to = CGEN_WRITING_TO_C;
 	cgen_write(g, "#include \"%s\"\n", h_filename);
@@ -34,6 +35,59 @@ static bool cgen_direct(CGenerator *g, DirectExpr *direct, Location where) {
 	case DIRECT_COUNT:
 		assert(0);
 		return false;
+	}
+	return true;
+}
+
+
+/* generates C statements which must go before an expression. */
+static bool cgen_expr_pre(CGenerator *g, Expression *e) {
+	switch (e->kind) {
+	case EXPR_BINARY_OP:
+		if (!cgen_expr_pre(g, e->binary.lhs)) return false;
+		if (!cgen_expr_pre(g, e->binary.rhs)) return false;
+		/* TODO(eventually): Short-circuiting operators will need some work */
+		break;
+	case EXPR_UNARY_OP:
+		if (!cgen_expr_pre(g, e->unary.of)) return false;
+		break;
+	case EXPR_CALL: {
+		if (!cgen_expr_pre(g, e->call.fn)) return false;
+		arr_foreach(&e->call.args, Expression, arg)
+			if (!cgen_expr_pre(g, arg))
+				return false;
+		Type *fn_types = e->call.fn->type.fn.types.data;
+		Type *ret_type = &fn_types[0];
+		if (cgen_fn_uses_out_param(ret_type)) {
+			/* generate out call */
+			e->call.out_var = g->anon_var_count++;
+
+			/* declaration of out variable */
+			cgen_type_pre(g, ret_type);
+			cgen_anon_var(g, e->call.out_var);
+			cgen_type_post(g, ret_type);
+			cgen_writeln(g, ";");
+
+			cgen_expr(g, e->call.fn);
+			
+			cgen_write(g, "(");
+			arr_foreach(&e->call.args, Expression, arg) {
+				if (arg != e->call.args.data) {
+					cgen_write(g, ",");
+					cgen_space(g);
+				}
+				if (!cgen_expr(g, arg)) return false;
+			}
+			if (e->call.args.len) {
+				cgen_write(g, ",");
+				cgen_space(g);
+			}
+			cgen_write(g, "&");
+			cgen_anon_var(g, e->call.out_var);
+			cgen_writeln(g, ");");
+		}
+	} break;
+	default: break;
 	}
 	return true;
 }
@@ -98,18 +152,24 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 	case EXPR_FN:
 		if (!cgen_fn_name(g, &e->fn, &e->where)) return false;
 		break;
-	case EXPR_CALL:
-		if (!cgen_expr(g, e->call.fn)) return false;
-		cgen_write(g, "(");
-		arr_foreach(&e->call.args, Expression, arg) {
-			if (arg != e->call.args.data) {
-				cgen_write(g, ",");
-				cgen_write_space(g);
+	case EXPR_CALL: {
+		Type *fn_types = e->call.fn->type.fn.types.data;
+		Type *ret_type = &fn_types[0];
+		if (cgen_fn_uses_out_param(ret_type)) { /* if there's an out parameter, */
+			cgen_anon_var(g, e->call.out_var); /* just use the variable we made earlier */
+		} else {
+			if (!cgen_expr(g, e->call.fn)) return false;
+			cgen_write(g, "(");
+			arr_foreach(&e->call.args, Expression, arg) {
+				if (arg != e->call.args.data) {
+					cgen_write(g, ",");
+					cgen_space(g);
+				}
+				if (!cgen_expr(g, arg)) return false;
 			}
-			if (!cgen_expr(g, arg)) return false;
+			cgen_write(g, ")");
 		}
-		cgen_write(g, ")");
-		break;
+	} break;
 	case EXPR_DIRECT:
 		if (!cgen_direct(g, &e->direct, e->where)) return false;
 		break;
@@ -150,7 +210,10 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 
 static bool cgen_decl(CGenerator *g, Declaration *d) {
 	size_t i = d->idents.len;
-	Expression *expr = &d->expr;
+	if (d->flags & DECL_FLAG_HAS_EXPR) {
+		if (!cgen_expr_pre(g, &d->expr))
+			return false;
+	}
 	/* because , is left-associative, we want to go backwards */
 	arr_foreach_reverse(&d->idents, Identifier, ident) {
 		Type *type;
@@ -165,19 +228,53 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 				return false;
 			}
 		}
+		if (type->kind == TYPE_ARR) {
+			/* if you do a : [3]int; translates into int64_t av___23[3] = {0}; int64_t *a = av___23; */
+			int has_expr = d->flags & DECL_FLAG_HAS_EXPR;
+			unsigned long var;
+			if (!has_expr) {
+				/* int64_t av___23[3] = {0}; */
+				var = g->anon_var_count++;
+				cgen_type_pre(g, type);
+				cgen_anon_var(g, var);
+				cgen_type_post(g, type);
+				cgen_space(g);
+				cgen_write(g, "=");
+				cgen_space(g);
+				cgen_zero_value(g, type);
+				cgen_writeln(g, ";");
+			}
+			/* int64_t *a = av___23; */
+			cgen_type_pre(g, type->arr.of);
+			cgen_write(g, "(*");
+			cgen_ident(g, *ident, NULL);
+			cgen_write(g, ")");
+			cgen_type_post(g, type->arr.of);
+			cgen_space(g);
+			cgen_write(g, "=");
+			cgen_space(g);
+			if (has_expr) {
+				if (!cgen_expr(g, &d->expr)) return false;
+			} else {
+				cgen_anon_var(g, var);
+			}
+			cgen_writeln(g, ";");
+			return true;
+		}
+		
 		cgen_type_pre(g, type);
-		if (d->flags & DECL_FLAG_CONST) { /* TODO: remove this */
-			cgen_write_space(g);
+		if (d->flags & DECL_FLAG_CONST) { /* TODO: remove this (never actually produce constants) */
+			cgen_space(g);
 			cgen_write(g, "const");
-			cgen_write_space(g);
+			cgen_space(g);
 		}
 		cgen_ident(g, *ident, NULL);
 		cgen_type_post(g, type);
-		cgen_write_space(g);
+		cgen_space(g);
 		cgen_write(g, "=");
+		cgen_space(g);
 		if (d->flags & DECL_FLAG_HAS_EXPR) {
-			cgen_write_space(g);
-			
+			Expression *expr = &d->expr;
 			if (d->idents.len > 1) {
 				if (expr->kind == EXPR_BINARY_OP && expr->binary.op == BINARY_COMMA) {
 					if (!cgen_expr(g, expr->binary.rhs)) return false;
@@ -191,7 +288,6 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 				if (!cgen_expr(g, expr)) return false;
 			}
 		} else {
-			cgen_write_space(g);
 			cgen_zero_value(g, type);
 		}
 		cgen_write(g, "; ");
@@ -238,16 +334,32 @@ static bool cgen_block(CGenerator *g, Block *b, BlockExitKind *exit_kind) {
 	}
 	if (exit_kind->is_return) {
 		/* generate return from function */
-		if (b->ret_expr && cgen_fn_uses_out_param(&b->ret_expr->type)) {
-			cgen_write(g, "*out__ = ");
-			cgen_expr(g, b->ret_expr);
-			cgen_writeln(g, ";");
-			cgen_writeln(g, "return;");
+		Expression *ret = b->ret_expr;
+		if (ret && cgen_fn_uses_out_param(&ret->type)) {
+			if (ret->type.kind == TYPE_ARR) {
+				/* returning possibly multi-dimensional arrays */
+				size_t total_size = 1; /* product of all dimensions */
+				Type *type;
+				for (type = &ret->type; type->kind == TYPE_ARR; type = type->arr.of)
+					total_size *= type->arr.n;
+				/* type is now the base type of the array, e.g. [3][3][3]fn() => fn() */
+				cgen_write(g, "memcpy(*out__, ");
+				if (!cgen_expr(g, b->ret_expr)) return false;
+				cgen_write(g, ", %lu * sizeof(", total_size);
+				cgen_type_pre(g, type);
+				cgen_type_post(g, type);
+				cgen_writeln(g, ")); return;");
+			} else {
+				cgen_write(g, "*out__ = ");
+				if (!cgen_expr(g, b->ret_expr)) return false;
+				cgen_writeln(g, ";");
+				cgen_writeln(g, "return;");
+			}
 		} else {
 			cgen_write(g, "return");
 			if (b->ret_expr) {
 				cgen_write(g, " ");
-				cgen_expr(g, b->ret_expr);
+				if (!cgen_expr(g, b->ret_expr)) return false;
 			}
 			cgen_writeln(g, ";");
 		}
@@ -267,7 +379,7 @@ static bool cgen_fn(CGenerator *g, FnExpr *f) {
 	if (!cgen_fn_header(g, f)) return false;
 	Block *prev_block = g->block;
 	cgen_block_enter(g, &f->body);
-	cgen_write_space(g);
+	cgen_space(g);
 	BlockExitKind e_kind;
 	e_kind.is_return = 1;
 	if (!cgen_block(g, &f->body, &e_kind)) return false;

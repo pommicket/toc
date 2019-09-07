@@ -48,7 +48,7 @@ static void cgen_write(CGenerator *g, const char *fmt, ...) {
 }
 
 /* Used to write an UNNECESSARY space */
-static void cgen_write_space(CGenerator *g) {
+static void cgen_space(CGenerator *g) {
 	cgen_write(g, " ");
 }
 
@@ -134,6 +134,15 @@ static bool cgen_fn_uses_out_param(Type *fn_ret_type) {
 	}
 }
 
+
+static void cgen_anon_var(CGenerator *g, unsigned long v) {
+	cgen_write(g, "av___%lu", v);
+}
+
+static void cgen_anon_fn(CGenerator *g, unsigned long f) {
+	cgen_write(g, "af___%lu", f);
+}
+
 static void cgen_type_pre(CGenerator *g, Type *t) {
 	switch (t->kind) {
 	case TYPE_VOID:
@@ -174,7 +183,7 @@ static void cgen_fn_params(CGenerator *g, Type *param_types, Param *params, size
 		for (size_t i = 0; i < nparams; i++) {
 			if (i) {
 				cgen_write(g, ",");
-				cgen_write_space(g);
+				cgen_space(g);
 			}
 			if (param_types) {
 				cgen_type_pre(g, &param_types[i]);
@@ -193,7 +202,7 @@ static void cgen_fn_params(CGenerator *g, Type *param_types, Param *params, size
 	if (uses_out_param) {
 		if (nparams) {
 			cgen_write(g, ",");
-			cgen_write_space(g);
+			cgen_space(g);
 		}
 		/* write out param */
 		cgen_type_pre(g, ret_type);
@@ -221,7 +230,7 @@ static void cgen_type_post(CGenerator *g, Type *t) {
 		if (!uses_out_param) {
 			cgen_type_post(g, ret_type);
 		}
-		cgen_write_space(g);
+		cgen_space(g);
 	} break;
 	case TYPE_TUPLE:
 		assert(0);
@@ -238,18 +247,17 @@ static void cgen_type_post(CGenerator *g, Type *t) {
 
 static bool cgen_fn_name(CGenerator *g, FnExpr *f, Location *where) {
 	if (f->name) {
+		/* TODO: check block  */
 		if (f->name == g->main_ident) {
 			cgen_write(g, "main__");
+			return true;
 		} else {
 			return cgen_ident(g, f->name, where);
 		}
 	} else {
-		cgen_write(g, "a___");
+		cgen_anon_fn(g, f->id);
+		return true;
 	}
-	
-	if (f->id != 0)
-		cgen_write(g, "%lu", f->id);
-	return true;
 }
 
 static bool cgen_fn_header(CGenerator *g, FnExpr *f) {

@@ -254,20 +254,19 @@ static bool type_of_expr(Expression *e, Type *t) {
 	} break;
 	case EXPR_CALL: {
 		Expression *f = e->call.fn;
-		Type fn_type;
 		if (f->kind == EXPR_IDENT) {
 			/* allow calling a function before declaring it */
-			if (!type_of_ident(f->where, f->ident, &fn_type, true)) return false;
+			if (!type_of_ident(f->where, f->ident, &f->type, true)) return false;
 		} else {
-			if (!type_of_expr(f, &fn_type)) return false;
+			if (!type_of_expr(f, &f->type)) return false;
 		}
-		if (fn_type.kind != TYPE_FN) {
-			char *type = type_to_str(&fn_type);
+		if (f->type.kind != TYPE_FN) {
+			char *type = type_to_str(&f->type);
 			err_print(e->where, "Calling non-function (type %s).", type);
 			return false;
 		}
 		/* TODO: Make sure args match fn type */
-		*t = *(Type*)fn_type.fn.types.data;
+		*t = *(Type*)f->type.fn.types.data;
 		break;
 	}
 	case EXPR_DIRECT:

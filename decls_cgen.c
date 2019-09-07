@@ -61,7 +61,7 @@ static bool cgen_decls_stmt(CGenerator *g, Statement *s) {
 		Declaration *d = &s->decl;
 		bool is_const_fn = (d->flags & DECL_FLAG_HAS_EXPR) && (d->flags & DECL_FLAG_CONST)
 			&& d->expr.kind == EXPR_FN;
-		
+
 		if (is_const_fn) {
 			/* e.g. foo @= fn() {}; (we want to set the function's name to "foo") */
 			d->expr.fn.name = *(Identifier*)d->idents.data;
@@ -79,14 +79,14 @@ static bool cgen_decls_stmt(CGenerator *g, Statement *s) {
 					cgen_ident(g, *i, NULL);
 					cgen_type_post(g, &d->type);
 					if (d->flags & DECL_FLAG_HAS_EXPR) { /* TODO: check if expr is const */
-						cgen_write_space(g);
+						cgen_space(g);
 						cgen_write(g, "=");
-						cgen_write_space(g);
+						cgen_space(g);
 						if (!cgen_expr(g, &d->expr))
 							return false;
 					}
 					cgen_write(g, ";");
-					cgen_write_space(g);
+					cgen_space(g);
 				}
 				cgen_writeln(g, "");
 			}

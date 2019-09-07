@@ -112,6 +112,7 @@ typedef struct Expression {
 		struct {
 			struct Expression *fn;
 			Array args;	/* of Expression */
+			unsigned long out_var; /* which out variable is used for this call (used by cgen) */
 		} call;
 	    DirectExpr direct;
 		Identifier ident;
