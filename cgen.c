@@ -2,6 +2,7 @@ static void cgen_create(CGenerator *g, Identifiers *ids, FILE *c_out, FILE *h_ou
 	g->c_out = c_out;
 	g->h_out = h_out;
 	g->anon_fn_count = 0;
+	g->anon_var_count = 0;
 	g->indent_level = 0;
 	g->block = NULL;
     g->indent_next = true;
@@ -220,25 +221,60 @@ static bool cgen_stmt(CGenerator *g, Statement *s) {
 
 static bool cgen_fns_in_stmt(CGenerator *g, Statement *s);
 
+typedef struct {
+	bool is_return; /* true => this is a function return */
+	unsigned long var_no; /* if is_return = false, set the anonymous variable with this number to the return value. */
+	const char *exit_with; /* how to exit this block in C, e.g. "break" (not needed if is_return = true). */
+} BlockExitKind;
+
+/* generates a block but not the functions, etc. inside it */
+static bool cgen_block(CGenerator *g, Block *b, BlockExitKind *exit_kind) {
+	bool success = true;
+	cgen_writeln(g, "{");
+	g->indent_level++;
+	arr_foreach(&b->stmts, Statement, s) {
+		if (!cgen_stmt(g, s))
+			success = false;
+	}
+	if (exit_kind->is_return) {
+		/* generate return from function */
+		if (b->ret_expr && cgen_fn_uses_out_param(&b->ret_expr->type)) {
+			cgen_write(g, "*out__ = ");
+			cgen_expr(g, b->ret_expr);
+			cgen_writeln(g, ";");
+			cgen_writeln(g, "return;");
+		} else {
+			cgen_write(g, "return");
+			if (b->ret_expr) {
+				cgen_write(g, " ");
+				cgen_expr(g, b->ret_expr);
+			}
+			cgen_writeln(g, ";");
+		}
+	} else {
+		err_print(b->ret_expr->where, "TODO");
+		return false;
+	}
+	if (success) {
+		g->indent_level--;
+		cgen_writeln(g, "}");
+	}
+	return success;
+}
+
 /* Generates function definition, and the definitions of all functions inside this */
 static bool cgen_fn(CGenerator *g, FnExpr *f) {
 	if (!cgen_fn_header(g, f)) return false;
 	Block *prev_block = g->block;
 	cgen_block_enter(g, &f->body);
-	bool ret = true;
 	cgen_write_space(g);
-	cgen_writeln(g, "{");
-	g->indent_level++;
-	arr_foreach(&f->body.stmts, Statement, s) {
-		if (!cgen_stmt(g, s))
-			ret = false;
-	}
-	g->indent_level--;
-	cgen_writeln(g, "}");
-	if (ret) {
-		arr_foreach(&f->body.stmts, Statement, stmt) {
-			if (!cgen_fns_in_stmt(g, stmt)) ret = false;
-		}
+	BlockExitKind e_kind;
+	e_kind.is_return = 1;
+	if (!cgen_block(g, &f->body, &e_kind)) return false;
+
+	bool ret = true;
+	arr_foreach(&f->body.stmts, Statement, stmt) {
+		if (!cgen_fns_in_stmt(g, stmt)) ret = false;
 	}
 	cgen_block_exit(g, prev_block);
 	return ret;

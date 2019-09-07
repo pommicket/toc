@@ -52,6 +52,7 @@ typedef struct {
 
 typedef struct Block {
 	Array stmts;
+    struct Expression *ret_expr; /* the return expression of this block, e.g. {foo(); 3} => 3  NULL for no expression. */
 } Block;
 
 typedef struct {
@@ -90,9 +91,6 @@ typedef struct {
 	Directive which;
 	Array args;	/* of Expression */
 } DirectExpr;
-
-
-#define EXPR_FLAG_FLEXIBLE 0x01	/* e.g. 4 => float/i32/etc. */
 
 typedef struct Expression {
 	Location where;
@@ -139,10 +137,12 @@ typedef enum {
 			  STMT_DECL,
 			  STMT_EXPR
 } StatementKind;
-	
+
+#define STMT_FLAG_VOIDED_EXPR 0x01 /* the "4;" in fn () { 4; } is a voided expression, but the "4" in fn () int { 4 } is not */
 typedef struct {
 	Location where;
 	StatementKind kind;
+	unsigned short flags;
 	union {
 		Declaration decl;
 		Expression expr;
@@ -237,7 +237,7 @@ static Keyword builtin_type_to_kw(BuiltinType t) {
 }
 
 /* returns the number of characters written, not including the null character */
-static size_t type_to_str(Type *t, char *buffer, size_t bufsize) {
+static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 	switch (t->kind) {
 	case TYPE_VOID:
 		return str_copy(buffer, bufsize, "void");
@@ -256,12 +256,12 @@ static size_t type_to_str(Type *t, char *buffer, size_t bufsize) {
 		for (size_t i = 0; i < nparams; i++) {
 			if (i > 0)
 				written += str_copy(buffer + written, bufsize - written, ", ");
-			written += type_to_str(&param_types[i], buffer + written, bufsize - written);
+			written += type_to_str_(&param_types[i], buffer + written, bufsize - written);
 		}
 		written += str_copy(buffer + written, bufsize - written, ")");
 		if (ret_type->kind != TYPE_VOID) {
 			written += str_copy(buffer + written, bufsize - written, " ");
-			written += type_to_str(ret_type, buffer + written, bufsize - written);
+			written += type_to_str_(ret_type, buffer + written, bufsize - written);
 		}
 		return written;
 	} break;
@@ -274,7 +274,7 @@ static size_t type_to_str(Type *t, char *buffer, size_t bufsize) {
 			written += str_copy(buffer + written, bufsize - written, "N");
 		}
 		written += str_copy(buffer + written, bufsize - written, "]");
-		written += type_to_str(t->arr.of, buffer + written, bufsize - written);
+		written += type_to_str_(t->arr.of, buffer + written, bufsize - written);
 		return written;
 	} break;
 	case TYPE_TUPLE: {
@@ -282,7 +282,7 @@ static size_t type_to_str(Type *t, char *buffer, size_t bufsize) {
 		arr_foreach(&t->tuple, Type, child) {
 			if (child != t->tuple.data)
 				written += str_copy(buffer + written, bufsize - written, ", ");
-			written += type_to_str(child, buffer + written, bufsize - written);
+			written += type_to_str_(child, buffer + written, bufsize - written);
 		}
 		written += str_copy(buffer + written, bufsize - written, ")");
 		return written;
@@ -291,6 +291,14 @@ static size_t type_to_str(Type *t, char *buffer, size_t bufsize) {
 
 	assert(0);
 	return 0;
+}
+
+/* return value should be freed by caller */
+static char *type_to_str(Type *t) {
+	/* TODO allow types >255 chars */
+	char *ret = err_malloc(256);
+	type_to_str_(t, ret, 256);
+	return ret;
 }
 
 /* 
@@ -316,99 +324,66 @@ static int op_precedence(Keyword op) {
 	}
 }
 
+/* TODO: check that we check which thing ends it everywhere */
 
-/*
-  ends_with = which keyword does this expression end with?
-  if it's KW_RPAREN, this will match parentheses properly.
-*/
-typedef enum {
-			  EXPR_END_RPAREN_OR_COMMA,
-			  EXPR_END_RSQUARE,
-			  EXPR_END_SEMICOLON
-} ExprEndKind;
-static Token *expr_find_end(Parser *p, ExprEndKind ends_with)  {
+#define EXPR_CAN_END_WITH_COMMA 0x01 /* a comma could end the expression */
+
+static Token *expr_find_end(Parser *p, unsigned flags)  {
 	Tokenizer *t = p->tokr;
-	int bracket_level = 0; /* if ends_with = EXPR_END_RSQUARE, used for square brackets,
-							  if ends_with = EXPR_END_RPAREN_OR_COMMA, used for parens */
+	int paren_level = 0;
 	int brace_level = 0;
+	int square_level = 0;
 	Token *token = t->token;
 	while (1) {
-		switch (ends_with) {
-		case EXPR_END_RPAREN_OR_COMMA:
-			if (token->kind == TOKEN_KW) {
-				switch (token->kw) {
-				case KW_COMMA:
-					if (bracket_level == 0)
-						return token;
-					break;
-				case KW_LPAREN:
-					bracket_level++;
-					break;
-				case KW_RPAREN:
-					bracket_level--;
-					if (bracket_level < 0)
-						return token;
-					break;
-				default: break;
-				}
+		if (token->kind == TOKEN_KW) {
+			switch (token->kw) {
+			case KW_COMMA:
+				if ((flags & EXPR_CAN_END_WITH_COMMA) &&
+					paren_level == 0 && brace_level == 0 && square_level == 0)
+					return token;
+				break;
+			case KW_LPAREN:
+				paren_level++;
+				break;
+			case KW_RPAREN:
+				paren_level--;
+				if (paren_level < 0)
+					return token;
+				break;
+			case KW_LSQUARE:
+				square_level++;
+				break;
+			case KW_RSQUARE:
+			    square_level--;
+				if (square_level < 0)
+					return token;
+				break;
+			case KW_LBRACE:
+				brace_level++;
+				break;
+			case KW_RBRACE:
+				brace_level--;
+				if (brace_level < 0)
+					return token;
+				break;
+			case KW_SEMICOLON:
+				if (brace_level == 0)
+					return token;
+				break;
+			default: break;
 			}
-			break;
-		case EXPR_END_RSQUARE:
-			if (token->kind == TOKEN_KW) {
-				switch (token->kw) {
-				case KW_LSQUARE:
-					bracket_level++;
-					break;
-				case KW_RSQUARE:
-					bracket_level--;
-					if (bracket_level < 0)
-						return token;
-					break;
-				default: break;
-				}
-			}
-			break;
-		case EXPR_END_SEMICOLON:
-			if (token->kind == TOKEN_KW) {
-				switch (token->kw) {
-				case KW_SEMICOLON:
-					/* ignore semicolons inside braces {} */
-					if (brace_level == 0)
-						return token;
-					break;
-				case KW_LBRACE:
-					brace_level++;
-					break;
-				case KW_RBRACE:
-					brace_level--;
-					if (brace_level < 0) {
-						t->token = token;
-						tokr_err(t, "Closing '}' without matching opening '{'.");
-						return NULL;
-					}
-					break;
-				default: break;
-				}
-			}
-			break;
 		}
 		if (token->kind == TOKEN_EOF) {
-			switch (ends_with) {
-			case EXPR_END_SEMICOLON:
-				if (brace_level > 0) {
-					tokr_err(t, "Opening brace was never closed."); /* FEATURE: Find out where this is */
-					return NULL;
-				} else {
-					tokr_err(t, "Could not find ';' at end of expression.");
-					return NULL;
-				}
-			case EXPR_END_RPAREN_OR_COMMA:
-				tokr_err(t, "Opening ( was never closed.");
-				return NULL;
-			case EXPR_END_RSQUARE:
-				tokr_err(t, "Opening [ was never closed.");
-				return NULL;
+			if (brace_level > 0) {
+				tokr_err(t, "Opening brace { was never closed."); /* FEATURE: Find out where this is */
+			} else if (paren_level > 0) {
+				tokr_err(t, "Opening parenthesis ( was never closed.");
+			} else if (square_level > 0) {
+				tokr_err(t, "Opening square bracket [ was never closed.");
+			} else {
+				tokr_err(t, "Could not find end of expression.");
 			}
+			return NULL;
 		}
 		token++;
 	}
@@ -473,7 +448,7 @@ static bool parse_type(Parser *p, Type *type) {
 			Token *start = t->token;
 			type->kind = TYPE_ARR;
 			t->token++;	/* move past [ */
-			Token *end = expr_find_end(p, EXPR_END_RSQUARE);
+			Token *end = expr_find_end(p, 0);
 			type->arr.n_expr = parser_new_expr(p);
 			if (!parse_expr(p, type->arr.n_expr, end)) return false;
 			t->token = end + 1;	/* go past ] */
@@ -548,6 +523,7 @@ static bool parse_block(Parser *p, Block *b) {
 	t->token++;	/* move past { */
 	arr_create(&b->stmts, sizeof(Statement));
 	bool ret = true;
+	b->ret_expr = NULL; /* default to no return unless overwritten later */
 	if (!token_is_kw(t->token, KW_RBRACE)) {
 		/* non-empty function body */
 		while (1) {
@@ -555,14 +531,28 @@ static bool parse_block(Parser *p, Block *b) {
 			if (!parse_stmt(p, stmt)) {
 				ret = false;
 			}
-			if (token_is_kw(t->token, KW_RBRACE)) break;
+			if (token_is_kw(t->token, KW_RBRACE)) {
+				if (stmt->kind == STMT_EXPR) {
+					if (!(stmt->flags & STMT_FLAG_VOIDED_EXPR)) {
+						b->ret_expr = parser_new_expr(p);
+						*b->ret_expr = stmt->expr;
+						arr_remove_last(&b->stmts); /* only keep this expression in the return value */
+					}
+				}
+				break;
+			} else if (stmt->kind == STMT_EXPR && !(stmt->flags & STMT_FLAG_VOIDED_EXPR)) {
+				/* in theory, this should never happen right now */
+				err_print(stmt->where, "Non-voided expression is not the last statement in a block (you might want to add a ';' to the end of this statement).");
+				return false;
+			}
 			if (t->token->kind == TOKEN_EOF) {
 				tokr_err(t, "Expected '}' to close function body.");
 				return false;
 			}
 		}
+	} else {
+		b->ret_expr = NULL;
 	}
-	
 	t->token++;	/* move past } */
 	p->block = prev_block;
 	return ret;
@@ -627,7 +617,7 @@ static bool parse_args(Parser *p, Array *args) {
 				return false;
 			}
 			Expression *arg = arr_add(args);
-			if (!parse_expr(p, arg, expr_find_end(p, EXPR_END_RPAREN_OR_COMMA))) {
+			if (!parse_expr(p, arg, expr_find_end(p, EXPR_CAN_END_WITH_COMMA))) {
 				return false;
 			}
 			if (token_is_kw(t->token, KW_RPAREN))
@@ -859,7 +849,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				if (!parse_expr(p, e->binary.lhs, opening_bracket)) return false;
 				/* parse index */
 				t->token = opening_bracket + 1;
-				Token *index_end = expr_find_end(p, EXPR_END_RSQUARE);
+				Token *index_end = expr_find_end(p, 0);
 				if (!parse_expr(p, e->binary.rhs, index_end))
 					return false;
 				t->token++;	/* move past ] */
@@ -887,6 +877,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			}
 		}
 		tokr_err(t, "Not implemented yet.");
+		t->token = end + 1;
 		return false;
 	}
 	
@@ -942,7 +933,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	case KW_COMMA:
 		op = BINARY_COMMA;
 		break;
-	default: assert(0); break;
+	default: assert(0); return false;
 	}
 	e->binary.op = op;
 	e->kind = EXPR_BINARY_OP;
@@ -1054,7 +1045,7 @@ static bool parse_single_type_in_decl(Parser *p, Declaration *d) {
 	/* OPTIM: switch t->token->kw ? */
     if (token_is_kw(t->token, KW_EQ)) {
 		t->token++;
-		if (!parse_expr(p, &d->expr, expr_find_end(p, EXPR_END_SEMICOLON)))
+		if (!parse_expr(p, &d->expr, expr_find_end(p, 0)))
 			return false;
 		d->flags |= DECL_FLAG_HAS_EXPR;
 		if (token_is_kw(t->token, KW_SEMICOLON)) {
@@ -1083,12 +1074,12 @@ static bool parse_decl(Parser *p, Declaration *d) {
 
 static bool parse_stmt(Parser *p, Statement *s) {
 	Tokenizer *t = p->tokr;
+	s->flags = 0;
 	if (t->token->kind == TOKEN_EOF)
 		tokr_err(t, "Expected statement.");
 	s->where = t->token->where;
 	/* 
-	   NOTE: This may cause problems in the future! Other statements might have comma
-	   as the second token.
+	   TODO: statements such as 3, 5; will not work.
 	*/
 	if (token_is_kw(t->token + 1, KW_COLON) || token_is_kw(t->token + 1, KW_COMMA)
 		|| token_is_kw(t->token + 1, KW_AT)) {
@@ -1110,22 +1101,33 @@ static bool parse_stmt(Parser *p, Statement *s) {
 		return true;
 	} else {
 		s->kind = STMT_EXPR;
-		Token *end = expr_find_end(p, EXPR_END_SEMICOLON);
+		Token *end = expr_find_end(p, 0);
+		if (token_is_kw(end, KW_SEMICOLON)) {
+			s->flags |= STMT_FLAG_VOIDED_EXPR;
+		}
 		if (!end) {
 			tokr_err(t, "No semicolon found at end of statement.");
 			while (t->token->kind != TOKEN_EOF) t->token++; /* move to end of file */
 			return false;
 		}
 		if (!parse_expr(p, &s->expr, end)) {
-			t->token = end + 1;
 			return false;
 		}
-		if (!token_is_kw(t->token, KW_SEMICOLON)) {
-			tokr_err(t, "Expected ';' at end of statement.");
+		/* go past end */
+		if (end->kind == TOKEN_KW) {
+			switch (end->kw) {
+			case KW_SEMICOLON:
+				t->token = end + 1;
+				break;
+			case KW_RBRACE:
+				t->token = end;	/* the } is past the end of the expr */
+				break;
+			default: assert(0); break;
+			}
+		} else {
 			t->token = end + 1;
-			return false;
 		}
-		t->token++;	/* move past ; */
+		
 		return true;
 	}
 }
@@ -1293,7 +1295,7 @@ static void fprint_expr(FILE *out, Expression *e) {
 		break;
 	case EXPR_DIRECT:
 		fprintf(out, "#");
-		fprintf(out, directives[e->direct.which]);
+		fprintf(out, "%s", directives[e->direct.which]);
 		fprint_args(out, &e->direct.args);
 		break;
 	}
@@ -1321,6 +1323,9 @@ static void fprint_decl(FILE *out, Declaration *d) {
 
 static void fprint_stmt(FILE *out, Statement *s) {
 	PARSE_PRINT_LOCATION(s->where);
+	if (s->flags & STMT_FLAG_VOIDED_EXPR)
+		fprintf(out, "(void)");
+	
 	switch (s->kind) {
 	case STMT_DECL:
 		fprint_decl(out, &s->decl);

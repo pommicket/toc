@@ -62,6 +62,8 @@ static Identifier ident_new(Identifiers *ids, Identifier parent, unsigned char i
 		tree->children[i] = NULL;
 #endif
 	tree->parent = parent;
+	if (parent)
+		tree->depth = parent->depth + 1;
 	tree->index_in_parent = index_in_parent;
 	return tree;
 }
@@ -163,8 +165,7 @@ static char *ident_to_str(Identifier i) {
 	char *str = malloc(i_len + 1);
 	str += i_len;
 	*str = 0;
-	
-	while (i) {
+	while (i->parent) {
 		str--;
 		unsigned char c_high = i->index_in_parent;
 		unsigned char c_low = i->parent->index_in_parent;

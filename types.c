@@ -1,3 +1,6 @@
+static bool types_stmt(Statement *s);
+static bool types_expr(Expression *e);
+
 /* pass NULL for block for global scope */
 static bool block_enter(Block *b, Array *stmts) {
 	bool ret = true;
@@ -102,10 +105,8 @@ static bool type_eq(Type *a, Type *b) {
 /* expected must equal got, or an error will be produced */
 static bool type_must_eq(Location where, Type *expected, Type *got) {
 	if (!type_eq(expected, got)) {
-		char str_ex[128];
-		char str_got[128];
-		type_to_str(expected, str_ex, sizeof str_ex);
-		type_to_str(got, str_got, sizeof str_got);
+		char *str_ex = type_to_str(expected);
+		char *str_got = type_to_str(got);
 		err_print(where, "Type mismatch: expected %s, but got %s.", str_ex, str_got);
 		return false;
 	}
@@ -117,8 +118,10 @@ static bool expr_must_lval(Expression *e) {
 	switch (e->kind) {
 	case EXPR_IDENT: {
 		IdentDecl *id_decl = ident_decl(e->ident);
-		if (!id_decl)
+		if (!id_decl) {
 			err_print(e->where, "Undeclared identifier.");
+			return false;
+		}
 		Declaration *d = id_decl->decl;
 		if (d->flags & DECL_FLAG_CONST) {
 			char *istr = ident_to_str(e->ident);
@@ -221,7 +224,7 @@ static bool type_resolve(Type *t) {
 /* NOTE: this does descend into un/binary ops, etc. but NOT into functions  */
 static bool type_of_expr(Expression *e, Type *t) {
 	t->flags = 0;
-	
+	t->kind = TYPE_UNKNOWN; /* default to unknown type (in the case of an error) */
 	switch (e->kind) {
 	case EXPR_FN: {
 		FnExpr *f = &e->fn;
@@ -259,8 +262,7 @@ static bool type_of_expr(Expression *e, Type *t) {
 			if (!type_of_expr(f, &fn_type)) return false;
 		}
 		if (fn_type.kind != TYPE_FN) {
-			char type[128];
-			type_to_str(&fn_type, type, sizeof type);
+			char *type = type_to_str(&fn_type);
 			err_print(e->where, "Calling non-function (type %s).", type);
 			return false;
 		}
@@ -277,8 +279,7 @@ static bool type_of_expr(Expression *e, Type *t) {
 		switch (e->unary.op) {
 		case UNARY_MINUS:
 			if (of_type->kind != TYPE_BUILTIN || !type_builtin_is_numerical(of_type->builtin)) {
-				char s[128];
-				type_to_str(of_type, s, sizeof s);
+				char *s = type_to_str(of_type);
 				err_print(e->where, "Cannot apply unary - to non-numerical type %s.", s);
 				return false;
 			}
@@ -333,9 +334,9 @@ static bool type_of_expr(Expression *e, Type *t) {
 				}
 			}
 			if (!match) {
-				char s1[128], s2[128];
-				type_to_str(lhs_type, s1, sizeof s1);
-				type_to_str(rhs_type, s2, sizeof s2);
+				char *s1, *s2;
+				s1 = type_to_str(lhs_type);
+				s2 = type_to_str(rhs_type);
 				const char *op = binary_op_to_str(e->binary.op);
 				err_print(e->where, "Mismatched types to operator %s: %s and %s", op, s1, s2);
 				return false;
@@ -382,14 +383,13 @@ static bool type_of_expr(Expression *e, Type *t) {
 	return true;
 }
 
-static bool types_stmt(Statement *s);
-
 static bool types_block(Block *b) {
 	bool ret = true;
 	if (!block_enter(b, &b->stmts)) return false;
 	arr_foreach(&b->stmts, Statement, s) {
 		if (!types_stmt(s)) ret = false;
 	}
+	if (b->ret_expr) types_expr(b->ret_expr);
 	if (!block_exit(b, &b->stmts)) return false;
 	return ret;
 }
@@ -399,7 +399,28 @@ static bool types_expr(Expression *e) {
 	if (!type_of_expr(e, t)) return false;
 	switch (e->kind) {
 	case EXPR_FN:
-		return types_block(&e->fn.body);
+		if (!types_block(&e->fn.body))
+			return false;
+		assert(e->type.kind == TYPE_FN);
+		Type *ret_type = e->type.fn.types.data;
+		Expression *ret_expr = e->fn.body.ret_expr;
+		if (ret_expr) {
+			if (!type_eq(ret_type, &ret_expr->type)) {
+				char *got = type_to_str(&ret_expr->type);
+				char *expected = type_to_str(ret_type);
+				err_print(ret_expr->where, "Returning type %s, but function returns type %s.", got, expected);
+				info_print(e->where, "Function declaration is here.");
+				free(got); free(expected);
+				return false;
+			}
+		} else if (ret_type->kind != TYPE_VOID) {
+			/* TODO: this should really be at the closing brace, and not the function declaration */
+			char *expected = type_to_str(ret_type);
+			err_print(e->where, "No return value in function which returns %s.", expected);
+			free(expected);
+			return false;
+		}
+		break;
 	case EXPR_CALL: {
 		bool ret = true;
 		arr_foreach(&e->call.args, Expression, arg) {
@@ -444,6 +465,7 @@ static bool types_decl(Declaration *d) {
 static bool types_stmt(Statement *s) {
 	switch (s->kind) {
 	case STMT_EXPR:
+		
 		if (!types_expr(&s->expr)) {
 			return false;
 		}

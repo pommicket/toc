@@ -1,5 +1,5 @@
 #!/bin/bash
-CC=gcc
+CC=clang
 
 # Possible extra build flags
 # these are for compiling the compiler, and NOT for compiling the program itself.

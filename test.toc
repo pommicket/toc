@@ -1,8 +1,9 @@
 #C("#include <stdio.h>\n");
-foo.bar @= fn() {
-	#C("puts(\"Hello!\");\n");
+foo @= fn() [3]int {
+	x : [3]int;
+	x
 };
-
 main @= fn() {
-	foo.bar(); 
+	x := foo();
+	#C("printf(\"Foo: %ld\\n\", (long)x)");
 };

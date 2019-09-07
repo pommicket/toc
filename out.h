@@ -1,4 +1,4 @@
 #include <stddef.h>
 #include <stdint.h>
-void foo__bar(void);
+void foo(int64_t (*out__)[3]);
 void main__(void);

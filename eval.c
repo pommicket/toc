@@ -80,10 +80,10 @@ static bool eval_expr_as_int(Expression *e, Integer *i) {
 			return false;
 		}
 		if (d->type.kind != TYPE_BUILTIN || !type_builtin_is_integer(d->type.builtin)) {
-			char type_str[128];
-		    type_to_str(&d->type, type_str, sizeof type_str);
+			char *type_str = type_to_str(&d->type);
 			err_print(e->where, "Expected integer, but identifier has type %s.", type_str);
 			info_print(d->where, "Declaration was here.");
+			free(type_str);
 			return false;
 		}
 		/* TODO: tuples */

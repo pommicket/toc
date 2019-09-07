@@ -8,6 +8,7 @@ typedef struct {
 	FILE *c_out;
 	FILE *h_out;
 	unsigned long anon_fn_count;
+	unsigned long anon_var_count;
 	Block *block;
 	int indent_level;
 	bool indent_next; /* should the next thing written be indented? */
@@ -123,7 +124,7 @@ static const char *builtin_type_to_str(BuiltinType b) {
 }
 
 /* will this function use a pointer parameter for output? (e.g. fn()[3]int => void(int (*x)[3]) */
-static bool fn_uses_out_param(Type *fn_ret_type) {
+static bool cgen_fn_uses_out_param(Type *fn_ret_type) {
 	switch (fn_ret_type->kind) {
 	case TYPE_TUPLE:
 	case TYPE_ARR:
@@ -144,7 +145,7 @@ static void cgen_type_pre(CGenerator *g, Type *t) {
 	case TYPE_FN: {
 		Type *types = t->fn.types.data;
 		Type *ret_type = &types[0];
-		if (fn_uses_out_param(ret_type)) {
+		if (cgen_fn_uses_out_param(ret_type)) {
 			cgen_write(g, "void ");
 		} else {
 			cgen_type_pre(g, ret_type);
@@ -166,7 +167,7 @@ static void cgen_type_pre(CGenerator *g, Type *t) {
 static void cgen_type_post(CGenerator *g, Type *t);
 /* either pass NULL for param_types (x)or for params */
 static void cgen_fn_params(CGenerator *g, Type *param_types, Param *params, size_t nparams, Type *ret_type) {
-	bool uses_out_param = fn_uses_out_param(ret_type);
+	bool uses_out_param = cgen_fn_uses_out_param(ret_type);
 	   
 	cgen_write(g, "(");
 	if (nparams) {
@@ -214,7 +215,7 @@ static void cgen_type_post(CGenerator *g, Type *t) {
 		Type *param_types = types + 1;
 		assert(t->fn.types.len > 0);
 		size_t nparams = t->fn.types.len-1;
-		bool uses_out_param = fn_uses_out_param(ret_type);
+		bool uses_out_param = cgen_fn_uses_out_param(ret_type);
 		cgen_write(g, ")");
 		cgen_fn_params(g, param_types, NULL, nparams, ret_type);
 		if (!uses_out_param) {
@@ -256,7 +257,7 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f) {
 		cgen_write(g, "static "); /* anonymous functions only exist in this translation unit */
 	}
 	
-	bool uses_out_param = fn_uses_out_param(&f->ret_type);
+	bool uses_out_param = cgen_fn_uses_out_param(&f->ret_type);
 	size_t nparams = f->params.len;
 	if (uses_out_param) {
 		cgen_write(g, "void ");
