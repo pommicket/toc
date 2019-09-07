@@ -1,13 +1,15 @@
 #C("#include <stdio.h>\n");
-foo @= fn() [3][3]int {
-	x : [3][3]int;
+N @= 10;
+
+foo @= fn() [N][N]int {
+	x : [N][N]int;
 	x
 };
 main @= fn() {
-	x : [3][3]int = foo();
+	x : [N][N]int = foo();
 	#C("
-for (int i = 0; i < 3; i++)
-	for (int j = 0; j < 3; j++)
+for (int i = 0; i < 10; i++)
+	for (int j = 0; j < 10; j++)
 		printf(\"%ld\", x[i][j]);
 puts(\"\");
 	");
