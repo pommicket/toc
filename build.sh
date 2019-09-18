@@ -7,7 +7,7 @@ CC=clang
 #   - must be set if the zero value of a pointer (as might be set by calloc/memset)
 #     is not the NULL pointer.
 
-ADDITIONAL_FLAGS=''
+ADDITIONAL_FLAGS='-Wno-unused-function -Wno-unneeded-internal-declaration'
 
 WARNINGS='-Wall -Wextra -Wpedantic -Wconversion -Wshadow'
 DEBUG_FLAGS="-O0 -g3 $WARNINGS -std=c11"

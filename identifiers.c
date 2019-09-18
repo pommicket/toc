@@ -177,6 +177,15 @@ static char *ident_to_str(Identifier i) {
 	return str;
 }
 
+static void ident_add_decl(Identifier i, struct Declaration *d, struct Block *b) {
+	if (!i->decls.item_sz) {
+		arr_create(&i->decls, sizeof(IdentDecl));
+	}
+	IdentDecl *id_decl = arr_add(&i->decls);
+	id_decl->decl = d;
+	id_decl->scope = b;
+}
+
 static IdentDecl *ident_decl(Identifier i) {
 	assert(i->decls.item_sz);
 	return (IdentDecl*)arr_last(&i->decls);

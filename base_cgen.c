@@ -94,7 +94,7 @@ static bool cgen_ident(CGenerator *g, Identifier i, Location *where) {
 		Declaration *decl = id_decl->decl;
 		if ((decl->flags & DECL_FLAG_HAS_EXPR) && (decl->flags & DECL_FLAG_CONST)) {
 			if (decl->expr.kind == EXPR_FN) {
-				cgen_fn_name(g, &decl->expr.fn, NULL);
+				cgen_fn_name(g, decl->expr.fn, NULL);
 				return true;
 			}
 		}

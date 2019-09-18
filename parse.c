@@ -45,23 +45,10 @@ typedef struct Type {
 	};
 } Type;
 
-typedef struct {
-	Identifier name;
-	Type type;
-} Param;
-
 typedef struct Block {
 	Array stmts;
     struct Expression *ret_expr; /* the return expression of this block, e.g. {foo(); 3} => 3  NULL for no expression. */
 } Block;
-
-typedef struct {
-	Array params;
-	Type ret_type;
-	Block body;
-	Identifier name; /* NULL if the function is anonymous (set to NULL by parse.c, set to actual value by types_cgen.c) */
-	unsigned long id; /* this is used to keep track of local vs global/other local functions (there might be multiple functions called "foo") */
-} FnExpr; /* an expression such as fn(x: int) int {return 2 * x;} */
 
 typedef enum {
 			  EXPR_INT_LITERAL,
@@ -116,7 +103,7 @@ typedef struct Expression {
 		} call;
 	    DirectExpr direct;
 		Identifier ident;
-		FnExpr fn;
+		struct FnExpr *fn;
 	};
 } Expression;
 
@@ -133,6 +120,14 @@ typedef struct Declaration {
 	unsigned short flags;
 	Expression expr;
 } Declaration;
+
+typedef struct FnExpr {
+	Declaration params;	/* declaration of the parameters to this function */
+	Type ret_type;
+	Block body;
+	Identifier name; /* NULL if the function is anonymous (set to NULL by parse.c, set to actual value by types_cgen.c) */
+	unsigned long id; /* this is used to keep track of local vs global/other local functions (there might be multiple functions called "foo") */
+} FnExpr; /* an expression such as fn(x: int) int {return 2 * x;} */
 
 typedef enum {
 			  STMT_DECL,
@@ -159,6 +154,14 @@ typedef struct {
 	BlockArr exprs; /* a dynamic array of expressions, so that we don't need to call malloc every time we make an expression */
 	Block *block; /* which block are we in? NULL = file scope */
 } Parser;
+
+typedef enum {
+			  DECL_END_SEMICOLON,
+			  DECL_END_RPAREN
+} DeclEndType;
+
+static bool parse_expr(Parser *p, Expression *e, Token *end);
+static bool parse_decl(Parser *p, Declaration *d, DeclEndType ends_with);
 
 static const char *binary_op_to_str(BinaryOp b) {
 	switch (b) {
@@ -390,7 +393,6 @@ static Token *expr_find_end(Parser *p, unsigned flags)  {
 	}
 }
 
-static bool parse_expr(Parser *p, Expression *e, Token *end);
 static bool parse_type(Parser *p, Type *type) {
 	Tokenizer *t = p->tokr;
 	type->where = t->token->where;
@@ -493,24 +495,6 @@ static bool parse_type(Parser *p, Type *type) {
 	
 }
 
-static bool parse_param(Parser *parser, Param *p) {
-	Tokenizer *t = parser->tokr;
-	if (t->token->kind != TOKEN_IDENT) {
-		tokr_err(t, "Expected parameter name.");
-		return false;
-	}
-	p->name = t->token->ident;
-	t->token++;
-	if (!token_is_kw(t->token, KW_COLON)) {
-		tokr_err(t, "Expected ':' between parameter name and type.");
-		return false;
-	}
-	t->token++;
-	if (!parse_type(parser, &p->type))
-		return false;
-	return true;
-}
-
 static bool parse_stmt(Parser *p, Statement *s);
 
 static bool parse_block(Parser *p, Block *b) {
@@ -529,11 +513,13 @@ static bool parse_block(Parser *p, Block *b) {
 		/* non-empty function body */
 		while (1) {
 			Statement *stmt = arr_add(&b->stmts);
-			if (!parse_stmt(p, stmt)) {
+			bool success = parse_stmt(p, stmt);
+			if (!success) {
 				ret = false;
 			}
+			
 			if (token_is_kw(t->token, KW_RBRACE)) {
-				if (stmt->kind == STMT_EXPR) {
+				if (success && stmt->kind == STMT_EXPR) {
 					if (!(stmt->flags & STMT_FLAG_VOIDED_EXPR)) {
 						b->ret_expr = parser_new_expr(p);
 						*b->ret_expr = stmt->expr;
@@ -541,15 +527,21 @@ static bool parse_block(Parser *p, Block *b) {
 					}
 				}
 				break;
-			} else if (stmt->kind == STMT_EXPR && !(stmt->flags & STMT_FLAG_VOIDED_EXPR)) {
-				/* in theory, this should never happen right now */
-				err_print(stmt->where, "Non-voided expression is not the last statement in a block (you might want to add a ';' to the end of this statement).");
-				return false;
 			}
+			
+			if (success) {
+				if (stmt->kind == STMT_EXPR && !(stmt->flags & STMT_FLAG_VOIDED_EXPR)) {
+					/* in theory, this should never happen right now */
+					err_print(stmt->where, "Non-voided expression is not the last statement in a block (you might want to add a ';' to the end of this statement).");
+					return false;
+				}
+			}
+			
 			if (t->token->kind == TOKEN_EOF) {
 				tokr_err(t, "Expected '}' to close function body.");
 				return false;
 			}
+			
 		}
 	} else {
 		b->ret_expr = NULL;
@@ -569,27 +561,9 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 		tokr_err(t, "Expected '(' after 'fn'.");
 		return false;
 	}
-	arr_create(&f->params, sizeof(Param));
-	
 	t->token++;
+	parse_decl(p, &f->params, DECL_END_RPAREN);
 	
-	if (!token_is_kw(t->token, KW_RPAREN)) {
-		/* non-empty parameter list */
-		while (1) {
-			Param *param = arr_add(&f->params);
-			if (!parse_param(p, param))
-				return false;
-			if (token_is_kw(t->token, KW_RPAREN)) break;
-			if (token_is_kw(t->token, KW_COMMA)) {
-				t->token++;
-				continue;
-			}
-			tokr_err(t, "Expected ',' or ')' to continue or end parameter list.");
-			return false;
-		}
-	}
-	
-	t->token++;	/* move past ) */
 	if (token_is_kw(t->token, KW_LBRACE)) {
 		/* void function */
 		f->ret_type.kind = TYPE_VOID;
@@ -680,7 +654,8 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	if (token_is_kw(t->token, KW_FN)) {
 		/* this is a function */
 		e->kind = EXPR_FN;
-		if (!parse_fn_expr(p, &e->fn))
+		e->fn = err_malloc(sizeof *e->fn);
+		if (!parse_fn_expr(p, e->fn))
 			return false;
 			
 		if (t->token != end) {
@@ -964,7 +939,7 @@ NOTE: this function actually parses all types in the declaration, but it just
 calls itself to do that.
 
 */
-static bool parse_single_type_in_decl(Parser *p, Declaration *d) {
+static bool parse_single_type_in_decl(Parser *p, Declaration *d, DeclEndType ends_with) {
 	Tokenizer *t = p->tokr;
 	/* OPTIM: Maybe don't use a dynamic array or use parser allocator. */
 	size_t n_idents_with_this_type = 1;
@@ -995,7 +970,7 @@ static bool parse_single_type_in_decl(Parser *p, Declaration *d) {
 	}
 	
 	
-	if (token_is_kw(t->token, KW_SEMICOLON)) {
+	if (token_is_kw(t->token, KW_SEMICOLON) || token_is_kw(t->token, KW_RPAREN)) {
 		/* e.g. foo :; */
 		tokr_err(t, "Cannot infer type without expression.");
 		return false;
@@ -1040,7 +1015,7 @@ static bool parse_single_type_in_decl(Parser *p, Declaration *d) {
 	if (token_is_kw(t->token, KW_COMMA)) {
 		/* next type in declaration */
 		t->token++;	/* move past , */
-		return parse_single_type_in_decl(p, d);
+		return parse_single_type_in_decl(p, d, ends_with);
 	}
 	
 	/* OPTIM: switch t->token->kw ? */
@@ -1049,28 +1024,39 @@ static bool parse_single_type_in_decl(Parser *p, Declaration *d) {
 		if (!parse_expr(p, &d->expr, expr_find_end(p, 0)))
 			return false;
 		d->flags |= DECL_FLAG_HAS_EXPR;
-		if (token_is_kw(t->token, KW_SEMICOLON)) {
+		if ((token_is_kw(t->token, KW_SEMICOLON) && ends_with == DECL_END_SEMICOLON)
+			|| (token_is_kw(t->token, KW_RPAREN) && ends_with == DECL_END_RPAREN)) {
 			t->token++;
 			return true;
 		}
-		tokr_err(t, "Expected ';' at end of expression"); /* should never happen in theory right now */
+		tokr_err(t, "Expected '%c' at end of expression.",
+				 ends_with == DECL_END_SEMICOLON ? ';' : ')');
 		return false;
-	} else if (token_is_kw(t->token, KW_SEMICOLON)) {
+		
+	} else if ((token_is_kw(t->token, KW_SEMICOLON) && ends_with == DECL_END_SEMICOLON)
+			   || (token_is_kw(t->token, KW_RPAREN) && ends_with == DECL_END_RPAREN)) {
 		t->token++;
 		return true;
 	} else {
-		tokr_err(t, "Expected ';' or '=' at end of delaration.");
+		tokr_err(t, "Expected '%c' or '=' at end of delaration.",
+				 ends_with == DECL_END_SEMICOLON ? ';' : ')');
 		return false;
 	}
 }
 
-static bool parse_decl(Parser *p, Declaration *d) {
+static bool parse_decl(Parser *p, Declaration *d, DeclEndType ends_with) {
 	d->type.kind = TYPE_VOID;
 	d->where = p->tokr->token->where;
 	arr_create(&d->idents, sizeof(Identifier));
-	
+	Tokenizer *t = p->tokr;
 	d->flags = 0;
-	return parse_single_type_in_decl(p, d); /* recursively calls itself to parse all types */
+	/* TODO: extract cond */
+	if ((token_is_kw(t->token, KW_SEMICOLON) && ends_with == DECL_END_SEMICOLON)
+		|| (token_is_kw(t->token, KW_RPAREN) && ends_with == DECL_END_RPAREN)) {
+		t->token++;
+		return true;
+	}
+	return parse_single_type_in_decl(p, d, ends_with); /* recursively calls itself to parse all types */
 }
 
 static bool parse_stmt(Parser *p, Statement *s) {
@@ -1085,7 +1071,7 @@ static bool parse_stmt(Parser *p, Statement *s) {
 	if (token_is_kw(t->token + 1, KW_COLON) || token_is_kw(t->token + 1, KW_COMMA)
 		|| token_is_kw(t->token + 1, KW_AT)) {
 		s->kind = STMT_DECL;
-		if (!parse_decl(p, &s->decl)) {
+		if (!parse_decl(p, &s->decl, DECL_END_SEMICOLON)) {
 			/* move to next statement */
 			/* TODO: This might cause unhelpful errors if the first semicolon is inside a block, etc. */
 			while (!token_is_kw(t->token, KW_SEMICOLON)) {
@@ -1111,10 +1097,9 @@ static bool parse_stmt(Parser *p, Statement *s) {
 			while (t->token->kind != TOKEN_EOF) t->token++; /* move to end of file */
 			return false;
 		}
-		if (!parse_expr(p, &s->expr, end)) {
-			return false;
-		}
-		/* go past end */
+	    bool success = parse_expr(p, &s->expr, end);
+		
+		/* go past end regardless of whether successful or not */
 		if (end->kind == TOKEN_KW) {
 			switch (end->kw) {
 			case KW_SEMICOLON:
@@ -1129,7 +1114,7 @@ static bool parse_stmt(Parser *p, Statement *s) {
 			t->token = end + 1;
 		}
 		
-		return true;
+		return success;
 	}
 }
 
@@ -1154,6 +1139,9 @@ static bool parse_file(Parser *p, ParsedFile *f) {
 #define PARSE_PRINT_LOCATION(l) //fprintf(out, "[l%lu]", (unsigned long)(l).line);
 
 static void fprint_expr(FILE *out, Expression *e);
+static void fprint_stmt(FILE *out, Statement *s);
+static void fprint_decl(FILE *out, Declaration *d);
+
 static void fprint_type(FILE *out, Type *t) {
 	PARSE_PRINT_LOCATION(t->where);
 	switch (t->kind) {
@@ -1199,13 +1187,6 @@ static void fprint_type(FILE *out, Type *t) {
 	}
 }
 
-static void fprint_param(FILE *out, Param *p) {
-	fprint_ident(out, p->name);
-	fprintf(out, ": ");
-	fprint_type(out, &p->type);
-}
-
-static void fprint_stmt(FILE *out, Statement *s);
 
 static void fprint_block(FILE *out,  Block *b) {
 	fprintf(out, "{\n");
@@ -1218,11 +1199,7 @@ static void fprint_block(FILE *out,  Block *b) {
 
 static void fprint_fn_expr(FILE *out, FnExpr *f) {
 	fprintf(out, "fn (");
-	arr_foreach(&f->params, Param, param) {
-		if (param != f->params.data)
-			fprintf(out, ", ");
-		fprint_param(out, param);
-	}
+	fprint_decl(out, &f->params);
 	fprintf(out, ") ");
 	fprint_type(out, &f->ret_type);
 	fprintf(out, " ");
@@ -1288,7 +1265,7 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprintf(out, ")");
 		break;
 	case EXPR_FN:
-		fprint_fn_expr(out, &e->fn);
+		fprint_fn_expr(out, e->fn);
 		break;
 	case EXPR_CALL:
 		fprint_expr(out, e->call.fn);

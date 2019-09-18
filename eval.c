@@ -74,7 +74,7 @@ static bool eval_expr_as_int(Expression *e, Integer *i) {
 			return false;
 		}
 		Declaration *d = id_decl->decl;
-		if (is_after(d->where, e->where)) {
+		if (location_after(d->where, e->where)) {
 			err_print(e->where, "Use of constant before its declaration.");
 			info_print(d->where, "Declaration will be here.");
 			return false;

@@ -8,8 +8,7 @@ static bool block_enter(Block *b, Array *stmts) {
 		if (stmt->kind == STMT_DECL) {
 			Declaration *decl = &stmt->decl;
 			arr_foreach(&decl->idents, Identifier, ident) {
-				IdentTree *id_info = *ident;
-				Array *decls = &id_info->decls;
+				Array *decls = &(*ident)->decls;
 				if (decls->len) {
 					/* check that it hasn't been declared in this block */
 					IdentDecl *prev = arr_last(decls);
@@ -19,14 +18,8 @@ static bool block_enter(Block *b, Array *stmts) {
 						ret = false;
 						continue;
 					}
-				} else {
-					/* array not initialized yet */
-					arr_create(decls, sizeof(IdentDecl));
 				}
-				
-				IdentDecl *ident_decl = arr_add(decls);
-				ident_decl->decl = decl;
-				ident_decl->scope = b;
+				ident_add_decl(*ident, decl, b);
 			}
 		}
 	}
@@ -154,7 +147,7 @@ static bool type_of_ident(Location where, Identifier i, Type *t, bool allow_use_
 	Declaration *d = decl->decl;
 	if (!allow_use_before_decl) {
 		/* TODO: Check self-referential declarations  */
-		if (d->where.code > where.code) {
+		if (location_after(d->where, where)) {
 			char *s = ident_to_str(i);
 			err_print(where, "Use of identifier %s before its declaration.", s);
 			info_print(d->where, "%s will be declared here.", s);
@@ -227,16 +220,19 @@ static bool type_of_expr(Expression *e, Type *t) {
 	t->kind = TYPE_UNKNOWN; /* default to unknown type (in the case of an error) */
 	switch (e->kind) {
 	case EXPR_FN: {
-		FnExpr *f = &e->fn;
+		FnExpr *f = e->fn;
 		t->kind = TYPE_FN;
 		arr_create(&t->fn.types, sizeof(Type));
 		Type *ret_type = arr_add(&t->fn.types);
 		type_resolve(&f->ret_type);
 		*ret_type = f->ret_type;
-		arr_foreach(&f->params, Param, param) {
+		Declaration *params = &f->params;
+		Type *type = &params->type;
+		Type *param_types = type->kind == TYPE_TUPLE ? type->tuple.data : type;
+	    for (size_t i = 0; i < params->idents.len; i++) {
 			Type *param_type = arr_add(&t->fn.types);
-			type_resolve(&param->type);
-			*param_type = param->type;
+			type_resolve(&param_types[i]);
+			*param_type = param_types[i];
 		}
 	} break;
 	case EXPR_INT_LITERAL:
@@ -398,11 +394,11 @@ static bool types_expr(Expression *e) {
 	if (!type_of_expr(e, t)) return false;
 	switch (e->kind) {
 	case EXPR_FN:
-		if (!types_block(&e->fn.body))
+		if (!types_block(&e->fn->body))
 			return false;
 		assert(e->type.kind == TYPE_FN);
 		Type *ret_type = e->type.fn.types.data;
-		Expression *ret_expr = e->fn.body.ret_expr;
+		Expression *ret_expr = e->fn->body.ret_expr;
 		if (ret_expr) {
 			if (!type_eq(ret_type, &ret_expr->type)) {
 				char *got = type_to_str(&ret_expr->type);

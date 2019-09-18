@@ -72,21 +72,21 @@ int main(int argc, char **argv) {
 	}
 	
 	/* TODO (eventually): use a tmp file (don't overwrite old output if there's an error) */
-	const char *c_out_filename = "out.c";
-	const char *h_out_filename = "out.h";
-	FILE *c_out = fopen(c_out_filename, "w");
-	FILE *h_out = fopen(h_out_filename, "w");
-	CGenerator cgen;
-	cgen_create(&cgen, &file_idents, c_out, h_out, h_out_filename);
-	if (!cgen_file(&cgen, &f)) {
-		err_fprint(TEXT_IMPORTANT("Errors occured while generating C code.\n"));
-		return EXIT_FAILURE;
-	}
+	/* const char *c_out_filename = "out.c"; */
+	/* const char *h_out_filename = "out.h"; */
+	/* FILE *c_out = fopen(c_out_filename, "w"); */
+	/* FILE *h_out = fopen(h_out_filename, "w"); */
+	/* CGenerator cgen; */
+	/* cgen_create(&cgen, &file_idents, c_out, h_out, h_out_filename); */
+	/* if (!cgen_file(&cgen, &f)) { */
+	/* 	err_fprint(TEXT_IMPORTANT("Errors occured while generating C code.\n")); */
+	/* 	return EXIT_FAILURE; */
+	/* } */
 	
 	block_exit(NULL, &f.stmts); /* exit global scope */
 	free(contents);
 	
-	fclose(c_out);
-	fclose(h_out);
+	/* fclose(c_out); */
+	/* fclose(h_out); */
 	idents_free(&file_idents);
 }

@@ -1,16 +1,12 @@
 #C("#include <stdio.h>\n");
-N @= 10;
 
-foo @= fn() [N][N]int {
-	x : [N][N]int;
-	x
+print_int @= fn(x: int) {
+		#C("printf(\"%ld\\n\", (long)x);\n");
 };
+
+times2 @= fn(x: int) int { 5 /* x*/ };
+
 main @= fn() {
-	x : [N][N]int = foo();
-	#C("
-for (int i = 0; i < 10; i++)
-	for (int j = 0; j < 10; j++)
-		printf(\"%ld\", x[i][j]);
-puts(\"\");
-	");
+	 print_int(times2(5));
+	 foo := fn (x, y, z : float, y:double) {};
 };
