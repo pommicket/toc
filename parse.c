@@ -939,6 +939,11 @@ NOTE: this function actually parses all types in the declaration, but it just
 calls itself to do that.
 
 */
+static inline bool ends_decl(Token *t, DeclEndType ends_with) {
+	return (token_is_kw(t, KW_SEMICOLON) && ends_with == DECL_END_SEMICOLON)
+		|| (token_is_kw(t, KW_RPAREN) && ends_with == DECL_END_RPAREN);
+}
+
 static bool parse_single_type_in_decl(Parser *p, Declaration *d, DeclEndType ends_with) {
 	Tokenizer *t = p->tokr;
 	/* OPTIM: Maybe don't use a dynamic array or use parser allocator. */
@@ -1024,8 +1029,7 @@ static bool parse_single_type_in_decl(Parser *p, Declaration *d, DeclEndType end
 		if (!parse_expr(p, &d->expr, expr_find_end(p, 0)))
 			return false;
 		d->flags |= DECL_FLAG_HAS_EXPR;
-		if ((token_is_kw(t->token, KW_SEMICOLON) && ends_with == DECL_END_SEMICOLON)
-			|| (token_is_kw(t->token, KW_RPAREN) && ends_with == DECL_END_RPAREN)) {
+		if (ends_decl(t->token, ends_with)) {
 			t->token++;
 			return true;
 		}
@@ -1033,8 +1037,7 @@ static bool parse_single_type_in_decl(Parser *p, Declaration *d, DeclEndType end
 				 ends_with == DECL_END_SEMICOLON ? ';' : ')');
 		return false;
 		
-	} else if ((token_is_kw(t->token, KW_SEMICOLON) && ends_with == DECL_END_SEMICOLON)
-			   || (token_is_kw(t->token, KW_RPAREN) && ends_with == DECL_END_RPAREN)) {
+	} else if (ends_decl(t->token, ends_with)) {
 		t->token++;
 		return true;
 	} else {
@@ -1050,9 +1053,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndType ends_with) {
 	arr_create(&d->idents, sizeof(Identifier));
 	Tokenizer *t = p->tokr;
 	d->flags = 0;
-	/* TODO: extract cond */
-	if ((token_is_kw(t->token, KW_SEMICOLON) && ends_with == DECL_END_SEMICOLON)
-		|| (token_is_kw(t->token, KW_RPAREN) && ends_with == DECL_END_RPAREN)) {
+	if (ends_decl(t->token, ends_with)) {
 		t->token++;
 		return true;
 	}
@@ -1194,7 +1195,11 @@ static void fprint_block(FILE *out,  Block *b) {
 		fprint_stmt(out, stmt);
 	}
 	fprintf(out, "}");
-
+	if (b->ret_expr) {
+		fprintf(out, " returns ");
+		fprint_expr(out, b->ret_expr);
+	}
+	
 }
 
 static void fprint_fn_expr(FILE *out, FnExpr *f) {
@@ -1277,6 +1282,8 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprint_args(out, &e->direct.args);
 		break;
 	}
+	fprintf(out, ":");
+	fprint_type(out, &e->type);
 }
 
 
@@ -1290,7 +1297,7 @@ static void fprint_decl(FILE *out, Declaration *d) {
 		fprintf(out, "[const]");
 	}
 	fprintf(out, ":");
-	if (d->flags & DECL_FLAG_ANNOTATES_TYPE) {
+	if ((d->flags & DECL_FLAG_FOUND_TYPE) || (d->flags & DECL_FLAG_ANNOTATES_TYPE)) {
 		fprint_type(out, &d->type);
 	}
 	if (d->flags & DECL_FLAG_HAS_EXPR) {

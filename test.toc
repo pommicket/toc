@@ -4,9 +4,9 @@ print_int @= fn(x: int) {
 		#C("printf(\"%ld\\n\", (long)x);\n");
 };
 
-times2 @= fn(x: int) int { 5 /* x*/ };
+times2 @= fn(x: int) int { x + x };
 
 main @= fn() {
 	 print_int(times2(5));
-	 foo := fn (x, y, z : float, y:double) {};
+	 foo := fn (x, y, z : float, A:double) {};
 };

@@ -187,8 +187,7 @@ static void ident_add_decl(Identifier i, struct Declaration *d, struct Block *b)
 }
 
 static IdentDecl *ident_decl(Identifier i) {
-	assert(i->decls.item_sz);
-	return (IdentDecl*)arr_last(&i->decls);
+    return i->decls.item_sz == 0 ? NULL : (IdentDecl*)arr_last(&i->decls);
 }
 
 static void idents_free(Identifiers *ids) {

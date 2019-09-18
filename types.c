@@ -1,49 +1,58 @@
 static bool types_stmt(Statement *s);
 static bool types_expr(Expression *e);
 
+static bool add_ident_decls(Block *b, Declaration *d) {
+	bool ret = true;
+	arr_foreach(&d->idents, Identifier, ident) {
+		Array *decls = &(*ident)->decls;
+		if (decls->len) {
+			/* check that it hasn't been declared in this block */
+			IdentDecl *prev = arr_last(decls);
+			if (prev->scope == b) {
+				err_print(d->where, "Re-declaration of identifier in the same block.");
+				info_print(prev->decl->where, "Previous declaration was here.");
+				ret = false;
+				continue;
+			}
+		}
+		ident_add_decl(*ident, d, b);
+	}
+	return ret;
+}
+
+static void remove_ident_decls(Block *b, Declaration *d) {
+	arr_foreach(&d->idents, Identifier, ident) {
+		IdentTree *id_info = *ident;
+		Array *decls = &id_info->decls;
+		assert(decls->item_sz);
+		IdentDecl *last_decl = arr_last(decls);
+		if (last_decl && last_decl->scope == b) {
+			arr_remove_last(decls); /* remove that declaration */
+		}
+	}
+}
+
 /* pass NULL for block for global scope */
 static bool block_enter(Block *b, Array *stmts) {
 	bool ret = true;
 	arr_foreach(stmts, Statement, stmt) {
 		if (stmt->kind == STMT_DECL) {
 			Declaration *decl = &stmt->decl;
-			arr_foreach(&decl->idents, Identifier, ident) {
-				Array *decls = &(*ident)->decls;
-				if (decls->len) {
-					/* check that it hasn't been declared in this block */
-					IdentDecl *prev = arr_last(decls);
-					if (prev->scope == b) {
-						err_print(decl->where, "Re-declaration of identifier in the same block.");
-						info_print(prev->decl->where, "Previous declaration was here.");
-						ret = false;
-						continue;
-					}
-				}
-				ident_add_decl(*ident, decl, b);
-			}
+			if (!add_ident_decls(b, decl))
+				ret = false;
 		}
 	}
 	return ret;
 }
 
-static bool block_exit(Block *b, Array *stmts) {
+static void block_exit(Block *b, Array *stmts) {
 	/* OPTIM: figure out some way of not re-iterating over everything */
-	bool ret = true;
 	arr_foreach(stmts, Statement, stmt) {
 		if (stmt->kind == STMT_DECL) {
 			Declaration *decl = &stmt->decl;
-			arr_foreach(&decl->idents, Identifier, ident) {
-				IdentTree *id_info = *ident;
-				Array *decls = &id_info->decls;
-				assert(decls->item_sz);
-				IdentDecl *last_decl = arr_last(decls);
-				if (last_decl->scope == b) {
-					arr_remove_last(decls); /* remove that declaration */
-				}
-			}
+			remove_ident_decls(b, decl);
 		}
 	}
-	return ret;
 }
 
 static bool type_eq(Type *a, Type *b) {
@@ -240,6 +249,9 @@ static bool type_of_expr(Expression *e, Type *t) {
 		t->builtin = BUILTIN_I64;
 		t->flags |= TYPE_FLAG_FLEXIBLE;
 		break;
+	case EXPR_STR_LITERAL:
+		t->kind = TYPE_UNKNOWN;	/* TODO */
+		break;
 	case EXPR_FLOAT_LITERAL:
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_FLOAT;
@@ -267,6 +279,10 @@ static bool type_of_expr(Expression *e, Type *t) {
 	}
 	case EXPR_DIRECT:
 		t->kind = TYPE_UNKNOWN;
+		/* TODO: make sure direct args have the right type */
+		arr_foreach(&e->direct.args, Expression, arg) {
+			types_expr(arg);
+		}
 		break;
 	case EXPR_UNARY_OP: {
 		Type *of_type = &e->unary.of->type;
@@ -385,7 +401,7 @@ static bool types_block(Block *b) {
 		if (!types_stmt(s)) ret = false;
 	}
 	if (b->ret_expr) types_expr(b->ret_expr);
-	if (!block_exit(b, &b->stmts)) return false;
+	block_exit(b, &b->stmts);
 	return ret;
 }
 
@@ -393,12 +409,16 @@ static bool types_expr(Expression *e) {
 	Type *t = &e->type;
 	if (!type_of_expr(e, t)) return false;
 	switch (e->kind) {
-	case EXPR_FN:
+	case EXPR_FN: {
+		assert(e->type.kind == TYPE_FN);
+		FnExpr *f = e->fn;
+		add_ident_decls(&f->body, &f->params);
 		if (!types_block(&e->fn->body))
 			return false;
-		assert(e->type.kind == TYPE_FN);
+		remove_ident_decls(&f->body, &f->params);
 		Type *ret_type = e->type.fn.types.data;
-		Expression *ret_expr = e->fn->body.ret_expr;
+		Expression *ret_expr = f->body.ret_expr;
+		
 		if (ret_expr) {
 			if (!type_eq(ret_type, &ret_expr->type)) {
 				char *got = type_to_str(&ret_expr->type);
@@ -415,7 +435,7 @@ static bool types_expr(Expression *e) {
 			free(expected);
 			return false;
 		}
-		break;
+	} break;
 	case EXPR_CALL: {
 		bool ret = true;
 		arr_foreach(&e->call.args, Expression, arg) {
