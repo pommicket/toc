@@ -79,6 +79,12 @@ typedef struct {
 	Array args;	/* of Expression */
 } DirectExpr;
 
+typedef struct {
+	struct Expression *fn;
+	Array args;	/* of Expression */
+	unsigned long out_var; /* which out variable is used for this call (used by cgen) */
+} CallExpr;
+
 typedef struct Expression {
 	Location where;
 	ExprKind kind;
@@ -96,11 +102,7 @@ typedef struct Expression {
 			struct Expression *lhs;
 			struct Expression *rhs;
 		} binary;
-		struct {
-			struct Expression *fn;
-			Array args;	/* of Expression */
-			unsigned long out_var; /* which out variable is used for this call (used by cgen) */
-		} call;
+		CallExpr call;
 	    DirectExpr direct;
 		Identifier ident;
 		struct FnExpr *fn;

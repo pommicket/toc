@@ -8,5 +8,6 @@ times2 @= fn(x: int) int { x + x };
 
 main @= fn() {
 	 print_int(times2(5));
-	 foo := fn (x, y, z : float, A:double) {};
+	 foo := fn (x, y, z,w : float, A:double) {};
+	 foo(foo,4,5,3,5);
 };

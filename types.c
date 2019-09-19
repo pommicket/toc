@@ -223,8 +223,9 @@ static bool type_resolve(Type *t) {
 	return true;
 }
 
-/* NOTE: this does descend into un/binary ops, etc. but NOT into functions  */
+/* NOTE: this does descend into un/binary ops, calls, etc. but NOT into any blocks  */
 static bool type_of_expr(Expression *e, Type *t) {
+	/* TODO: only get the type of an expr once (flag) */
 	t->flags = 0;
 	t->kind = TYPE_UNKNOWN; /* default to unknown type (in the case of an error) */
 	switch (e->kind) {
@@ -261,20 +262,44 @@ static bool type_of_expr(Expression *e, Type *t) {
 		if (!type_of_ident(e->where, e->ident, t, false)) return false;
 	} break;
 	case EXPR_CALL: {
-		Expression *f = e->call.fn;
+		CallExpr *c = &e->call;
+		Expression *f = c->fn;
 		if (f->kind == EXPR_IDENT) {
 			/* allow calling a function before declaring it */
 			if (!type_of_ident(f->where, f->ident, &f->type, true)) return false;
 		} else {
 			if (!type_of_expr(f, &f->type)) return false;
 		}
+		arr_foreach(&c->args, Expression, arg) {
+			if (!type_of_expr(arg, &arg->type))
+				return false;
+		}
 		if (f->type.kind != TYPE_FN) {
 			char *type = type_to_str(&f->type);
 			err_print(e->where, "Calling non-function (type %s).", type);
 			return false;
 		}
-		/* TODO: Make sure args match fn type */
-		*t = *(Type*)f->type.fn.types.data;
+		Type *ret_type = (Type *)f->type.fn.types.data;
+		Type *param_types = ret_type + 1;
+		Expression *args = c->args.data;
+		size_t nparams = f->type.fn.types.len - 1;
+		if (nparams != c->args.len) {
+			err_print(e->where, "Expected %lu arguments to function, but got %lu.", (unsigned long)nparams, (unsigned long)c->args.len);
+			return false;
+		}
+		bool ret = true;
+		for (size_t p = 0; p < nparams; p++) {
+			Type *expected = &param_types[p];
+			Type *got = &args[p].type;
+			if (!type_eq(expected, got)) {
+				ret = false;
+				char *estr = type_to_str(expected);
+				char *gstr = type_to_str(got);
+				err_print(args[p].where, "Expected type %s as %lu%s argument to function, but got %s.", estr, 1+(unsigned long)p, ordinals(1+p), gstr);
+			}
+		}
+		if (!ret) return false;
+		*t = *ret_type;
 		break;
 	}
 	case EXPR_DIRECT:
@@ -405,6 +430,7 @@ static bool types_block(Block *b) {
 	return ret;
 }
 
+/* does descend into blocks, unlike type_of_expr. */
 static bool types_expr(Expression *e) {
 	Type *t = &e->type;
 	if (!type_of_expr(e, t)) return false;
@@ -435,13 +461,6 @@ static bool types_expr(Expression *e) {
 			free(expected);
 			return false;
 		}
-	} break;
-	case EXPR_CALL: {
-		bool ret = true;
-		arr_foreach(&e->call.args, Expression, arg) {
-			if (!types_expr(arg)) ret = false;
-		}
-	    return ret;
 	} break;
 	default: break;
 	}
