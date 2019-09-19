@@ -63,7 +63,7 @@ static bool type_eq(Type *a, Type *b) {
 		if (b->flags & TYPE_FLAG_FLEXIBLE) return true;
 		assert(a->kind == TYPE_BUILTIN);
 		
-		if (a->builtin == BUILTIN_FLOAT) {
+		if (type_builtin_is_floating(a->builtin)) {
 			return type_builtin_is_floating(b->builtin);
 		}
 		assert(a->builtin == BUILTIN_I64);
@@ -245,17 +245,17 @@ static bool type_of_expr(Expression *e, Type *t) {
 			*param_type = param_types[i];
 		}
 	} break;
-	case EXPR_INT_LITERAL:
+	case EXPR_LITERAL_INT:
 	    t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_I64;
 		t->flags |= TYPE_FLAG_FLEXIBLE;
 		break;
-	case EXPR_STR_LITERAL:
+	case EXPR_LITERAL_STR:
 		t->kind = TYPE_UNKNOWN;	/* TODO */
 		break;
-	case EXPR_FLOAT_LITERAL:
+	case EXPR_LITERAL_FLOAT:
 		t->kind = TYPE_BUILTIN;
-		t->builtin = BUILTIN_FLOAT;
+		t->builtin = BUILTIN_F32;
 		t->flags |= TYPE_FLAG_FLEXIBLE;
 		break;
 	case EXPR_IDENT: {
@@ -356,9 +356,9 @@ static bool type_of_expr(Expression *e, Type *t) {
 				int rhs_is_flexible = rhs_type->flags & TYPE_FLAG_FLEXIBLE;
 				if (lhs_is_flexible && rhs_is_flexible) {
 					*t = *lhs_type;
-					if (rhs_type->builtin == BUILTIN_FLOAT) {
+					if (rhs_type->builtin == BUILTIN_F32) {
 						/* promote to float */
-						t->builtin = BUILTIN_FLOAT;
+						t->builtin = BUILTIN_F32;
 					}
 				} else if (type_eq(lhs_type, rhs_type)) {
 					if (!lhs_is_flexible)
@@ -425,7 +425,9 @@ static bool types_block(Block *b) {
 	arr_foreach(&b->stmts, Statement, s) {
 		if (!types_stmt(s)) ret = false;
 	}
-	if (b->ret_expr) types_expr(b->ret_expr);
+	if (b->ret_expr)
+		if (!types_expr(b->ret_expr))
+			ret = false;
 	block_exit(b, &b->stmts);
 	return ret;
 }

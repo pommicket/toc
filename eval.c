@@ -14,17 +14,17 @@
 static bool eval_expr_as_int(Expression *e, Integer *i) {
 	/* OPTIM: cache eval'd expression values? (probably only for declarations) */
 	switch (e->kind) {
-	case EXPR_FLOAT_LITERAL:
+	case EXPR_LITERAL_FLOAT:
 		err_print(e->where, "Expected integer, but found floating-point literal.");
 		return false;
-	case EXPR_INT_LITERAL:
+	case EXPR_LITERAL_INT:
 		if (e->intl > (UInteger)INTEGER_MAX) { /* TODO: FIXME */
 			err_print(e->where, "Overflow when evaluating integer.");
 			return false;
 		}
 		*i = (Integer)e->intl;
 		return true;
-	case EXPR_STR_LITERAL:
+	case EXPR_LITERAL_STR:
 		err_print(e->where, "Expected integer, but found string literal.");
 		return false;
 	case EXPR_UNARY_OP:

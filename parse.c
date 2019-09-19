@@ -17,8 +17,8 @@ typedef enum {
 			  BUILTIN_U16,
 			  BUILTIN_U32,
 			  BUILTIN_U64,
-			  BUILTIN_FLOAT,
-			  BUILTIN_DOUBLE,
+			  BUILTIN_F32,
+			  BUILTIN_F64,
 			  BUILTIN_TYPE_COUNT
 } BuiltinType;
 
@@ -51,9 +51,9 @@ typedef struct Block {
 } Block;
 
 typedef enum {
-			  EXPR_INT_LITERAL,
-			  EXPR_FLOAT_LITERAL,
-			  EXPR_STR_LITERAL,
+			  EXPR_LITERAL_FLOAT,
+			  EXPR_LITERAL_INT,
+			  EXPR_LITERAL_STR,
 			  EXPR_IDENT, /* variable or constant */
 			  EXPR_BINARY_OP,
 			  EXPR_UNARY_OP,
@@ -194,8 +194,8 @@ static bool type_builtin_is_integer(BuiltinType b) {
 
 static bool type_builtin_is_floating(BuiltinType b) {
 	switch (b) {
-	case BUILTIN_FLOAT:
-	case BUILTIN_DOUBLE:
+	case BUILTIN_F32:
+	case BUILTIN_F64:
 		return true;
 	default: return false;
 	}
@@ -218,8 +218,8 @@ static BuiltinType kw_to_builtin_type(Keyword kw) {
 	case KW_U16: return BUILTIN_U16;
 	case KW_U32: return BUILTIN_U32;
 	case KW_U64: return BUILTIN_U64;
-	case KW_FLOAT: return BUILTIN_FLOAT;
-	case KW_DOUBLE: return BUILTIN_DOUBLE;
+	case KW_F32: return BUILTIN_F32;
+	case KW_F64: return BUILTIN_F64;
 	default: return BUILTIN_TYPE_COUNT;
 	}
 }
@@ -234,8 +234,8 @@ static Keyword builtin_type_to_kw(BuiltinType t) {
 	case BUILTIN_U16: return KW_U16;
 	case BUILTIN_U32: return KW_U32;
 	case BUILTIN_U64: return KW_U64;
-	case BUILTIN_FLOAT: return KW_FLOAT;
-	case BUILTIN_DOUBLE: return KW_DOUBLE;
+	case BUILTIN_F32: return KW_F32;
+	case BUILTIN_F64: return KW_F64;
 	case BUILTIN_TYPE_COUNT: break;
 	}
 	assert(0);
@@ -622,15 +622,11 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			NumLiteral *num = &t->token->num;
 			switch (num->kind) {
 			case NUM_LITERAL_FLOAT:
-				e->kind = EXPR_FLOAT_LITERAL;
-				e->type.kind = TYPE_BUILTIN;
-				e->type.builtin = BUILTIN_FLOAT;
+				e->kind = EXPR_LITERAL_FLOAT;
 				e->floatl = num->floatval;
 				break;
 			case NUM_LITERAL_INT:
-				e->kind = EXPR_INT_LITERAL;
-				e->type.kind = TYPE_BUILTIN;
-				e->type.builtin = BUILTIN_I64; /* TODO: if it's too big, use a u64 instead. */
+				e->kind = EXPR_LITERAL_INT;
 				e->intl = num->intval;
 				break;
 			}
@@ -640,7 +636,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			e->ident = t->token->ident;
 			break;
 		case TOKEN_STR_LITERAL:
-			e->kind = EXPR_STR_LITERAL;
+			e->kind = EXPR_LITERAL_STR;
 			e->strl = t->token->str;
 	    	break;
 		default:
@@ -1225,13 +1221,13 @@ static void fprint_args(FILE *out, Array *args) {
 static void fprint_expr(FILE *out, Expression *e) {
 	PARSE_PRINT_LOCATION(e->where);
 	switch (e->kind) {
-	case EXPR_INT_LITERAL:
+	case EXPR_LITERAL_INT:
 		fprintf(out, "%lld", (long long)e->intl);
 		break;
-	case EXPR_FLOAT_LITERAL:
+	case EXPR_LITERAL_FLOAT:
 		fprintf(out, "%f", (double)e->floatl);
 		break;
-	case EXPR_STR_LITERAL:
+	case EXPR_LITERAL_STR:
 		fprintf(out, "\"%s\"", e->strl.str);
 		break;
 	case EXPR_IDENT:
