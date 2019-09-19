@@ -60,6 +60,7 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 
+	
 	block_enter(NULL, &f.stmts); /* enter global scope */
 	if (!types_file(&f)) {
 		err_fprint(TEXT_IMPORTANT("Errors occured while determining types.\n"));

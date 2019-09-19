@@ -1,6 +1,6 @@
 #C("#include <stdio.h>\n");
 
-print_int @= fn(x: int) {
+print_int @= fn(y: int) {
 		#C("printf(\"%ld\\n\", (long)x);\n");
 };
 
@@ -8,5 +8,5 @@ times2 @= fn(x: int) int { x + x };
 
 main @= fn() {
 	 print_int(times2(5));
-	 foo := fn (x, y, z : float, A:double) {};
+	 foo := fn (x, y, z : f32, A:f64) {};
 };
