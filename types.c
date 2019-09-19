@@ -1,3 +1,4 @@
+static bool type_of_expr(Expression *e);
 static bool types_stmt(Statement *s);
 static bool types_expr(Expression *e);
 
@@ -144,7 +145,6 @@ static bool expr_must_lval(Expression *e) {
 	return false;
 }
 
-static bool type_of_expr(Expression *e, Type *t);
 static bool type_of_ident(Location where, Identifier i, Type *t, bool allow_use_before_decl) {
 	IdentDecl *decl = ident_decl(i);
 	if (!decl) {
@@ -170,8 +170,9 @@ static bool type_of_ident(Location where, Identifier i, Type *t, bool allow_use_
 	if (d->flags & DECL_FLAG_ANNOTATES_TYPE) {
 		decl_type = d->type;
 	} else {
-		if (!type_of_expr(&d->expr, &decl_type))
+		if (!type_of_expr(&d->expr))
 			return false;
+		decl_type = d->expr.type;
 	}
 	
 	if (d->idents.len > 1) {
@@ -224,8 +225,9 @@ static bool type_resolve(Type *t) {
 }
 
 /* NOTE: this does descend into un/binary ops, calls, etc. but NOT into any blocks  */
-static bool type_of_expr(Expression *e, Type *t) {
-	/* TODO: only get the type of an expr once (flag) */
+static bool type_of_expr(Expression *e) {
+	if (e->flags & EXPR_FLAG_FOUND_TYPE) return true;
+	Type *t = &e->type;
 	t->flags = 0;
 	t->kind = TYPE_UNKNOWN; /* default to unknown type (in the case of an error) */
 	switch (e->kind) {
@@ -268,10 +270,10 @@ static bool type_of_expr(Expression *e, Type *t) {
 			/* allow calling a function before declaring it */
 			if (!type_of_ident(f->where, f->ident, &f->type, true)) return false;
 		} else {
-			if (!type_of_expr(f, &f->type)) return false;
+			if (!type_of_expr(f)) return false;
 		}
 		arr_foreach(&c->args, Expression, arg) {
-			if (!type_of_expr(arg, &arg->type))
+			if (!type_of_expr(arg))
 				return false;
 		}
 		if (f->type.kind != TYPE_FN) {
@@ -304,14 +306,24 @@ static bool type_of_expr(Expression *e, Type *t) {
 	}
 	case EXPR_DIRECT:
 		t->kind = TYPE_UNKNOWN;
-		/* TODO: make sure direct args have the right type */
-		arr_foreach(&e->direct.args, Expression, arg) {
+	    arr_foreach(&e->direct.args, Expression, arg) {
 			types_expr(arg);
+		}
+		switch (e->direct.which) {
+		case DIRECT_C: {
+			size_t n_args = e->direct.args.len;
+			if (n_args != 1) {
+				err_print(e->where, "#C call should have one string argument (got %lu arguments).", (unsigned long)n_args);
+				return false;
+			}
+			/* TODO: when string types are added, check */
+		} break;
+		case DIRECT_COUNT: assert(0); return false;
 		}
 		break;
 	case EXPR_UNARY_OP: {
 		Type *of_type = &e->unary.of->type;
-	    if (!type_of_expr(e->unary.of, of_type)) return false;
+	    if (!type_of_expr(e->unary.of)) return false;
 		switch (e->unary.op) {
 		case UNARY_MINUS:
 			if (of_type->kind != TYPE_BUILTIN || !type_builtin_is_numerical(of_type->builtin)) {
@@ -326,8 +338,8 @@ static bool type_of_expr(Expression *e, Type *t) {
 	case EXPR_BINARY_OP: {
 		Type *lhs_type = &e->binary.lhs->type;
 		Type *rhs_type = &e->binary.rhs->type;
-		if (!type_of_expr(e->binary.lhs, lhs_type)
-			|| !type_of_expr(e->binary.rhs, rhs_type))
+		if (!type_of_expr(e->binary.lhs)
+			|| !type_of_expr(e->binary.rhs))
 			return false;
 		switch (e->binary.op) {
 		case BINARY_SET:
@@ -416,6 +428,7 @@ static bool type_of_expr(Expression *e, Type *t) {
 		}
 	} break;
 	}
+	e->flags |= EXPR_FLAG_FOUND_TYPE;
 	return true;
 }
 
@@ -434,8 +447,7 @@ static bool types_block(Block *b) {
 
 /* does descend into blocks, unlike type_of_expr. */
 static bool types_expr(Expression *e) {
-	Type *t = &e->type;
-	if (!type_of_expr(e, t)) return false;
+	if (!type_of_expr(e)) return false;
 	switch (e->kind) {
 	case EXPR_FN: {
 		assert(e->type.kind == TYPE_FN);

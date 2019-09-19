@@ -85,9 +85,12 @@ typedef struct {
 	unsigned long out_var; /* which out variable is used for this call (used by cgen) */
 } CallExpr;
 
+#define EXPR_FLAG_FOUND_TYPE 0x01
+
 typedef struct Expression {
 	Location where;
 	ExprKind kind;
+	uint16_t flags;
 	Type type;
 	union {
 		Floating floatl;
@@ -609,6 +612,7 @@ static bool parse_args(Parser *p, Array *args) {
 
 static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	Tokenizer *t = p->tokr;
+	e->flags = 0;
 	if (end == NULL) return false;
 	e->where = t->token->where;
 	if (end <= t->token) {
