@@ -41,7 +41,9 @@ static bool eval_expr_as_int(Expression *e, Integer *i) {
 			
 		switch (e->binary.op) {
 		case BINARY_PLUS:
-		case BINARY_MINUS: {
+		case BINARY_MINUS:
+		case BINARY_MUL:
+		case BINARY_DIV: {
 			Integer lhs, rhs;
 			if (!eval_expr_as_int(e->binary.lhs, &lhs)) return false;
 			if (!eval_expr_as_int(e->binary.rhs, &rhs)) return false;
@@ -51,6 +53,12 @@ static bool eval_expr_as_int(Expression *e, Integer *i) {
 				return true;
 			case BINARY_MINUS:
 				*i = lhs - rhs;
+				return true;
+			case BINARY_MUL:
+				*i = lhs * rhs;
+				return true;
+			case BINARY_DIV:
+				*i = lhs / rhs;
 				return true;
 			default: assert(0); return false;
 			}

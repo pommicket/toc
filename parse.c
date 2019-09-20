@@ -46,6 +46,8 @@ typedef struct Type {
 } Type;
 
 typedef struct Block {
+	Location start;
+	Location end;
 	Array stmts;
     struct Expression *ret_expr; /* the return expression of this block, e.g. {foo(); 3} => 3  NULL for no expression. */
 } Block;
@@ -70,6 +72,8 @@ typedef enum {
 			  BINARY_SET, /* e.g. x = y */
 			  BINARY_PLUS,
 			  BINARY_MINUS,
+			  BINARY_MUL,
+			  BINARY_DIV,
 			  BINARY_COMMA,
 			  BINARY_AT_INDEX /* e.g. x[i] */
 } BinaryOp;
@@ -172,6 +176,8 @@ static const char *binary_op_to_str(BinaryOp b) {
 	switch (b) {
 	case BINARY_PLUS: return "+";
 	case BINARY_MINUS: return "-";
+	case BINARY_MUL: return "*";
+	case BINARY_DIV: return "/";
 	case BINARY_SET: return "=";
 	case BINARY_COMMA: return ",";
 	case BINARY_AT_INDEX: return "[]";
@@ -320,16 +326,13 @@ static Expression *parser_new_expr(Parser *p) {
 #define NOT_AN_OP -1
 static int op_precedence(Keyword op) {
 	switch (op) {
-	case KW_EQ:
-		return 0;
-	case KW_COMMA:
-		return 5;
-	case KW_PLUS:
-		return 10;
-	case KW_MINUS:
-		return 20;
-	default:
-		return NOT_AN_OP;
+	case KW_EQ: return 0;
+	case KW_COMMA: return 5;
+	case KW_PLUS: return 10;
+	case KW_MINUS: return 20;
+	case KW_ASTERISK: return 30;
+	case KW_SLASH: return 40;
+	default: return NOT_AN_OP;
 	}
 }
 
@@ -510,6 +513,7 @@ static bool parse_block(Parser *p, Block *b) {
 		tokr_err(t, "Expected '{' to open block.");
 		return false;
 	}
+	b->start = t->token->where;
 	t->token++;	/* move past { */
 	arr_create(&b->stmts, sizeof(Statement));
 	bool ret = true;
@@ -551,6 +555,7 @@ static bool parse_block(Parser *p, Block *b) {
 	} else {
 		b->ret_expr = NULL;
 	}
+	b->end = t->token->where;
 	t->token++;	/* move past } */
 	p->block = prev_block;
 	return ret;
@@ -911,6 +916,13 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	case KW_COMMA:
 		op = BINARY_COMMA;
 		break;
+	case KW_ASTERISK:
+		op = BINARY_MUL;
+		break;
+	case KW_SLASH:
+		op = BINARY_DIV;
+		break;
+		
 	default: assert(0); return false;
 	}
 	e->binary.op = op;
@@ -953,7 +965,7 @@ static bool parse_single_type_in_decl(Parser *p, Declaration *d, DeclEndType end
 	while (1) {
 		Identifier *ident = arr_add(&d->idents);
 		if (t->token->kind != TOKEN_IDENT) {
-			tokr_err(t, "Cannot declare non-identifier.");
+			tokr_err(t, "Cannot declare non-identifier (that's a %s).", token_kind_to_str(t->token->kind)); /* TODO(eventually): an */
 			return false;
 		}
 		*ident = t->token->ident;
@@ -1238,23 +1250,7 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprint_ident(out, e->ident);
 		break;
 	case EXPR_BINARY_OP:
-		switch (e->binary.op) {
-		case BINARY_PLUS:
-			fprintf(out, "add");
-			break;
-		case BINARY_MINUS:
-			fprintf(out, "subtract");
-			break;
-		case BINARY_SET:
-			fprintf(out, "set");
-			break;
-		case BINARY_AT_INDEX:
-			fprintf(out, "at");
-			break;
-		case BINARY_COMMA:
-			fprintf(out, "tuple");
-			break;
-		}
+		fprintf(out, "%s", binary_op_to_str(e->binary.op));
 		fprintf(out, "(");
 		fprint_expr(out, e->binary.lhs);
 		fprintf(out, ",");

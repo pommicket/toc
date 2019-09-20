@@ -236,14 +236,16 @@ static bool type_of_expr(Expression *e) {
 		t->kind = TYPE_FN;
 		arr_create(&t->fn.types, sizeof(Type));
 		Type *ret_type = arr_add(&t->fn.types);
-		type_resolve(&f->ret_type);
+		if (!type_resolve(&f->ret_type))
+			return false;
 		*ret_type = f->ret_type;
 		Declaration *params = &f->params;
 		Type *type = &params->type;
 		Type *param_types = type->kind == TYPE_TUPLE ? type->tuple.data : type;
 	    for (size_t i = 0; i < params->idents.len; i++) {
 			Type *param_type = arr_add(&t->fn.types);
-			type_resolve(&param_types[i]);
+			if (!type_resolve(&param_types[i]))
+				return false;
 			*param_type = param_types[i];
 		}
 	} break;
@@ -346,7 +348,9 @@ static bool type_of_expr(Expression *e) {
 			if (!expr_must_lval(e->binary.lhs)) return false;
 			/* fallthrough */
 		case BINARY_PLUS:
-		case BINARY_MINUS: {
+		case BINARY_MINUS:
+		case BINARY_MUL:
+		case BINARY_DIV: {
 			bool match = true;
 			if (e->binary.op != BINARY_SET) {
 				/* numerical binary ops */
@@ -471,8 +475,9 @@ static bool types_expr(Expression *e) {
 		} else if (ret_type->kind != TYPE_VOID) {
 			/* TODO: this should really be at the closing brace, and not the function declaration */
 			char *expected = type_to_str(ret_type);
-			err_print(e->where, "No return value in function which returns %s.", expected);
+			err_print(f->body.end, "No return value in function which returns %s.", expected);
 			free(expected);
+			info_print(e->where, "Function was declared here:");
 			return false;
 		}
 	} break;

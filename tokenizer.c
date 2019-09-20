@@ -28,9 +28,11 @@ typedef enum {
 			  KW_EQEQ,
 			  KW_LT,
 			  KW_LE,
-			  KW_MINUS,
 			  KW_PLUS,
-			  KW_LAST_SYMBOL = KW_PLUS, /* last one entirely consisting of symbols */
+			  KW_MINUS,
+			  KW_ASTERISK,
+			  KW_SLASH,
+			  KW_LAST_SYMBOL = KW_SLASH, /* last one entirely consisting of symbols */
 			  KW_FN,
 			  KW_INT,
 			  KW_I8,
@@ -47,8 +49,8 @@ typedef enum {
 } Keyword;
 
 static const char *keywords[KW_COUNT] =
-	{";", "=", ":", "@", ",", "(", ")", "{", "}", "[", "]", "==", "<", "<=", "-", "+", "fn",
-	 "int", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"};
+	{";", "=", ":", "@", ",", "(", ")", "{", "}", "[", "]", "==", "<", "<=", "+", "-", "*",
+	 "/", "fn", "int", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"};
 
 static const char *directives[DIRECT_COUNT] =
 	{"C"};
@@ -136,6 +138,22 @@ typedef struct {
 
 static inline bool token_is_kw(Token *t, Keyword kw) {
 	return t->kind == TOKEN_KW && t->kw == kw;
+}
+
+
+
+static const char *token_kind_to_str(TokenKind t) {
+	switch (t) {
+	case TOKEN_KW: return "keyword";
+	case TOKEN_IDENT: return "identifier";
+	case TOKEN_DIRECT: return "directive";
+	case TOKEN_NUM_LITERAL: return "numerical literal";
+	case TOKEN_CHAR_LITERAL: return "character literal";
+	case TOKEN_STR_LITERAL: return "string literal";
+	case TOKEN_EOF: return "end of file";
+	}
+	assert(0);
+	return "";
 }
 
 static void fprint_token(FILE *out, Token *t) {
@@ -459,9 +477,9 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 
 		if (*t->s == '\'') {
 			/* it's a character literal! */
-			tokr_nextchar(t);
 			Token *token = tokr_add(t);
 			tokr_put_location(t, token);
+			tokr_nextchar(t);
 			char c;
 			if (*t->s == '\\') {
 				/* escape sequence */

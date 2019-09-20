@@ -1,8 +1,10 @@
-/* TODO: multi-dimensional arrays are flattened in types.c */
-/* TODO: remove all cgen errors */
-/* TODO: don't eval consts in C */
-/* TODO: Functions returning fixed-length arrays */
-/* TODO: improve error for declaring a keyword, e.g. i8: int = 8123; */
+/* 
+TODO:
+blocks anywhere
+pointers
+don't allow nested functions to capture outer variables (constants are allowed though)
+re-do cgen
+ */
 #include "toc.c"
 
 int main(int argc, char **argv) {
