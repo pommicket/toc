@@ -110,6 +110,9 @@ static bool eval_expr_as_int(Expression *e, Integer *i) {
 	case EXPR_CALL:
 		err_print(e->where, "Compile time function calling not supported yet."); /* TODO */
 		break;
+	case EXPR_BLOCK:
+		err_print(e->where, "Block eval not supported yet."); /* TODO */
+		break;
 	case EXPR_DIRECT:
 		switch (e->direct.which) {
 		case DIRECT_C:

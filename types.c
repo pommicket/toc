@@ -1,6 +1,7 @@
 static bool type_of_expr(Expression *e);
 static bool types_stmt(Statement *s);
 static bool types_expr(Expression *e);
+static bool types_block(Block *b);
 
 static bool add_ident_decls(Block *b, Declaration *d) {
 	bool ret = true;
@@ -224,7 +225,7 @@ static bool type_resolve(Type *t) {
 	return true;
 }
 
-/* NOTE: this does descend into un/binary ops, calls, etc. but NOT into any blocks  */
+/* NOTE: this does descend into un/binary ops, calls, etc. but NOT into any functions  */
 static bool type_of_expr(Expression *e) {
 	if (e->flags & EXPR_FLAG_FOUND_TYPE) return true;
 	Type *t = &e->type;
@@ -306,6 +307,12 @@ static bool type_of_expr(Expression *e) {
 		*t = *ret_type;
 		break;
 	}
+	case EXPR_BLOCK: {
+		Block *b = &e->block;
+		if (!types_block(b))
+			return false;
+		*t = b->ret_expr->type;
+	} break;
 	case EXPR_DIRECT:
 		t->kind = TYPE_UNKNOWN;
 	    arr_foreach(&e->direct.args, Expression, arg) {

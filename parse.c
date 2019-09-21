@@ -61,6 +61,7 @@ typedef enum {
 			  EXPR_UNARY_OP,
 			  EXPR_FN,
 			  EXPR_CALL,
+			  EXPR_BLOCK,
 			  EXPR_DIRECT
 } ExprKind;
 
@@ -113,6 +114,7 @@ typedef struct Expression {
 	    DirectExpr direct;
 		Identifier ident;
 		struct FnExpr *fn;
+		Block block;
 	};
 } Expression;
 
@@ -393,8 +395,10 @@ static Token *expr_find_end(Parser *p, unsigned flags)  {
 			} else if (square_level > 0) {
 				tokr_err(t, "Opening square bracket [ was never closed.");
 			} else {
-				tokr_err(t, "Could not find end of expression.");
+				tokr_err(t, "Could not find end of expression (did you forget a semicolon?).");
+				/* FEATURE: improve err message */
 			}
+			t->token = token; /* don't try to continue */
 			return NULL;
 		}
 		token++;
@@ -476,7 +480,7 @@ static bool parse_type(Parser *p, Type *type) {
 			t->token++;	/* move past ( */
 			while (1) {
 				Type *child = arr_add(&type->tuple);
-				parse_type(p, child);
+				if (!parse_type(p, child)) return false;
 				if (token_is_kw(t->token, KW_RPAREN)) { /* we're done with the tuple */
 					t->token++;	/* move past ) */
 					break;
@@ -859,6 +863,17 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				return true;
 			}
 		}
+
+		if (token_is_kw(t->token, KW_LBRACE)) {
+			/* it's a block */
+			e->kind = EXPR_BLOCK;
+			if (!parse_block(p, &e->block)) return false;
+			if (t->token != end) {
+				tokr_err(t, "Expression continues after end of block."); /* TODO: improve this err message */
+				return false;
+			}
+			return true;
+		}
 		tokr_err(t, "Not implemented yet.");
 		t->token = end + 1;
 		return false;
@@ -1040,14 +1055,21 @@ static bool parse_single_type_in_decl(Parser *p, Declaration *d, DeclEndType end
 	/* OPTIM: switch t->token->kw ? */
     if (token_is_kw(t->token, KW_EQ)) {
 		t->token++;
-		if (!parse_expr(p, &d->expr, expr_find_end(p, 0)))
+		Token *end = expr_find_end(p, 0);
+		if (!token_is_kw(end, KW_SEMICOLON)) {
+			tokr_err(t, "Expected ';' at end of declaration.");
 			return false;
+		}
+		if (!parse_expr(p, &d->expr, end)) {
+			t->token = end + 1;	/* move past ; */
+			return false;
+		}
 		d->flags |= DECL_FLAG_HAS_EXPR;
 		if (ends_decl(t->token, ends_with)) {
 			t->token++;
 			return true;
 		}
-		tokr_err(t, "Expected '%c' at end of expression.",
+		tokr_err(t, "Expected '%c' at end of declaration.",
 				 ends_with == DECL_END_SEMICOLON ? ';' : ')');
 		return false;
 		
@@ -1087,30 +1109,19 @@ static bool parse_stmt(Parser *p, Statement *s) {
 		|| token_is_kw(t->token + 1, KW_AT)) {
 		s->kind = STMT_DECL;
 		if (!parse_decl(p, &s->decl, DECL_END_SEMICOLON)) {
-			/* move to next statement */
-			/* TODO: This might cause unhelpful errors if the first semicolon is inside a block, etc. */
-			while (!token_is_kw(t->token, KW_SEMICOLON)) {
-				if (t->token->kind == TOKEN_EOF) {
-					/* don't bother continuing */
-					tokr_err(t, "No semicolon found at end of declaration.");
-					return false;
-				}
-				t->token++;
-			}
-			t->token++;	/* move past ; */
 			return false;
 		}
 		return true;
 	} else {
 		s->kind = STMT_EXPR;
 		Token *end = expr_find_end(p, 0);
-		if (token_is_kw(end, KW_SEMICOLON)) {
-			s->flags |= STMT_FLAG_VOIDED_EXPR;
-		}
 		if (!end) {
 			tokr_err(t, "No semicolon found at end of statement.");
 			while (t->token->kind != TOKEN_EOF) t->token++; /* move to end of file */
 			return false;
+		}
+		if (token_is_kw(end, KW_SEMICOLON)) {
+			s->flags |= STMT_FLAG_VOIDED_EXPR;
 		}
 	    bool success = parse_expr(p, &s->expr, end);
 		
@@ -1147,6 +1158,10 @@ static bool parse_file(Parser *p, ParsedFile *f) {
 		Statement *stmt = arr_add(&f->stmts);
 		if (!parse_stmt(p, stmt))
 			ret = false;
+		if (token_is_kw(t->token, KW_RBRACE)) {
+			tokr_err(t, "} without a matching {.");
+			return false;
+		}
 	}
 	return ret;
 }
@@ -1260,7 +1275,7 @@ static void fprint_expr(FILE *out, Expression *e) {
 	case EXPR_UNARY_OP:
 		switch (e->unary.op) {
 		case UNARY_MINUS:
-			fprintf(out, "negate");
+			fprintf(out, "-");
 			break;
 		}
 		fprintf(out, "(");
@@ -1273,6 +1288,9 @@ static void fprint_expr(FILE *out, Expression *e) {
 	case EXPR_CALL:
 		fprint_expr(out, e->call.fn);
 		fprint_args(out, &e->call.args);
+		break;
+	case EXPR_BLOCK:
+		fprint_block(out, &e->block);
 		break;
 	case EXPR_DIRECT:
 		fprintf(out, "#");
