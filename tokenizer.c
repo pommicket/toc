@@ -31,6 +31,7 @@ typedef enum {
 			  KW_PLUS,
 			  KW_MINUS,
 			  KW_ASTERISK,
+			  KW_AMPERSAND,
 			  KW_SLASH,
 			  KW_LAST_SYMBOL = KW_SLASH, /* last one entirely consisting of symbols */
 			  KW_FN,
@@ -50,7 +51,7 @@ typedef enum {
 
 static const char *keywords[KW_COUNT] =
 	{";", "=", ":", "@", ",", "(", ")", "{", "}", "[", "]", "==", "<", "<=", "+", "-", "*",
-	 "/", "fn", "int", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"};
+	 "&", "/", "fn", "int", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"};
 
 static const char *directives[DIRECT_COUNT] =
 	{"C"};

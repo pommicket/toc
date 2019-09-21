@@ -35,6 +35,9 @@ static bool eval_expr_as_int(Expression *e, Integer *i) {
 			*i = -of;
 			return true;
 		}
+		case UNARY_ADDRESS:
+			err_print(e->where, "Use of pointer as integer constant.");
+			return false;
 		}
 		break;
 	case EXPR_BINARY_OP: {

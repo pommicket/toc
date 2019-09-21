@@ -119,7 +119,7 @@ static bool type_must_eq(Location where, Type *expected, Type *got) {
 	return true;
 }
 
-/* Prints an error and returns false if the given expression is not an l-value */
+/* sometimes prints an error and returns false if the given expression is not an l-value */
 static bool expr_must_lval(Expression *e) {
 	switch (e->kind) {
 	case EXPR_IDENT: {
@@ -144,7 +144,6 @@ static bool expr_must_lval(Expression *e) {
 	default:
 		break;
 	}
-	err_print(e->where, "Cannot assign to non-lvalue."); 
 	return false;
 }
 
@@ -333,7 +332,8 @@ static bool type_of_expr(Expression *e) {
 		}
 		break;
 	case EXPR_UNARY_OP: {
-		Type *of_type = &e->unary.of->type;
+		Expression *of = e->unary.of;
+		Type *of_type = &of->type;
 	    if (!type_of_expr(e->unary.of)) return false;
 		switch (e->unary.op) {
 		case UNARY_MINUS:
@@ -343,6 +343,15 @@ static bool type_of_expr(Expression *e) {
 				return false;
 			}
 			*t = *of_type;
+			break;
+		case UNARY_ADDRESS:
+			if (!expr_must_lval(of)) {
+				err_print(e->where, "Cannot take address of non-lvalue."); /* FEATURE: better err */
+				return false;
+			}
+			t->kind = TYPE_PTR;
+			t->ptr.of = malloc(sizeof *t->ptr.of); /* OPTIM */
+			*t->ptr.of = *of_type;
 			break;
 		}
 	} break;
@@ -354,7 +363,10 @@ static bool type_of_expr(Expression *e) {
 			return false;
 		switch (e->binary.op) {
 		case BINARY_SET:
-			if (!expr_must_lval(e->binary.lhs)) return false;
+			if (!expr_must_lval(e->binary.lhs)) {
+				err_print(e->where, "You can only assign to an lvalue."); /* FEATURE: better err */
+				return false;
+			}
 			/* fallthrough */
 		case BINARY_PLUS:
 		case BINARY_MINUS:

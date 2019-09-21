@@ -1,4 +1,6 @@
 main @= fn() {
-	 x, y, z : *int;
-	 foo : *f32;
+	 x : int;
+	 y : *i64 = &x;
+	 N @= 12.3;
+	 z := &N;
 };

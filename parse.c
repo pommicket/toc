@@ -70,7 +70,8 @@ typedef enum {
 } ExprKind;
 
 typedef enum {
-			  UNARY_MINUS
+			  UNARY_MINUS,
+			  UNARY_ADDRESS	/* &x */
 } UnaryOp;
 
 typedef enum {
@@ -177,6 +178,15 @@ typedef enum {
 
 static bool parse_expr(Parser *p, Expression *e, Token *end);
 static bool parse_decl(Parser *p, Declaration *d, DeclEndType ends_with);
+
+static const char *unary_op_to_str(UnaryOp u) {
+	switch (u) {
+	case UNARY_MINUS: return "-";
+	case UNARY_ADDRESS: return "&";
+	}
+	assert(0);
+	return "";
+}
 
 static const char *binary_op_to_str(BinaryOp b) {
 	switch (b) {
@@ -341,6 +351,7 @@ static int op_precedence(Keyword op) {
 	case KW_COMMA: return 5;
 	case KW_PLUS: return 10;
 	case KW_MINUS: return 20;
+	case KW_AMPERSAND: return 25;
 	case KW_ASTERISK: return 30;
 	case KW_SLASH: return 40;
 	default: return NOT_AN_OP;
@@ -895,15 +906,15 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		return false;
 	}
 	
-	/* This is a unary op not a binary one. */
+	/* Check if his is a unary op not a binary one (e.g. +-3 => +(-3), not (+)-(3)). */
 	while (lowest_precedence_op != t->token
 		   && lowest_precedence_op[-1].kind == TOKEN_KW
 		   && op_precedence(lowest_precedence_op[-1].kw) != NOT_AN_OP) {
 		lowest_precedence_op--;
 	}
 
-	/* Unary */
 	if (lowest_precedence_op == t->token) {
+		/* Unary */
 		UnaryOp op;
 		bool is_unary;
 		switch (lowest_precedence_op->kw) {
@@ -915,6 +926,10 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		case KW_MINUS:
 			is_unary = true;
 			op = UNARY_MINUS;
+			break;
+		case KW_AMPERSAND:
+			is_unary=  true;
+			op = UNARY_ADDRESS;
 			break;
 		default:
 			is_unary = false;
@@ -1249,11 +1264,7 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprintf(out, ")");
 		break;
 	case EXPR_UNARY_OP:
-		switch (e->unary.op) {
-		case UNARY_MINUS:
-			fprintf(out, "-");
-			break;
-		}
+		fprintf(out, "%s", unary_op_to_str(e->unary.op));
 		fprintf(out, "(");
 		fprint_expr(out, e->unary.of);
 		fprintf(out, ")");
