@@ -44,6 +44,7 @@ typedef enum {
 			  KW_U16,
 			  KW_U32,
 			  KW_U64,
+			  KW_FLOAT,
 			  KW_F32,
 			  KW_F64,
 			  KW_COUNT
@@ -51,7 +52,8 @@ typedef enum {
 
 static const char *keywords[KW_COUNT] =
 	{";", "=", ":", "@", ",", "(", ")", "{", "}", "[", "]", "==", "<", "<=", "+", "-", "*",
-	 "&", "/", "fn", "int", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"};
+	 "&", "/", "fn", "int", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "float",
+	 "f32", "f64"};
 
 static const char *directives[DIRECT_COUNT] =
 	{"C"};

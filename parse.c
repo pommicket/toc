@@ -127,13 +127,14 @@ typedef struct Expression {
 #define DECL_FLAG_CONST 0x02
 #define DECL_FLAG_HAS_EXPR 0x04
 #define DECL_FLAG_FOUND_TYPE 0x08
+#define DECL_FLAG_ERRORED_ABOUT_SELF_REFERENCE 0x10 /* has there been an error about this decl referencing itself? */
 
 /* OPTIM: Instead of using dynamic arrays, do two passes. */
 typedef struct Declaration {
 	Location where;
 	Array idents;
 	Type type;
-	unsigned short flags;
+	uint16_t flags;
 	Expression expr;
 	struct Value *val; /* only for constant decls. set to NULL here, and to actual value by types.c. */
 } Declaration;
@@ -245,6 +246,7 @@ static BuiltinType kw_to_builtin_type(Keyword kw) {
 	case KW_U16: return BUILTIN_U16;
 	case KW_U32: return BUILTIN_U32;
 	case KW_U64: return BUILTIN_U64;
+	case KW_FLOAT: return BUILTIN_F32;
 	case KW_F32: return BUILTIN_F32;
 	case KW_F64: return BUILTIN_F64;
 	default: return BUILTIN_TYPE_COUNT;
