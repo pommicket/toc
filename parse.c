@@ -649,6 +649,8 @@ static bool parse_args(Parser *p, Array *args) {
 	return true;
 }
 
+static void fprint_expr(FILE *out, Expression *e);
+
 static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	Tokenizer *t = p->tokr;
 	e->flags = 0;
@@ -813,14 +815,15 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			if (token->kind == TOKEN_KW) {
 				switch (token->kw) {
 				case KW_LPAREN:
-					if (square_level == 0 && paren_level == 0 && token != t->tokens.data
+					if (square_level == 0 && paren_level == 0 && brace_level == 0
+						&& token != t->tokens.data
 						&& token[-1].kind != TOKEN_DIRECT /* don't include directives */)
 						opening_bracket = token; /* maybe this left parenthesis opens the function call */
 					paren_level++;
 					break;
 				case KW_LSQUARE:
-					if (square_level == 0 && paren_level == 0)
-						opening_bracket = token; /* ^^ (array access) */
+					if (square_level == 0 && paren_level == 0 && brace_level == 0)
+						opening_bracket = token; /* (array access) */
 					square_level++;
 					break;
 				case KW_RPAREN:
@@ -828,6 +831,12 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					break;
 				case KW_RSQUARE:
 					square_level--;
+					break;
+				case KW_LBRACE:
+					brace_level++;
+					break;
+				case KW_RBRACE:
+					brace_level--;
 					break;
 				default: break;
 				}

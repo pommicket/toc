@@ -167,15 +167,18 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t, bool
 	typedef Declaration *DeclarationPtr;
 	arr_foreach(&tr->in_decls, DeclarationPtr, in_decl) {
 		if (d == *in_decl) {
-			/* if we've complained about it before when we were figuring out the type, don't complain again */
-			if (!(d->flags & DECL_FLAG_ERRORED_ABOUT_SELF_REFERENCE)) {
-				char *s = ident_to_str(i);
-				err_print(where, "Use of identifier %s within its own declaration.", s);
-				free(s);
-				info_print(d->where, "Declaration was here.");
-				d->flags |= DECL_FLAG_ERRORED_ABOUT_SELF_REFERENCE;
+			assert(d->flags & DECL_FLAG_HAS_EXPR); /* we can only be in decls with an expr */
+			if (d->expr.kind != EXPR_FN) { /* it's okay if a function references itself */
+				/* if we've complained about it before when we were figuring out the type, don't complain again */
+				if (!(d->flags & DECL_FLAG_ERRORED_ABOUT_SELF_REFERENCE)) {
+					char *s = ident_to_str(i);
+					err_print(where, "Use of identifier %s within its own declaration.", s);
+					free(s);
+					info_print(d->where, "Declaration was here.");
+					d->flags |= DECL_FLAG_ERRORED_ABOUT_SELF_REFERENCE;
+				}
+				return false;
 			}
-			return false;
 		}
 	}
 	if (!allow_use_before_decl) {

@@ -21,13 +21,6 @@ static inline const char *ordinals(size_t x) {
 	}
 }
 
-typedef uint32_t LineNo;
-
-typedef struct {
-	LineNo line;
-	char *code;
-} Location;
-
 /* file name of file being processed */
 /* TODO: remove this */
 static const char *err_filename;

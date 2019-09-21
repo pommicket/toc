@@ -1,8 +1,12 @@
 main @= fn() {
-	 y := {
-	   x := 5;
-	   z := y;
-	   z
-	 };
+/*
+	 f := main;
+	 f();
+	 main();
+*/
+	N @= {
+	   foo : [N]int;
+	   foo[0]
+	};
 };
 
