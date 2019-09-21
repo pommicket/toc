@@ -101,6 +101,8 @@ static bool type_eq(Type *a, Type *b) {
 	case TYPE_ARR:
 		if (a->arr.n != b->arr.n) return false;
 		return type_eq(a->arr.of, b->arr.of);
+	case TYPE_PTR:
+		return type_eq(a->ptr.of, b->ptr.of);
 	}
 	assert(0);
 	return false;

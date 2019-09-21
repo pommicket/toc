@@ -5,7 +5,8 @@ typedef enum {
 			  TYPE_BUILTIN,
 			  TYPE_FN,
 			  TYPE_TUPLE,
-			  TYPE_ARR /* e.g. [5]int */
+			  TYPE_ARR,
+			  TYPE_PTR
 } TypeKind;
 
 typedef enum {
@@ -42,6 +43,9 @@ typedef struct Type {
 				struct Expression *n_expr;
 			};
 		} arr;
+		struct {
+			struct Type *of;
+		} ptr;
 	};
 } Type;
 
@@ -304,6 +308,11 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 		written += str_copy(buffer + written, bufsize - written, ")");
 		return written;
 	}
+	case TYPE_PTR: {
+		size_t written = str_copy(buffer, bufsize, "*");
+		written += type_to_str_(t->ptr.of, buffer + written, bufsize - written);
+		return written;
+	}
 	}
 
 	assert(0);
@@ -493,6 +502,13 @@ static bool parse_type(Parser *p, Type *type) {
 					return false;
 				}
 			}
+			break;
+		case KW_ASTERISK:
+			/* pointer */
+			type->kind = TYPE_PTR;
+			type->ptr.of = err_malloc(sizeof *type->ptr.of); /* OPTIM */
+			t->token++;	/* move past * */
+			if (!parse_type(p, type->ptr.of)) return false;
 			break;
 		default:
 			tokr_err(t, "Unrecognized type.");
@@ -1174,47 +1190,7 @@ static void fprint_decl(FILE *out, Declaration *d);
 
 static void fprint_type(FILE *out, Type *t) {
 	PARSE_PRINT_LOCATION(t->where);
-	switch (t->kind) {
-	case TYPE_BUILTIN:
-		fprintf(out, "%s", keywords[builtin_type_to_kw(t->builtin)]);
-		break;
-	case TYPE_VOID:
-		fprintf(out, "void");
-		break;
-	case TYPE_UNKNOWN:
-		fprintf(out, "???");
-		break;
-	case TYPE_FN: {
-		Type *types = t->fn.types.data;
-		fprintf(out, "fn (");
-		for (size_t i = 1; i < t->fn.types.len; i++){ 
-			fprint_type(out, &types[i]);
-			fprintf(out, ",");
-		}
-		fprintf(out, ") ");
-		fprint_type(out, &types[0]);
-	} break;
-	case TYPE_TUPLE: {
-		fprintf(out, "(");
-		arr_foreach(&t->tuple, Type, child) {
-			if (child != t->tuple.data) {
-				fprintf(out, ", ");
-			}
-			fprint_type(out, child);
-		}
-		fprintf(out, ")");
-	} break;
-	case TYPE_ARR:
-		fprintf(out, "[");
-		if (t->flags & TYPE_FLAG_RESOLVED) {
-			fprintf(out, INTEGER_FMT, t->arr.n);
-		} else {
-			fprint_expr(out, t->arr.n_expr);
-		}
-		fprintf(out, "]");
-		fprint_type(out, t->arr.of);
-		break;
-	}
+	fprintf(out, "%s", type_to_str(t));
 }
 
 

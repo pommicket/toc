@@ -1,6 +1,5 @@
 /* 
 TODO:
-blocks anywhere
 pointers
 don't allow nested functions to capture outer variables (constants are allowed though)
 re-do cgen

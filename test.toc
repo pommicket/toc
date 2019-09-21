@@ -1,3 +1,4 @@
 main @= fn() {
-	 x := 7;
+	 x, y, z : *int;
+	 foo : *f32;
 };

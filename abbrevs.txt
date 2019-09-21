@@ -3,8 +3,11 @@ ident - identifier
 direct - directive
 decl - declaration
 stmt - statement
+expr - expression
+op - operator
 tokr - tokenizer
 str - string
 num - number
 fn - function
+ptr - pointer
 eof - end of file
