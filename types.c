@@ -202,8 +202,14 @@ static bool type_resolve(Type *t) {
 	case TYPE_ARR: {
 		/* it's an array */
 		if (!type_resolve(t->arr.of)) return false; /* resolve inner type */
-		Integer size;
-		if (!eval_expr_as_int(t->arr.n_expr, &size)) return false; /* resolve N */
+		Value val;
+		Expression *n_expr = t->arr.n_expr;
+		if (!type_of_expr(n_expr)) return false;
+		if (n_expr->type.kind != TYPE_BUILTIN || !type_builtin_is_integer(n_expr->type.builtin))
+			return false;
+		
+		if (!eval_expr(n_expr, &val)) return false; /* resolve N */
+		Integer size = val.intv;
 		if (size < 0)
 			err_print(t->arr.n_expr->where, "Negative array length (" INTEGER_FMT ")", size);
 		t->arr.n = (UInteger)size;
@@ -353,6 +359,8 @@ static bool type_of_expr(Expression *e) {
 			t->ptr.of = malloc(sizeof *t->ptr.of); /* OPTIM */
 			*t->ptr.of = *of_type;
 			break;
+		case UNARY_DEREF:
+			*t = *of_type->ptr.of;
 		}
 	} break;
 	case EXPR_BINARY_OP: {
@@ -530,6 +538,13 @@ static bool types_decl(Declaration *d) {
 				return false;
 			}
 			d->type = d->expr.type;
+		}
+		if (d->flags & DECL_FLAG_CONST) {
+			if (!d->val) {
+				d->val = err_malloc(sizeof *d->val); /* OPTIM */
+				if (!eval_expr(&d->expr, d->val))
+					return false;
+			}
 		}
 	}
 	d->flags |= DECL_FLAG_FOUND_TYPE;

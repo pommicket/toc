@@ -71,7 +71,8 @@ typedef enum {
 
 typedef enum {
 			  UNARY_MINUS,
-			  UNARY_ADDRESS	/* &x */
+			  UNARY_ADDRESS, /* &x */
+			  UNARY_DEREF
 } UnaryOp;
 
 typedef enum {
@@ -92,7 +93,6 @@ typedef struct {
 typedef struct {
 	struct Expression *fn;
 	Array args;	/* of Expression */
-	unsigned long out_var; /* which out variable is used for this call (used by cgen) */
 } CallExpr;
 
 #define EXPR_FLAG_FOUND_TYPE 0x01
@@ -135,14 +135,13 @@ typedef struct Declaration {
 	Type type;
 	unsigned short flags;
 	Expression expr;
+	struct Value *val; /* only for constant decls. set to NULL here, and to actual value by types.c. */
 } Declaration;
 
 typedef struct FnExpr {
 	Declaration params;	/* declaration of the parameters to this function */
 	Type ret_type;
 	Block body;
-	Identifier name; /* NULL if the function is anonymous (set to NULL by parse.c, set to actual value by types_cgen.c) */
-	unsigned long id; /* this is used to keep track of local vs global/other local functions (there might be multiple functions called "foo") */
 } FnExpr; /* an expression such as fn(x: int) int {return 2 * x;} */
 
 typedef enum {
@@ -177,12 +176,15 @@ typedef enum {
 } DeclEndType;
 
 static bool parse_expr(Parser *p, Expression *e, Token *end);
-static bool parse_decl(Parser *p, Declaration *d, DeclEndType ends_with);
+
+#define PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR 0x01
+static bool parse_decl(Parser *p, Declaration *d, DeclEndType ends_with, uint16_t flags);
 
 static const char *unary_op_to_str(UnaryOp u) {
 	switch (u) {
 	case UNARY_MINUS: return "-";
 	case UNARY_ADDRESS: return "&";
+	case UNARY_DEREF: return "*";
 	}
 	assert(0);
 	return "";
@@ -596,14 +598,13 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 	Tokenizer *t = p->tokr;
 	/* only called when token is fn */
 	assert(token_is_kw(t->token, KW_FN));
-	f->name = 0;
 	t->token++;
 	if (!token_is_kw(t->token, KW_LPAREN)) {
 		tokr_err(t, "Expected '(' after 'fn'.");
 		return false;
 	}
 	t->token++;
-	parse_decl(p, &f->params, DECL_END_RPAREN);
+	parse_decl(p, &f->params, DECL_END_RPAREN, PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR);
 	
 	if (token_is_kw(t->token, KW_LBRACE)) {
 		/* void function */
@@ -928,8 +929,12 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			op = UNARY_MINUS;
 			break;
 		case KW_AMPERSAND:
-			is_unary=  true;
+			is_unary = true;
 			op = UNARY_ADDRESS;
+			break;
+		case KW_ASTERISK:
+			is_unary = true;
+			op = UNARY_DEREF;
 			break;
 		default:
 			is_unary = false;
@@ -1004,117 +1009,8 @@ static inline bool ends_decl(Token *t, DeclEndType ends_with) {
 		|| (token_is_kw(t, KW_RPAREN) && ends_with == DECL_END_RPAREN);
 }
 
-static bool parse_single_type_in_decl(Parser *p, Declaration *d, DeclEndType ends_with) {
-	Tokenizer *t = p->tokr;
-	/* OPTIM: Maybe don't use a dynamic array or use parser allocator. */
-	size_t n_idents_with_this_type = 1;
-	while (1) {
-		Identifier *ident = arr_add(&d->idents);
-		if (t->token->kind != TOKEN_IDENT) {
-			tokr_err(t, "Cannot declare non-identifier (that's a %s).", token_kind_to_str(t->token->kind)); /* TODO(eventually): an */
-			return false;
-		}
-		*ident = t->token->ident;
-		t->token++;
-		if (token_is_kw(t->token, KW_COMMA)) {
-			t->token++;
-			n_idents_with_this_type++;
-			continue;
-		}
-		if (token_is_kw(t->token, KW_COLON)) {
-			t->token++;
-			break;
-		}
-		if (token_is_kw(t->token, KW_AT)) {
-			d->flags |= DECL_FLAG_CONST;
-			t->token++;
-			break;
-		}
-		tokr_err(t, "Expected ',' to continue listing variables or ':' / '@' to indicate type.");
-		return false;
-	}
-	
-	
-	if (token_is_kw(t->token, KW_SEMICOLON) || token_is_kw(t->token, KW_RPAREN)) {
-		/* e.g. foo :; */
-		tokr_err(t, "Cannot infer type without expression.");
-		return false;
-	}
-
-	bool annotates_type = !token_is_kw(t->token, KW_EQ) && !token_is_kw(t->token, KW_COMMA);
-	if (d->type.kind != TYPE_VOID /* multiple types in one declaration */
-		&& (!!(d->flags & DECL_FLAG_ANNOTATES_TYPE)) != annotates_type) { /* annotation on one decl but not the other */
-		/* e.g. x: int, y := 3, 5;*/
-		tokr_err(t, "You must specify either all types or no types in a single declaration.");
-		return false;
-	}
-	if (annotates_type) {
-		d->flags |= DECL_FLAG_ANNOTATES_TYPE;
-		Type type;
-		if (!parse_type(p, &type)) {
-			return false;
-		}
-		if (n_idents_with_this_type == 1 && d->type.kind == TYPE_VOID) {
-			d->type = type;
-		} else if (d->type.kind == TYPE_TUPLE) {
-			/* add to tuple */
-			for (size_t i = 0; i < n_idents_with_this_type; i++) {
-				*(Type*)arr_add(&d->type.tuple) = type;
-			}
-		} else {
-			/* construct tuple */
-			Array tup_arr;
-			arr_create(&tup_arr, sizeof(Type));
-			if (d->type.kind != TYPE_VOID) {
-				*(Type*)arr_add(&tup_arr) = d->type; /* add current type */
-			}
-			d->type.flags = 0;
-			d->type.kind = TYPE_TUPLE;
-			d->type.tuple = tup_arr;
-			for (size_t i = 0; i < n_idents_with_this_type; i++) {
-				*(Type*)arr_add(&d->type.tuple) = type;
-			}
-		}
-	}
-
-	if (token_is_kw(t->token, KW_COMMA)) {
-		/* next type in declaration */
-		t->token++;	/* move past , */
-		return parse_single_type_in_decl(p, d, ends_with);
-	}
-	
-	/* OPTIM: switch t->token->kw ? */
-    if (token_is_kw(t->token, KW_EQ)) {
-		t->token++;
-		Token *end = expr_find_end(p, 0);
-		if (!token_is_kw(end, KW_SEMICOLON)) {
-			tokr_err(t, "Expected ';' at end of declaration.");
-			return false;
-		}
-		if (!parse_expr(p, &d->expr, end)) {
-			t->token = end + 1;	/* move past ; */
-			return false;
-		}
-		d->flags |= DECL_FLAG_HAS_EXPR;
-		if (ends_decl(t->token, ends_with)) {
-			t->token++;
-			return true;
-		}
-		tokr_err(t, "Expected '%c' at end of declaration.",
-				 ends_with == DECL_END_SEMICOLON ? ';' : ')');
-		return false;
-		
-	} else if (ends_decl(t->token, ends_with)) {
-		t->token++;
-		return true;
-	} else {
-		tokr_err(t, "Expected '%c' or '=' at end of delaration.",
-				 ends_with == DECL_END_SEMICOLON ? ';' : ')');
-		return false;
-	}
-}
-
-static bool parse_decl(Parser *p, Declaration *d, DeclEndType ends_with) {
+static bool parse_decl(Parser *p, Declaration *d, DeclEndType ends_with, uint16_t flags) {
+	d->val = NULL;
 	d->type.kind = TYPE_VOID;
 	d->where = p->tokr->token->where;
 	arr_create(&d->idents, sizeof(Identifier));
@@ -1124,7 +1020,152 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndType ends_with) {
 		t->token++;
 		return true;
 	}
-	return parse_single_type_in_decl(p, d, ends_with); /* recursively calls itself to parse all types */
+	
+	/* OPTIM: Maybe don't use a dynamic array or use parser allocator. */
+	size_t n_idents_with_this_type = 1;
+	bool ret = true;
+	for (size_t type_no = 0; ; type_no++) {
+		/* parse a single type in this decl */
+		while (1) {
+			Identifier *ident = arr_add(&d->idents);
+			if (t->token->kind != TOKEN_IDENT) {
+				tokr_err(t, "Cannot declare non-identifier (that's a %s).", token_kind_to_str(t->token->kind)); /* TODO(eventually): an */
+				ret = false;
+				break;
+			}
+			*ident = t->token->ident;
+			t->token++;
+			if (token_is_kw(t->token, KW_COMMA)) {
+				t->token++;
+				n_idents_with_this_type++;
+				continue;
+			}
+			if (token_is_kw(t->token, KW_COLON)) {
+				if (d->flags & DECL_FLAG_CONST) {
+					tokr_err(t, "Either everything or nothing must be constant in a declaration.");
+				    ret = false;
+					break;
+				}
+				t->token++;
+				break;
+			}
+			if (token_is_kw(t->token, KW_AT)) {
+				if (type_no == 0) {
+					d->flags |= DECL_FLAG_CONST;
+				} else if (!(d->flags & DECL_FLAG_CONST)) {
+					tokr_err(t, "Either everything or nothing must be constant in a declaration.");
+					ret = false;
+					break;
+				}
+				t->token++;
+				break;
+			}
+			tokr_err(t, "Expected ',' to continue listing variables or ':' / '@' to indicate type.");
+			ret = false;
+			break;
+		}
+		if (!ret) break;
+	
+		if (token_is_kw(t->token, KW_SEMICOLON) || token_is_kw(t->token, KW_RPAREN)) {
+			/* e.g. foo :; */
+			tokr_err(t, "Cannot infer type without expression.");
+		    ret = false;
+			break;
+		}
+
+		bool annotates_type = !token_is_kw(t->token, KW_EQ) && !token_is_kw(t->token, KW_COMMA);
+		if (d->type.kind != TYPE_VOID /* multiple types in one declaration */
+			&& (!!(d->flags & DECL_FLAG_ANNOTATES_TYPE)) != annotates_type) { /* annotation on one decl but not the other */
+			/* e.g. x: int, y := 3, 5;*/
+			tokr_err(t, "You must specify either all types or no types in a single declaration.");
+			ret = false;
+			break;
+		}
+		if (annotates_type) {
+			d->flags |= DECL_FLAG_ANNOTATES_TYPE;
+			Type type;
+			if (!parse_type(p, &type)) {
+			    ret = false;
+				break;
+			}
+			if (n_idents_with_this_type == 1 && d->type.kind == TYPE_VOID) {
+				d->type = type;
+			} else if (d->type.kind == TYPE_TUPLE) {
+				/* add to tuple */
+				for (size_t i = 0; i < n_idents_with_this_type; i++) {
+					*(Type*)arr_add(&d->type.tuple) = type;
+				}
+			} else {
+				/* construct tuple */
+				Array tup_arr;
+				arr_create(&tup_arr, sizeof(Type));
+				if (d->type.kind != TYPE_VOID) {
+					*(Type*)arr_add(&tup_arr) = d->type; /* add current type */
+				}
+				d->type.flags = 0;
+				d->type.kind = TYPE_TUPLE;
+				d->type.tuple = tup_arr;
+				for (size_t i = 0; i < n_idents_with_this_type; i++) {
+					*(Type*)arr_add(&d->type.tuple) = type;
+				}
+			}
+		}
+
+		if (token_is_kw(t->token, KW_COMMA)) {
+			/* next type in declaration */
+			t->token++;	/* move past , */
+			continue;
+		}
+	
+		/* OPTIM: switch t->token->kw ? */
+		if (token_is_kw(t->token, KW_EQ)) {
+			t->token++;
+			Token *end = expr_find_end(p, 0);
+			if (!token_is_kw(end, KW_SEMICOLON)) {
+				tokr_err(t, "Expected ';' at end of declaration.");
+				ret = false;
+				break;
+			}
+			d->flags |= DECL_FLAG_HAS_EXPR;
+			if (!parse_expr(p, &d->expr, end)) {
+				t->token = end + 1;	/* move past ; */
+				ret = false;
+				break;
+			}
+			if (ends_decl(t->token, ends_with)) {
+				t->token++;
+				break;
+			}
+			tokr_err(t, "Expected '%c' at end of declaration.",
+					 ends_with == DECL_END_SEMICOLON ? ';' : ')');
+			ret = false;
+		} else if (ends_decl(t->token, ends_with)) {
+			t->token++;
+		} else {
+			tokr_err(t, "Expected '%c' or '=' at end of delaration.",
+					 ends_with == DECL_END_SEMICOLON ? ';' : ')');
+			ret = false;
+		}
+		break;
+	}
+	
+	if ((d->flags & DECL_FLAG_CONST) && !(d->flags & DECL_FLAG_HAS_EXPR) && !(flags & PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR)) {
+		t->token--;
+		/* disallowed constant without an expression, e.g. x @ int; */
+		tokr_err(t, "You must have an expression at the end of this constant declaration.");
+		ret = false;
+	}
+	
+	if (!ret) {
+		/* move past end of decl */
+		while (t->token->kind != TOKEN_EOF && !token_is_kw(t->token, KW_SEMICOLON)) {
+			t->token++;
+		}
+		if (token_is_kw(t->token, KW_SEMICOLON)) {
+			t->token++;	/* move past ; */
+		}
+	}
+	return ret;
 }
 
 static bool parse_stmt(Parser *p, Statement *s) {
@@ -1139,7 +1180,7 @@ static bool parse_stmt(Parser *p, Statement *s) {
 	if (token_is_kw(t->token + 1, KW_COLON) || token_is_kw(t->token + 1, KW_COMMA)
 		|| token_is_kw(t->token + 1, KW_AT)) {
 		s->kind = STMT_DECL;
-		if (!parse_decl(p, &s->decl, DECL_END_SEMICOLON)) {
+		if (!parse_decl(p, &s->decl, DECL_END_SEMICOLON, 0)) {
 			return false;
 		}
 		return true;

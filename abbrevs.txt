@@ -1,13 +1,14 @@
-kw - keyword
-ident - identifier
-direct - directive
 decl - declaration
-stmt - statement
-expr - expression
-op - operator
-tokr - tokenizer
-str - string
-num - number
-fn - function
-ptr - pointer
+deref - dereference
+direct - directive
 eof - end of file
+expr - expression
+fn - function
+ident - identifier
+kw - keyword
+num - number
+op - operator
+ptr - pointer
+stmt - statement
+str - string
+tokr - tokenizer
