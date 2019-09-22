@@ -400,6 +400,7 @@ static Token *expr_find_end(Parser *p, uint16_t flags, bool *is_vbs)  {
 				break;
 			case KW_LBRACE:
 				brace_level++;
+				could_be_vbs = true;
 				break;
 			case KW_RBRACE:
 				brace_level--;
@@ -417,10 +418,11 @@ static Token *expr_find_end(Parser *p, uint16_t flags, bool *is_vbs)  {
 				break;
 			default: break;
 			}
-				
-		}
-		if (!token_is_kw(token, KW_RBRACE) && !token_is_kw(token, KW_SEMICOLON))
+			if (token->kw != KW_RBRACE && token->kw != KW_SEMICOLON && token->kw != KW_LBRACE)
+				could_be_vbs = false;
+		} else {
 			could_be_vbs = false;
+		}
 		if (token->kind == TOKEN_EOF) {
 			if (brace_level > 0) {
 				tokr_err(t, "Opening brace { was never closed."); /* FEATURE: Find out where this is */
@@ -1219,20 +1221,11 @@ static bool parse_stmt(Parser *p, Statement *s) {
 		}
 	    bool success = parse_expr(p, &s->expr, end);
 		
-		/* go past end regardless of whether successful or not */
-		if (end->kind == TOKEN_KW) {
-			switch (end->kw) {
-			case KW_SEMICOLON:
-				t->token = end + 1;
-				break;
-			case KW_RBRACE:
-				t->token = end;	/* the } is past the end of the expr */
-				break;
-			default: assert(0); break;
-			}
-		} else {
-			t->token = end + 1;
-		}
+		/* go past end of expr regardless of whether successful or not */
+		if (token_is_kw(end, KW_SEMICOLON))
+			t->token = end + 1;	/* skip ; */
+		else
+			t->token = end;
 		
 		return success;
 	}
