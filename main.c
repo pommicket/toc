@@ -1,6 +1,6 @@
 /* 
 TODO:
-if, else
+test blockarr
 re-do cgen
  */
 #include "toc.c"
