@@ -1,7 +1,12 @@
+x := 3;
+
 main @= fn() {
-	 f := main;
-	 f();
-	 { main(); }
-	 f();
+	 y := 5;
+	 z @= 10;
+	 foo @= fn() {
+	 	 bar := y;
+		 asdf := z;
+		 gfdij := x;
+	 };
 };
 

@@ -1,5 +1,6 @@
 typedef struct {
 	Array in_decls;	/* array of declarations we are currently inside */
+	Block *block;
 } Typer;
 
 static bool type_of_expr(Typer *tr, Expression *e);
@@ -128,10 +129,7 @@ static bool expr_must_lval(Expression *e) {
 	switch (e->kind) {
 	case EXPR_IDENT: {
 		IdentDecl *id_decl = ident_decl(e->ident);
-		if (!id_decl) {
-			err_print(e->where, "Undeclared identifier.");
-			return false;
-		}
+		assert(id_decl);
 		Declaration *d = id_decl->decl;
 		if (d->flags & DECL_FLAG_CONST) {
 			char *istr = ident_to_str(e->ident);
@@ -163,6 +161,18 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t, bool
 		return false;
 	}
 	Declaration *d = decl->decl;
+	bool captured = false;
+	if (decl->scope != NULL)
+		for (Block *block = tr->block; block != decl->scope; block = block->parent) {
+			if (block->kind == BLOCK_FN) {
+				captured = true;
+				break;
+			}
+		}
+	if (captured && !(d->flags & DECL_FLAG_CONST)) {
+		err_print(where, "Variables cannot be captured into inner functions (but constants can).");
+		return false;
+	}
 	/* are we inside this declaration? */
 	typedef Declaration *DeclarationPtr;
 	arr_foreach(&tr->in_decls, DeclarationPtr, in_decl) {
@@ -504,6 +514,8 @@ static bool type_of_expr(Typer *tr, Expression *e) {
 
 static bool types_block(Typer *tr, Block *b) {
 	bool ret = true;
+	Block *prev_block = tr->block;
+	tr->block = b;
 	if (!block_enter(b, &b->stmts)) return false;
 	arr_foreach(&b->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) ret = false;
@@ -512,6 +524,7 @@ static bool types_block(Typer *tr, Block *b) {
 		if (!types_expr(tr, b->ret_expr))
 			ret = false;
 	block_exit(b, &b->stmts);
+	tr->block = prev_block;
 	return ret;
 }
 
@@ -617,6 +630,7 @@ static bool types_stmt(Typer *tr, Statement *s) {
 }
 
 static void typer_create(Typer *tr) {
+	tr->block = NULL;
 	arr_create(&tr->in_decls, sizeof(Declaration *));
 }
 

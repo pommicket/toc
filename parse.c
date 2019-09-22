@@ -49,10 +49,17 @@ typedef struct Type {
 	};
 } Type;
 
+typedef enum {
+			  BLOCK_FN,
+			  BLOCK_EXPR
+} BlockKind;
+
 typedef struct Block {
+	BlockKind kind;
 	Location start;
 	Location end;
 	Array stmts;
+	struct Block *parent;
     struct Expression *ret_expr; /* the return expression of this block, e.g. {foo(); 3} => 3  NULL for no expression. */
 } Block;
 
@@ -555,6 +562,7 @@ static bool parse_stmt(Parser *p, Statement *s);
 static bool parse_block(Parser *p, Block *b) {
 	Tokenizer *t = p->tokr;
 	Block *prev_block = p->block;
+	b->parent = prev_block;
 	p->block = b;
 	if (!token_is_kw(t->token, KW_LBRACE)) {
 		tokr_err(t, "Expected '{' to open block.");
@@ -566,7 +574,7 @@ static bool parse_block(Parser *p, Block *b) {
 	bool ret = true;
 	b->ret_expr = NULL; /* default to no return unless overwritten later */
 	if (!token_is_kw(t->token, KW_RBRACE)) {
-		/* non-empty function body */
+		/* non-empty block */
 		while (1) {
 			Statement *stmt = arr_add(&b->stmts);
 			bool success = parse_stmt(p, stmt);
@@ -629,6 +637,7 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 			return false;
 		}
 	}
+	f->body.kind = BLOCK_FN;
 	return parse_block(p, &f->body);
 }
 
@@ -918,6 +927,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		if (token_is_kw(t->token, KW_LBRACE)) {
 			/* it's a block */
 			e->kind = EXPR_BLOCK;
+			e->block.kind = BLOCK_EXPR;
 			if (!parse_block(p, &e->block)) return false;
 			if (t->token != end) {
 				tokr_err(t, "Expression continues after end of block."); /* TODO: improve this err message */
