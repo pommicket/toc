@@ -1,8 +1,11 @@
 main @= fn() {
 	 x := 1;
-	 if x {
-	 	foo := 5;	
-	 };
-	 foo := if 1 { 5 };
+	 foo := if x {
+	 9	
+	 } elif 7-3 {
+	  5
+	 } elif main {
+	 3
+	 } else {7 };
 };
 

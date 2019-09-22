@@ -164,7 +164,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t, bool
 	bool captured = false;
 	if (decl->scope != NULL)
 		for (Block *block = tr->block; block != decl->scope; block = block->parent) {
-			if (block->kind == BLOCK_FN) {
+			if (block->flags & BLOCK_FLAG_FN) {
 				captured = true;
 				break;
 			}
@@ -357,6 +357,20 @@ static bool type_of_expr(Typer *tr, Expression *e) {
 				char *that_type = type_to_str(&i->next_elif->type);
 				
 				err_print(e->where, "elif/else block of an if statement has a different type. Expected %s, but got %s.", that_type, this_type);
+				return false;
+			}
+		}
+		if (i->kind == IFEXPR_IF && t->kind != TYPE_VOID) {
+			/* make sure there's an else at the end of this chain */
+			bool has_else = false;
+			IfExpr *curr = i;
+		    do {
+				curr = &curr->next_elif->if_;
+				if (curr->kind == IFEXPR_ELSE)
+					has_else = true;
+			} while (curr->next_elif);
+			if (!has_else) {
+				err_print(e->where, "non-void if block with no else");
 				return false;
 			}
 		}

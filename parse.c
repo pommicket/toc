@@ -49,13 +49,10 @@ typedef struct Type {
 	};
 } Type;
 
-typedef enum {
-			  BLOCK_FN,
-			  BLOCK_EXPR
-} BlockKind;
+#define BLOCK_FLAG_FN 0x01
 
 typedef struct Block {
-	BlockKind kind;
+	uint16_t flags;
 	Location start;
 	Location end;
 	Array stmts;
@@ -103,7 +100,14 @@ typedef struct {
 	Array args;	/* of Expression */
 } CallExpr;
 
+typedef enum {
+			  IFEXPR_IF,
+			  IFEXPR_ELIF,
+			  IFEXPR_ELSE
+} IfExprKind;
+
 typedef struct {
+	IfExprKind kind;
 	struct Expression *cond; /* NULL = this is an else */
 	struct Expression *next_elif; /* next elif/else of this statement */
 	Block body;
@@ -424,7 +428,9 @@ static Token *expr_find_end(Parser *p, uint16_t flags, bool *is_vbs)  {
 				brace_level--;
 				if (brace_level == 0 && could_be_vbs && !token_is_kw(token + 1, KW_RPAREN)) {
 					if (is_vbs) *is_vbs = true;
-					return token + 1; /* token afer } is end */
+					/* if there's an else/elif, the expr must continue */
+					if (!(token_is_kw(token + 1, KW_ELSE) || token_is_kw(token + 1, KW_ELIF)))
+						return token + 1; /* token afer } is end */
 				}
 				if (brace_level < 0)
 					return token;
@@ -571,6 +577,7 @@ static bool parse_type(Parser *p, Type *type) {
 static bool parse_stmt(Parser *p, Statement *s);
 
 static bool parse_block(Parser *p, Block *b) {
+	b->flags = 0;
 	Tokenizer *t = p->tokr;
 	Block *prev_block = p->block;
 	b->parent = prev_block;
@@ -648,8 +655,10 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 			return false;
 		}
 	}
-	f->body.kind = BLOCK_FN;
-	return parse_block(p, &f->body);
+	if (!parse_block(p, &f->body))
+		return false;
+	f->body.flags |= BLOCK_FLAG_FN;
+	return true;
 }
 
 /* parses, e.g. "(3, 5, foo)" */
@@ -735,8 +744,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				return false;
 			
 			if (t->token != end) {
-				tokr_err(t, "Direct function calling in an expression is not supported yet.\nYou can wrap the function in parentheses.");
-				/* TODO */
+				tokr_err(t, "Direct function calling in an expression is not supported.\nYou can wrap the function in parentheses.");
 				return false;
 			}
 			return true;
@@ -744,8 +752,10 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		case KW_IF: {
 			IfExpr *i = &e->if_;
 			e->kind = EXPR_IF;
+			i->kind = IFEXPR_IF;
 			t->token++;
 			Token *cond_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE, NULL);
+			if (!cond_end) return false;
 			if (!token_is_kw(cond_end, KW_LBRACE)) {
 				t->token = cond_end;
 				tokr_err(t, "Expected { to open if body.");
@@ -754,8 +764,48 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			i->cond = parser_new_expr(p);
 			if (!parse_expr(p, i->cond, cond_end)) return false;
 			if (!parse_block(p, &i->body)) return false;
-			i->next_elif = NULL;
-			/* TODO: elif/else */
+			IfExpr *curr = i;
+			while (1) {
+				bool is_else = token_is_kw(t->token, KW_ELSE);
+				bool is_elif = token_is_kw(t->token, KW_ELIF);
+				if (!is_else && !is_elif) {
+					curr->next_elif = NULL;
+					break;
+				}
+				if (curr->kind == IFEXPR_ELSE) {
+					tokr_err(t, "You can't have more elif/elses after an else.");
+					return false;
+				}
+				Expression *next = parser_new_expr(p);
+				next->flags = 0;
+				next->kind = EXPR_IF;
+				next->where = t->token->where;
+				curr->next_elif = next;
+				IfExpr *nexti = &next->if_;
+				if (is_else) {
+					t->token++;
+					nexti->cond = NULL;
+					nexti->kind = IFEXPR_ELSE;
+					if (!parse_block(p, &nexti->body)) return false;
+				} else {
+					/* elif */
+					t->token++;
+					cond_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE, NULL);
+					if (!cond_end) return false;
+					if (!token_is_kw(cond_end, KW_LBRACE)) {
+						t->token = cond_end;
+						tokr_err(t, "Expected { to open elif body.");
+						return false;
+					}
+					Expression *cond = parser_new_expr(p);
+					if (!parse_expr(p, cond, cond_end))
+						return false;
+					nexti->cond = cond;
+					nexti->kind = IFEXPR_ELIF;
+					if (!parse_block(p, &nexti->body)) return false;
+				}
+				curr = nexti;
+			}
 			return true;
 		}
 		default: break;
@@ -963,8 +1013,6 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 
 		if (token_is_kw(t->token, KW_LBRACE)) {
 			/* it's a block */
-			e->kind = EXPR_BLOCK;
-			e->block.kind = BLOCK_EXPR;
 			if (!parse_block(p, &e->block)) return false;
 			if (t->token != end) {
 				tokr_err(t, "Expression continues after end of block."); /* TODO: improve this err message */
