@@ -1,12 +1,8 @@
-x := 3;
-
 main @= fn() {
-	 y := 5;
-	 z @= 10;
-	 foo @= fn() {
-	 	 bar := y;
-		 asdf := z;
-		 gfdij := x;
+	 x := 1;
+	 if x {
+	 	foo := 5;	
 	 };
+	 foo := if 1 { 5 };
 };
 

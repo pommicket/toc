@@ -70,6 +70,7 @@ typedef enum {
 			  EXPR_IDENT, /* variable or constant */
 			  EXPR_BINARY_OP,
 			  EXPR_UNARY_OP,
+			  EXPR_IF,
 			  EXPR_FN,
 			  EXPR_CALL,
 			  EXPR_BLOCK,
@@ -102,6 +103,12 @@ typedef struct {
 	Array args;	/* of Expression */
 } CallExpr;
 
+typedef struct {
+	struct Expression *cond; /* NULL = this is an else */
+	struct Expression *next_elif; /* next elif/else of this statement */
+	Block body;
+} IfExpr;
+
 #define EXPR_FLAG_FOUND_TYPE 0x01
 
 typedef struct Expression {
@@ -125,6 +132,7 @@ typedef struct Expression {
 		CallExpr call;
 	    DirectExpr direct;
 		Identifier ident;
+		IfExpr if_;
 		struct FnExpr *fn;
 		Block block;
 	};
@@ -372,6 +380,7 @@ static int op_precedence(Keyword op) {
 /* TODO: check that we check which thing ends it everywhere */
 
 #define EXPR_CAN_END_WITH_COMMA 0x01 /* a comma could end the expression */
+#define EXPR_CAN_END_WITH_LBRACE 0x02
 
 static Token *expr_find_end(Parser *p, uint16_t flags, bool *is_vbs)  {
 	Tokenizer *t = p->tokr;
@@ -406,12 +415,14 @@ static Token *expr_find_end(Parser *p, uint16_t flags, bool *is_vbs)  {
 					return token;
 				break;
 			case KW_LBRACE:
+				if ((flags & EXPR_CAN_END_WITH_LBRACE) && square_level == 0 && paren_level == 0)
+					return token;
 				brace_level++;
 				could_be_vbs = true;
 				break;
 			case KW_RBRACE:
 				brace_level--;
-				if (brace_level == 0 && could_be_vbs) {
+				if (brace_level == 0 && could_be_vbs && !token_is_kw(token + 1, KW_RPAREN)) {
 					if (is_vbs) *is_vbs = true;
 					return token + 1; /* token afer } is end */
 				}
@@ -714,21 +725,41 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	}
 
 	Token *start = t->token;
+
+	if (t->token->kind == TOKEN_KW) switch (t->token->kw) {
+		case KW_FN: {
+			/* this is a function */
+			e->kind = EXPR_FN;
+			e->fn = err_malloc(sizeof *e->fn);
+			if (!parse_fn_expr(p, e->fn))
+				return false;
 			
-	if (token_is_kw(t->token, KW_FN)) {
-		/* this is a function */
-		e->kind = EXPR_FN;
-		e->fn = err_malloc(sizeof *e->fn);
-		if (!parse_fn_expr(p, e->fn))
-			return false;
-			
-		if (t->token != end) {
-			tokr_err(t, "Direct function calling in an expression is not supported yet.\nYou can wrap the function in parentheses.");
-			/* TODO */
-			return false;
+			if (t->token != end) {
+				tokr_err(t, "Direct function calling in an expression is not supported yet.\nYou can wrap the function in parentheses.");
+				/* TODO */
+				return false;
+			}
+			return true;
 		}
-		return true;
-	}
+		case KW_IF: {
+			IfExpr *i = &e->if_;
+			e->kind = EXPR_IF;
+			t->token++;
+			Token *cond_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE, NULL);
+			if (!token_is_kw(cond_end, KW_LBRACE)) {
+				t->token = cond_end;
+				tokr_err(t, "Expected { to open if body.");
+				return false;
+			}
+			i->cond = parser_new_expr(p);
+			if (!parse_expr(p, i->cond, cond_end)) return false;
+			if (!parse_block(p, &i->body)) return false;
+			i->next_elif = NULL;
+			/* TODO: elif/else */
+			return true;
+		}
+		default: break;
+		}
 	
 	/* Find the lowest-precedence operator not in parentheses/braces/square brackets */
 	int paren_level = 0;
@@ -808,6 +839,12 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	
 	if (entirely_within_parentheses) {
 		t->token++;	/* move past opening ( */
+		if (token_is_kw(t->token, KW_RPAREN)) {
+			/* ()foo */
+			t->token--;
+			tokr_err(t, "Stray () (maybe try wrapping the stuff before this in parentheses)");
+			return false;
+		}
 		Token *new_end = end - 1; /* parse to ending ) */
 		if (!parse_expr(p, e, new_end))
 			return false;
@@ -1337,6 +1374,17 @@ static void fprint_expr(FILE *out, Expression *e) {
 		break;
 	case EXPR_FN:
 		fprint_fn_expr(out, e->fn);
+		break;
+	case EXPR_IF:
+		if (e->if_.cond) {
+			fprintf(out, "(else)? if ");
+			fprint_expr(out, e->if_.cond);
+		} else {
+			fprintf(out, "else");
+		}
+		fprint_block(out, &e->if_.body);
+		if (e->if_.next_elif)
+			fprint_expr(out, e->if_.next_elif);
 		break;
 	case EXPR_CALL:
 		fprint_expr(out, e->call.fn);

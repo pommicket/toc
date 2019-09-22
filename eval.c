@@ -7,6 +7,11 @@ typedef struct Value {
 	};
 } Value;
 
+/* static bool eval_truthiness(Expression *e, Value *v) { */
+/* 	/\* TODO *\/ */
+/* 	return true; */
+/* } */
+
 /* NOTE: expr must be typed before it can be evaluated */
 static bool eval_expr(Expression *e, Value *v) { 
 	/* TODO: cache eval'd expression values (probably only needed for declarations) */
@@ -131,6 +136,9 @@ static bool eval_expr(Expression *e, Value *v) {
 	case EXPR_FN:
 		v->fn = *e->fn;
 		return true;
+	case EXPR_IF: {
+		err_print(e->where, "compile time if not supported yet."); /* TODO */
+	} break;
 	case EXPR_CALL:
 		err_print(e->where, "Compile time function calling not supported yet."); /* TODO */
 		break;

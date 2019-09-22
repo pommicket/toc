@@ -267,12 +267,35 @@ static bool type_resolve(Typer *tr, Type *t) {
 	return true;
 }
 
+
+static bool type_can_be_truthy(Type *t) {
+	switch (t->kind) {
+	case TYPE_VOID:
+		return false;
+	case TYPE_UNKNOWN:
+		return true;
+	case TYPE_BUILTIN:
+		return true;
+	case TYPE_FN:
+		return true;
+	case TYPE_TUPLE:
+		return false;
+	case TYPE_ARR:
+		return false;
+	case TYPE_PTR:
+		return true;
+	}
+	assert(0);
+	return false;
+}
+
 /* NOTE: this does descend into un/binary ops, calls, etc. but NOT into any functions  */
 static bool type_of_expr(Typer *tr, Expression *e) {
 	if (e->flags & EXPR_FLAG_FOUND_TYPE) return true;
 	Type *t = &e->type;
 	t->flags = 0;
 	t->kind = TYPE_UNKNOWN; /* default to unknown type (in the case of an error) */
+	e->flags |= EXPR_FLAG_FOUND_TYPE; /* even if failed, pretend we found the type */
 	switch (e->kind) {
 	case EXPR_FN: {
 		FnExpr *f = e->fn;
@@ -307,6 +330,36 @@ static bool type_of_expr(Typer *tr, Expression *e) {
 		break;
 	case EXPR_IDENT: {
 		if (!type_of_ident(tr, e->where, e->ident, t, false)) return false;
+	} break;
+	case EXPR_IF: {
+		IfExpr *i = &e->if_;
+		if (i->cond) {
+			if (!type_of_expr(tr, i->cond))
+				return false;
+			if (!type_can_be_truthy(&i->cond->type)) {
+				char *s = type_to_str(&i->cond->type);
+				err_print(i->cond->where, "Type %s cannot be the condition of an if statement.", s);
+				free(s);
+				return false;
+			}
+		}
+		if (!types_block(tr, &i->body))
+			return false;
+		if (i->body.ret_expr)
+			*t = i->body.ret_expr->type;
+		else
+			t->kind = TYPE_VOID;
+		if (i->next_elif) {
+			if (!type_of_expr(tr, i->next_elif))
+				return false;
+			if (!type_eq(t, &i->next_elif->type)) {
+				char *this_type = type_to_str(t);
+				char *that_type = type_to_str(&i->next_elif->type);
+				
+				err_print(e->where, "elif/else block of an if statement has a different type. Expected %s, but got %s.", that_type, this_type);
+				return false;
+			}
+		}
 	} break;
 	case EXPR_CALL: {
 		CallExpr *c = &e->call;
@@ -508,7 +561,6 @@ static bool type_of_expr(Typer *tr, Expression *e) {
 		}
 	} break;
 	}
-	e->flags |= EXPR_FLAG_FOUND_TYPE;
 	return true;
 }
 
@@ -529,6 +581,7 @@ static bool types_block(Typer *tr, Block *b) {
 }
 
 /* does descend into blocks, unlike type_of_expr. */
+/* TODO: you still need to descend into other things */
 static bool types_expr(Typer *tr, Expression *e) {
 	if (!type_of_expr(tr, e)) return false;
 	switch (e->kind) {

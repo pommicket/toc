@@ -1,6 +1,5 @@
 /* 
 TODO:
-don't allow nested functions to capture outer variables (constants are allowed though)
 if, else
 re-do cgen
  */
