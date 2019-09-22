@@ -1,12 +1,7 @@
+
 main @= fn() {
-/*
 	 f := main;
 	 f();
-	 main();
-*/
-	N @= {
-	   foo : [N]int;
-	   foo[0]
-	};
+	 { main(); }
 };
 

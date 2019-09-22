@@ -366,12 +366,14 @@ static int op_precedence(Keyword op) {
 
 #define EXPR_CAN_END_WITH_COMMA 0x01 /* a comma could end the expression */
 
-static Token *expr_find_end(Parser *p, unsigned flags)  {
+static Token *expr_find_end(Parser *p, uint16_t flags, bool *is_vbs)  {
 	Tokenizer *t = p->tokr;
 	int paren_level = 0;
 	int brace_level = 0;
 	int square_level = 0;
 	Token *token = t->token;
+	bool could_be_vbs = false; /* could this be a void block statement (whose semicolons can be omitted)? e.g. {x := 5;} */
+	if (is_vbs) *is_vbs = false;
 	while (1) {
 		if (token->kind == TOKEN_KW) {
 			switch (token->kw) {
@@ -401,16 +403,24 @@ static Token *expr_find_end(Parser *p, unsigned flags)  {
 				break;
 			case KW_RBRACE:
 				brace_level--;
+				if (brace_level == 0 && could_be_vbs) {
+					if (is_vbs) *is_vbs = true;
+					return token + 1; /* token afer } is end */
+				}
 				if (brace_level < 0)
 					return token;
 				break;
 			case KW_SEMICOLON:
 				if (brace_level == 0)
 					return token;
+				could_be_vbs = true;
 				break;
 			default: break;
 			}
+				
 		}
+		if (!token_is_kw(token, KW_RBRACE) && !token_is_kw(token, KW_SEMICOLON))
+			could_be_vbs = false;
 		if (token->kind == TOKEN_EOF) {
 			if (brace_level > 0) {
 				tokr_err(t, "Opening brace { was never closed."); /* FEATURE: Find out where this is */
@@ -487,7 +497,7 @@ static bool parse_type(Parser *p, Type *type) {
 			Token *start = t->token;
 			type->kind = TYPE_ARR;
 			t->token++;	/* move past [ */
-			Token *end = expr_find_end(p, 0);
+			Token *end = expr_find_end(p, 0, NULL);
 			type->arr.n_expr = parser_new_expr(p);
 			if (!parse_expr(p, type->arr.n_expr, end)) return false;
 			t->token = end + 1;	/* go past ] */
@@ -636,7 +646,7 @@ static bool parse_args(Parser *p, Array *args) {
 				return false;
 			}
 			Expression *arg = arr_add(args);
-			if (!parse_expr(p, arg, expr_find_end(p, EXPR_CAN_END_WITH_COMMA))) {
+			if (!parse_expr(p, arg, expr_find_end(p, EXPR_CAN_END_WITH_COMMA, NULL))) {
 				return false;
 			}
 			if (token_is_kw(t->token, KW_RPAREN))
@@ -875,7 +885,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				if (!parse_expr(p, e->binary.lhs, opening_bracket)) return false;
 				/* parse index */
 				t->token = opening_bracket + 1;
-				Token *index_end = expr_find_end(p, 0);
+				Token *index_end = expr_find_end(p, 0, NULL);
 				if (!parse_expr(p, e->binary.rhs, index_end))
 					return false;
 				t->token++;	/* move past ] */
@@ -1131,13 +1141,13 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndType ends_with, uint16_
 		/* OPTIM: switch t->token->kw ? */
 		if (token_is_kw(t->token, KW_EQ)) {
 			t->token++;
-			Token *end = expr_find_end(p, 0);
-			if (!token_is_kw(end, KW_SEMICOLON)) {
+			d->flags |= DECL_FLAG_HAS_EXPR;
+			Token *end = expr_find_end(p, 0, NULL);
+			if (!end || !token_is_kw(end, KW_SEMICOLON)) {
 				tokr_err(t, "Expected ';' at end of declaration.");
 				ret = false;
 				break;
 			}
-			d->flags |= DECL_FLAG_HAS_EXPR;
 			if (!parse_expr(p, &d->expr, end)) {
 				t->token = end + 1;	/* move past ; */
 				ret = false;
@@ -1197,13 +1207,14 @@ static bool parse_stmt(Parser *p, Statement *s) {
 		return true;
 	} else {
 		s->kind = STMT_EXPR;
-		Token *end = expr_find_end(p, 0);
+		bool is_vbs;
+		Token *end = expr_find_end(p, 0, &is_vbs);
 		if (!end) {
 			tokr_err(t, "No semicolon found at end of statement.");
 			while (t->token->kind != TOKEN_EOF) t->token++; /* move to end of file */
 			return false;
 		}
-		if (token_is_kw(end, KW_SEMICOLON)) {
+		if (is_vbs || token_is_kw(end, KW_SEMICOLON)) {
 			s->flags |= STMT_FLAG_VOIDED_EXPR;
 		}
 	    bool success = parse_expr(p, &s->expr, end);

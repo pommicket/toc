@@ -343,7 +343,11 @@ static bool type_of_expr(Typer *tr, Expression *e) {
 		Block *b = &e->block;
 		if (!types_block(tr, b))
 			return false;
-		*t = b->ret_expr->type;
+		if (b->ret_expr) {
+			*t = b->ret_expr->type;
+		} else {
+			t->kind = TYPE_VOID;
+		}
 	} break;
 	case EXPR_DIRECT:
 		t->kind = TYPE_UNKNOWN;
@@ -575,7 +579,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 		} else {
 			if (d->expr.type.kind == TYPE_VOID) {
 				/* e.g. x := (fn(){})(); */
-				err_print(d->expr.where, "Used return value of function which does not return anything.");
+				err_print(d->expr.where, "Use of void value.");
 				success = false;
 				goto ret;
 			}
