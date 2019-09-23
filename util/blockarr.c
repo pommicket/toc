@@ -30,18 +30,19 @@ static void block_arr_create(BlockArr *arr, int lg_block_sz, size_t item_sz) {
 static void *block_arr_add(BlockArr *arr) {
 	ArrBlock *last_block;
 	last_block = arr_last(&arr->blocks);
-		
 	if (arr->blocks.data == NULL ||
 		(unsigned long)last_block->n >= (1UL << arr->lg_block_sz)) {
 		ArrBlock *block;
 		/* no blocks yet / ran out of blocks*/
 		block = arr_add(&arr->blocks);
-		block->data = err_malloc(arr->item_sz << arr->lg_block_sz);
 		block->n = 1;
+		size_t bytes = arr->item_sz << arr->lg_block_sz;
+		block->data = err_malloc(bytes);
 		block->last = block->data;
 		return block->data;
 	} else {
 		last_block->last = (char*)last_block->last + arr->item_sz;
+		last_block->n++;
 		return last_block->last;
 	}
 }
