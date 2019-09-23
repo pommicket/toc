@@ -333,46 +333,50 @@ static bool type_of_expr(Typer *tr, Expression *e) {
 	} break;
 	case EXPR_IF: {
 		IfExpr *i = &e->if_;
-		if (i->cond) {
-			if (!type_of_expr(tr, i->cond))
-				return false;
-			if (!type_can_be_truthy(&i->cond->type)) {
-				char *s = type_to_str(&i->cond->type);
-				err_print(i->cond->where, "Type %s cannot be the condition of an if statement.", s);
-				free(s);
-				return false;
-			}
-		}
-		if (!types_block(tr, &i->body))
+		IfExpr *curr = i;
+		Type *curr_type = t;
+		bool has_else = false;
+		if (!types_block(tr, &curr->body))
 			return false;
-		if (i->body.ret_expr)
-			*t = i->body.ret_expr->type;
-		else
-			t->kind = TYPE_VOID;
-		if (i->next_elif) {
-			if (!type_of_expr(tr, i->next_elif))
-				return false;
-			if (!type_eq(t, &i->next_elif->type)) {
-				char *this_type = type_to_str(t);
-				char *that_type = type_to_str(&i->next_elif->type);
+		*t = curr->body.ret_expr->type;
+		while (1) {
+			if (curr->cond) {
+				if (!type_of_expr(tr, curr->cond))
+					return false;
+				if (!type_can_be_truthy(&curr->cond->type)) {
+					char *s = type_to_str(&curr->cond->type);
+					err_print(curr->cond->where, "Type %s cannot be the condition of an if statement.", s);
+					free(s);
+					return false;
+				}
+			} else {
+				has_else = true;
+			}
+			if (curr->next_elif) {
+				IfExpr *nexti = &curr->next_elif->if_;
+				Type *next_type = &curr->next_elif->type;
+			    if (!types_block(tr, &nexti->body)) {
+					return false;
+				}
+				*next_type = nexti->body.ret_expr->type;
+				if (!type_eq(curr_type, next_type)) {
+					char *currstr = type_to_str(curr_type);
+					char *nextstr = type_to_str(next_type);
+					err_print(curr->next_elif->where, "Mismatched types in if/elif/else chain. Previous block was of type %s, but this one is of type %s.", currstr, nextstr);
+					free(currstr);
+					free(nextstr);
+					return false;
+				}
+				curr = nexti;
 				
-				err_print(e->where, "elif/else block of an if statement has a different type. Expected %s, but got %s.", that_type, this_type);
-				return false;
+			} else {
+				break;
 			}
 		}
-		if (i->kind == IFEXPR_IF && t->kind != TYPE_VOID) {
-			/* make sure there's an else at the end of this chain */
-			bool has_else = false;
-			IfExpr *curr = i;
-		    do {
-				curr = &curr->next_elif->if_;
-				if (curr->kind == IFEXPR_ELSE)
-					has_else = true;
-			} while (curr->next_elif);
-			if (!has_else) {
-				err_print(e->where, "non-void if block with no else");
-				return false;
-			}
+		
+		if (!has_else && t->kind == TYPE_VOID) {
+			err_print(e->where, "non-void if block with no else");
+			return false;
 		}
 	} break;
 	case EXPR_CALL: {

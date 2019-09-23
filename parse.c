@@ -100,14 +100,7 @@ typedef struct {
 	Array args;	/* of Expression */
 } CallExpr;
 
-typedef enum {
-			  IFEXPR_IF,
-			  IFEXPR_ELIF,
-			  IFEXPR_ELSE
-} IfExprKind;
-
 typedef struct {
-	IfExprKind kind;
 	struct Expression *cond; /* NULL = this is an else */
 	struct Expression *next_elif; /* next elif/else of this statement */
 	Block body;
@@ -752,7 +745,6 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		case KW_IF: {
 			IfExpr *i = &e->if_;
 			e->kind = EXPR_IF;
-			i->kind = IFEXPR_IF;
 			t->token++;
 			Token *cond_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE, NULL);
 			if (!cond_end) return false;
@@ -772,7 +764,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					curr->next_elif = NULL;
 					break;
 				}
-				if (curr->kind == IFEXPR_ELSE) {
+				if (curr->cond == NULL) {
 					tokr_err(t, "You can't have more elif/elses after an else.");
 					return false;
 				}
@@ -785,7 +777,6 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				if (is_else) {
 					t->token++;
 					nexti->cond = NULL;
-					nexti->kind = IFEXPR_ELSE;
 					if (!parse_block(p, &nexti->body)) return false;
 				} else {
 					/* elif */
@@ -801,12 +792,15 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					if (!parse_expr(p, cond, cond_end))
 						return false;
 					nexti->cond = cond;
-					nexti->kind = IFEXPR_ELIF;
 					if (!parse_block(p, &nexti->body)) return false;
 				}
 				curr = nexti;
 			}
 			return true;
+		}
+		case KW_WHILE: {
+			/* TODO */
+		    return true;
 		}
 		default: break;
 		}
@@ -1020,7 +1014,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			}
 			return true;
 		}
-		tokr_err(t, "Not implemented yet.");
+		tokr_err(t, "Unrecognized expression.");
 		t->token = end + 1;
 		return false;
 	}

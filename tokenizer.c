@@ -37,6 +37,7 @@ typedef enum {
 			  KW_IF,
 			  KW_ELIF,
 			  KW_ELSE,
+			  KW_WHILE,
 			  KW_FN,
 			  KW_INT,
 			  KW_I8,
@@ -55,8 +56,8 @@ typedef enum {
 
 static const char *keywords[KW_COUNT] =
 	{";", "=", ":", "@", ",", "(", ")", "{", "}", "[", "]", "==", "<", "<=", "+", "-", "*",
-	 "&", "/", "if", "elif", "else", "fn", "int", "i8", "i16", "i32", "i64", "u8", "u16",
-	 "u32", "u64", "float", "f32", "f64"};
+	 "&", "/", "if", "elif", "else", "while", "fn", "int", "i8", "i16", "i32", "i64", "u8",
+	 "u16", "u32", "u64", "float", "f32", "f64"};
 
 static const char *directives[DIRECT_COUNT] =
 	{"C"};
