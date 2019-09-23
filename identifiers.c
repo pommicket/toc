@@ -162,7 +162,7 @@ static Identifier ident_get(Identifiers *ids, const char *s) {
 
 static char *ident_to_str(Identifier i) {
 	size_t i_len = (size_t)(i->depth / 2); /* length = depth / 2 */
-	char *str = malloc(i_len + 1);
+	char *str = err_malloc(i_len + 1);
 	str += i_len;
 	*str = 0;
 	while (i->parent) {

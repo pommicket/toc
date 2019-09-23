@@ -463,7 +463,7 @@ static bool type_of_expr(Typer *tr, Expression *e) {
 				return false;
 			}
 			t->kind = TYPE_PTR;
-			t->ptr.of = malloc(sizeof *t->ptr.of); /* OPTIM */
+			t->ptr.of = err_malloc(sizeof *t->ptr.of); /* OPTIM */
 			*t->ptr.of = *of_type;
 			break;
 		case UNARY_DEREF:

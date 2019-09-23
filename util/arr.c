@@ -13,7 +13,7 @@ static void arr_create(Array *arr, size_t item_sz) {
 
 static inline void arr_reserve(Array *arr, size_t n) {
 	arr->cap = n;
-	arr->data = realloc(arr->data, arr->item_sz * arr->cap);
+	arr->data = err_realloc(arr->data, arr->item_sz * arr->cap);
 
 }
 

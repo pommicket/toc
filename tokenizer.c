@@ -530,7 +530,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 				len++;
 				tokr_nextchar(t);
 			}
-			char *strlit = malloc(len + 1);
+			char *strlit = err_malloc(len + 1);
 		    char *strptr = strlit;
 			tokr_get_location(t, token);
 			tokr_nextchar(t); /* past opening " */

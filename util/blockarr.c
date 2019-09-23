@@ -36,7 +36,7 @@ static void *block_arr_add(BlockArr *arr) {
 		ArrBlock *block;
 		/* no blocks yet / ran out of blocks*/
 		block = arr_add(&arr->blocks);
-		block->data = malloc(arr->item_sz << arr->lg_block_sz);
+		block->data = err_malloc(arr->item_sz << arr->lg_block_sz);
 		block->n = 1;
 		block->last = block->data;
 		return block->data;

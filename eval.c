@@ -47,7 +47,7 @@ static bool eval_expr(Expression *e, Value *v) {
 			return true;
 		}
 		case UNARY_ADDRESS:
-			v->points_to = malloc(sizeof *v->points_to); /* OPTIM */
+			v->points_to = err_malloc(sizeof *v->points_to); /* OPTIM */
 			return eval_expr(e->unary.of, v->points_to);
 		case UNARY_DEREF: {
 			Value ptr;
