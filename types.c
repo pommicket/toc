@@ -374,8 +374,8 @@ static bool type_of_expr(Typer *tr, Expression *e) {
 			}
 		}
 		
-		if (!has_else && t->kind == TYPE_VOID) {
-			err_print(e->where, "non-void if block with no else");
+		if (!has_else && t->kind != TYPE_VOID) {
+			err_print(e->where, "Non-void if block with no else.");
 			return false;
 		}
 	} break;
@@ -583,26 +583,46 @@ static bool type_of_expr(Typer *tr, Expression *e) {
 }
 
 static bool types_block(Typer *tr, Block *b) {
-	bool ret = true;
+	bool success = true;
 	Block *prev_block = tr->block;
 	tr->block = b;
 	if (!block_enter(b, &b->stmts)) return false;
 	arr_foreach(&b->stmts, Statement, s) {
-		if (!types_stmt(tr, s)) ret = false;
+		if (!types_stmt(tr, s)) success = false;
 	}
-	if (b->ret_expr)
+	if (!success) return false;
+	if (b->ret_expr) {
 		if (!types_expr(tr, b->ret_expr))
-			ret = false;
+			return false;
+		if (b->ret_expr->type.kind == TYPE_VOID) {
+			err_print(b->ret_expr->where, "Cannot return void value.");
+			return false;
+		}
+	}
+	
 	block_exit(b, &b->stmts);
 	tr->block = prev_block;
-	return ret;
+	return true;
 }
 
-/* does descend into blocks, unlike type_of_expr. */
+/* does descend into functions, unlike type_of_expr. */
 /* TODO: you still need to descend into other things */
 static bool types_expr(Typer *tr, Expression *e) {
 	if (!type_of_expr(tr, e)) return false;
 	switch (e->kind) {
+	case EXPR_UNARY_OP:
+		if (!types_expr(tr, e->unary.of)) return false;
+		break;
+	case EXPR_BINARY_OP:
+		if (!types_expr(tr, e->binary.lhs)) return false;
+		if (!types_expr(tr, e->binary.rhs)) return false;
+		break;
+	case EXPR_CALL:
+		if (!types_expr(tr, e->call.fn)) return false;
+		arr_foreach(&e->call.args, Expression, arg) {
+			if (!types_expr(tr, arg)) return false;
+		}
+		break;
 	case EXPR_FN: {
 		assert(e->type.kind == TYPE_FN);
 		FnExpr *f = e->fn;
@@ -631,7 +651,18 @@ static bool types_expr(Typer *tr, Expression *e) {
 			return false;
 		}
 	} break;
-	default: break;
+	case EXPR_IF: {
+		IfExpr *i = &e->if_;
+		if (i->cond && !types_expr(tr, i->cond)) return false;
+		
+	} break;
+	case EXPR_DIRECT:
+	case EXPR_BLOCK:
+	case EXPR_IDENT:
+	case EXPR_LITERAL_INT:
+	case EXPR_LITERAL_FLOAT:
+	case EXPR_LITERAL_STR:
+		break;
 	}
 	return true;
 }

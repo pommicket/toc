@@ -1,13 +1,11 @@
 main @= fn() {
-	 //x := 1;
-	 /*foo := if x {
-	 9	
-	 } elif 7-3 {
-	  5
-	 } elif main {
-	 3
-	 } else {7 };*/
-
-	 bar := if 1 { 9 };
+	 {
+		i := 0;
+	 	asdf := if (fn(i: i64) i64 { i - 1024 })(i) {
+			 i = i * 2;
+			 i
+		} else { 0 };
+	 }
+	 (fn(){})();
 };
 

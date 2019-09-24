@@ -1007,6 +1007,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 
 		if (token_is_kw(t->token, KW_LBRACE)) {
 			/* it's a block */
+			e->kind = EXPR_BLOCK;
 			if (!parse_block(p, &e->block)) return false;
 			if (t->token != end) {
 				tokr_err(t, "Expression continues after end of block."); /* TODO: improve this err message */
