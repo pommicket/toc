@@ -384,7 +384,7 @@ static bool type_of_expr(Typer *tr, Expression *e) {
 		if (!types_block(tr, &w->body))
 			return false;
 		if (!type_of_expr()) {
-			/* TODO: is type_of_expr really necessary? why not just never descend into fns unless it's a decl? */
+			/* TODO: is type_of_expr vs types_expr really necessary? */
 		}
 		*t = w->body.ret_expr->type;
 	} break;
