@@ -136,8 +136,9 @@ static bool eval_expr(Expression *e, Value *v) {
 	case EXPR_FN:
 		v->fn = *e->fn;
 		return true;
-	case EXPR_IF: {
-		err_print(e->where, "compile time if not supported yet."); /* TODO */
+	case EXPR_IF:
+	case EXPR_WHILE: {
+		err_print(e->where, "compile time if/while not supported yet."); /* TODO */
 	} break;
 	case EXPR_CALL:
 		err_print(e->where, "Compile time function calling not supported yet."); /* TODO */

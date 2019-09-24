@@ -379,6 +379,15 @@ static bool type_of_expr(Typer *tr, Expression *e) {
 			return false;
 		}
 	} break;
+	case EXPR_WHILE: {
+		WhileExpr *w = &e->while_;
+		if (!types_block(tr, &w->body))
+			return false;
+		if (!type_of_expr()) {
+			/* TODO: is type_of_expr really necessary? why not just never descend into fns unless it's a decl? */
+		}
+		*t = w->body.ret_expr->type;
+	} break;
 	case EXPR_CALL: {
 		CallExpr *c = &e->call;
 		Expression *f = c->fn;

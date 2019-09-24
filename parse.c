@@ -68,6 +68,7 @@ typedef enum {
 			  EXPR_BINARY_OP,
 			  EXPR_UNARY_OP,
 			  EXPR_IF,
+			  EXPR_WHILE,
 			  EXPR_FN,
 			  EXPR_CALL,
 			  EXPR_BLOCK,
@@ -106,6 +107,11 @@ typedef struct {
 	Block body;
 } IfExpr;
 
+typedef struct {
+	struct Expression *cond;
+	Block body;
+} WhileExpr;
+
 #define EXPR_FLAG_FOUND_TYPE 0x01
 
 typedef struct Expression {
@@ -130,6 +136,7 @@ typedef struct Expression {
 	    DirectExpr direct;
 		Identifier ident;
 		IfExpr if_;
+		WhileExpr while_;
 		struct FnExpr *fn;
 		Block block;
 	};
@@ -799,7 +806,21 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			return true;
 		}
 		case KW_WHILE: {
-			/* TODO */
+			e->kind = EXPR_WHILE;
+			WhileExpr *w = &e->while_;
+			t->token++;
+			Token *cond_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE, NULL);
+			if (!cond_end) return false;
+			if (!token_is_kw(cond_end, KW_LBRACE)) {
+				t->token = cond_end;
+				tokr_err(t, "Expected { to open while body.");
+				return false;
+			}
+			Expression *cond = parser_new_expr(p);
+			w->cond = cond;
+			if (!parse_expr(p, cond, cond_end))
+				return false;
+			if (!parse_block(p, &w->body)) return false;
 		    return true;
 		}
 		default: break;
@@ -1428,6 +1449,11 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprint_block(out, &e->if_.body);
 		if (e->if_.next_elif)
 			fprint_expr(out, e->if_.next_elif);
+		break;
+	case EXPR_WHILE:
+	    fprintf(out, "while ");
+		fprint_expr(out, e->while_.cond);
+		fprint_block(out, &e->while_.body);
 		break;
 	case EXPR_CALL:
 		fprint_expr(out, e->call.fn);
