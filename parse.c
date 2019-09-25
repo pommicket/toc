@@ -20,6 +20,7 @@ typedef enum {
 			  BUILTIN_U64,
 			  BUILTIN_F32,
 			  BUILTIN_F64,
+			  BUILTIN_BOOL,
 			  BUILTIN_TYPE_COUNT
 } BuiltinType;
 
@@ -64,6 +65,7 @@ typedef enum {
 			  EXPR_LITERAL_FLOAT,
 			  EXPR_LITERAL_INT,
 			  EXPR_LITERAL_STR,
+			  EXPR_LITERAL_BOOL,
 			  EXPR_IDENT, /* variable or constant */
 			  EXPR_BINARY_OP,
 			  EXPR_UNARY_OP,
@@ -123,6 +125,7 @@ typedef struct Expression {
 		Floating floatl;
 		UInteger intl;
 		StrLiteral strl;
+		bool booll;
 		struct {
 			UnaryOp op;
 			struct Expression *of;
@@ -276,6 +279,7 @@ static BuiltinType kw_to_builtin_type(Keyword kw) {
 	case KW_FLOAT: return BUILTIN_F32;
 	case KW_F32: return BUILTIN_F32;
 	case KW_F64: return BUILTIN_F64;
+	case KW_BOOL: return BUILTIN_BOOL;
 	default: return BUILTIN_TYPE_COUNT;
 	}
 }
@@ -292,6 +296,7 @@ static Keyword builtin_type_to_kw(BuiltinType t) {
 	case BUILTIN_U64: return KW_U64;
 	case BUILTIN_F32: return KW_F32;
 	case BUILTIN_F64: return KW_F64;
+	case BUILTIN_BOOL: return KW_BOOL;
 	case BUILTIN_TYPE_COUNT: break;
 	}
 	assert(0);
@@ -733,7 +738,21 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			e->kind = EXPR_LITERAL_STR;
 			e->strl = t->token->str;
 	    	break;
+		case TOKEN_KW:
+			switch (t->token->kw) {
+			case KW_TRUE:
+				e->kind = EXPR_LITERAL_BOOL;
+				e->booll = true;
+				break;
+			case KW_FALSE:
+				e->kind = EXPR_LITERAL_BOOL;
+				e->booll = false;
+				break;
+			default: goto unrecognized;
+			}
+			break;
 		default:
+		unrecognized:
 			tokr_err(t, "Unrecognized expression.");
 			return false;
 		}
@@ -1115,7 +1134,10 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	case KW_SLASH:
 		op = BINARY_DIV;
 		break;
-		
+	case KW_AMPERSAND:
+	case KW_EXCLAMATION:
+	    err_print(lowest_precedence_op->where, "Unary operator '%s' being used as a binary operator!", kw_to_str(lowest_precedence_op->kw));
+	    return false;
 	default: assert(0); return false;
 	}
 	e->binary.op = op;
@@ -1450,6 +1472,9 @@ static void fprint_expr(FILE *out, Expression *e) {
 		break;
 	case EXPR_LITERAL_STR:
 		fprintf(out, "\"%s\"", e->strl.str);
+		break;
+	case EXPR_LITERAL_BOOL:
+		fprintf(out, "%s", e->booll ? "true" : "false");
 		break;
 	case EXPR_IDENT:
 		fprint_ident(out, e->ident);

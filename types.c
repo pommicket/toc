@@ -385,6 +385,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 		t->builtin = BUILTIN_F32;
 		t->flags |= TYPE_FLAG_FLEXIBLE;
 		break;
+	case EXPR_LITERAL_BOOL:
+		t->kind = TYPE_BUILTIN;
+		t->builtin = BUILTIN_BOOL;
+		break;
 	case EXPR_IDENT: {
 		if (!type_of_ident(tr, e->where, e->ident, t)) return false;
 	} break;

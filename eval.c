@@ -4,6 +4,7 @@ typedef struct Value {
 		Floating floatv;
 		struct Value *points_to;
 		FnExpr fn;
+		bool boolv;
 	};
 } Value;
 
@@ -29,6 +30,9 @@ static bool eval_expr(Expression *e, Value *v) {
 	case EXPR_LITERAL_STR:
 		err_print(e->where, "not implemented yet"); /* TODO */
 		return false;
+	case EXPR_LITERAL_BOOL:
+		v->boolv = e->booll;
+		return true;
 	case EXPR_UNARY_OP: {
 		Expression *of_expr = e->unary.of;
 		switch (e->unary.op) {

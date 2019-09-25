@@ -43,6 +43,9 @@ typedef enum {
 			  KW_WHILE,
 			  KW_RETURN,
 			  KW_FN,
+			  KW_BOOL,
+			  KW_TRUE,
+			  KW_FALSE,
 			  KW_INT,
 			  KW_I8,
 			  KW_I16,
@@ -60,9 +63,12 @@ typedef enum {
 
 static const char *keywords[KW_COUNT] =
 	{";", "=", ":", "@", ",", "(", ")", "{", "}", "[", "]", "==", "<", "<=", ">", ">=",
-	 "+", "-", "*", "!", "&", "/", "if", "elif", "else", "while", "return", "fn", "int",
-	 "i8", "i16", "i32", "i64",
+	 "+", "-", "*", "!", "&", "/", "if", "elif", "else", "while", "return", "fn",
+	 "bool", "true", "false",
+	 "int", "i8", "i16", "i32", "i64",
 	 "u8", "u16", "u32", "u64", "float", "f32", "f64"};
+
+static inline const char *kw_to_str(Keyword k) { return keywords[k]; }
 
 static const char *directives[DIRECT_COUNT] =
 	{"C"};
@@ -172,7 +178,7 @@ static void fprint_token(FILE *out, Token *t) {
 	fprintf(out, "l%lu-", (unsigned long)t->where.line);
 	switch (t->kind) {
 	case TOKEN_KW:
-		fprintf(out, "keyword: %s", keywords[t->kw]);
+		fprintf(out, "keyword: %s", kw_to_str(t->kw));
 		break;
 	case TOKEN_IDENT:
 		fprintf(out, "identifier: %p: ", (void*)t->ident);
