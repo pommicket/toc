@@ -3,10 +3,11 @@ typedef struct {
 	Block *block;
 } Typer;
 
-static bool type_of_expr(Typer *tr, Expression *e);
 static bool types_stmt(Typer *tr, Statement *s);
+static bool types_decl(Typer *tr, Declaration *d);
 static bool types_expr(Typer *tr, Expression *e);
 static bool types_block(Typer *tr, Block *b);
+static bool type_resolve(Typer *tr, Type *t);
 
 static bool add_ident_decls(Block *b, Declaration *d) {
 	bool ret = true;
@@ -152,7 +153,28 @@ static bool expr_must_lval(Expression *e) {
 	return false;
 }
 
-static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t, bool allow_use_before_decl) {
+static bool type_of_fn(Typer *tr, FnExpr *f, Type *t) {
+	
+	t->kind = TYPE_FN;
+	arr_create(&t->fn.types, sizeof(Type));
+	Type *ret_type = arr_add(&t->fn.types);
+	if (!type_resolve(tr, &f->ret_type))
+		return false;
+	*ret_type = f->ret_type;
+	Declaration *params = &f->params;
+	if (!types_decl(tr, params)) return false;
+	Type *type = &params->type;
+	Type *param_types = type->kind == TYPE_TUPLE ? type->tuple.data : type;
+	for (size_t i = 0; i < params->idents.len; i++) {
+		Type *param_type = arr_add(&t->fn.types);
+		if (!type_resolve(tr, &param_types[i]))
+			return false;
+		*param_type = param_types[i];
+	}
+	return true;
+}
+
+static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 	IdentDecl *decl = ident_decl(i);
 	if (!decl) {
 		char *s = ident_to_str(i);
@@ -191,42 +213,36 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t, bool
 			}
 		}
 	}
-	if (!allow_use_before_decl) {
-		/* TODO: Check self-referential declarations  */
-		if (location_after(d->where, where)) {
+	
+	if (d->flags & DECL_FLAG_FOUND_TYPE) {
+		if (d->idents.len > 1) {
+			/* it's a tuple! */
+		
+			arr_foreach(&d->idents, Identifier, decl_i) {
+				if (*decl_i == i) {
+					long index = (long)(decl_i - (Identifier*)d->idents.data);
+					*t = ((Type*)d->type.tuple.data)[index];
+					return true;
+				}
+			}
+			assert(0);
+			return false;
+		} else {
+			*t = d->type;
+			return true;
+		}
+	} else {
+		if ((d->flags & DECL_FLAG_HAS_EXPR) && (d->expr.kind == EXPR_FN)) {
+			/* allow using a function before declaring it */
+			if (!type_of_fn(tr, d->expr.fn, t)) return false;
+			return true;
+		} else {
 			char *s = ident_to_str(i);
-			err_print(where, "Use of identifier %s before its declaration.", s);
+			err_print(where, "Use of identifier %s before its declaration.\nNote that it is only possible to use a constant function before it is directly declared (e.g. x @= fn() {}).", s);
 			info_print(d->where, "%s will be declared here.", s);
 			free(s);
 			return false;
 		}
-	}
-
-	/* OPTIM: you don't always need to do so much copying */
-	Type decl_type;
-	if (d->flags & DECL_FLAG_ANNOTATES_TYPE) {
-		decl_type = d->type;
-	} else {
-		if (!type_of_expr(tr, &d->expr))
-			return false;
-		decl_type = d->expr.type;
-	}
-	
-	if (d->idents.len > 1) {
-		/* it's a tuple! */
-		
-		arr_foreach(&d->idents, Identifier, decl_i) {
-			if (*decl_i == i) {
-				long index = (long)(decl_i - (Identifier*)d->idents.data);
-				*t = ((Type*)d->type.tuple.data)[index];
-				return true;
-			}
-		}
-		assert(0);
-		return false;
-	} else {
-		*t = decl_type;
-		return true;
 	}
 }
 
@@ -239,7 +255,7 @@ static bool type_resolve(Typer *tr, Type *t) {
 		if (!type_resolve(tr, t->arr.of)) return false; /* resolve inner type */
 		Value val;
 		Expression *n_expr = t->arr.n_expr;
-		if (!type_of_expr(tr, n_expr)) return false;
+		if (!types_expr(tr, n_expr)) return false;
 		if (n_expr->type.kind != TYPE_BUILTIN || !type_builtin_is_integer(n_expr->type.builtin))
 			return false;
 		
@@ -289,8 +305,7 @@ static bool type_can_be_truthy(Type *t) {
 	return false;
 }
 
-/* NOTE: this does descend into un/binary ops, calls, etc. but NOT into any functions  */
-static bool type_of_expr(Typer *tr, Expression *e) {
+static bool types_expr(Typer *tr, Expression *e) {
 	if (e->flags & EXPR_FLAG_FOUND_TYPE) return true;
 	Type *t = &e->type;
 	t->flags = 0;
@@ -299,20 +314,32 @@ static bool type_of_expr(Typer *tr, Expression *e) {
 	switch (e->kind) {
 	case EXPR_FN: {
 		FnExpr *f = e->fn;
-		t->kind = TYPE_FN;
-		arr_create(&t->fn.types, sizeof(Type));
-		Type *ret_type = arr_add(&t->fn.types);
-		if (!type_resolve(tr, &f->ret_type))
-			return false;
-		*ret_type = f->ret_type;
-		Declaration *params = &f->params;
-		Type *type = &params->type;
-		Type *param_types = type->kind == TYPE_TUPLE ? type->tuple.data : type;
-	    for (size_t i = 0; i < params->idents.len; i++) {
-			Type *param_type = arr_add(&t->fn.types);
-			if (!type_resolve(tr, &param_types[i]))
+		if (!type_of_fn(tr, f, t)) return false;
+		add_ident_decls(&f->body, &f->params);
+		bool success = true;
+		success = types_block(tr, &e->fn->body);
+		remove_ident_decls(&f->body, &f->params);
+		if (!success) return false;
+		Expression *ret_expr = f->body.ret_expr;
+		assert(t->kind == TYPE_FN);
+		Type *ret_type = t->fn.types.data;
+		if (ret_expr) {
+			if (!types_expr(tr, ret_expr)) return false;
+			if (!type_eq(ret_type, &ret_expr->type)) {
+				char *got = type_to_str(&ret_expr->type);
+				char *expected = type_to_str(ret_type);
+				err_print(ret_expr->where, "Returning type %s, but function returns type %s.", got, expected);
+				info_print(e->where, "Function declaration is here.");
+				free(got); free(expected);
 				return false;
-			*param_type = param_types[i];
+			}
+		} else if (ret_type->kind != TYPE_VOID) {
+			/* TODO: this should really be at the closing brace, and not the function declaration */
+			char *expected = type_to_str(ret_type);
+			err_print(f->body.end, "No return value in function which returns %s.", expected);
+			free(expected);
+			info_print(e->where, "Function was declared here:");
+			return false;
 		}
 	} break;
 	case EXPR_LITERAL_INT:
@@ -329,7 +356,7 @@ static bool type_of_expr(Typer *tr, Expression *e) {
 		t->flags |= TYPE_FLAG_FLEXIBLE;
 		break;
 	case EXPR_IDENT: {
-		if (!type_of_ident(tr, e->where, e->ident, t, false)) return false;
+		if (!type_of_ident(tr, e->where, e->ident, t)) return false;
 	} break;
 	case EXPR_IF: {
 		IfExpr *i = &e->if_;
@@ -341,7 +368,7 @@ static bool type_of_expr(Typer *tr, Expression *e) {
 		*t = curr->body.ret_expr->type;
 		while (1) {
 			if (curr->cond) {
-				if (!type_of_expr(tr, curr->cond))
+				if (!types_expr(tr, curr->cond))
 					return false;
 				if (!type_can_be_truthy(&curr->cond->type)) {
 					char *s = type_to_str(&curr->cond->type);
@@ -381,11 +408,12 @@ static bool type_of_expr(Typer *tr, Expression *e) {
 	} break;
 	case EXPR_WHILE: {
 		WhileExpr *w = &e->while_;
+		bool ret = true;
+		if (!types_expr(tr, w->cond))
+			ret = false;
 		if (!types_block(tr, &w->body))
-			return false;
-		if (!type_of_expr()) {
-			/* TODO: is type_of_expr vs types_expr really necessary? */
-		}
+			ret = false;
+		if (!ret) return false;
 		*t = w->body.ret_expr->type;
 	} break;
 	case EXPR_CALL: {
@@ -393,12 +421,12 @@ static bool type_of_expr(Typer *tr, Expression *e) {
 		Expression *f = c->fn;
 		if (f->kind == EXPR_IDENT) {
 			/* allow calling a function before declaring it */
-			if (!type_of_ident(tr, f->where, f->ident, &f->type, true)) return false;
+			if (!type_of_ident(tr, f->where, f->ident, &f->type)) return false;
 		} else {
-			if (!type_of_expr(tr, f)) return false;
+			if (!types_expr(tr, f)) return false;
 		}
 		arr_foreach(&c->args, Expression, arg) {
-			if (!type_of_expr(tr, arg))
+			if (!types_expr(tr, arg))
 				return false;
 		}
 		if (f->type.kind != TYPE_FN) {
@@ -442,7 +470,8 @@ static bool type_of_expr(Typer *tr, Expression *e) {
 	case EXPR_DIRECT:
 		t->kind = TYPE_UNKNOWN;
 	    arr_foreach(&e->direct.args, Expression, arg) {
-			types_expr(tr, arg);
+			if (!types_expr(tr, arg))
+				return false;
 		}
 		switch (e->direct.which) {
 		case DIRECT_C: {
@@ -459,7 +488,7 @@ static bool type_of_expr(Typer *tr, Expression *e) {
 	case EXPR_UNARY_OP: {
 		Expression *of = e->unary.of;
 		Type *of_type = &of->type;
-	    if (!type_of_expr(tr, e->unary.of)) return false;
+	    if (!types_expr(tr, e->unary.of)) return false;
 		switch (e->unary.op) {
 		case UNARY_MINUS:
 			if (of_type->kind != TYPE_BUILTIN || !type_builtin_is_numerical(of_type->builtin)) {
@@ -493,8 +522,8 @@ static bool type_of_expr(Typer *tr, Expression *e) {
 	case EXPR_BINARY_OP: {
 		Type *lhs_type = &e->binary.lhs->type;
 		Type *rhs_type = &e->binary.rhs->type;
-		if (!type_of_expr(tr, e->binary.lhs)
-			|| !type_of_expr(tr, e->binary.rhs))
+		if (!types_expr(tr, e->binary.lhs)
+			|| !types_expr(tr, e->binary.rhs))
 			return false;
 		switch (e->binary.op) {
 		case BINARY_SET:
@@ -597,85 +626,21 @@ static bool types_block(Typer *tr, Block *b) {
 	tr->block = b;
 	if (!block_enter(b, &b->stmts)) return false;
 	arr_foreach(&b->stmts, Statement, s) {
-		if (!types_stmt(tr, s)) success = false;
+		if (!types_stmt(tr, s))
+			success = false;
 	}
-	if (!success) return false;
-	if (b->ret_expr) {
+	if (success && b->ret_expr) {
 		if (!types_expr(tr, b->ret_expr))
-			return false;
+			success = false;
 		if (b->ret_expr->type.kind == TYPE_VOID) {
 			err_print(b->ret_expr->where, "Cannot return void value.");
-			return false;
+		    success = false;
 		}
 	}
-	
 	block_exit(b, &b->stmts);
 	tr->block = prev_block;
-	return true;
+	return success;
 }
-
-/* does descend into functions, unlike type_of_expr. */
-/* TODO: you still need to descend into other things */
-static bool types_expr(Typer *tr, Expression *e) {
-	if (!type_of_expr(tr, e)) return false;
-	switch (e->kind) {
-	case EXPR_UNARY_OP:
-		if (!types_expr(tr, e->unary.of)) return false;
-		break;
-	case EXPR_BINARY_OP:
-		if (!types_expr(tr, e->binary.lhs)) return false;
-		if (!types_expr(tr, e->binary.rhs)) return false;
-		break;
-	case EXPR_CALL:
-		if (!types_expr(tr, e->call.fn)) return false;
-		arr_foreach(&e->call.args, Expression, arg) {
-			if (!types_expr(tr, arg)) return false;
-		}
-		break;
-	case EXPR_FN: {
-		assert(e->type.kind == TYPE_FN);
-		FnExpr *f = e->fn;
-		add_ident_decls(&f->body, &f->params);
-		if (!types_block(tr, &e->fn->body))
-			return false;
-		remove_ident_decls(&f->body, &f->params);
-		Type *ret_type = e->type.fn.types.data;
-		Expression *ret_expr = f->body.ret_expr;
-		
-		if (ret_expr) {
-			if (!type_eq(ret_type, &ret_expr->type)) {
-				char *got = type_to_str(&ret_expr->type);
-				char *expected = type_to_str(ret_type);
-				err_print(ret_expr->where, "Returning type %s, but function returns type %s.", got, expected);
-				info_print(e->where, "Function declaration is here.");
-				free(got); free(expected);
-				return false;
-			}
-		} else if (ret_type->kind != TYPE_VOID) {
-			/* TODO: this should really be at the closing brace, and not the function declaration */
-			char *expected = type_to_str(ret_type);
-			err_print(f->body.end, "No return value in function which returns %s.", expected);
-			free(expected);
-			info_print(e->where, "Function was declared here:");
-			return false;
-		}
-	} break;
-	case EXPR_IF: {
-		IfExpr *i = &e->if_;
-		if (i->cond && !types_expr(tr, i->cond)) return false;
-		
-	} break;
-	case EXPR_DIRECT:
-	case EXPR_BLOCK:
-	case EXPR_IDENT:
-	case EXPR_LITERAL_INT:
-	case EXPR_LITERAL_FLOAT:
-	case EXPR_LITERAL_STR:
-		break;
-	}
-	return true;
-}
-
 
 static bool types_decl(Typer *tr, Declaration *d) {
 	bool success = true;
