@@ -9,6 +9,7 @@ kw - keyword
 num - number
 op - operator
 ptr - pointer
+ret - return
 stmt - statement
 str - string
 tokr - tokenizer

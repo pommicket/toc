@@ -1,6 +1,7 @@
 typedef struct {
 	Array in_decls;	/* array of declarations we are currently inside */
 	Block *block;
+	Type *ret_type;	/* the return type of the function we're currently parsing. NULL for none. */
 } Typer;
 
 static bool types_stmt(Typer *tr, Statement *s);
@@ -307,40 +308,69 @@ static bool type_can_be_truthy(Type *t) {
 
 static bool types_expr(Typer *tr, Expression *e) {
 	if (e->flags & EXPR_FLAG_FOUND_TYPE) return true;
+	Type *prev_ret_type = tr->ret_type;
+	
 	Type *t = &e->type;
 	t->flags = 0;
 	t->kind = TYPE_UNKNOWN; /* default to unknown type (in the case of an error) */
 	e->flags |= EXPR_FLAG_FOUND_TYPE; /* even if failed, pretend we found the type */
+	bool success = true;
 	switch (e->kind) {
 	case EXPR_FN: {
 		FnExpr *f = e->fn;
-		if (!type_of_fn(tr, f, t)) return false;
+		if (!type_of_fn(tr, f, t)) {
+			success = false;
+			goto fn_ret;
+		}
+		tr->ret_type = t->fn.types.data;
 		add_ident_decls(&f->body, &f->params);
-		bool success = true;
-		success = types_block(tr, &e->fn->body);
+		bool block_success = true;
+		block_success = types_block(tr, &e->fn->body);
 		remove_ident_decls(&f->body, &f->params);
-		if (!success) return false;
+		if (!block_success) {
+			success = false;
+			goto fn_ret;
+		}
 		Expression *ret_expr = f->body.ret_expr;
 		assert(t->kind == TYPE_FN);
 		Type *ret_type = t->fn.types.data;
 		if (ret_expr) {
-			if (!types_expr(tr, ret_expr)) return false;
+			if (!types_expr(tr, ret_expr)) {
+				success = false;
+				goto fn_ret;
+			}
 			if (!type_eq(ret_type, &ret_expr->type)) {
 				char *got = type_to_str(&ret_expr->type);
 				char *expected = type_to_str(ret_type);
 				err_print(ret_expr->where, "Returning type %s, but function returns type %s.", got, expected);
 				info_print(e->where, "Function declaration is here.");
 				free(got); free(expected);
-				return false;
+				success = false;
+				goto fn_ret;
 			}
 		} else if (ret_type->kind != TYPE_VOID) {
+			Array stmts = e->fn->body.stmts;
+			if (stmts.len) {
+				Statement *last_stmt = (Statement *)stmts.data + (stmts.len - 1);
+				if (last_stmt->kind == STMT_RET) {
+					/*
+					  last statement is a return, so it doesn't matter that the function has no return value
+					ideally this would handle if foo { return 5; } else { return 6; } */
+					success = true;
+					goto fn_ret;
+				}
+			}
 			/* TODO: this should really be at the closing brace, and not the function declaration */
 			char *expected = type_to_str(ret_type);
 			err_print(f->body.end, "No return value in function which returns %s.", expected);
 			free(expected);
 			info_print(e->where, "Function was declared here:");
-			return false;
+			success = false;
+			goto fn_ret;
 		}
+		fn_ret:
+		tr->ret_type = prev_ret_type;
+		if (!success) return false;
 	} break;
 	case EXPR_LITERAL_INT:
 	    t->kind = TYPE_BUILTIN;
@@ -700,6 +730,25 @@ static bool types_stmt(Typer *tr, Statement *s) {
 	case STMT_DECL:
 		if (!types_decl(tr, &s->decl))
 			return false;
+		break;
+	case STMT_RET:
+		if (!tr->ret_type) {
+			err_print(s->where, "return outside of a function.");
+			return false;
+		}
+		if (s->ret.flags & RET_FLAG_EXPR) {
+			if (tr->ret_type->kind == TYPE_VOID) {
+				err_print(s->where, "Return value in void function.");
+				return false;
+			}
+			if (!types_expr(tr, &s->ret.expr))
+				return false;
+		} else {
+			if (tr->ret_type->kind != TYPE_VOID) {
+				err_print(s->where, "No return value in non-void function.");
+				return false;
+			}
+		}
 		break;
 	}
 	return true;

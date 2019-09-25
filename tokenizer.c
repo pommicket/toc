@@ -28,9 +28,12 @@ typedef enum {
 			  KW_EQEQ,
 			  KW_LT,
 			  KW_LE,
+			  KW_GT,
+			  KW_GE,
 			  KW_PLUS,
 			  KW_MINUS,
 			  KW_ASTERISK,
+			  KW_EXCLAMATION,
 			  KW_AMPERSAND,
 			  KW_SLASH,
 			  KW_LAST_SYMBOL = KW_SLASH, /* last one entirely consisting of symbols */
@@ -38,6 +41,7 @@ typedef enum {
 			  KW_ELIF,
 			  KW_ELSE,
 			  KW_WHILE,
+			  KW_RETURN,
 			  KW_FN,
 			  KW_INT,
 			  KW_I8,
@@ -55,9 +59,10 @@ typedef enum {
 } Keyword;
 
 static const char *keywords[KW_COUNT] =
-	{";", "=", ":", "@", ",", "(", ")", "{", "}", "[", "]", "==", "<", "<=", "+", "-", "*",
-	 "&", "/", "if", "elif", "else", "while", "fn", "int", "i8", "i16", "i32", "i64", "u8",
-	 "u16", "u32", "u64", "float", "f32", "f64"};
+	{";", "=", ":", "@", ",", "(", ")", "{", "}", "[", "]", "==", "<", "<=", ">", ">=",
+	 "+", "-", "*", "!", "&", "/", "if", "elif", "else", "while", "return", "fn", "int",
+	 "i8", "i16", "i32", "i64",
+	 "u8", "u16", "u32", "u64", "float", "f32", "f64"};
 
 static const char *directives[DIRECT_COUNT] =
 	{"C"};
