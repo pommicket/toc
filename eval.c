@@ -8,10 +8,11 @@ typedef struct Value {
 	};
 } Value;
 
-/* static bool eval_truthiness(Expression *e, Value *v) { */
-/* 	/\* TODO *\/ */
-/* 	return true; */
-/* } */
+static bool eval_truthiness(Expression *e, Value *v) {
+	/* TODO */
+	(void)e,(void)v;
+	return true;
+}
 
 /* NOTE: expr must be typed before it can be evaluated */
 static bool eval_expr(Expression *e, Value *v) { 
@@ -50,6 +51,9 @@ static bool eval_expr(Expression *e, Value *v) {
 			}
 			return true;
 		}
+		case UNARY_NOT:
+			v->boolv = !eval_truthiness(e, v);
+		    return true;
 		case UNARY_ADDRESS:
 			v->points_to = err_malloc(sizeof *v->points_to); /* OPTIM */
 			return eval_expr(e->unary.of, v->points_to);

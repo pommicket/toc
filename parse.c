@@ -80,7 +80,8 @@ typedef enum {
 typedef enum {
 			  UNARY_MINUS,
 			  UNARY_ADDRESS, /* &x */
-			  UNARY_DEREF
+			  UNARY_DEREF, /* *x */
+			  UNARY_NOT	/* !x */
 } UnaryOp;
 
 typedef enum {
@@ -216,6 +217,7 @@ static const char *unary_op_to_str(UnaryOp u) {
 	case UNARY_MINUS: return "-";
 	case UNARY_ADDRESS: return "&";
 	case UNARY_DEREF: return "*";
+	case UNARY_NOT: return "!";
 	}
 	assert(0);
 	return "";
@@ -390,6 +392,7 @@ static int op_precedence(Keyword op) {
 	case KW_AMPERSAND: return 25;
 	case KW_ASTERISK: return 30;
 	case KW_SLASH: return 40;
+	case KW_EXCLAMATION: return 50;
 	default: return NOT_AN_OP;
 	}
 }
@@ -1078,7 +1081,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	if (lowest_precedence_op == t->token) {
 		/* Unary */
 		UnaryOp op;
-		bool is_unary;
+		bool is_unary = true;
 		switch (lowest_precedence_op->kw) {
 		case KW_PLUS:
 			/* unary + is ignored entirely */
@@ -1086,16 +1089,16 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			/* re-parse this expression without + */
 			return parse_expr(p, e, end);
 		case KW_MINUS:
-			is_unary = true;
 			op = UNARY_MINUS;
 			break;
 		case KW_AMPERSAND:
-			is_unary = true;
 			op = UNARY_ADDRESS;
 			break;
 		case KW_ASTERISK:
-			is_unary = true;
 			op = UNARY_DEREF;
+			break;
+		case KW_EXCLAMATION:
+			op = UNARY_NOT;
 			break;
 		default:
 			is_unary = false;

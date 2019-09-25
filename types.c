@@ -257,9 +257,12 @@ static bool type_resolve(Typer *tr, Type *t) {
 		Value val;
 		Expression *n_expr = t->arr.n_expr;
 		if (!types_expr(tr, n_expr)) return false;
-		if (n_expr->type.kind != TYPE_BUILTIN || !type_builtin_is_integer(n_expr->type.builtin))
+		if (n_expr->type.kind != TYPE_BUILTIN || !type_builtin_is_integer(n_expr->type.builtin)) {
+			char *s = type_to_str(&n_expr->type);
+			err_print(n_expr->where, "Cannot use type %s as the size of an array (it's not an integer type).", s);
+			free(s);
 			return false;
-		
+		}
 		if (!eval_expr(n_expr, &val)) return false; /* resolve N */
 		Integer size = val.intv;
 		if (size < 0)
@@ -551,6 +554,15 @@ static bool types_expr(Typer *tr, Expression *e) {
 			}
 			*t = *of_type->ptr.of;
 			break;
+		case UNARY_NOT:
+			if (!type_can_be_truthy(of_type)) {
+				char *s = type_to_str(of_type);
+				err_print(e->where, "Type '%s' cannot be truthy, so the not operator cannot be applied to it.", s);
+				free(s);
+				return false;
+			}
+			t->kind = TYPE_BUILTIN;
+			t->builtin = BUILTIN_BOOL;
 		}
 	} break;
 	case EXPR_BINARY_OP: {
