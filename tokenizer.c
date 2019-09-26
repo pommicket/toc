@@ -15,7 +15,6 @@ typedef enum {
 
 typedef enum {
 			  KW_SEMICOLON,
-			  KW_EQ,
 			  KW_COLON,
 			  KW_AT,
 			  KW_COMMA,
@@ -26,6 +25,7 @@ typedef enum {
 			  KW_LSQUARE,
 			  KW_RSQUARE,
 			  KW_EQEQ,
+			  KW_NE,
 			  KW_LT,
 			  KW_LE,
 			  KW_GT,
@@ -36,7 +36,8 @@ typedef enum {
 			  KW_EXCLAMATION,
 			  KW_AMPERSAND,
 			  KW_SLASH,
-			  KW_LAST_SYMBOL = KW_SLASH, /* last one entirely consisting of symbols */
+			  KW_EQ,
+			  KW_LAST_SYMBOL = KW_EQ, /* last one entirely consisting of symbols */
 			  KW_IF,
 			  KW_ELIF,
 			  KW_ELSE,
@@ -62,8 +63,10 @@ typedef enum {
 } Keyword;
 
 static const char *keywords[KW_COUNT] =
-	{";", "=", ":", "@", ",", "(", ")", "{", "}", "[", "]", "==", "<", "<=", ">", ">=",
-	 "+", "-", "*", "!", "&", "/", "if", "elif", "else", "while", "return", "fn",
+	{";", ":", "@", ",", "(", ")", "{", "}", "[", "]", "==", "!=", "<", "<=", ">", ">=",
+	 "+", "-", "*", "!", "&", "/",
+	 "=",
+	 "if", "elif", "else", "while", "return", "fn",
 	 "bool", "true", "false",
 	 "int", "i8", "i16", "i32", "i64",
 	 "u8", "u16", "u32", "u64", "float", "f32", "f64"};

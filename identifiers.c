@@ -41,7 +41,7 @@ static int isident(int c) {
 		return 1;
 	if (c >= '0' && c <= '9')
 		return 1;
-	if (c == '_' || c == '.') return 1;
+	if (c == '_') return 1;
 #if CHAR_MIN < 0
 	if (c < 0) /* on systems where char = signed char, UTF-8 characters are probably < 0? */
 		return 1;
@@ -135,11 +135,7 @@ static void fprint_ident_reduced_charset(FILE *out, Identifier id) {
 		fprintf(out, "x__%x",c);
 	} else {
 		char chr = (char)ident_uchar_to_char(c);
-		if (chr == '.') {
-			fprintf(out, "__");	/* replace . with __ */
-		} else {
-			fputc(chr, out);
-		}
+		fputc(chr, out);
 	}
 }
 

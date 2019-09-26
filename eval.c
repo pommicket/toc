@@ -70,8 +70,13 @@ static bool eval_expr(Expression *e, Value *v) {
 		/* NOTE: this will need to change for short-circuiting */
 		if (!eval_expr(e->binary.lhs, &lhs)) return false;
 		if (!eval_expr(e->binary.rhs, &rhs)) return false;
+		if (e->type.kind != TYPE_BUILTIN) {
+			err_print(e->where, "Operators can only be applied to builtin types.");
+			return false;
+		}
 		bool is_int = type_builtin_is_integer(e->type.builtin);
 		bool is_float = type_builtin_is_floating(e->type.builtin);
+		bool is_bool = e->type.builtin == BUILTIN_BOOL;
 		switch (e->binary.op) {
 		case BINARY_PLUS:
 			if (is_int) {
@@ -100,6 +105,52 @@ static bool eval_expr(Expression *e, Value *v) {
 				v->intv = lhs.intv / rhs.intv;
 			} else if (is_float) {
 				v->floatv = lhs.floatv / rhs.floatv;
+			} else assert(0);
+			return true;
+		case BINARY_EQ:
+			if (is_int) {
+				v->boolv = lhs.intv == rhs.intv;
+			} else if (is_float) {
+				v->boolv = lhs.floatv == rhs.floatv;
+			} else if (is_bool) {
+				v->boolv = lhs.boolv == rhs.boolv;
+			} else assert(0);
+			return true;
+		case BINARY_NE:
+			if (is_int) {
+				v->boolv = lhs.intv != rhs.intv;
+			} else if (is_float) {
+				v->boolv = lhs.floatv != rhs.floatv;
+			} else if (is_bool) {
+				v->boolv = lhs.boolv != rhs.boolv;
+			} else assert(0);
+			return true;
+		case BINARY_GT:
+			if (is_int) {
+				v->boolv = lhs.intv > rhs.intv;
+			} else if (is_float) {
+				v->boolv = lhs.floatv > rhs.floatv;
+			} else assert(0);
+			return true;
+		case BINARY_GE:
+			if (is_int) {
+				v->boolv = lhs.intv >= rhs.intv;
+			} else if (is_float) {
+				v->boolv = lhs.floatv >= rhs.floatv;
+			} else assert(0);
+			return true;
+		case BINARY_LT:
+			if (is_int) {
+				v->boolv = lhs.intv < rhs.intv;
+			} else if (is_float) {
+				v->boolv = lhs.floatv < rhs.floatv;
+			} else assert(0);
+			return true;
+		case BINARY_LE:
+			if (is_int) {
+				v->boolv = lhs.intv <= rhs.intv;
+			} else if (is_float) {
+				v->boolv = lhs.floatv <= rhs.floatv;
 			} else assert(0);
 			return true;
 	    case BINARY_SET:

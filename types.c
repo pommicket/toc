@@ -581,7 +581,13 @@ static bool types_expr(Typer *tr, Expression *e) {
 		case BINARY_PLUS:
 		case BINARY_MINUS:
 		case BINARY_MUL:
-		case BINARY_DIV: {
+		case BINARY_DIV:
+		case BINARY_LT:
+		case BINARY_GT:
+		case BINARY_LE:
+		case BINARY_GE:
+		case BINARY_EQ:
+		case BINARY_NE: {
 			bool match = true;
 			if (e->binary.op != BINARY_SET) {
 				/* numerical binary ops */
@@ -594,26 +600,38 @@ static bool types_expr(Typer *tr, Expression *e) {
 				}
 			}
 			if (match) {
-				if (e->binary.op == BINARY_SET) {
+				switch (e->binary.op) {
+				case BINARY_SET:
 					/* type of x = y is always void */
 					t->kind = TYPE_VOID;
 					break;
-				}
-				int lhs_is_flexible = lhs_type->flags & TYPE_FLAG_FLEXIBLE;
-				int rhs_is_flexible = rhs_type->flags & TYPE_FLAG_FLEXIBLE;
-				if (lhs_is_flexible && rhs_is_flexible) {
-					*t = *lhs_type;
-					if (rhs_type->builtin == BUILTIN_F32) {
-						/* promote to float */
-						t->builtin = BUILTIN_F32;
-					}
-				} else if (type_eq(lhs_type, rhs_type)) {
-					if (!lhs_is_flexible)
+				case BINARY_LT:
+				case BINARY_GT:
+				case BINARY_LE:
+				case BINARY_GE:
+				case BINARY_EQ:
+				case BINARY_NE:
+					t->kind = TYPE_BUILTIN;
+					t->builtin = BUILTIN_BOOL;
+					break;
+				default: {
+					int lhs_is_flexible = lhs_type->flags & TYPE_FLAG_FLEXIBLE;
+					int rhs_is_flexible = rhs_type->flags & TYPE_FLAG_FLEXIBLE;
+					if (lhs_is_flexible && rhs_is_flexible) {
 						*t = *lhs_type;
-					else
-						*t = *rhs_type;
-				} else {
-					match = false;
+						if (rhs_type->builtin == BUILTIN_F32) {
+							/* promote to float */
+							t->builtin = BUILTIN_F32;
+						}
+					} else if (type_eq(lhs_type, rhs_type)) {
+						if (!lhs_is_flexible)
+							*t = *lhs_type;
+						else
+							*t = *rhs_type;
+					} else {
+						match = false;
+					}
+				} break;
 				}
 			}
 			if (!match) {
