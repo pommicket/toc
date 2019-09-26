@@ -1,5 +1,7 @@
 /* 
 TODO:
+get rid of multiple types in one decl (no a, b := twofn();)
+casting
 re-do cgen
  */
 #include "toc.c"

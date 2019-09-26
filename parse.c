@@ -1371,15 +1371,26 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndType ends_with, uint16_
 	return ret;
 }
 
+static bool is_decl(Tokenizer *t) {
+	Token *token = t->token;
+	while (1) {
+		if (token->kind != TOKEN_IDENT) return false;
+		token++;
+		if (token->kind != TOKEN_KW) return false;
+		if (token->kw == KW_COLON || token->kw == KW_AT)
+			return true;
+		if (token->kw != KW_COMMA) return false;
+		token++;
+	}
+}
+
 static bool parse_stmt(Parser *p, Statement *s) {
 	Tokenizer *t = p->tokr;
 	s->flags = 0;
 	if (t->token->kind == TOKEN_EOF)
 		tokr_err(t, "Expected statement.");
 	s->where = t->token->where;
-	/* 
-	   TODO: statements such as 3, 5; will not work.
-	*/
+	
 	if (token_is_kw(t->token, KW_RETURN)) {
 		s->kind = STMT_RET;
 		t->token++;
@@ -1404,8 +1415,7 @@ static bool parse_stmt(Parser *p, Statement *s) {
 		t->token = end + 1;
 		return success;
 	}
-	if (token_is_kw(t->token + 1, KW_COLON) || token_is_kw(t->token + 1, KW_COMMA)
-		|| token_is_kw(t->token + 1, KW_AT)) {
+	if (is_decl(t)) {
 		s->kind = STMT_DECL;
 		if (!parse_decl(p, &s->decl, DECL_END_SEMICOLON, 0)) {
 			return false;

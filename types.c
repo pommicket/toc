@@ -146,7 +146,13 @@ static bool expr_must_lval(Expression *e) {
 		if (e->unary.op == UNARY_DEREF) return true;
 		break;
 	case EXPR_BINARY_OP:
-		if (e->binary.op == BINARY_AT_INDEX) return true;
+		switch (e->binary.op) {
+		case BINARY_AT_INDEX: return true;
+		case BINARY_COMMA:
+			/* x, y is an lval, but 3, "hello" is not. */
+			return expr_must_lval(e->binary.lhs) && expr_must_lval(e->binary.rhs);
+		default: break;
+		}
 		break;
 	default:
 		break;
@@ -218,13 +224,13 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 	if (d->flags & DECL_FLAG_FOUND_TYPE) {
 		if (d->idents.len > 1) {
 			/* it's a tuple! */
-		
+			long index = 0;
 			arr_foreach(&d->idents, Identifier, decl_i) {
 				if (*decl_i == i) {
-					long index = (long)(decl_i - (Identifier*)d->idents.data);
 					*t = ((Type*)d->type.tuple.data)[index];
 					return true;
 				}
+				index++;
 			}
 			assert(0);
 			return false;
@@ -238,10 +244,12 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 			if (!type_of_fn(tr, d->expr.fn, t)) return false;
 			return true;
 		} else {
-			char *s = ident_to_str(i);
-			err_print(where, "Use of identifier %s before its declaration.\nNote that it is only possible to use a constant function before it is directly declared (e.g. x @= fn() {}).", s);
-			info_print(d->where, "%s will be declared here.", s);
-			free(s);
+			if (location_after(d->where, where)) {
+				char *s = ident_to_str(i);
+				err_print(where, "Use of identifier %s before its declaration.\nNote that it is only possible to use a constant function before it is directly declared (e.g. x @= fn() {}).", s);
+				info_print(d->where, "%s will be declared here.", s);
+				free(s);
+			} /* else, there should have been an error earlier */
 			return false;
 		}
 	}
@@ -599,6 +607,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 					match = false;
 				}
 			}
+			if (!type_eq(lhs_type, rhs_type)) match = false;
 			if (match) {
 				switch (e->binary.op) {
 				case BINARY_SET:
@@ -623,14 +632,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 							/* promote to float */
 							t->builtin = BUILTIN_F32;
 						}
-					} else if (type_eq(lhs_type, rhs_type)) {
-						if (!lhs_is_flexible)
-							*t = *lhs_type;
-						else
-							*t = *rhs_type;
-					} else {
-						match = false;
-					}
+					} else if (!lhs_is_flexible)
+						*t = *lhs_type;
+					else
+						*t = *rhs_type;
 				} break;
 				}
 			}
@@ -737,6 +742,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 				goto ret;
 			}
 			d->type = d->expr.type;
+			d->type.flags &= ~TYPE_FLAG_FLEXIBLE; /* x := 5; => x is not flexible */
 		}
 		if (d->flags & DECL_FLAG_CONST) {
 			if (!d->val) {
