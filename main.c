@@ -1,7 +1,9 @@
 /* 
 TODO:
-casting
 named return values
+optional params
+named params
+evaluator (simplify compile time constant expressions)
 re-do cgen
  */
 #include "toc.c"

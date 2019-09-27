@@ -667,12 +667,26 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 	t->token++;
 	arr_create(&f->params, sizeof(Declaration));
 	bool ret = true;
-	while (!token_is_kw(t->token, KW_RPAREN)) {
-		Declaration *decl = arr_add(&f->params);
-		if (!parse_decl(p, decl, DECL_END_RPAREN_COMMA, PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR))
-		    ret = false;
+	if (token_is_kw(t->token, KW_RPAREN)) {
+		t->token++;
+	} else {
+		while (t->token->kind != TOKEN_EOF && !token_is_kw(t->token - 1, KW_RPAREN)) {
+			Declaration *decl = arr_add(&f->params);
+			if (!parse_decl(p, decl, DECL_END_RPAREN_COMMA, PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR)) {
+				ret = false;
+				/* skip to end of param list */
+				while (t->token->kind != TOKEN_EOF && !token_is_kw(t->token, KW_RPAREN))
+					t->token++;
+				break;
+			}
+		}
 	}
-	t->token++;
+	
+	if (t->token->kind == TOKEN_EOF) {
+		tokr_err(t, "End of file encountered while parsing parameter list.");
+		return false;
+	}
+	
 	if (token_is_kw(t->token, KW_LBRACE)) {
 		/* void function */
 		f->ret_type.kind = TYPE_VOID;
@@ -1291,13 +1305,17 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndType ends_with, uint16_
 		}
 		d->type = type;
 	}
+	char end_char = ends_with == DECL_END_SEMICOLON ? ';' : ')';
 	
 	if (token_is_kw(t->token, KW_EQ)) {
 		t->token++;
 		d->flags |= DECL_FLAG_HAS_EXPR;
-		Token *end = expr_find_end(p, 0, NULL);
-		if (!end || !token_is_kw(end, KW_SEMICOLON)) {
-			tokr_err(t, "Expected ';' at end of declaration.");
+		uint16_t expr_flags = 0;
+		if (ends_with == DECL_END_RPAREN_COMMA)
+			expr_flags |= EXPR_CAN_END_WITH_COMMA;
+		Token *end = expr_find_end(p, expr_flags, NULL);
+		if (!end || !ends_decl(end, ends_with)) {
+			tokr_err(t, "Expected '%c' at end of declaration.", end_char);
 		    goto ret_false;
 		}
 		if (!parse_expr(p, &d->expr, end)) {
@@ -1307,15 +1325,13 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndType ends_with, uint16_
 		if (ends_decl(t->token, ends_with)) {
 			t->token++;
 		} else {
-			tokr_err(t, "Expected '%c' at end of declaration.",
-					 ends_with == DECL_END_SEMICOLON ? ';' : ')');
+			tokr_err(t, "Expected '%c' at end of declaration.", end_char);
 		    goto ret_false;
 		}
 	} else if (ends_decl(t->token, ends_with)) {
 		t->token++;
 	} else {
-		tokr_err(t, "Expected '%c' or '=' at end of delaration.",
-				 ends_with == DECL_END_SEMICOLON ? ';' : ')');
+		tokr_err(t, "Expected '%c' or '=' at end of delaration.", end_char);
 	    goto ret_false;
 	}
 	
