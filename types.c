@@ -161,22 +161,20 @@ static bool expr_must_lval(Expression *e) {
 }
 
 static bool type_of_fn(Typer *tr, FnExpr *f, Type *t) {
-	
 	t->kind = TYPE_FN;
 	arr_create(&t->fn.types, sizeof(Type));
 	Type *ret_type = arr_add(&t->fn.types);
 	if (!type_resolve(tr, &f->ret_type))
 		return false;
 	*ret_type = f->ret_type;
-	Declaration *params = &f->params;
-	if (!types_decl(tr, params)) return false;
-	Type *type = &params->type;
-	Type *param_types = type->kind == TYPE_TUPLE ? type->tuple.data : type;
-	for (size_t i = 0; i < params->idents.len; i++) {
-		Type *param_type = arr_add(&t->fn.types);
-		if (!type_resolve(tr, &param_types[i]))
+	arr_foreach(&f->params, Declaration, decl) {
+		if (!types_decl(tr, decl)) return false;
+		if (!type_resolve(tr, &decl->type))
 			return false;
-		*param_type = param_types[i];
+		for (size_t i = 0; i < decl->idents.len; i++) {
+			Type *param_type = arr_add(&t->fn.types);
+			*param_type = decl->type;
+		}
 	}
 	return true;
 }
@@ -222,26 +220,12 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 	}
 	
 	if (d->flags & DECL_FLAG_FOUND_TYPE) {
-		if (d->idents.len > 1) {
-			/* it's a tuple! */
-			long index = 0;
-			arr_foreach(&d->idents, Identifier, decl_i) {
-				if (*decl_i == i) {
-					*t = ((Type*)d->type.tuple.data)[index];
-					return true;
-				}
-				index++;
-			}
-			assert(0);
-			return false;
-		} else {
-			*t = d->type;
-			return true;
-		}
+		*t = d->type;
+		return true;
 	} else {
 		if ((d->flags & DECL_FLAG_HAS_EXPR) && (d->expr.kind == EXPR_FN)) {
 			/* allow using a function before declaring it */
-			if (!type_of_fn(tr, d->expr.fn, t)) return false;
+			if (!type_of_fn(tr, &d->expr.fn, t)) return false;
 			return true;
 		} else {
 			if (location_after(d->where, where)) {
@@ -328,16 +312,18 @@ static bool types_expr(Typer *tr, Expression *e) {
 	bool success = true;
 	switch (e->kind) {
 	case EXPR_FN: {
-		FnExpr *f = e->fn;
+		FnExpr *f = &e->fn;
 		if (!type_of_fn(tr, f, t)) {
 			success = false;
 			goto fn_ret;
 		}
 		tr->ret_type = t->fn.types.data;
-		add_ident_decls(&f->body, &f->params);
+		arr_foreach(&f->params, Declaration, decl)
+			add_ident_decls(&f->body, decl);
 		bool block_success = true;
-		block_success = types_block(tr, &e->fn->body);
-		remove_ident_decls(&f->body, &f->params);
+		block_success = types_block(tr, &e->fn.body);
+		arr_foreach(&f->params, Declaration, decl)
+			remove_ident_decls(&f->body, decl);
 		if (!block_success) {
 			success = false;
 			goto fn_ret;
@@ -360,7 +346,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				goto fn_ret;
 			}
 		} else if (ret_type->kind != TYPE_VOID) {
-			Array stmts = e->fn->body.stmts;
+			Array stmts = e->fn.body.stmts;
 			if (stmts.len) {
 				Statement *last_stmt = (Statement *)stmts.data + (stmts.len - 1);
 				if (last_stmt->kind == STMT_RET) {

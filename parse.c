@@ -121,6 +121,12 @@ typedef struct {
 	Block body;
 } WhileExpr;
 
+typedef struct FnExpr {
+    Array params; /* declarations of the parameters to this function */
+	Type ret_type;
+	Block body;
+} FnExpr; /* an expression such as fn(x: int) int { 2 * x } */
+
 #define EXPR_FLAG_FOUND_TYPE 0x01
 
 typedef struct Expression {
@@ -147,7 +153,7 @@ typedef struct Expression {
 		Identifier ident;
 		IfExpr if_;
 		WhileExpr while_;
-		struct FnExpr *fn;
+		FnExpr fn;
 		Block block;
 	};
 } Expression;
@@ -167,12 +173,6 @@ typedef struct Declaration {
 	Expression expr;
 	struct Value *val; /* only for constant decls. set to NULL here, and to actual value by types.c. */
 } Declaration;
-
-typedef struct FnExpr {
-	Declaration params;	/* declaration of the parameters to this function */
-	Type ret_type;
-	Block body;
-} FnExpr; /* an expression such as fn(x: int) int { 2 * x } */
 
 typedef enum {
 			  STMT_DECL,
@@ -210,7 +210,7 @@ typedef struct {
 
 typedef enum {
 			  DECL_END_SEMICOLON,
-			  DECL_END_RPAREN
+			  DECL_END_RPAREN_COMMA
 } DeclEndType;
 
 static bool parse_expr(Parser *p, Expression *e, Token *end);
@@ -678,21 +678,27 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 		return false;
 	}
 	t->token++;
-	parse_decl(p, &f->params, DECL_END_RPAREN, PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR);
-	
+	arr_create(&f->params, sizeof(Declaration));
+	bool ret = true;
+	while (!token_is_kw(t->token, KW_RPAREN)) {
+		Declaration *decl = arr_add(&f->params);
+		if (!parse_decl(p, decl, DECL_END_RPAREN_COMMA, PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR))
+		    ret = false;
+	}
+	t->token++;
 	if (token_is_kw(t->token, KW_LBRACE)) {
 		/* void function */
 		f->ret_type.kind = TYPE_VOID;
 		f->ret_type.flags = 0;
 	} else {
 		if (!parse_type(p, &f->ret_type)) {
-			return false;
+			ret = false;
 		}
 	}
 	if (!parse_block(p, &f->body))
-		return false;
+		ret = false;
 	f->body.flags |= BLOCK_FLAG_FN;
-	return true;
+	return ret;
 }
 
 /* parses, e.g. "(3, 5, foo)" */
@@ -787,8 +793,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		case KW_FN: {
 			/* this is a function */
 			e->kind = EXPR_FN;
-			e->fn = err_malloc(sizeof *e->fn);
-			if (!parse_fn_expr(p, e->fn))
+			if (!parse_fn_expr(p, &e->fn))
 				return false;
 			
 			if (t->token != end) {
@@ -975,7 +980,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		/* 
 		   can't call at start, e.g. in (fn() {})(), it is not the empty function ""
 		   being called with fn() {} as an argument
-		 */
+		*/
 		if (token_is_kw(t->token, KW_LPAREN)) {
 			paren_level++;
 			token++;
@@ -1198,177 +1203,111 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	return true;
 }
 
-/* 
-parses
-x : int, y : float; 
-^^this^^
-then recursively calls itself to parse the rest
-NOTE: this function actually parses all types in the declaration, but it just
-calls itself to do that.
-
-*/
 static inline bool ends_decl(Token *t, DeclEndType ends_with) {
-	return (token_is_kw(t, KW_SEMICOLON) && ends_with == DECL_END_SEMICOLON)
-		|| (token_is_kw(t, KW_RPAREN) && ends_with == DECL_END_RPAREN);
+	if (t->kind != TOKEN_KW) return false;
+	switch (ends_with) {
+	case DECL_END_SEMICOLON:
+		return t->kw == KW_SEMICOLON;
+    case DECL_END_RPAREN_COMMA:
+		return t->kw == KW_RPAREN || t->kw == KW_COMMA;
+	default: assert(0); return false;
+	}
 }
 
 static bool parse_decl(Parser *p, Declaration *d, DeclEndType ends_with, uint16_t flags) {
 	d->val = NULL;
-	d->type.kind = TYPE_VOID;
 	d->where = p->tokr->token->where;
 	arr_create(&d->idents, sizeof(Identifier));
 	Tokenizer *t = p->tokr;
 	d->flags = 0;
-	if (ends_decl(t->token, ends_with)) {
-		t->token++;
-		return true;
-	}
 	
 	/* OPTIM: Maybe don't use a dynamic array or use parser allocator. */
-	size_t n_idents_with_this_type = 1;
-	bool ret = true;
-	for (size_t type_no = 0; ; type_no++) {
-		/* parse a single type in this decl */
-		while (1) {
-			Identifier *ident = arr_add(&d->idents);
-			if (t->token->kind != TOKEN_IDENT) {
-				tokr_err(t, "Cannot declare non-identifier (that's a %s).", token_kind_to_str(t->token->kind)); /* TODO(eventually): an */
-				ret = false;
-				break;
-			}
-			*ident = t->token->ident;
-			t->token++;
-			if (token_is_kw(t->token, KW_COMMA)) {
-				t->token++;
-				n_idents_with_this_type++;
-				continue;
-			}
-			if (token_is_kw(t->token, KW_COLON)) {
-				if (d->flags & DECL_FLAG_CONST) {
-					tokr_err(t, "Either everything or nothing must be constant in a declaration.");
-				    ret = false;
-					break;
-				}
-				t->token++;
-				break;
-			}
-			if (token_is_kw(t->token, KW_AT)) {
-				if (type_no == 0) {
-					d->flags |= DECL_FLAG_CONST;
-				} else if (!(d->flags & DECL_FLAG_CONST)) {
-					tokr_err(t, "Either everything or nothing must be constant in a declaration.");
-					ret = false;
-					break;
-				}
-				t->token++;
-				break;
-			}
-			tokr_err(t, "Expected ',' to continue listing variables or ':' / '@' to indicate type.");
-			ret = false;
-			break;
+	while (1) {
+		Identifier *ident = arr_add(&d->idents);
+		if (t->token->kind != TOKEN_IDENT) {
+			tokr_err(t, "Cannot declare non-identifier (%s).", token_kind_to_str(t->token->kind));
+			goto ret_false;
 		}
-		if (!ret) break;
-	
-		if (token_is_kw(t->token, KW_SEMICOLON) || token_is_kw(t->token, KW_RPAREN)) {
-			/* e.g. foo :; */
-			tokr_err(t, "Cannot infer type without expression.");
-		    ret = false;
-			break;
-		}
-
-		bool annotates_type = !token_is_kw(t->token, KW_EQ) && !token_is_kw(t->token, KW_COMMA);
-		if (d->type.kind != TYPE_VOID /* multiple types in one declaration */
-			&& (!!(d->flags & DECL_FLAG_ANNOTATES_TYPE)) != annotates_type) { /* annotation on one decl but not the other */
-			/* e.g. x: int, y := 3, 5;*/
-			tokr_err(t, "You must specify either all types or no types in a single declaration.");
-			ret = false;
-			break;
-		}
-		if (annotates_type) {
-			d->flags |= DECL_FLAG_ANNOTATES_TYPE;
-			Type type;
-			if (!parse_type(p, &type)) {
-			    ret = false;
-				break;
-			}
-			if (n_idents_with_this_type == 1 && d->type.kind == TYPE_VOID) {
-				d->type = type;
-			} else if (d->type.kind == TYPE_TUPLE) {
-				/* add to tuple */
-				for (size_t i = 0; i < n_idents_with_this_type; i++) {
-					*(Type*)arr_add(&d->type.tuple) = type;
-				}
-			} else {
-				/* construct tuple */
-				Array tup_arr;
-				arr_create(&tup_arr, sizeof(Type));
-				if (d->type.kind != TYPE_VOID) {
-					*(Type*)arr_add(&tup_arr) = d->type; /* add current type */
-				}
-				d->type.flags = 0;
-				d->type.kind = TYPE_TUPLE;
-				d->type.tuple = tup_arr;
-				for (size_t i = 0; i < n_idents_with_this_type; i++) {
-					*(Type*)arr_add(&d->type.tuple) = type;
-				}
-			}
-		}
-
+		*ident = t->token->ident;
+		t->token++;
 		if (token_is_kw(t->token, KW_COMMA)) {
-			/* next type in declaration */
-			t->token++;	/* move past , */
+			t->token++;
 			continue;
 		}
-	
-		/* OPTIM: switch t->token->kw ? */
-		if (token_is_kw(t->token, KW_EQ)) {
+		if (token_is_kw(t->token, KW_COLON)) {
 			t->token++;
-			d->flags |= DECL_FLAG_HAS_EXPR;
-			Token *end = expr_find_end(p, 0, NULL);
-			if (!end || !token_is_kw(end, KW_SEMICOLON)) {
-				tokr_err(t, "Expected ';' at end of declaration.");
-				ret = false;
-				break;
-			}
-			if (!parse_expr(p, &d->expr, end)) {
-				t->token = end + 1;	/* move past ; */
-				ret = false;
-				break;
-			}
-			if (ends_decl(t->token, ends_with)) {
-				t->token++;
-				break;
-			}
-			tokr_err(t, "Expected '%c' at end of declaration.",
-					 ends_with == DECL_END_SEMICOLON ? ';' : ')');
-			ret = false;
-		} else if (ends_decl(t->token, ends_with)) {
+			break;
+		}
+		if (token_is_kw(t->token, KW_AT)) {
+			d->flags |= DECL_FLAG_CONST;
+			t->token++;
+			break;
+		}
+		tokr_err(t, "Expected ',' to continue listing variables or ':' / '@' to indicate type.");
+	    goto ret_false;
+	}
+	
+	if (token_is_kw(t->token, KW_SEMICOLON) || token_is_kw(t->token, KW_RPAREN)) {
+		/* e.g. foo :; */
+		tokr_err(t, "Cannot infer type without expression.");
+		goto ret_false;
+	}
+
+	bool annotates_type = !token_is_kw(t->token, KW_EQ) && !token_is_kw(t->token, KW_COMMA);
+	if (annotates_type) {
+		d->flags |= DECL_FLAG_ANNOTATES_TYPE;
+		Type type;
+		if (!parse_type(p, &type)) {
+		    goto ret_false;
+		}
+		d->type = type;
+	}
+	
+	if (token_is_kw(t->token, KW_EQ)) {
+		t->token++;
+		d->flags |= DECL_FLAG_HAS_EXPR;
+		Token *end = expr_find_end(p, 0, NULL);
+		if (!end || !token_is_kw(end, KW_SEMICOLON)) {
+			tokr_err(t, "Expected ';' at end of declaration.");
+		    goto ret_false;
+		}
+		if (!parse_expr(p, &d->expr, end)) {
+			t->token = end; /* move to ; */
+		    goto ret_false;
+		}
+		if (ends_decl(t->token, ends_with)) {
 			t->token++;
 		} else {
-			tokr_err(t, "Expected '%c' or '=' at end of delaration.",
+			tokr_err(t, "Expected '%c' at end of declaration.",
 					 ends_with == DECL_END_SEMICOLON ? ';' : ')');
-			ret = false;
+		    goto ret_false;
 		}
-		break;
+	} else if (ends_decl(t->token, ends_with)) {
+		t->token++;
+	} else {
+		tokr_err(t, "Expected '%c' or '=' at end of delaration.",
+				 ends_with == DECL_END_SEMICOLON ? ';' : ')');
+	    goto ret_false;
 	}
 	
 	if ((d->flags & DECL_FLAG_CONST) && !(d->flags & DECL_FLAG_HAS_EXPR) && !(flags & PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR)) {
 		t->token--;
 		/* disallowed constant without an expression, e.g. x @ int; */
 		tokr_err(t, "You must have an expression at the end of this constant declaration.");
-		ret = false;
+	    goto ret_false;
 	}
+
+	return true;
 	
-	if (!ret) {
-		/* move past end of decl */
-		while (t->token->kind != TOKEN_EOF && !token_is_kw(t->token, KW_SEMICOLON)) {
-			t->token++;
-		}
-		if (token_is_kw(t->token, KW_SEMICOLON)) {
-			t->token++;	/* move past ; */
-		}
+ ret_false:
+	/* move past end of decl */
+	while (t->token->kind != TOKEN_EOF && !token_is_kw(t->token, KW_SEMICOLON)) {
+		t->token++;
 	}
-	return ret;
+	if (token_is_kw(t->token, KW_SEMICOLON)) {
+		t->token++;	/* move past ; */
+	}
+	return false;
 }
 
 static bool is_decl(Tokenizer *t) {
@@ -1494,7 +1433,9 @@ static void fprint_block(FILE *out,  Block *b) {
 
 static void fprint_fn_expr(FILE *out, FnExpr *f) {
 	fprintf(out, "fn (");
-	fprint_decl(out, &f->params);
+	arr_foreach(&f->params, Declaration, decl) {
+		fprint_decl(out, decl);
+	}
 	fprintf(out, ") ");
 	fprint_type(out, &f->ret_type);
 	fprintf(out, " ");
@@ -1543,7 +1484,7 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprintf(out, ")");
 		break;
 	case EXPR_FN:
-		fprint_fn_expr(out, e->fn);
+		fprint_fn_expr(out, &e->fn);
 		break;
 	case EXPR_IF:
 		if (e->if_.cond) {

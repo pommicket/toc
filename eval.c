@@ -193,7 +193,7 @@ static bool eval_expr(Expression *e, Value *v) {
 		return true;
 	} break;
 	case EXPR_FN:
-		v->fn = *e->fn;
+		v->fn = e->fn;
 		return true;
 	case EXPR_IF:
 	case EXPR_WHILE: {
