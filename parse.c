@@ -72,6 +72,7 @@ typedef enum {
 			  EXPR_IF,
 			  EXPR_WHILE,
 			  EXPR_FN,
+			  EXPR_CAST,
 			  EXPR_CALL,
 			  EXPR_BLOCK,
 			  EXPR_DIRECT
@@ -121,11 +122,16 @@ typedef struct {
 	Block body;
 } WhileExpr;
 
-typedef struct FnExpr {
+typedef struct {
     Array params; /* declarations of the parameters to this function */
 	Type ret_type;
 	Block body;
 } FnExpr; /* an expression such as fn(x: int) int { 2 * x } */
+
+typedef struct {
+	Type type;
+	struct Expression *expr;
+} CastExpr;
 
 #define EXPR_FLAG_FOUND_TYPE 0x01
 
@@ -154,6 +160,7 @@ typedef struct Expression {
 		IfExpr if_;
 		WhileExpr while_;
 		FnExpr fn;
+		CastExpr cast;
 		Block block;
 	};
 } Expression;
@@ -394,26 +401,6 @@ static Expression *parser_new_expr(Parser *p) {
 	return block_arr_add(&p->exprs);
 }
 
-#define NOT_AN_OP -1
-static int op_precedence(Keyword op) {
-	switch (op) {
-	case KW_EQ: return 0;
-	case KW_LT: return 3;
-	case KW_GT: return 3;
-	case KW_LE: return 3;
-	case KW_GE: return 3;
-	case KW_EQEQ: return 3;
-	case KW_NE: return 3; 
-	case KW_COMMA: return 5;
-	case KW_PLUS: return 10;
-	case KW_MINUS: return 20;
-	case KW_AMPERSAND: return 25;
-	case KW_ASTERISK: return 30;
-	case KW_SLASH: return 40;
-	case KW_EXCLAMATION: return 50;
-	default: return NOT_AN_OP;
-	}
-}
 
 /* TODO: check that we check which thing ends it everywhere */
 
@@ -732,6 +719,29 @@ static bool parse_args(Parser *p, Array *args) {
 
 static void fprint_expr(FILE *out, Expression *e);
 
+
+#define NOT_AN_OP -1
+#define CAST_PRECEDENCE 1
+static int op_precedence(Keyword op) {
+	switch (op) {
+	case KW_EQ: return 0;
+	case KW_LT: return 3;
+	case KW_GT: return 3;
+	case KW_LE: return 3;
+	case KW_GE: return 3;
+	case KW_EQEQ: return 3;
+	case KW_NE: return 3; 
+	case KW_COMMA: return 5;
+	case KW_PLUS: return 10;
+	case KW_MINUS: return 20;
+	case KW_AMPERSAND: return 25;
+	case KW_ASTERISK: return 30;
+	case KW_SLASH: return 40;
+	case KW_EXCLAMATION: return 50;
+	default: return NOT_AN_OP;
+	}
+}
+
 static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	Tokenizer *t = p->tokr;
 	e->flags = 0;
@@ -927,7 +937,8 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				break;
 			default: { /* OPTIM: use individual cases for each op */
 				if (paren_level == 0 && brace_level == 0 && square_level == 0) {
-					int precedence = op_precedence(token->kw);
+					int precedence = token->kw == KW_AS ? CAST_PRECEDENCE
+						: op_precedence(token->kw);
 					if (precedence == NOT_AN_OP) break; /* nvm it's not an operator */
 					if (lowest_precedence == NOT_AN_OP || precedence <= lowest_precedence) {
 						lowest_precedence = precedence;
@@ -970,7 +981,133 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		return true;
 	}
 	
-	if (lowest_precedence == NOT_AN_OP) {
+	if (lowest_precedence != NOT_AN_OP) {
+		
+		/* Check if this is a unary op not a binary one (e.g. +-3 => +(-3), not (+)-(3)). */
+		while (lowest_precedence_op != t->token
+			   && lowest_precedence_op[-1].kind == TOKEN_KW
+			   && op_precedence(lowest_precedence_op[-1].kw) != NOT_AN_OP) {
+			lowest_precedence_op--;
+		}
+
+		if (lowest_precedence_op == t->token) {
+			/* Unary */
+			UnaryOp op;
+			bool is_unary = true;
+			switch (lowest_precedence_op->kw) {
+			case KW_PLUS:
+				/* unary + is ignored entirely */
+				t->token++;
+				/* re-parse this expression without + */
+				return parse_expr(p, e, end);
+			case KW_MINUS:
+				op = UNARY_MINUS;
+				break;
+			case KW_AMPERSAND:
+				op = UNARY_ADDRESS;
+				break;
+			case KW_ASTERISK:
+				op = UNARY_DEREF;
+				break;
+			case KW_EXCLAMATION:
+				op = UNARY_NOT;
+				break;
+			default:
+				is_unary = false;
+				break;
+			}
+			if (!is_unary) {
+				tokr_err(t, "%s is not a unary operator.", keywords[lowest_precedence_op->kw]);
+				return false;
+			}
+			e->unary.op = op;
+			e->kind = EXPR_UNARY_OP;
+			t->token++;
+			Expression *of = parser_new_expr(p);
+			e->unary.of = of;
+			return parse_expr(p, of, end);
+		}
+
+		if (lowest_precedence_op->kw == KW_AS) {
+			/* cast */
+			Expression *casted = parser_new_expr(p);
+			e->kind = EXPR_CAST;
+			e->cast.expr = casted;
+			if (!parse_expr(p, casted, lowest_precedence_op))
+				return false;
+			t->token = lowest_precedence_op + 1;
+			if (!parse_type(p, &e->cast.type))
+				return false;
+			if (t->token != end) {
+				tokr_err(t, "Cast expression continues after type");
+				return false;
+			}
+			return true;
+		}
+	
+	
+		BinaryOp op; 
+		switch (lowest_precedence_op->kw) {
+		case KW_PLUS:
+			op = BINARY_PLUS;
+			break;
+		case KW_MINUS:
+			op = BINARY_MINUS;
+			break;
+		case KW_EQEQ:
+			op = BINARY_EQ;
+			break;
+		case KW_NE:
+			op = BINARY_NE;
+			break;
+		case KW_LT:
+			op = BINARY_LT;
+			break;
+		case KW_LE:
+			op = BINARY_LE;
+			break;
+		case KW_GT:
+			op = BINARY_GT;
+			break;
+		case KW_GE:
+			op = BINARY_GE;
+			break;
+		case KW_EQ:
+			op = BINARY_SET;
+			break;
+		case KW_COMMA:
+			op = BINARY_COMMA;
+			break;
+		case KW_ASTERISK:
+			op = BINARY_MUL;
+			break;
+		case KW_SLASH:
+			op = BINARY_DIV;
+			break;
+		case KW_AMPERSAND:
+		case KW_EXCLAMATION:
+			err_print(lowest_precedence_op->where, "Unary operator '%s' being used as a binary operator!", kw_to_str(lowest_precedence_op->kw));
+			return false;
+		default: assert(0); return false;
+		}
+		e->binary.op = op;
+		e->kind = EXPR_BINARY_OP;
+
+		Expression *lhs = parser_new_expr(p);
+		e->binary.lhs = lhs;
+		if (!parse_expr(p, lhs, lowest_precedence_op)) {
+			return false;
+		}
+	
+		Expression *rhs = parser_new_expr(p);
+		t->token = lowest_precedence_op + 1;
+		e->binary.rhs = rhs;
+		if (!parse_expr(p, rhs, end)) {
+			return false;
+		}
+	
+		return true;
+	} else {
 		/* function calls, array accesses, etc. */
 		
 		/* try a function call or array access */
@@ -1093,114 +1230,6 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		t->token = end + 1;
 		return false;
 	}
-	
-	/* Check if his is a unary op not a binary one (e.g. +-3 => +(-3), not (+)-(3)). */
-	while (lowest_precedence_op != t->token
-		   && lowest_precedence_op[-1].kind == TOKEN_KW
-		   && op_precedence(lowest_precedence_op[-1].kw) != NOT_AN_OP) {
-		lowest_precedence_op--;
-	}
-
-	if (lowest_precedence_op == t->token) {
-		/* Unary */
-		UnaryOp op;
-		bool is_unary = true;
-		switch (lowest_precedence_op->kw) {
-		case KW_PLUS:
-			/* unary + is ignored entirely */
-			t->token++;
-			/* re-parse this expression without + */
-			return parse_expr(p, e, end);
-		case KW_MINUS:
-			op = UNARY_MINUS;
-			break;
-		case KW_AMPERSAND:
-			op = UNARY_ADDRESS;
-			break;
-		case KW_ASTERISK:
-			op = UNARY_DEREF;
-			break;
-		case KW_EXCLAMATION:
-			op = UNARY_NOT;
-			break;
-		default:
-			is_unary = false;
-			break;
-		}
-		if (!is_unary) {
-			tokr_err(t, "%s is not a unary operator.", keywords[lowest_precedence_op->kw]);
-			return false;
-		}
-		e->unary.op = op;
-		e->kind = EXPR_UNARY_OP;
-		t->token++;
-		Expression *of = parser_new_expr(p);
-		e->unary.of = of;
-		return parse_expr(p, of, end);
-	}
-	
-	
-	BinaryOp op; 
-	switch (lowest_precedence_op->kw) {
-	case KW_PLUS:
-		op = BINARY_PLUS;
-		break;
-	case KW_MINUS:
-		op = BINARY_MINUS;
-		break;
-	case KW_EQEQ:
-		op = BINARY_EQ;
-		break;
-	case KW_NE:
-		op = BINARY_NE;
-		break;
-	case KW_LT:
-		op = BINARY_LT;
-		break;
-	case KW_LE:
-		op = BINARY_LE;
-		break;
-	case KW_GT:
-		op = BINARY_GT;
-		break;
-	case KW_GE:
-		op = BINARY_GE;
-		break;
-	case KW_EQ:
-		op = BINARY_SET;
-		break;
-	case KW_COMMA:
-		op = BINARY_COMMA;
-		break;
-	case KW_ASTERISK:
-		op = BINARY_MUL;
-		break;
-	case KW_SLASH:
-		op = BINARY_DIV;
-		break;
-	case KW_AMPERSAND:
-	case KW_EXCLAMATION:
-	    err_print(lowest_precedence_op->where, "Unary operator '%s' being used as a binary operator!", kw_to_str(lowest_precedence_op->kw));
-	    return false;
-	default: assert(0); return false;
-	}
-	e->binary.op = op;
-	e->kind = EXPR_BINARY_OP;
-
-	Expression *lhs = parser_new_expr(p);
-	e->binary.lhs = lhs;
-	if (!parse_expr(p, lhs, lowest_precedence_op)) {
-		return false;
-	}
-	
-	Expression *rhs = parser_new_expr(p);
-	t->token = lowest_precedence_op + 1;
-	e->binary.rhs = rhs;
-	if (!parse_expr(p, rhs, end)) {
-		return false;
-	}
-	
-	return true;
 }
 
 static inline bool ends_decl(Token *t, DeclEndType ends_with) {
@@ -1485,6 +1514,13 @@ static void fprint_expr(FILE *out, Expression *e) {
 		break;
 	case EXPR_FN:
 		fprint_fn_expr(out, &e->fn);
+		break;
+	case EXPR_CAST:
+		fprintf(out, "cast(");
+		fprint_expr(out, e->cast.expr);
+		fprintf(out, ", ");
+		fprint_type(out, &e->cast.type);
+		fprintf(out, ")");
 		break;
 	case EXPR_IF:
 		if (e->if_.cond) {
