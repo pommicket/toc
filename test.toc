@@ -1,4 +1,5 @@
 main @= fn() {
+	 foo @= fn() i64 { return 3; };
 	 test @= fn(x : i64, y : i32, z,w: i64) ret1 : i64, ret2 : i64 {
 	 	  ret1 = x;
 	 };
