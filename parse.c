@@ -103,12 +103,13 @@ typedef enum {
 
 typedef struct {
 	Directive which;
-	Array args;	/* of Expression */
+	Array args;	/* of Argument */
 } DirectExpr;
+
 
 typedef struct {
 	struct Expression *fn;
-	Array args;	/* of Expression */
+	Array args;	/* of Argument */
 } CallExpr;
 
 typedef struct {
@@ -165,6 +166,11 @@ typedef struct Expression {
 		Block block;
 	};
 } Expression;
+
+typedef struct {
+	Identifier name; /* NULL = no name */
+	Expression val;
+} Argument;
 
 #define DECL_FLAG_ANNOTATES_TYPE 0x01
 #define DECL_FLAG_CONST 0x02
@@ -745,7 +751,7 @@ static bool parse_args(Parser *p, Array *args) {
 	Tokenizer *t = p->tokr;
 	Token *start = t->token;
 	assert(token_is_kw(start, KW_LPAREN));
-	arr_create(args, sizeof(Expression));
+	arr_create(args, sizeof(Argument));
 	t->token++; /* move past ( */
 	if (!token_is_kw(t->token, KW_RPAREN)) {
 		/* non-empty arg list */
@@ -755,8 +761,15 @@ static bool parse_args(Parser *p, Array *args) {
 				info_print(start->where, "This is where the argument list starts.");
 				return false;
 			}
-			Expression *arg = arr_add(args);
-			if (!parse_expr(p, arg, expr_find_end(p, EXPR_CAN_END_WITH_COMMA, NULL))) {
+			Argument *arg = arr_add(args);
+			/* named arguments */
+			if (t->token->kind == TOKEN_IDENT && token_is_kw(t->token + 1, KW_EQ)) {
+			    arg->name = t->token->ident;
+				t->token += 2;
+			} else {
+				arg->name = NULL;
+			}
+			if (!parse_expr(p, &arg->val, expr_find_end(p, EXPR_CAN_END_WITH_COMMA, NULL))) {
 				return false;
 			}
 			if (token_is_kw(t->token, KW_RPAREN))
@@ -1534,9 +1547,13 @@ static void fprint_fn_expr(FILE *out, FnExpr *f) {
 
 static void fprint_args(FILE *out, Array *args) {
 	fprintf(out, "(");
-	arr_foreach(args, Expression, arg) {
+	arr_foreach(args, Argument, arg) {
 		if (arg != args->data) fprintf(out, ", ");
-		fprint_expr(out, arg);
+		if (arg->name) {
+			fprint_ident(out, arg->name);
+			fprintf(out, " = ");
+		}
+		fprint_expr(out, &arg->val);
 	}
 	fprintf(out, ")");
 }

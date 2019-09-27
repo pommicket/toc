@@ -1,3 +1,4 @@
+arg - argument
 decl - declaration
 deref - dereference
 direct - directive
@@ -8,8 +9,10 @@ ident - identifier
 kw - keyword
 num - number
 op - operator
+param - parameter
 ptr - pointer
 ret - return
 stmt - statement
 str - string
 tokr - tokenizer
+val - value

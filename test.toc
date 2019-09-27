@@ -3,5 +3,8 @@ main @= fn() {
 	 test @= fn(x : i64, y : i32, z,w: i64) ret1 : i64, ret2 : i64 {
 	 	  ret1 = x;
 	 };
+	 a,b : i64;
+	 // a, b = test(3,7,2,3);
+	 a, b = test(x = 3, y = 7, z = 30, w = 20);
 };
 

@@ -482,8 +482,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 		} else {
 			if (!types_expr(tr, f)) return false;
 		}
-		arr_foreach(&c->args, Expression, arg) {
-			if (!types_expr(tr, arg))
+		arr_foreach(&c->args, Argument, arg) {
+			if (!types_expr(tr, &arg->val))
 				return false;
 		}
 		if (f->type.kind != TYPE_FN) {
@@ -493,7 +493,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		}
 		Type *ret_type = (Type *)f->type.fn.types.data;
 		Type *param_types = ret_type + 1;
-		Expression *args = c->args.data;
+		Argument *args = c->args.data;
 		size_t nparams = f->type.fn.types.len - 1;
 		if (nparams != c->args.len) {
 			err_print(e->where, "Expected %lu arguments to function, but got %lu.", (unsigned long)nparams, (unsigned long)c->args.len);
@@ -501,13 +501,14 @@ static bool types_expr(Typer *tr, Expression *e) {
 		}
 		bool ret = true;
 		for (size_t p = 0; p < nparams; p++) {
+			Expression *val = &args[p].val;
 			Type *expected = &param_types[p];
-			Type *got = &args[p].type;
+			Type *got = &val->type;
 			if (!type_eq(expected, got)) {
 				ret = false;
 				char *estr = type_to_str(expected);
 				char *gstr = type_to_str(got);
-				err_print(args[p].where, "Expected type %s as %lu%s argument to function, but got %s.", estr, 1+(unsigned long)p, ordinals(1+p), gstr);
+				err_print(val->where, "Expected type %s as %lu%s argument to function, but got %s.", estr, 1+(unsigned long)p, ordinals(1+p), gstr);
 			}
 		}
 		if (!ret) return false;
@@ -526,8 +527,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 	} break;
 	case EXPR_DIRECT:
 		t->kind = TYPE_UNKNOWN;
-	    arr_foreach(&e->direct.args, Expression, arg) {
-			if (!types_expr(tr, arg))
+	    arr_foreach(&e->direct.args, Argument, arg) {
+			if (!types_expr(tr, &arg->val))
 				return false;
 		}
 		switch (e->direct.which) {

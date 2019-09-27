@@ -1,7 +1,7 @@
 /* 
 TODO:
-optional params
 named args
+optional params
 evaluator (simplify compile time constant expressions)
 re-do cgen
  */
