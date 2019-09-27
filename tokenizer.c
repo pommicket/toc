@@ -151,6 +151,7 @@ typedef struct {
 typedef struct {
 	Array tokens;
 	char *s; /* string being parsed */
+	const char *filename;
 	LineNo line;
 	Token *token; /* token currently being processed */
 	Identifiers *idents;
@@ -214,13 +215,6 @@ static void fprint_token(FILE *out, Token *t) {
 	}
 }
 
-static Token *tokr_add(Tokenizer *t) {
-	Token *token = arr_add(&t->tokens);
-	token->where.line = t->line;
-	token->where.code = t->s;
-	return token;
-}
-
 static inline void tokr_nextchar(Tokenizer *t) {
 	if (*(t->s) == '\n') {
 		t->line++;
@@ -252,7 +246,7 @@ static char tokr_esc_seq(Tokenizer *t) {
 /* to be used during tokenization */
 static void tokenization_err(Tokenizer *t, const char *fmt, ...) {
 	va_list args;
-	Location where = {t->line, t->s};
+	Location where = {t->line, t->s, t->filename};
 	va_start(args, fmt);
 	err_vprint(where, fmt, args);
 	va_end(args);
@@ -279,6 +273,7 @@ static void tokr_err_(const char *src_file, int src_line, Tokenizer *t, const ch
 static void tokr_put_location(Tokenizer *tokr, Token *t) {
 	t->where.line = tokr->line;
 	t->where.code = tokr->s;
+	t->where.filename = tokr->filename;
 }
 
 static void tokr_get_location(Tokenizer *tokr, Token *t) {
@@ -286,10 +281,17 @@ static void tokr_get_location(Tokenizer *tokr, Token *t) {
 	tokr->s = t->where.code;
 }
 
-static void tokr_create(Tokenizer *t, Identifiers *idents) {
+static void tokr_create(Tokenizer *t, Identifiers *idents, const char *filename) {
 	arr_create(&t->tokens, sizeof(Token));
 	arr_reserve(&t->tokens, 256);
 	t->idents = idents;
+	t->filename = filename;
+}
+
+static Token *tokr_add(Tokenizer *t) {
+	Token *token = arr_add(&t->tokens);
+	tokr_put_location(t, token);
+	return token;
 }
 
 static bool tokenize_string(Tokenizer *t, char *str) {
@@ -350,7 +352,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 			if (direct != DIRECT_COUNT) {
 				/* it's a directive */
 				Token *token = tokr_add(t);
-				token->where.line = t->line;
+				tokr_put_location(t, token);
 				token->where.code = start_s;
 				token->kind = TOKEN_DIRECT;
 				token->direct = direct;
@@ -367,7 +369,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 			if (kw != KW_COUNT) {
 				/* it's a keyword */
 				Token *token = tokr_add(t);
-				token->where.line = t->line;
+				tokr_put_location(t, token);
 				token->where.code = start_s;
 				token->kind = TOKEN_KW;
 				token->kw = kw;

@@ -124,6 +124,7 @@ typedef struct {
 
 typedef struct {
     Array params; /* declarations of the parameters to this function */
+	Array ret_decls; /* array of decls, if this has named return values. otherwise, len & data will be 0. */
 	Type ret_type;
 	Block body;
 } FnExpr; /* an expression such as fn(x: int) int { 2 * x } */
@@ -217,13 +218,14 @@ typedef struct {
 
 typedef enum {
 			  DECL_END_SEMICOLON,
-			  DECL_END_RPAREN_COMMA
-} DeclEndType;
+			  DECL_END_RPAREN_COMMA,
+			  DECL_END_LBRACE_COMMA
+} DeclEndKind;
 
 static bool parse_expr(Parser *p, Expression *e, Token *end);
 
 #define PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR 0x01
-static bool parse_decl(Parser *p, Declaration *d, DeclEndType ends_with, uint16_t flags);
+static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_t flags);
 
 static const char *unary_op_to_str(UnaryOp u) {
 	switch (u) {
@@ -655,8 +657,33 @@ static bool parse_block(Parser *p, Block *b) {
 	return ret;
 }
 
+static bool is_decl(Tokenizer *t);
+	
+static bool parse_decl_list(Parser *p, Array *decls, DeclEndKind decl_end) {
+	Tokenizer *t = p->tokr;
+	bool ret = true;
+	bool first = true;
+	while (t->token->kind != TOKEN_EOF &&
+		   (first || (
+			!token_is_kw(t->token - 1, KW_RPAREN) &&
+			!token_is_kw(t->token - 1, KW_LBRACE)))) {
+		first = false;
+		Declaration *decl = arr_add(decls);
+		if (!parse_decl(p, decl, decl_end, PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR)) {
+			ret = false;
+			/* skip to end of param list */
+			while (t->token->kind != TOKEN_EOF && !token_is_kw(t->token, KW_RPAREN))
+				t->token++;
+			break;
+		}
+	}
+	return ret;
+}
+
 static bool parse_fn_expr(Parser *p, FnExpr *f) {
 	Tokenizer *t = p->tokr;
+	f->ret_decls.len = 0;
+	f->ret_decls.data = NULL;
 	/* only called when token is fn */
 	assert(token_is_kw(t->token, KW_FN));
 	t->token++;
@@ -670,16 +697,8 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 	if (token_is_kw(t->token, KW_RPAREN)) {
 		t->token++;
 	} else {
-		while (t->token->kind != TOKEN_EOF && !token_is_kw(t->token - 1, KW_RPAREN)) {
-			Declaration *decl = arr_add(&f->params);
-			if (!parse_decl(p, decl, DECL_END_RPAREN_COMMA, PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR)) {
-				ret = false;
-				/* skip to end of param list */
-				while (t->token->kind != TOKEN_EOF && !token_is_kw(t->token, KW_RPAREN))
-					t->token++;
-				break;
-			}
-		}
+		if (!parse_decl_list(p, &f->params, DECL_END_RPAREN_COMMA))
+		    return false;
 	}
 	
 	if (t->token->kind == TOKEN_EOF) {
@@ -691,6 +710,25 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 		/* void function */
 		f->ret_type.kind = TYPE_VOID;
 		f->ret_type.flags = 0;
+	} else if (is_decl(t)) {
+		arr_create(&f->ret_decls, sizeof(Declaration));
+		if (!parse_decl_list(p, &f->ret_decls, DECL_END_LBRACE_COMMA))
+			return false;
+		t->token--;	/* move back to { */
+		assert(f->ret_decls.len);
+		if (f->ret_decls.len > 1 || ((Declaration *)f->ret_decls.data)[0].idents.len) {
+			f->ret_type.kind = TYPE_TUPLE;
+			f->ret_type.flags = 0;
+			arr_create(&f->ret_type.tuple, sizeof(Type));
+			arr_foreach(&f->ret_decls, Declaration, decl) {
+				for (size_t i = 0; i < decl->idents.len; i++) {
+					Type *tuple_type = arr_add(&f->ret_type.tuple);
+					*tuple_type = decl->type;
+				}
+			}
+		} else {
+			f->ret_type = ((Declaration *)f->ret_decls.data)[0].type;
+		}
 	} else {
 		if (!parse_type(p, &f->ret_type)) {
 			ret = false;
@@ -735,17 +773,17 @@ static void fprint_expr(FILE *out, Expression *e);
 
 
 #define NOT_AN_OP -1
-#define CAST_PRECEDENCE 1
+#define CAST_PRECEDENCE 2
 static int op_precedence(Keyword op) {
 	switch (op) {
 	case KW_EQ: return 0;
+	case KW_COMMA: return 1;
 	case KW_LT: return 3;
 	case KW_GT: return 3;
 	case KW_LE: return 3;
 	case KW_GE: return 3;
 	case KW_EQEQ: return 3;
 	case KW_NE: return 3; 
-	case KW_COMMA: return 5;
 	case KW_PLUS: return 10;
 	case KW_MINUS: return 20;
 	case KW_AMPERSAND: return 25;
@@ -1246,18 +1284,20 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	}
 }
 
-static inline bool ends_decl(Token *t, DeclEndType ends_with) {
+static inline bool ends_decl(Token *t, DeclEndKind ends_with) {
 	if (t->kind != TOKEN_KW) return false;
 	switch (ends_with) {
 	case DECL_END_SEMICOLON:
 		return t->kw == KW_SEMICOLON;
     case DECL_END_RPAREN_COMMA:
 		return t->kw == KW_RPAREN || t->kw == KW_COMMA;
+	case DECL_END_LBRACE_COMMA:
+		return t->kw == KW_LBRACE || t->kw == KW_COMMA;
 	default: assert(0); return false;
 	}
 }
 
-static bool parse_decl(Parser *p, Declaration *d, DeclEndType ends_with, uint16_t flags) {
+static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_t flags) {
 	d->val = NULL;
 	d->where = p->tokr->token->where;
 	arr_create(&d->idents, sizeof(Identifier));
@@ -1305,8 +1345,13 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndType ends_with, uint16_
 		}
 		d->type = type;
 	}
-	char end_char = ends_with == DECL_END_SEMICOLON ? ';' : ')';
-	
+	const char *end_str;
+	switch (ends_with) {
+	case DECL_END_SEMICOLON: end_str = "';'"; break;
+	case DECL_END_RPAREN_COMMA: end_str = "')' or ','"; break;
+	case DECL_END_LBRACE_COMMA: end_str = "'{' or ','"; break;
+	}
+			
 	if (token_is_kw(t->token, KW_EQ)) {
 		t->token++;
 		d->flags |= DECL_FLAG_HAS_EXPR;
@@ -1315,7 +1360,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndType ends_with, uint16_
 			expr_flags |= EXPR_CAN_END_WITH_COMMA;
 		Token *end = expr_find_end(p, expr_flags, NULL);
 		if (!end || !ends_decl(end, ends_with)) {
-			tokr_err(t, "Expected '%c' at end of declaration.", end_char);
+			tokr_err(t, "Expected %s at end of declaration.", end_str);
 		    goto ret_false;
 		}
 		if (!parse_expr(p, &d->expr, end)) {
@@ -1325,13 +1370,13 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndType ends_with, uint16_
 		if (ends_decl(t->token, ends_with)) {
 			t->token++;
 		} else {
-			tokr_err(t, "Expected '%c' at end of declaration.", end_char);
+			tokr_err(t, "Expected %s at end of declaration.", end_str);
 		    goto ret_false;
 		}
 	} else if (ends_decl(t->token, ends_with)) {
 		t->token++;
 	} else {
-		tokr_err(t, "Expected '%c' or '=' at end of delaration.", end_char);
+		tokr_err(t, "Expected %s or '=' at end of delaration.", end_str);
 	    goto ret_false;
 	}
 	

@@ -2,6 +2,7 @@ typedef uint32_t LineNo;
 typedef struct {
 	LineNo line;
 	char *code;
+	const char *filename;
 } Location;
 
 bool location_after(Location a, Location b) { /* a is after b? */

@@ -176,6 +176,9 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t) {
 			*param_type = decl->type;
 		}
 	}
+	arr_foreach(&f->ret_decls, Declaration, decl) {
+		if (!types_decl(tr, decl)) return false;
+	}
 	return true;
 }
 
@@ -233,7 +236,9 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 				err_print(where, "Use of identifier %s before its declaration.\nNote that it is only possible to use a constant function before it is directly declared (e.g. x @= fn() {}).", s);
 				info_print(d->where, "%s will be declared here.", s);
 				free(s);
-			} /* else, there should have been an error earlier */
+			} else {
+				err_print(d->where, "Declaration type not found yet, even though it has passed.\nThis should not happen.");
+			}
 			return false;
 		}
 	}
@@ -320,9 +325,13 @@ static bool types_expr(Typer *tr, Expression *e) {
 		tr->ret_type = t->fn.types.data;
 		arr_foreach(&f->params, Declaration, decl)
 			add_ident_decls(&f->body, decl);
+		arr_foreach(&f->ret_decls, Declaration, decl)
+			add_ident_decls(&f->body, decl);
 		bool block_success = true;
 		block_success = types_block(tr, &e->fn.body);
 		arr_foreach(&f->params, Declaration, decl)
+			remove_ident_decls(&f->body, decl);
+		arr_foreach(&f->ret_decls, Declaration, decl)
 			remove_ident_decls(&f->body, decl);
 		if (!block_success) {
 			success = false;

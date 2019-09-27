@@ -39,11 +39,10 @@ int main(int argc, char **argv) {
 	}
 	fclose(in);
 
-	err_filename = in_filename;
 	Identifiers file_idents;
 	idents_create(&file_idents);
 	Tokenizer t;
-	tokr_create(&t, &file_idents);
+	tokr_create(&t, &file_idents, in_filename);
 	if (!tokenize_string(&t, contents)) {
 		err_fprint(TEXT_IMPORTANT("Errors occured while preprocessing.\n"));
 		return EXIT_FAILURE;

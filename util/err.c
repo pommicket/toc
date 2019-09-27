@@ -21,10 +21,6 @@ static inline const char *ordinals(size_t x) {
 	}
 }
 
-/* file name of file being processed */
-/* TODO: remove this */
-static const char *err_filename;
-
 /* Write directly to the error file */
 static void err_fwrite(const void *data, size_t size, size_t n) {
 	fwrite(data, size, n, stderr);
@@ -41,16 +37,16 @@ static void err_vfprint(const char *fmt, va_list args) {
 	vfprintf(stderr, fmt, args);
 }
 
-static void err_print_header_(LineNo line) {
-	err_fprint(TEXT_ERROR("error:") " at line %lu of %s:\n", (unsigned long)line, err_filename);
+static void err_print_header_(Location where) {
+	err_fprint(TEXT_ERROR("error:") " at line %lu of %s:\n", (unsigned long)where.line, where.filename);
 }
 
-static void info_print_header_(LineNo line) {
-	err_fprint(TEXT_INFO("info:") " at line %lu of %s:\n", (unsigned long)line, err_filename);
+static void info_print_header_(Location where) {
+	err_fprint(TEXT_INFO("info:") " at line %lu of %s:\n", (unsigned long)where.line, where.filename);
 }
 
-static void warn_print_header_(LineNo line) {
-	err_fprint(TEXT_WARN("warning:") " at line %lu of %s:\n", (unsigned long)line, err_filename);
+static void warn_print_header_(Location where) {
+	err_fprint(TEXT_WARN("warning:") " at line %lu of %s:\n", (unsigned long)where.line, where.filename);
 }
 
 static void err_print_footer_(const char *context) {
@@ -70,7 +66,7 @@ static void err_print_footer_(const char *context) {
 
 
 static void err_vprint(Location where, const char *fmt, va_list args) {
-	err_print_header_(where.line);
+	err_print_header_(where);
 	err_vfprint(fmt, args);
 	err_print_footer_(where.code);
 }
@@ -89,7 +85,7 @@ static void err_print_(int line, const char *file, Location where, const char *f
 static void info_print(Location where, const char *fmt, ...) {
 	va_list args;
 	va_start(args, fmt);
-	info_print_header_(where.line);
+	info_print_header_(where);
 	err_vfprint(fmt, args);
 	err_print_footer_(where.code);
 	va_end(args);
@@ -98,7 +94,7 @@ static void info_print(Location where, const char *fmt, ...) {
 static void warn_print(Location where, const char *fmt, ...) {
 	va_list args;
 	va_start(args, fmt);
-	warn_print_header_(where.line);
+	warn_print_header_(where);
 	err_vfprint(fmt, args);
 	err_print_footer_(where.code);
 	va_end(args);
