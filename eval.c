@@ -195,16 +195,13 @@ static bool eval_expr(Expression *e, Value *v) {
 	case EXPR_FN:
 		v->fn = e->fn;
 		return true;
+	case EXPR_CAST:
 	case EXPR_IF:
-	case EXPR_WHILE: {
-		err_print(e->where, "compile time if/while not supported yet."); /* TODO */
-	} break;
+	case EXPR_WHILE:
 	case EXPR_CALL:
-		err_print(e->where, "Compile time function calling not supported yet."); /* TODO */
-		break;
-	case EXPR_BLOCK:
-		err_print(e->where, "Block eval not supported yet."); /* TODO */
-		break;
+	case EXPR_BLOCK: {
+		err_print(e->where, "operation not supported at compile time yet."); /* TODO */
+	} break;
 	case EXPR_DIRECT:
 		switch (e->direct.which) {
 		case DIRECT_C:

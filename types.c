@@ -389,6 +389,13 @@ static bool types_expr(Typer *tr, Expression *e) {
 	case EXPR_IDENT: {
 		if (!type_of_ident(tr, e->where, e->ident, t)) return false;
 	} break;
+	case EXPR_CAST: {
+		/* TODO: forbid certain casts */
+		CastExpr *c = &e->cast;
+		if (!types_expr(tr, c->expr))
+			return false;
+		*t = c->type;
+	} break;
 	case EXPR_IF: {
 		IfExpr *i = &e->if_;
 		IfExpr *curr = i;
@@ -741,6 +748,11 @@ static bool types_decl(Typer *tr, Declaration *d) {
 		}
 	}
 	d->flags |= DECL_FLAG_FOUND_TYPE;
+	if (d->type.kind == TYPE_TUPLE) {
+		/* TODO(eventually): Should this be allowed? */
+		err_print(d->where, "Declaring a tuple is not allowed.");
+		return false;
+	}
  ret:
 	arr_remove_last(&tr->in_decls);
 	return success;
