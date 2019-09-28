@@ -14,7 +14,12 @@ static void arr_create(Array *arr, size_t item_sz) {
 static inline void arr_reserve(Array *arr, size_t n) {
 	arr->cap = n;
 	arr->data = err_realloc(arr->data, arr->item_sz * arr->cap);
+}
 
+/* like arr_reserve, but sets the length of the array too */
+static inline void arr_set_len(Array *arr, size_t n) {
+	arr->len = arr->cap = n;
+	arr->data = err_realloc(arr->data, arr->item_sz * arr->cap);
 }
 
 static inline void *arr_last(Array *arr) {

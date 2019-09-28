@@ -4,7 +4,7 @@ main @= fn() {
 	 	  ret1 = x;
 	 };
 	 a,b : i64;
-	 // a, b = test(3,7,2,3);
-	 a, b = test(x = 3, y = 7, z = 30, w = 20);
+	 a, b = test(3,7,2,3);
+	 a, b = test(x = 3, z = 7, w = 30, y = 20);
 };
 

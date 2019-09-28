@@ -2,8 +2,11 @@
 TODO:
 named args
 optional params
+char type
+string constants are []char
 evaluator (simplify compile time constant expressions)
 re-do cgen
+any odd number of "s for a string
  */
 #include "toc.c"
 
@@ -61,13 +64,16 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 
+	fprint_parsed_file(stdout, &f);
+
+	printf("\n\n-----\n\n");
 	
 	block_enter(NULL, &f.stmts); /* enter global scope */
 	if (!types_file(&f)) {
 		err_fprint(TEXT_IMPORTANT("Errors occured while determining types.\n"));
 		return EXIT_FAILURE;
 	}
-	
+	parse_printing_after_types = true;
 	fprint_parsed_file(stdout, &f);
 	
 	tokr_free(&t);

@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include <stdarg.h>
 #include <string.h>
 #include <ctype.h>
@@ -16,11 +17,11 @@ typedef long double Floating; /* OPTIM: Switch to double */
 #define UINTEGER_FMT "%llu"
 #define INTEGER_FMT "%lld"
 
-#include "util/location.c"
-#include "util/err.c"
-#include "util/arr.c"
-#include "util/blockarr.c"
-#include "util/str.c"
+#include "location.c"
+#include "err.c"
+#include "arr.c"
+#include "blockarr.c"
+#include "str.c"
 #include "identifiers.c"
 #include "tokenizer.c"
 #include "parse.c"

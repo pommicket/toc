@@ -109,7 +109,7 @@ typedef struct {
 
 typedef struct {
 	struct Expression *fn;
-	Array args;	/* of Argument */
+	Array args;	/* of Argument; after typing, becomes of Expression */
 } CallExpr;
 
 typedef struct {
@@ -168,6 +168,7 @@ typedef struct Expression {
 } Expression;
 
 typedef struct {
+	Location where;
 	Identifier name; /* NULL = no name */
 	Expression val;
 } Argument;
@@ -762,6 +763,7 @@ static bool parse_args(Parser *p, Array *args) {
 				return false;
 			}
 			Argument *arg = arr_add(args);
+			arg->where = t->token->where;
 			/* named arguments */
 			if (t->token->kind == TOKEN_IDENT && token_is_kw(t->token + 1, KW_EQ)) {
 			    arg->name = t->token->ident;
@@ -1511,6 +1513,9 @@ static bool parse_file(Parser *p, ParsedFile *f) {
 
 #define PARSE_PRINT_LOCATION(l) //fprintf(out, "[l%lu]", (unsigned long)(l).line);
 
+/* in theory, this shouldn't be global, but these functions are mostly for debugging anyways */
+static bool parse_printing_after_types;
+
 static void fprint_expr(FILE *out, Expression *e);
 static void fprint_stmt(FILE *out, Statement *s);
 static void fprint_decl(FILE *out, Declaration *d);
@@ -1537,6 +1542,8 @@ static void fprint_block(FILE *out,  Block *b) {
 static void fprint_fn_expr(FILE *out, FnExpr *f) {
 	fprintf(out, "fn (");
 	arr_foreach(&f->params, Declaration, decl) {
+		if (decl != f->params.data)
+			fprintf(out, ", ");
 		fprint_decl(out, decl);
 	}
 	fprintf(out, ") ");
@@ -1547,13 +1554,22 @@ static void fprint_fn_expr(FILE *out, FnExpr *f) {
 
 static void fprint_args(FILE *out, Array *args) {
 	fprintf(out, "(");
-	arr_foreach(args, Argument, arg) {
-		if (arg != args->data) fprintf(out, ", ");
-		if (arg->name) {
-			fprint_ident(out, arg->name);
-			fprintf(out, " = ");
+	if (parse_printing_after_types) {
+		assert(args->item_sz == sizeof(Expression));
+		arr_foreach(args, Expression, arg) {
+			if (arg != args->data) fprintf(out, ", ");
+			fprint_expr(out, arg);
 		}
-		fprint_expr(out, &arg->val);
+	} else {
+		assert(args->item_sz == sizeof(Argument));
+		arr_foreach(args, Argument, arg) {
+			if (arg != args->data) fprintf(out, ", ");
+			if (arg->name) {
+				fprint_ident(out, arg->name);
+				fprintf(out, " = ");
+			}
+			fprint_expr(out, &arg->val);
+		}
 	}
 	fprintf(out, ")");
 }
@@ -1629,8 +1645,10 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprint_args(out, &e->direct.args);
 		break;
 	}
-	fprintf(out, ":");
-	fprint_type(out, &e->type);
+	if (parse_printing_after_types) {
+		fprintf(out, ":");
+		fprint_type(out, &e->type);
+	}
 }
 
 
@@ -1641,9 +1659,10 @@ static void fprint_decl(FILE *out, Declaration *d) {
 		fprint_ident(out, *ident);
 	}
 	if (d->flags & DECL_FLAG_CONST) {
-		fprintf(out, "[const]");
+		fprintf(out, "@");
+	} else {
+		fprintf(out, ":");
 	}
-	fprintf(out, ":");
 	if ((d->flags & DECL_FLAG_FOUND_TYPE) || (d->flags & DECL_FLAG_ANNOTATES_TYPE)) {
 		fprint_type(out, &d->type);
 	}

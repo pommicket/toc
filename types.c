@@ -500,7 +500,56 @@ static bool types_expr(Typer *tr, Expression *e) {
 			return false;
 		}
 		bool ret = true;
+		FnExpr *fn_decl = NULL;
+		Array new_args_arr;
+		size_t nargs = c->args.len;
+		arr_create(&new_args_arr, sizeof(Expression));
+		arr_set_len(&new_args_arr, nargs);
+		Expression *new_args = new_args_arr.data;
+		bool *params_set = calloc(nargs, sizeof *params_set);
+		if (f->kind == EXPR_IDENT) {
+			IdentDecl *decl = ident_decl(f->ident);
+			assert(decl);
+			if (decl->decl->flags & DECL_FLAG_HAS_EXPR) {
+				Expression *expr = &decl->decl->expr;
+				if (expr->kind == EXPR_FN)
+					fn_decl = &decl->decl->expr.fn;
+			}
+		}
+		bool had_named_arg = false;
 		for (size_t p = 0; p < nparams; p++) {
+			if (args[p].name) {
+				if (!fn_decl) {
+					err_print(args[p].where, "You must call a function directly by its name to use named arguments.");
+					return false;
+				}
+				long index = 0;
+				long arg_index = -1;
+				arr_foreach(&fn_decl->params, Declaration, param) {
+					arr_foreach(&param->idents, Identifier, ident) {
+						if (*ident == args[p].name) {
+							arg_index = index;
+							break;
+						}
+						index++;
+					}
+					if (arg_index != -1) break;
+				}
+				if (arg_index == -1) {
+					char *s = ident_to_str(args[p].name);
+					err_print(args[p].where, "Argument '%s' does not appear in declaration of function.", s);
+					free(s);
+					info_print(ident_decl(f->ident)->decl->where, "Declaration is here.");
+					return false;
+				}
+				new_args[arg_index] = args[p].val;
+				params_set[arg_index] = true;
+				continue;
+			}
+			if (had_named_arg) {
+				err_print(args[p].where, "Unnamed argument after named argument.");
+				return false;
+			}
 			Expression *val = &args[p].val;
 			Type *expected = &param_types[p];
 			Type *got = &val->type;
@@ -510,8 +559,31 @@ static bool types_expr(Typer *tr, Expression *e) {
 				char *gstr = type_to_str(got);
 				err_print(val->where, "Expected type %s as %lu%s argument to function, but got %s.", estr, 1+(unsigned long)p, ordinals(1+p), gstr);
 			}
+			new_args[p] = args[p].val;
+			params_set[p] = true;
 		}
 		if (!ret) return false;
+		for (size_t i = 0; i < nargs; i++) {
+			if (!params_set[i]) {
+				size_t index = 0;
+				assert(fn_decl); /* we can only miss an arg if we're using named args */
+				
+				arr_foreach(&fn_decl->params, Declaration, param) {
+					arr_foreach(&param->idents, Identifier, ident) {
+						if (index == i) {
+							char *s = ident_to_str(*ident);
+							err_print(e->where, "Argument %lu (%s) not set in function call.", 1+(unsigned long)i, s);
+							free(s);
+							return false;
+						}
+						index++;
+					}
+				}
+			}
+		}
+		free(params_set);
+		arr_free(&c->args);
+		c->args = new_args_arr;
 		*t = *ret_type;
 		break;
 	}
@@ -528,6 +600,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 	case EXPR_DIRECT:
 		t->kind = TYPE_UNKNOWN;
 	    arr_foreach(&e->direct.args, Argument, arg) {
+			if (arg->name) {
+				err_print(arg->where, "Directives should not have named arguments.");
+				return false;
+			}
 			if (!types_expr(tr, &arg->val))
 				return false;
 		}
