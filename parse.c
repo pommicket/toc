@@ -75,6 +75,7 @@ typedef enum {
 			  EXPR_WHILE,
 			  EXPR_FN,
 			  EXPR_CAST,
+			  EXPR_NEW,
 			  EXPR_CALL,
 			  EXPR_BLOCK,
 			  EXPR_DIRECT
@@ -84,7 +85,8 @@ typedef enum {
 			  UNARY_MINUS,
 			  UNARY_ADDRESS, /* &x */
 			  UNARY_DEREF, /* *x */
-			  UNARY_NOT	/* !x */
+			  UNARY_NOT, /* !x */
+			  UNARY_DEL
 } UnaryOp;
 
 typedef enum {
@@ -162,6 +164,12 @@ typedef struct Expression {
 		CallExpr call;
 	    DirectExpr direct;
 		Identifier ident;
+		struct {
+			Type type;
+		} new;
+		struct {
+			Type type;
+		} del;
 		IfExpr if_;
 		WhileExpr while_;
 		FnExpr fn;
@@ -243,6 +251,7 @@ static const char *unary_op_to_str(UnaryOp u) {
 	case UNARY_ADDRESS: return "&";
 	case UNARY_DEREF: return "*";
 	case UNARY_NOT: return "!";
+	case UNARY_DEL: return "del";
 	}
 	assert(0);
 	return "";
@@ -313,6 +322,7 @@ static BuiltinType kw_to_builtin_type(Keyword kw) {
 	case KW_F32: return BUILTIN_F32;
 	case KW_F64: return BUILTIN_F64;
 	case KW_BOOL: return BUILTIN_BOOL;
+	case KW_CHAR: return BUILTIN_CHAR;
 	default: return BUILTIN_TYPE_COUNT;
 	}
 }
@@ -389,7 +399,7 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 		return written;
 	}
 	case TYPE_PTR: {
-		size_t written = str_copy(buffer, bufsize, "*");
+		size_t written = str_copy(buffer, bufsize, "&");
 		written += type_to_str_(t->ptr.of, buffer + written, bufsize - written);
 		return written;
 	}
@@ -588,11 +598,11 @@ static bool parse_type(Parser *p, Type *type) {
 				}
 			}
 			break;
-		case KW_ASTERISK:
+		case KW_AMPERSAND:
 			/* pointer */
 			type->kind = TYPE_PTR;
 			type->ptr.of = err_malloc(sizeof *type->ptr.of); /* OPTIM */
-			t->token++;	/* move past * */
+			t->token++;	/* move past & */
 			if (!parse_type(p, type->ptr.of)) return false;
 			break;
 		default:
@@ -792,7 +802,9 @@ static void fprint_expr(FILE *out, Expression *e);
 
 
 #define NOT_AN_OP -1
+/* cast/new aren't really operators since they operate on types, not exprs. */
 #define CAST_PRECEDENCE 2
+#define NEW_PRECEDENCE 22
 static int op_precedence(Keyword op) {
 	switch (op) {
 	case KW_EQ: return 0;
@@ -809,6 +821,7 @@ static int op_precedence(Keyword op) {
 	case KW_ASTERISK: return 30;
 	case KW_SLASH: return 40;
 	case KW_EXCLAMATION: return 50;
+	case KW_DEL: return 1000;
 	default: return NOT_AN_OP;
 	}
 }
@@ -871,6 +884,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		t->token = end;
 		return true;
 	}
+
 
 	Token *start = t->token;
 
@@ -1012,8 +1026,12 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				break;
 			default: { /* OPTIM: use individual cases for each op */
 				if (paren_level == 0 && brace_level == 0 && square_level == 0) {
-					int precedence = token->kw == KW_AS ? CAST_PRECEDENCE
-						: op_precedence(token->kw);
+					int precedence;
+					switch (token->kw) {
+					case KW_AS: precedence = CAST_PRECEDENCE; break;
+					case KW_NEW: precedence = NEW_PRECEDENCE; break;
+					default: precedence = op_precedence(token->kw); break;
+					}
 					if (precedence == NOT_AN_OP) break; /* nvm it's not an operator */
 					if (lowest_precedence == NOT_AN_OP || precedence <= lowest_precedence) {
 						lowest_precedence = precedence;
@@ -1069,7 +1087,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			/* Unary */
 			UnaryOp op;
 			bool is_unary = true;
-			switch (lowest_precedence_op->kw) {
+			switch (t->token->kw) {
 			case KW_PLUS:
 				/* unary + is ignored entirely */
 				t->token++;
@@ -1086,6 +1104,14 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				break;
 			case KW_EXCLAMATION:
 				op = UNARY_NOT;
+				break;
+			case KW_NEW:
+				t->token++;
+				e->kind = EXPR_NEW;
+				if (!parse_type(p, &e->new.type)) return false;
+				return true;
+			case KW_DEL:
+				op = UNARY_DEL;
 				break;
 			default:
 				is_unary = false;
@@ -1161,6 +1187,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			break;
 		case KW_AMPERSAND:
 		case KW_EXCLAMATION:
+		case KW_DEL:
 			err_print(lowest_precedence_op->where, "Unary operator '%s' being used as a binary operator!", kw_to_str(lowest_precedence_op->kw));
 			return false;
 		default: assert(0); return false;
@@ -1626,6 +1653,10 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprintf(out, ", ");
 		fprint_type(out, &e->cast.type);
 		fprintf(out, ")");
+		break;
+	case EXPR_NEW:
+		fprintf(out, "new ");
+		fprint_type(out, &e->new.type);
 		break;
 	case EXPR_IF:
 		if (e->if_.cond) {

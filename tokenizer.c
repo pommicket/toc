@@ -45,6 +45,8 @@ typedef enum {
 			  KW_RETURN,
 			  KW_FN,
 			  KW_AS,
+			  KW_NEW,
+			  KW_DEL,
 			  KW_INT,
 			  KW_I8,
 			  KW_I16,
@@ -69,6 +71,7 @@ static const char *keywords[KW_COUNT] =
 	 "+", "-", "*", "!", "&", "/",
 	 "=",
 	 "if", "elif", "else", "while", "return", "fn", "as",
+	 "new", "del",
 	 "int", "i8", "i16", "i32", "i64",
 	 "u8", "u16", "u32", "u64", "float", "f32", "f64",
 	 "char", "bool", "true", "false"};

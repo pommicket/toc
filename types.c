@@ -279,7 +279,14 @@ static bool type_resolve(Typer *tr, Type *t) {
 				return false;
 		}
 		break;
-	default: break;
+	case TYPE_PTR:
+		if (!type_resolve(tr, t->ptr.of))
+			return false;
+		break;
+	case TYPE_UNKNOWN:
+	case TYPE_VOID:
+	case TYPE_BUILTIN:
+		break;
 	}
 	t->flags |= TYPE_FLAG_RESOLVED;
 	return true;
@@ -396,7 +403,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 	case EXPR_LITERAL_STR:
 		t->kind = TYPE_ARR;
 		t->arr.n = e->strl.len;
-		t->arr.of = malloc(sizeof *t->arr.of);
+		t->arr.of = err_malloc(sizeof *t->arr.of);
 		t->arr.of->flags = TYPE_FLAG_RESOLVED;
 		t->arr.of->kind = TYPE_BUILTIN;
 		t->arr.of->builtin = BUILTIN_CHAR;
@@ -419,12 +426,19 @@ static bool types_expr(Typer *tr, Expression *e) {
 		if (!type_of_ident(tr, e->where, e->ident, t)) return false;
 	} break;
 	case EXPR_CAST: {
-		/* TODO: forbid certain casts */
+		/* TODO: forbid/warn certain casts */
 		CastExpr *c = &e->cast;
 		if (!types_expr(tr, c->expr))
 			return false;
 		*t = c->type;
 	} break;
+	case EXPR_NEW:
+		t->kind = TYPE_PTR;
+		t->ptr.of = err_malloc(sizeof *t->ptr.of);
+		t->ptr.of = &e->new.type;
+		if (!type_resolve(tr, t))
+			return false;
+		break;
 	case EXPR_IF: {
 		IfExpr *i = &e->if_;
 		IfExpr *curr = i;
@@ -666,6 +680,15 @@ static bool types_expr(Typer *tr, Expression *e) {
 				return false;
 			}
 			*t = *of_type->ptr.of;
+			break;
+		case UNARY_DEL:
+			if (of_type->kind != TYPE_PTR) {
+				char *s = type_to_str(of_type);
+				err_print(e->where, "Cannot delete non-pointer type %s.", s);
+				free(s);
+				return false;
+			}
+			t->kind = TYPE_VOID;
 			break;
 		case UNARY_NOT:
 			if (!type_can_be_truthy(of_type)) {

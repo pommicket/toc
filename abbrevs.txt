@@ -1,5 +1,6 @@
 arg - argument
 decl - declaration
+del - delete
 deref - dereference
 direct - directive
 eof - end of file

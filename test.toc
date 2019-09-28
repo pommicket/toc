@@ -1,8 +1,5 @@
 main @= fn() {
-	 foo := 'a';
-	 bar := foo as u8 as f32;
-	 x := "hello";
-	 x[4] = 's';
-	 x[3] = foo;
+	 asdf := new &[3]&char;
+	 del new int;
+	 del asdf;
 };
-

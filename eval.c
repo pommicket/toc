@@ -60,6 +60,9 @@ static bool eval_expr(Expression *e, Value *v) {
 			*v = *ptr.points_to;
 			return true;
 		} break;
+		case UNARY_DEL:	/* TODO */
+			assert(0);
+			break;
 		}
 	} break;
 	case EXPR_BINARY_OP: {
@@ -197,7 +200,8 @@ static bool eval_expr(Expression *e, Value *v) {
 	case EXPR_CALL:
 	case EXPR_BLOCK:
 	case EXPR_LITERAL_STR:
-	case EXPR_LITERAL_CHAR: {
+	case EXPR_LITERAL_CHAR:
+	case EXPR_NEW:{
 		err_print(e->where, "operation not supported at compile time yet."); /* TODO */
 	} break;
 	case EXPR_DIRECT:

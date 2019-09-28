@@ -1,7 +1,6 @@
 /* 
 TODO:
-new/delete
-evaluator (simplify compile time constant expressions)
+finish evaluator
 re-do cgen
 any odd number of "s for a string
  */
