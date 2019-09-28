@@ -73,8 +73,8 @@ static bool type_eq(Type *a, Type *b) {
 		if (b->flags & TYPE_FLAG_FLEXIBLE) return true;
 		assert(a->kind == TYPE_BUILTIN);
 		
-		if (type_builtin_is_floating(a->builtin)) {
-			return type_builtin_is_floating(b->builtin);
+		if (type_builtin_is_float(a->builtin)) {
+			return type_builtin_is_float(b->builtin);
 		}
 		assert(a->builtin == BUILTIN_I64);
 		return type_builtin_is_numerical(b->builtin);
@@ -255,7 +255,11 @@ static bool type_resolve(Typer *tr, Type *t) {
 		Value val;
 		Expression *n_expr = t->arr.n_expr;
 		if (!types_expr(tr, n_expr)) return false;
-		if (n_expr->type.kind != TYPE_BUILTIN || !type_builtin_is_integer(n_expr->type.builtin)) {
+		if (n_expr->type.kind == TYPE_UNKNOWN) {
+			t->arr.n = 0;
+			break;
+		}
+		if (n_expr->type.kind != TYPE_BUILTIN || !type_builtin_is_int(n_expr->type.builtin)) {
 			char *s = type_to_str(&n_expr->type);
 			err_print(n_expr->where, "Cannot use type %s as the size of an array (it's not an integer type).", s);
 			free(s);
@@ -263,8 +267,10 @@ static bool type_resolve(Typer *tr, Type *t) {
 		}
 		if (!eval_expr(n_expr, &val)) return false; /* resolve N */
 		Integer size = val.intv;
-		if (size < 0)
+		if (size < 0) {
 			err_print(t->arr.n_expr->where, "Negative array length (" INTEGER_FMT ")", size);
+			return false;
+		}
 		t->arr.n = (UInteger)size;
 	} break;
 	case TYPE_FN:
@@ -762,13 +768,12 @@ static bool types_expr(Typer *tr, Expression *e) {
 					int rhs_is_flexible = rhs_type->flags & TYPE_FLAG_FLEXIBLE;
 					if (lhs_is_flexible && rhs_is_flexible) {
 						/* both flexible */
+						*t = *lhs_type;
 						if (rhs_type->builtin == BUILTIN_F32) {
 							/* promote to float */
-							lhs_type->builtin = BUILTIN_F32;
+							t->builtin = BUILTIN_F32;
 						}
-						if (lhs_type->builtin == BUILTIN_F32)
-							rhs_type->builtin = BUILTIN_F32;
-						*t = *lhs_type;
+						
 					} else if (!lhs_is_flexible) {
 						/* lhs inflexible, rhs ? */
 						*t = *lhs_type;

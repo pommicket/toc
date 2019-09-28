@@ -277,7 +277,18 @@ static const char *binary_op_to_str(BinaryOp b) {
 	return "";
 }
 
-static bool type_builtin_is_integer(BuiltinType b) {
+static bool type_builtin_is_uint(BuiltinType b) {
+	switch (b) {
+	case BUILTIN_U8:
+	case BUILTIN_U16:
+	case BUILTIN_U32:
+	case BUILTIN_U64:
+		return true;
+	default: return false;
+	}
+}
+
+static bool type_builtin_is_int(BuiltinType b) {
 	switch (b) {
 	case BUILTIN_I8:
 	case BUILTIN_I16:
@@ -292,7 +303,7 @@ static bool type_builtin_is_integer(BuiltinType b) {
 	}
 }
 
-static bool type_builtin_is_floating(BuiltinType b) {
+static bool type_builtin_is_float(BuiltinType b) {
 	switch (b) {
 	case BUILTIN_F32:
 	case BUILTIN_F64:
@@ -302,7 +313,7 @@ static bool type_builtin_is_floating(BuiltinType b) {
 }
 
 static bool type_builtin_is_numerical(BuiltinType b) {
-	return type_builtin_is_integer(b) || type_builtin_is_floating(b);
+	return type_builtin_is_int(b) || type_builtin_is_float(b);
 }
 
 
