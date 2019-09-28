@@ -1,9 +1,8 @@
 /* 
 TODO:
-named args
-optional params
 char type
 string constants are []char
+new/delete
 evaluator (simplify compile time constant expressions)
 re-do cgen
 any odd number of "s for a string

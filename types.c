@@ -495,18 +495,14 @@ static bool types_expr(Typer *tr, Expression *e) {
 		Type *param_types = ret_type + 1;
 		Argument *args = c->args.data;
 		size_t nparams = f->type.fn.types.len - 1;
-		if (nparams != c->args.len) {
-			err_print(e->where, "Expected %lu arguments to function, but got %lu.", (unsigned long)nparams, (unsigned long)c->args.len);
-			return false;
-		}
+		size_t nargs = c->args.len;
 		bool ret = true;
 		FnExpr *fn_decl = NULL;
 		Array new_args_arr;
-		size_t nargs = c->args.len;
 		arr_create(&new_args_arr, sizeof(Expression));
-		arr_set_len(&new_args_arr, nargs);
+		arr_set_len(&new_args_arr, nparams);
 		Expression *new_args = new_args_arr.data;
-		bool *params_set = calloc(nargs, sizeof *params_set);
+		bool *params_set = calloc(nparams, sizeof *params_set);
 		if (f->kind == EXPR_IDENT) {
 			IdentDecl *decl = ident_decl(f->ident);
 			assert(decl);
@@ -516,13 +512,18 @@ static bool types_expr(Typer *tr, Expression *e) {
 					fn_decl = &decl->decl->expr.fn;
 			}
 		}
+		if (!fn_decl && nargs != nparams) {
+			err_print(e->where, "Expected %lu arguments to function call, but got %lu.", (unsigned long)nparams, (unsigned long)nargs);
+			return false;
+		}
 		bool had_named_arg = false;
-		for (size_t p = 0; p < nparams; p++) {
+		for (size_t p = 0; p < nargs; p++) {
 			if (args[p].name) {
 				if (!fn_decl) {
 					err_print(args[p].where, "You must call a function directly by its name to use named arguments.");
 					return false;
 				}
+				had_named_arg = true;
 				long index = 0;
 				long arg_index = -1;
 				arr_foreach(&fn_decl->params, Declaration, param) {
@@ -563,18 +564,23 @@ static bool types_expr(Typer *tr, Expression *e) {
 			params_set[p] = true;
 		}
 		if (!ret) return false;
-		for (size_t i = 0; i < nargs; i++) {
+		for (size_t i = 0; i < nparams; i++) {
 			if (!params_set[i]) {
 				size_t index = 0;
-				assert(fn_decl); /* we can only miss an arg if we're using named args */
+				assert(fn_decl); /* we can only miss an arg if we're using named/optional args */
 				
 				arr_foreach(&fn_decl->params, Declaration, param) {
+					bool is_required = !(param->flags & DECL_FLAG_HAS_EXPR);
 					arr_foreach(&param->idents, Identifier, ident) {
 						if (index == i) {
-							char *s = ident_to_str(*ident);
-							err_print(e->where, "Argument %lu (%s) not set in function call.", 1+(unsigned long)i, s);
-							free(s);
-							return false;
+							if (is_required) {
+								char *s = ident_to_str(*ident);
+								err_print(e->where, "Argument %lu (%s) not set in function call.", 1+(unsigned long)i, s);
+								free(s);
+								return false;
+							} else {
+								new_args[i] = param->expr;
+							}
 						}
 						index++;
 					}

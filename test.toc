@@ -1,10 +1,10 @@
 main @= fn() {
 	 foo @= fn() i64 { return 3; };
-	 test @= fn(x : i64, y : i32, z,w: i64) ret1 : i64, ret2 : i64 {
-	 	  ret1 = x;
+	 test @= fn(x : i64, y : i32, z,w : f32 = 18, foo := false) ret1 : i64, ret2 : i64 {
+	 	  ret1 = x + (z + w as i64);
 	 };
 	 a,b : i64;
-	 a, b = test(3,7,2,3);
-	 a, b = test(x = 3, z = 7, w = 30, y = 20);
+	 a, b = test(3,7,2, foo = true);
+	 a, b = test(x = 3, y = 30);
 };
 
