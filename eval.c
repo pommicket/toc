@@ -1,27 +1,56 @@
+typedef enum {
+			  VAL_VOID,
+			  VAL_INT,
+			  VAL_FLOAT,
+			  VAL_PTR,
+			  VAL_FN,
+			  VAL_BOOL
+} ValueKind;
+
+#define VAL_FLAG_FN_NULL 0x01 /* is this function null? */
+
+typedef double FloatVal;
+
 typedef struct Value {
+	ValueKind kind;
 	union {
 		Integer intv;
-		Floating floatv;
+	    FloatVal floatv;
 		struct Value *points_to;
-		FnExpr fn;
+		FnExpr *fn;
 		bool boolv;
 	};
 } Value;
 
-static bool eval_truthiness(Expression *e, Value *v) {
-	/* TODO */
-	(void)e,(void)v;
-	return true;
+static bool eval_truthiness(Value *v) {
+	switch (v->kind) {
+	case VAL_VOID:
+		assert(0);
+		return false;
+	case VAL_INT:
+		return v->intv != 0;
+	case VAL_FLOAT:
+		return v->floatv != 0;
+	case VAL_PTR:
+		return v->points_to != NULL;
+	case VAL_FN:
+		return v->fn != NULL;
+	case VAL_BOOL:
+		return v->boolv;
+	}
+	assert(0);
+	return false;
 }
 
 /* NOTE: expr must be typed before it can be evaluated */
-static bool eval_expr(Expression *e, Value *v) { 
-	/* TODO: cache eval'd expression values (probably only needed for declarations) */
+static bool eval_expr(Expression *e, Value *v) {
 	switch (e->kind) {
 	case EXPR_LITERAL_FLOAT:
-		v->floatv = e->floatl;
-		return false;
+		v->kind = VAL_FLOAT;
+		v->floatv = (FloatVal)e->floatl;
+		return true;
 	case EXPR_LITERAL_INT:
+		v->kind = VAL_INT;
 		if (e->intl > (UInteger)INTEGER_MAX) { /* TODO: FIXME */
 			err_print(e->where, "Overflow when evaluating integer.");
 			return false;
@@ -29,6 +58,7 @@ static bool eval_expr(Expression *e, Value *v) {
 		v->intv = (Integer)e->intl;
 		return true;
 	case EXPR_LITERAL_BOOL:
+		v->kind = VAL_BOOL;
 		v->boolv = e->booll;
 		return true;
 	case EXPR_UNARY_OP: {
@@ -38,20 +68,23 @@ static bool eval_expr(Expression *e, Value *v) {
 			Value of;
 			if (!eval_expr(of_expr, &of)) return false;
 		    assert(e->type.kind != TYPE_BUILTIN);
-			if (type_builtin_is_integer(e->type.builtin)) {
+			v->kind = of.kind;
+			if (v->kind == VAL_INT) {
 				v->intv = -of.intv;
-			} else if (type_builtin_is_floating(e->type.builtin)) {
+			} else if (v->kind == VAL_FLOAT) {
 				v->floatv = -of.floatv;
 			} else {
-				err_print(e->where, "negation of non-numerical types not supported in evaluator yet.");
+			    assert(0);
 				return false;
 			}
 			return true;
 		}
 		case UNARY_NOT:
-			v->boolv = !eval_truthiness(e, v);
+			v->kind = VAL_BOOL;
+			v->boolv = !eval_truthiness(v);
 		    return true;
 		case UNARY_ADDRESS:
+			v->kind = VAL_PTR;
 			v->points_to = err_malloc(sizeof *v->points_to); /* OPTIM */
 			return eval_expr(e->unary.of, v->points_to);
 		case UNARY_DEREF: {
@@ -79,6 +112,7 @@ static bool eval_expr(Expression *e, Value *v) {
 		bool is_bool = e->type.builtin == BUILTIN_BOOL;
 		switch (e->binary.op) {
 		case BINARY_PLUS:
+			v->kind = lhs.kind;
 			if (is_int) {
 				v->intv = lhs.intv + rhs.intv;
 			} else if (is_float) {
@@ -86,6 +120,7 @@ static bool eval_expr(Expression *e, Value *v) {
 			} else assert(0);
 			return true;
 		case BINARY_MINUS:
+			v->kind = lhs.kind;
 			if (is_int) {
 				v->intv = lhs.intv - rhs.intv;
 			} else if (is_float) {
@@ -93,6 +128,7 @@ static bool eval_expr(Expression *e, Value *v) {
 			} else assert(0);
 			return true;
 		case BINARY_MUL:
+			v->kind = lhs.kind;
 			if (is_int) {
 				v->intv = lhs.intv * rhs.intv;
 			} else if (is_float) {
@@ -100,6 +136,7 @@ static bool eval_expr(Expression *e, Value *v) {
 			} else assert(0);
 			return true;
 		case BINARY_DIV:
+			v->kind = lhs.kind;
 			/* TODO(eventually): check div by 0 */
 			if (is_int) {
 				v->intv = lhs.intv / rhs.intv;
@@ -108,6 +145,7 @@ static bool eval_expr(Expression *e, Value *v) {
 			} else assert(0);
 			return true;
 		case BINARY_EQ:
+			v->kind = VAL_BOOL;
 			if (is_int) {
 				v->boolv = lhs.intv == rhs.intv;
 			} else if (is_float) {
@@ -117,6 +155,7 @@ static bool eval_expr(Expression *e, Value *v) {
 			} else assert(0);
 			return true;
 		case BINARY_NE:
+			v->kind = VAL_BOOL;
 			if (is_int) {
 				v->boolv = lhs.intv != rhs.intv;
 			} else if (is_float) {
@@ -126,6 +165,7 @@ static bool eval_expr(Expression *e, Value *v) {
 			} else assert(0);
 			return true;
 		case BINARY_GT:
+			v->kind = VAL_BOOL;
 			if (is_int) {
 				v->boolv = lhs.intv > rhs.intv;
 			} else if (is_float) {
@@ -133,6 +173,7 @@ static bool eval_expr(Expression *e, Value *v) {
 			} else assert(0);
 			return true;
 		case BINARY_GE:
+			v->kind = VAL_BOOL;
 			if (is_int) {
 				v->boolv = lhs.intv >= rhs.intv;
 			} else if (is_float) {
@@ -140,6 +181,7 @@ static bool eval_expr(Expression *e, Value *v) {
 			} else assert(0);
 			return true;
 		case BINARY_LT:
+			v->kind = VAL_BOOL;
 			if (is_int) {
 				v->boolv = lhs.intv < rhs.intv;
 			} else if (is_float) {
@@ -147,6 +189,7 @@ static bool eval_expr(Expression *e, Value *v) {
 			} else assert(0);
 			return true;
 		case BINARY_LE:
+			v->kind = VAL_BOOL;
 			if (is_int) {
 				v->boolv = lhs.intv <= rhs.intv;
 			} else if (is_float) {
@@ -154,6 +197,7 @@ static bool eval_expr(Expression *e, Value *v) {
 			} else assert(0);
 			return true;
 	    case BINARY_SET:
+			v->kind = VAL_VOID;
 			return true;
 		case BINARY_COMMA:
 			err_print(e->where, "tuples not supported at compile time yet.");
@@ -192,7 +236,8 @@ static bool eval_expr(Expression *e, Value *v) {
 		return true;
 	} break;
 	case EXPR_FN:
-		v->fn = e->fn;
+		v->kind = VAL_FN;
+		v->fn = &e->fn;
 		return true;
 	case EXPR_CAST:
 	case EXPR_IF:

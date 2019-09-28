@@ -628,7 +628,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		}
 	} break;
 	case EXPR_DIRECT:
-		t->kind = TYPE_UNKNOWN;
+		/* type automatically set to unknown */
 	    arr_foreach(&e->direct.args, Argument, arg) {
 			if (arg->name) {
 				err_print(arg->where, "Directives should not have named arguments.");
@@ -653,6 +653,9 @@ static bool types_expr(Typer *tr, Expression *e) {
 		Expression *of = e->unary.of;
 		Type *of_type = &of->type;
 	    if (!types_expr(tr, e->unary.of)) return false;
+		if (of_type->kind == TYPE_UNKNOWN) {
+			return true;
+		}
 		switch (e->unary.op) {
 		case UNARY_MINUS:
 			if (of_type->kind != TYPE_BUILTIN || !type_builtin_is_numerical(of_type->builtin)) {
@@ -707,6 +710,9 @@ static bool types_expr(Typer *tr, Expression *e) {
 		if (!types_expr(tr, e->binary.lhs)
 			|| !types_expr(tr, e->binary.rhs))
 			return false;
+		if (lhs_type->kind == TYPE_UNKNOWN || rhs_type->kind == TYPE_UNKNOWN) {
+			return true;
+		}
 		switch (e->binary.op) {
 		case BINARY_SET:
 			if (!expr_must_lval(e->binary.lhs)) {
@@ -755,15 +761,21 @@ static bool types_expr(Typer *tr, Expression *e) {
 					int lhs_is_flexible = lhs_type->flags & TYPE_FLAG_FLEXIBLE;
 					int rhs_is_flexible = rhs_type->flags & TYPE_FLAG_FLEXIBLE;
 					if (lhs_is_flexible && rhs_is_flexible) {
-						*t = *lhs_type;
+						/* both flexible */
 						if (rhs_type->builtin == BUILTIN_F32) {
 							/* promote to float */
-							t->builtin = BUILTIN_F32;
+							lhs_type->builtin = BUILTIN_F32;
 						}
-					} else if (!lhs_is_flexible)
+						if (lhs_type->builtin == BUILTIN_F32)
+							rhs_type->builtin = BUILTIN_F32;
 						*t = *lhs_type;
-					else
+					} else if (!lhs_is_flexible) {
+						/* lhs inflexible, rhs ? */
+						*t = *lhs_type;
+					} else {
+						/* lhs flexible, rhs ? */
 						*t = *rhs_type;
+					}
 				} break;
 				}
 			}
@@ -883,13 +895,19 @@ static bool types_decl(Typer *tr, Declaration *d) {
 			}
 		}
 	}
-	d->flags |= DECL_FLAG_FOUND_TYPE;
 	if (d->type.kind == TYPE_TUPLE) {
 		/* TODO(eventually): Should this be allowed? */
 		err_print(d->where, "Declaring a tuple is not allowed.");
 		return false;
 	}
  ret:
+	/* pretend we found the type even if we didn't to prevent too many errors */
+	d->flags |= DECL_FLAG_FOUND_TYPE;
+	if (!success) {
+		/* use unknown type if we didn't get the type */
+		d->type.flags = 0;
+	    d->type.kind = TYPE_UNKNOWN;
+	}
 	arr_remove_last(&tr->in_decls);
 	return success;
 }

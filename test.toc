@@ -1,5 +1,7 @@
 main @= fn() {
-	 asdf := new &[3]&char;
-	 del new int;
-	 del asdf;
+	 foo @= 5.3 + 6;
+	 // x @= fn(i: f32) i64 {
+	   // 0
+	 // };
+	 bar := foo+-foo;
 };
