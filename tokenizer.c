@@ -45,9 +45,6 @@ typedef enum {
 			  KW_RETURN,
 			  KW_FN,
 			  KW_AS,
-			  KW_BOOL,
-			  KW_TRUE,
-			  KW_FALSE,
 			  KW_INT,
 			  KW_I8,
 			  KW_I16,
@@ -60,6 +57,10 @@ typedef enum {
 			  KW_FLOAT,
 			  KW_F32,
 			  KW_F64,
+			  KW_CHAR,
+			  KW_BOOL,
+			  KW_TRUE,
+			  KW_FALSE,
 			  KW_COUNT
 } Keyword;
 
@@ -68,9 +69,9 @@ static const char *keywords[KW_COUNT] =
 	 "+", "-", "*", "!", "&", "/",
 	 "=",
 	 "if", "elif", "else", "while", "return", "fn", "as",
-	 "bool", "true", "false",
 	 "int", "i8", "i16", "i32", "i64",
-	 "u8", "u16", "u32", "u64", "float", "f32", "f64"};
+	 "u8", "u16", "u32", "u64", "float", "f32", "f64",
+	 "char", "bool", "true", "false"};
 
 static inline const char *kw_to_str(Keyword k) { return keywords[k]; }
 

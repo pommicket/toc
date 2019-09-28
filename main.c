@@ -1,7 +1,5 @@
 /* 
 TODO:
-char type
-string constants are []char
 new/delete
 evaluator (simplify compile time constant expressions)
 re-do cgen

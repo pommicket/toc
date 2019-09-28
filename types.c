@@ -394,7 +394,13 @@ static bool types_expr(Typer *tr, Expression *e) {
 		t->flags |= TYPE_FLAG_FLEXIBLE;
 		break;
 	case EXPR_LITERAL_STR:
-		t->kind = TYPE_UNKNOWN;	/* TODO */
+		t->kind = TYPE_ARR;
+		t->arr.n = e->strl.len;
+		t->arr.of = malloc(sizeof *t->arr.of);
+		t->arr.of->flags = TYPE_FLAG_RESOLVED;
+		t->arr.of->kind = TYPE_BUILTIN;
+		t->arr.of->builtin = BUILTIN_CHAR;
+		t->flags |= TYPE_FLAG_RESOLVED;
 		break;
 	case EXPR_LITERAL_FLOAT:
 		t->kind = TYPE_BUILTIN;
@@ -404,6 +410,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 	case EXPR_LITERAL_BOOL:
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_BOOL;
+		break;
+	case EXPR_LITERAL_CHAR:
+		t->kind = TYPE_BUILTIN;
+		t->builtin = BUILTIN_CHAR;
 		break;
 	case EXPR_IDENT: {
 		if (!type_of_ident(tr, e->where, e->ident, t)) return false;
@@ -781,6 +791,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		}
 	} break;
 	}
+    
 	return true;
 }
 

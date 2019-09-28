@@ -28,9 +28,6 @@ static bool eval_expr(Expression *e, Value *v) {
 		}
 		v->intv = (Integer)e->intl;
 		return true;
-	case EXPR_LITERAL_STR:
-		err_print(e->where, "not implemented yet"); /* TODO */
-		return false;
 	case EXPR_LITERAL_BOOL:
 		v->boolv = e->booll;
 		return true;
@@ -183,7 +180,6 @@ static bool eval_expr(Expression *e, Value *v) {
 			info_print(d->where, "Declaration was here.");
 			return false;
 		}
-		/* TODO: tuples */
 		if (!d->val) {
 			d->val = err_malloc(sizeof *d->val); /* OPTIM */
 			if (!eval_expr(&d->expr, d->val))
@@ -199,7 +195,9 @@ static bool eval_expr(Expression *e, Value *v) {
 	case EXPR_IF:
 	case EXPR_WHILE:
 	case EXPR_CALL:
-	case EXPR_BLOCK: {
+	case EXPR_BLOCK:
+	case EXPR_LITERAL_STR:
+	case EXPR_LITERAL_CHAR: {
 		err_print(e->where, "operation not supported at compile time yet."); /* TODO */
 	} break;
 	case EXPR_DIRECT:

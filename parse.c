@@ -20,6 +20,7 @@ typedef enum {
 			  BUILTIN_U64,
 			  BUILTIN_F32,
 			  BUILTIN_F64,
+			  BUILTIN_CHAR,
 			  BUILTIN_BOOL,
 			  BUILTIN_TYPE_COUNT
 } BuiltinType;
@@ -30,7 +31,7 @@ typedef enum {
 typedef struct Type {
 	Location where;
 	TypeKind kind;
-	unsigned short flags;
+	uint16_t flags;
 	union {
 	    BuiltinType builtin;
 		struct {
@@ -66,6 +67,7 @@ typedef enum {
 			  EXPR_LITERAL_INT,
 			  EXPR_LITERAL_STR,
 			  EXPR_LITERAL_BOOL,
+			  EXPR_LITERAL_CHAR,
 			  EXPR_IDENT, /* variable or constant */
 			  EXPR_BINARY_OP,
 			  EXPR_UNARY_OP,
@@ -147,6 +149,7 @@ typedef struct Expression {
 		UInteger intl;
 		StrLiteral strl;
 		bool booll;
+		char charl;
 		struct {
 			UnaryOp op;
 			struct Expression *of;
@@ -327,6 +330,7 @@ static Keyword builtin_type_to_kw(BuiltinType t) {
 	case BUILTIN_F32: return KW_F32;
 	case BUILTIN_F64: return KW_F64;
 	case BUILTIN_BOOL: return KW_BOOL;
+	case BUILTIN_CHAR: return KW_CHAR;
 	case BUILTIN_TYPE_COUNT: break;
 	}
 	assert(0);
@@ -842,6 +846,10 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			e->kind = EXPR_LITERAL_STR;
 			e->strl = t->token->str;
 	    	break;
+		case TOKEN_CHAR_LITERAL:
+			e->kind = EXPR_LITERAL_CHAR;
+			e->charl = t->token->chr;
+			break;
 		case TOKEN_KW:
 			switch (t->token->kw) {
 			case KW_TRUE:
@@ -1588,6 +1596,9 @@ static void fprint_expr(FILE *out, Expression *e) {
 		break;
 	case EXPR_LITERAL_BOOL:
 		fprintf(out, "%s", e->booll ? "true" : "false");
+		break;
+	case EXPR_LITERAL_CHAR:
+		fprintf(out, "'%c'", e->charl);
 		break;
 	case EXPR_IDENT:
 		fprint_ident(out, e->ident);
