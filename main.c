@@ -11,7 +11,9 @@ any odd number of "s for a string
 #include "toc.c"
 
 int main(int argc, char **argv) {
-	allocr_test();
+#ifdef TOC_DEBUG
+	test_all();
+#endif
 	return 0;
 	if (argc < 2) {
 		fprintf(stderr, "Please specify an input file.\n");

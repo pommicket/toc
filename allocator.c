@@ -7,6 +7,9 @@ typedef struct Page {
 typedef struct {
 	Page *first;
 	Page *last;
+	void **dyn; /* array of void*s for dynamic memory */
+	size_t dyn_len;
+	size_t dyn_cap;
 } Allocator;
 
 /* number of bytes a page hold, not including the header */
@@ -47,21 +50,7 @@ static void *allocr_calloc(Allocator *a, size_t bytes) {
 
 /* IMPORTANT: this can only be called with data which was originally allocated with allocr_realloc(a, NULL, x) */
 static void *allocr_realloc(Allocator *a, void *data, size_t new_size) {
-	if (!data) {
-		Page *page = err_malloc(sizeof *page + new_size);
-		page->used = PAGE_SIZE;	/* pretend we used all of this page */
-		page->next = NULL;
-		if (a->last)
-			a->last->next = page;
-		else
-			a->first = page;
-		a->last = page;
-		return page->data;
-	} else {
-		Page *page = (Page *)((char *)data - offsetof(Page, data));
-		page = err_realloc(page, sizeof *page + new_size);
-		return page->data;
-	}
+	return NULL;
 }
 
 static void allocr_free_all(Allocator *a) {
@@ -70,28 +59,7 @@ static void allocr_free_all(Allocator *a) {
 		free(page);
 		page = next;
 	}
-}
-
-static void allocr_test(void) {
-	Allocator a;
-	allocr_create(&a);
-	for (int x = 1000; x <= 8000; x += 1000) {
-		size_t nfoos = x;
-		int *foos = allocr_malloc(&a, nfoos * sizeof(int));
-
-		for (size_t i = 0; i < nfoos; i++)
-			foos[i] = (int)i;
-		for (size_t i = 0; i < nfoos; i++)
-			assert(foos[i] == (int)i);
-		size_t nbars = x;
-		int *bars = allocr_calloc(&a, nbars * sizeof(int));
-		for (size_t i = 0; i < nbars; i++)
-			assert(bars[i] == 0);
-		for (size_t i = 0; i < nbars; i++)
-			bars[i] = (int)i;
-		for (size_t i = 0; i < nbars; i++)
-			assert(bars[i] == (int)i);
+	for (size_t i = 0; i < a->dyn_len; i++) {
+		free(a->dyn[i]);
 	}
-	
-	allocr_free_all(&a);
 }

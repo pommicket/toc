@@ -28,3 +28,5 @@ typedef long double Floating; /* OPTIM: Switch to double */
 #include "parse.c"
 #include "eval.c"
 #include "types.c"
+
+#include "tests.c"

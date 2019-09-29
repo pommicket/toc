@@ -16,10 +16,20 @@ static inline void arr_reserve(Array *arr, size_t n) {
 	arr->data = err_realloc(arr->data, arr->item_sz * arr->cap);
 }
 
+static inline void arr_reservea(Array *arr, size_t n, Allocator *a) {
+	arr->cap = n;
+	arr->data = allocr_realloc(a, arr->data, n);
+}
+
 /* like arr_reserve, but sets the length of the array too */
 static inline void arr_set_len(Array *arr, size_t n) {
-	arr->len = arr->cap = n;
-	arr->data = err_realloc(arr->data, arr->item_sz * arr->cap);
+	arr_reserve(arr, n);
+	arr->len = n;
+}
+
+static inline void arr_set_lena(Array *arr, size_t n, Allocator *a) {
+	arr_reservea(arr, n, a);
+	arr->len = n;
 }
 
 static inline void *arr_last(Array *arr) {
@@ -32,6 +42,14 @@ static inline void *arr_last(Array *arr) {
 static void *arr_add(Array *arr) {
 	if (arr->len >= arr->cap) {
 		arr_reserve(arr, (arr->cap + 1) * 2);
+	}
+	arr->len++;
+	return (void*)((char*)arr->data + arr->item_sz * (arr->len - 1));
+}
+
+static void *arr_adda(Array *arr, Allocator *a) {
+	if (arr->len >= arr->cap) {
+		arr_reservea(arr, (arr->cap + 1) * 2, a);
 	}
 	arr->len++;
 	return (void*)((char*)arr->data + arr->item_sz * (arr->len - 1));

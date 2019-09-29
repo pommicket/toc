@@ -230,7 +230,7 @@ typedef struct {
 
 typedef struct {
 	Tokenizer *tokr;
-	BlockArr exprs; /* a dynamic array of expressions, so that we don't need to call malloc every time we make an expression */
+	Allocator allocr;
 	Block *block; /* which block are we in? NULL = file scope */
 } Parser;
 
@@ -432,7 +432,11 @@ static char *type_to_str(Type *t) {
    allocate a new expression.
 */
 static Expression *parser_new_expr(Parser *p) {
-	return block_arr_add(&p->exprs);
+	return allocr_malloc(&p->allocr, sizeof(Expression));
+}
+
+static void *parser_arr_add(Parser *p, Array *a) {
+	return arr_adda(a, &p->allocr);
 }
 
 
@@ -543,11 +547,11 @@ static bool parse_type(Parser *p, Type *type) {
 				tokr_err(t, "Expected ( for function type.");
 				return false;
 			}
-			arr_add(&type->fn.types); /* add return type */
+			parser_arr_add(p, &type->fn.types); /* add return type */
 			t->token++;
 			if (!token_is_kw(t->token, KW_RPAREN)) {
 				while (1) {
-					Type *param_type = arr_add(&type->fn.types);
+					Type *param_type = parser_arr_add(p, &type->fn.types);
 					if (!parse_type(p, param_type)) return false;
 					if (token_is_kw(t->token, KW_RPAREN))
 						break;
@@ -594,7 +598,7 @@ static bool parse_type(Parser *p, Type *type) {
 			arr_create(&type->tuple, sizeof(Type));
 			t->token++;	/* move past ( */
 			while (1) {
-				Type *child = arr_add(&type->tuple);
+				Type *child = parser_arr_add(p, &type->tuple);
 				if (!parse_type(p, child)) return false;
 				if (token_is_kw(t->token, KW_RPAREN)) { /* we're done with the tuple */
 					t->token++;	/* move past ) */
@@ -649,7 +653,7 @@ static bool parse_block(Parser *p, Block *b) {
 	if (!token_is_kw(t->token, KW_RBRACE)) {
 		/* non-empty block */
 		while (1) {
-			Statement *stmt = arr_add(&b->stmts);
+			Statement *stmt = parser_arr_add(p, &b->stmts);
 			bool success = parse_stmt(p, stmt);
 			if (!success) {
 				ret = false;
@@ -700,7 +704,7 @@ static bool parse_decl_list(Parser *p, Array *decls, DeclEndKind decl_end) {
 			!token_is_kw(t->token - 1, KW_RPAREN) &&
 			!token_is_kw(t->token - 1, KW_LBRACE)))) {
 		first = false;
-		Declaration *decl = arr_add(decls);
+		Declaration *decl = parser_arr_add(p, decls);
 		if (!parse_decl(p, decl, decl_end, PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR)) {
 			ret = false;
 			/* skip to end of param list */
@@ -754,7 +758,7 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 			arr_create(&f->ret_type.tuple, sizeof(Type));
 			arr_foreach(&f->ret_decls, Declaration, decl) {
 				for (size_t i = 0; i < decl->idents.len; i++) {
-					Type *tuple_type = arr_add(&f->ret_type.tuple);
+					Type *tuple_type = parser_arr_add(p, &f->ret_type.tuple);
 					*tuple_type = decl->type;
 				}
 			}
@@ -787,7 +791,7 @@ static bool parse_args(Parser *p, Array *args) {
 				info_print(start->where, "This is where the argument list starts.");
 				return false;
 			}
-			Argument *arg = arr_add(args);
+			Argument *arg = parser_arr_add(p, args);
 			arg->where = t->token->where;
 			/* named arguments */
 			if (t->token->kind == TOKEN_IDENT && token_is_kw(t->token + 1, KW_EQ)) {
@@ -1367,7 +1371,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_
 	
 	/* OPTIM: Maybe don't use a dynamic array or use parser allocator. */
 	while (1) {
-		Identifier *ident = arr_add(&d->idents);
+		Identifier *ident = parser_arr_add(p, &d->idents);
 		if (t->token->kind != TOKEN_IDENT) {
 			tokr_err(t, "Cannot declare non-identifier (%s).", token_kind_to_str(t->token->kind));
 			goto ret_false;
@@ -1538,7 +1542,7 @@ static bool parse_stmt(Parser *p, Statement *s) {
 static void parser_from_tokenizer(Parser *p, Tokenizer *t) {
 	p->tokr = t;
 	p->block = NULL;
-	block_arr_create(&p->exprs, 10, sizeof(Expression)); /* block size = 1024 */
+	allocr_create(&p->allocr);
 }
 
 static bool parse_file(Parser *p, ParsedFile *f) {
@@ -1546,7 +1550,7 @@ static bool parse_file(Parser *p, ParsedFile *f) {
 	arr_create(&f->stmts, sizeof(Statement));
 	bool ret = true;
 	while (t->token->kind != TOKEN_EOF) {
-		Statement *stmt = arr_add(&f->stmts);
+		Statement *stmt = parser_arr_add(p, &f->stmts);
 		if (!parse_stmt(p, stmt))
 			ret = false;
 		if (token_is_kw(t->token, KW_RBRACE)) {
@@ -1556,6 +1560,11 @@ static bool parse_file(Parser *p, ParsedFile *f) {
 	}
 	return ret;
 }
+
+static void parser_free(Parser *p) {
+	allocr_free_all(&p->allocr);
+}
+
 
 #define PARSE_PRINT_LOCATION(l) //fprintf(out, "[l%lu]", (unsigned long)(l).line);
 
