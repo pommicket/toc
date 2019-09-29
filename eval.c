@@ -6,25 +6,70 @@ typedef enum {
 			  VAL_FLOAT,
 			  VAL_PTR,
 			  VAL_FN,
-			  VAL_BOOL
+			  VAL_BOOL,
+			  VAL_ARR
 } ValueKind;
 
 #define VAL_FLAG_FN_NULL 0x01 /* is this function null? */
 
 typedef double FloatVal;
 
+typedef struct {
+	void *data;
+	UInteger n;
+} ArrVal;
+
 typedef struct Value {
-	ValueKind kind;
+    ValueKind kind;
+	ValueKind arr_kind;
 	union {
 		Integer intv;
 		UInteger uintv;
 	    FloatVal floatv;
 		bool boolv;
 		char charv;
-		struct Value *points_to;
+		struct Value *ptr;
 		FnExpr *fn;
+		ArrVal arr;
 	};
 } Value;
+
+
+static ValueKind type_to_val_kind(Type *t) {
+	switch (t->kind) {
+	case TYPE_VOID: return VAL_VOID;
+	case TYPE_FN: return VAL_FN;
+	case TYPE_PTR: return VAL_PTR;
+	case TYPE_ARR: return VAL_ARR;
+	case TYPE_BUILTIN:
+		switch (t->builtin) {
+		case BUILTIN_I8:
+		case BUILTIN_I16:
+		case BUILTIN_I32:
+		case BUILTIN_I64:
+			return VAL_INT;
+		case BUILTIN_U8:
+		case BUILTIN_U16:
+		case BUILTIN_U32:
+		case BUILTIN_U64:
+			return VAL_UINT;
+		case BUILTIN_F32:
+		case BUILTIN_F64:
+			return VAL_FLOAT;
+		case BUILTIN_CHAR:
+			return VAL_CHAR;
+		case BUILTIN_BOOL:
+			return VAL_BOOL;
+		case BUILTIN_TYPE_COUNT: break;
+		}
+		break;
+	case TYPE_TUPLE: /* TODO */
+	case TYPE_UNKNOWN:
+		break;
+	}
+	assert(0);
+	return VAL_VOID;
+}
 
 static bool eval_truthiness(Value *v) {
 	switch (v->kind) {
@@ -38,13 +83,15 @@ static bool eval_truthiness(Value *v) {
 	case VAL_FLOAT:
 		return v->floatv != 0;
 	case VAL_PTR:
-		return v->points_to != NULL;
+		return v->ptr != NULL;
 	case VAL_FN:
 		return v->fn != NULL;
 	case VAL_BOOL:
 		return v->boolv;
 	case VAL_CHAR:
 		return v->charv != 0;
+	case VAL_ARR:
+		return v->arr.n != 0;
 	}
 	assert(0);
 	return false;
@@ -58,8 +105,9 @@ static inline bool val_eq(Value a, Value b) {
 	case VAL_FLOAT: return a.floatv == b.floatv;
 	case VAL_BOOL: return a.boolv == b.boolv;
 	case VAL_FN: return a.fn == b.fn;
-	case VAL_PTR: return a.points_to == b.points_to;
+	case VAL_PTR: return a.ptr == b.ptr;
 	case VAL_CHAR: return a.charv == b.charv;
+	case VAL_ARR:
 	case VAL_VOID: assert(0);
 	}
 	return false;
@@ -73,14 +121,16 @@ static inline bool val_lt(Value a, Value b) {
 	case VAL_FLOAT: return a.floatv < b.floatv;
 	case VAL_BOOL: return a.boolv < b.boolv;
 	case VAL_FN: return a.fn < b.fn;
-	case VAL_PTR: return a.points_to < b.points_to;
+	case VAL_PTR: return a.ptr < b.ptr;
 	case VAL_CHAR: return a.charv < b.charv;
+	case VAL_ARR:
 	case VAL_VOID: assert(0);
 	}
 	return false;
 }
 
 static bool val_cast(Location where, Value *out, Value cast, Type *type) {
+	/* TODO: errors at type checking */
 	switch (type->kind) {
 	case TYPE_VOID:
 		out->kind = VAL_VOID;
@@ -104,9 +154,10 @@ static bool val_cast(Location where, Value *out, Value cast, Type *type) {
 			case VAL_FN:
 				out->uintv = (UInteger)cast.fn;	break;
 			case VAL_PTR:
-				out->uintv = (UInteger)cast.points_to; break;
+				out->uintv = (UInteger)cast.ptr; break;
 			case VAL_CHAR:
 				out->uintv = (UInteger)cast.charv; break;
+			case VAL_ARR:
 			case VAL_VOID: assert(0);
 			}
 			break;
@@ -127,9 +178,10 @@ static bool val_cast(Location where, Value *out, Value cast, Type *type) {
 			case VAL_FN:
 				out->intv = (Integer)cast.fn;	break;
 			case VAL_PTR:
-				out->intv = (Integer)cast.points_to; break;
+				out->intv = (Integer)cast.ptr; break;
 			case VAL_CHAR:
 				out->intv = (Integer)cast.charv; break;
+			case VAL_ARR:
 			case VAL_VOID: assert(0);
 			}
 			break;
@@ -145,14 +197,14 @@ static bool val_cast(Location where, Value *out, Value cast, Type *type) {
 				out->floatv = cast.floatv; break;
 			case VAL_BOOL:
 				out->floatv = cast.boolv ? 1.0 : 0.0; break;
-			case VAL_FN:
-			case VAL_PTR:
-				/* TODO: errors at type checking */
-				assert(0);
-				return false;
 			case VAL_CHAR:
 				out->floatv = (FloatVal)cast.charv; break;
-			case VAL_VOID: assert(0);
+			case VAL_VOID:
+			case VAL_FN:
+			case VAL_ARR:
+			case VAL_PTR:
+				assert(0);
+				return false;
 			}
 			break;
 		case BUILTIN_BOOL:
@@ -173,9 +225,10 @@ static bool val_cast(Location where, Value *out, Value cast, Type *type) {
 			case VAL_FN:
 				out->charv = (char)cast.fn; break;
 			case VAL_PTR:
-				out->charv = (char)cast.points_to; break;
+				out->charv = (char)cast.ptr; break;
 			case VAL_CHAR:
 				out->charv = cast.charv; break;
+			case VAL_ARR:
 			case VAL_VOID: assert(0);
 			}
 			break;
@@ -192,17 +245,17 @@ static bool val_cast(Location where, Value *out, Value cast, Type *type) {
 		case VAL_FN:
 			out->fn = cast.fn; break;
 		case VAL_PTR:
-			out->fn = (FnExpr *)cast.points_to; break;
+			out->fn = (FnExpr *)cast.ptr; break;
 		case VAL_CHAR:
 		case VAL_FLOAT:
 		case VAL_BOOL:
+		case VAL_ARR:
 			assert(0); return false;
 		case VAL_VOID: assert(0);
 		}
 		break;
 	case TYPE_TUPLE:
-	case TYPE_ARR:
-		/* TODO: errors at type checking */
+		/* TODO: error at type checking */
 		assert(0);
 		return false;
 	case TYPE_UNKNOWN:
@@ -250,11 +303,21 @@ static bool eval_expr(Expression *e, Value *v) {
 			v->kind = VAL_INT;
 			v->intv = (Integer)e->intl;
 		}
-		return true;
+		break;
 	case EXPR_LITERAL_BOOL:
 		v->kind = VAL_BOOL;
 		v->boolv = e->booll;
-		return true;
+		break;
+	case EXPR_LITERAL_CHAR:
+		v->kind = VAL_CHAR;
+		v->charv = e->charl;
+	    break;
+	case EXPR_LITERAL_STR:
+		v->kind = VAL_ARR;
+		v->arr_kind = VAL_CHAR;
+		v->arr.n = e->strl.len;
+		v->arr.data = e->strl.str;
+		break;
 	case EXPR_UNARY_OP: {
 		Expression *of_expr = e->unary.of;
 		switch (e->unary.op) {
@@ -271,7 +334,7 @@ static bool eval_expr(Expression *e, Value *v) {
 			    assert(0);
 				return false;
 			}
-			return true;
+			break;
 		}
 		case UNARY_NOT:
 			v->kind = VAL_BOOL;
@@ -279,13 +342,13 @@ static bool eval_expr(Expression *e, Value *v) {
 		    return true;
 		case UNARY_ADDRESS:
 			v->kind = VAL_PTR;
-			v->points_to = err_malloc(sizeof *v->points_to); /* OPTIM */
-			return eval_expr(e->unary.of, v->points_to);
+			v->ptr = err_malloc(sizeof *v->ptr); /* OPTIM */
+			return eval_expr(e->unary.of, v->ptr);
 		case UNARY_DEREF: {
 			Value ptr;
 			if (!eval_expr(of_expr, &ptr)) return false;
-			*v = *ptr.points_to;
-			return true;
+			*v = *ptr.ptr;
+		    break;
 		} break;
 		case UNARY_DEL:	/* TODO */
 			assert(0);
@@ -379,9 +442,36 @@ static bool eval_expr(Expression *e, Value *v) {
 		case BINARY_COMMA:
 			err_print(e->where, "tuples not supported at compile time yet.");
 			return false;
-		case BINARY_AT_INDEX:
-			err_print(e->where, "Cannot get index of array at compile time yet.");
-			return false;
+		case BINARY_AT_INDEX: {
+			assert(lhs.kind == VAL_ARR);
+			assert(rhs.kind == VAL_INT || rhs.kind == VAL_UINT);
+			/* TODO: optional bounds checking */
+			UInteger index = rhs.kind == VAL_INT ? (UInteger)rhs.intv : rhs.uintv;
+			void *arr = lhs.arr.data;
+			v->kind = lhs.arr_kind;
+			switch (lhs.arr_kind) {
+			case VAL_INT:
+				v->intv = ((Integer *)arr)[index]; break;
+			case VAL_UINT:
+				v->uintv = ((UInteger *)arr)[index]; break;
+			case VAL_FLOAT:
+				v->floatv = ((FloatVal *)arr)[index]; break;
+			case VAL_CHAR:
+				v->charv = ((char *)arr)[index]; break;
+			case VAL_BOOL:
+				v->boolv = ((bool *)arr)[index]; break;
+			case VAL_PTR:
+				v->ptr = ((Value **)arr)[index]; break;
+			case VAL_ARR:
+				v->arr = ((ArrVal *)arr)[index]; break;
+			case VAL_FN:
+				v->fn = ((FnExpr **)arr)[index]; break;
+			case VAL_VOID:
+				assert(0);
+				return false;
+			}
+		    break;
+		}
 		}
 	} break;
 	case EXPR_IDENT: {
@@ -436,10 +526,6 @@ static bool eval_expr(Expression *e, Value *v) {
 	}
 	case EXPR_BLOCK:
 		return eval_block(&e->block, v);
-	case EXPR_LITERAL_CHAR:
-		v->kind = VAL_CHAR;
-		v->charv = e->charl;
-	    break;
 	case EXPR_CAST: {
 		Value cast_val;
 		if (!eval_expr(e->cast.expr, &cast_val)) return false;
@@ -455,9 +541,12 @@ static bool eval_expr(Expression *e, Value *v) {
 		}
 		break;
 	case EXPR_NEW:
+		v->kind = VAL_PTR;
+		v->ptr = err_calloc(1, sizeof *v->ptr); /* TODO(eventually): get this to work even if NULL ptrs aren't 0 */
+		v->ptr->kind = type_to_val_kind(&e->new.type);
+		break;
 	case EXPR_WHILE:
 	case EXPR_CALL:
-	case EXPR_LITERAL_STR:
 		err_print(e->where, "Not implemented yet");
 		return false;
 	}

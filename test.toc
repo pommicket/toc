@@ -5,10 +5,11 @@ main @= fn() {
 	 N @= (-10 + (97 as char as f32)) as u32;
 	 arr4 : [N]int;
 	 arr5 : [main as u64]int;
-///	 arr6 : [main as u64 as fn() as u64]int; FIXME
+	 // arr6 : [main as u64 as fn() as u64]int;FIXME
 	 arr7 : [main as u64 as fn() int as u64]int; 
 
-	 // x @= fn(i: f32) i64 {
-	   // 0
-	 // };
+	 str @= "foo";
+	 arr8 : [(str[0] as u32) + (str[1] as u32) + (str[2] as u32)]int;
+	 asdf @= new int;
+	 arr9 : [asdf as u64]int;
 };
