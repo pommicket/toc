@@ -1,6 +1,7 @@
 /* 
 TODO:
 finish evaluator
+fix void fn type
 re-do cgen
 any odd number of "s for a string
  */

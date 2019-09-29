@@ -21,19 +21,39 @@ typedef struct {
 
 typedef struct Value {
     ValueKind kind;
-	ValueKind arr_kind;
+	union {
+		ValueKind arr_kind;
+		ValueKind ptr_kind;
+	};
 	union {
 		Integer intv;
 		UInteger uintv;
 	    FloatVal floatv;
 		bool boolv;
 		char charv;
-		struct Value *ptr;
+		void *ptr;
 		FnExpr *fn;
 		ArrVal arr;
 	};
 } Value;
 
+size_t sizeof_val_kind(ValueKind k) {
+	Value v;
+	switch (k) {
+	case VAL_VOID:
+		return 0;
+	case VAL_INT: return sizeof v.intv;
+	case VAL_UINT: return sizeof v.uintv;
+	case VAL_FLOAT: return sizeof v.floatv;
+	case VAL_BOOL: return sizeof v.boolv;
+	case VAL_CHAR: return sizeof v.charv;
+	case VAL_PTR: return sizeof v.ptr;
+	case VAL_FN: return sizeof v.fn;
+	case VAL_ARR: return sizeof v.arr;
+	}
+	assert(0);
+	return 0;
+}
 
 static ValueKind type_to_val_kind(Type *t) {
 	switch (t->kind) {
@@ -218,16 +238,13 @@ static bool val_cast(Location where, Value *out, Value cast, Type *type) {
 				out->charv = (char)cast.uintv; break;
 			case VAL_INT:
 				out->charv = (char)cast.intv; break;
-			case VAL_FLOAT:
-				out->charv = (char)cast.floatv; break;
 			case VAL_BOOL:
 				out->charv = cast.boolv ? 1 : 0; break;
-			case VAL_FN:
-				out->charv = (char)cast.fn; break;
-			case VAL_PTR:
-				out->charv = (char)cast.ptr; break;
 			case VAL_CHAR:
 				out->charv = cast.charv; break;
+			case VAL_FLOAT:
+			case VAL_FN:
+			case VAL_PTR:
 			case VAL_ARR:
 			case VAL_VOID: assert(0);
 			}
@@ -250,10 +267,52 @@ static bool val_cast(Location where, Value *out, Value cast, Type *type) {
 		case VAL_FLOAT:
 		case VAL_BOOL:
 		case VAL_ARR:
+		case VAL_VOID:
 			assert(0); return false;
-		case VAL_VOID: assert(0);
 		}
 		break;
+	case TYPE_PTR:
+		out->kind = VAL_PTR;
+		out->ptr_kind = type_to_val_kind(type->ptr.of);
+		switch (cast.kind) {
+		case VAL_INT:
+			out->ptr = (void *)cast.intv; break;
+		case VAL_UINT:
+			out->ptr = (void *)cast.uintv; break;
+		case VAL_FN:
+			out->ptr = (void *)cast.fn; break;
+		case VAL_PTR:
+			out->ptr = cast.ptr; break;
+		case VAL_ARR:
+			out->ptr = cast.arr.data; break;
+		case VAL_CHAR:
+		case VAL_VOID:
+		case VAL_FLOAT:
+		case VAL_BOOL:
+			assert(0); return false;
+		}
+		return true;
+	case TYPE_ARR:
+		out->kind = VAL_ARR;
+		out->arr_kind = type_to_val_kind(type->arr.of);
+		out->arr.n = type->arr.n;
+		switch (cast.kind) {
+		case VAL_PTR:
+			out->arr.data = cast.ptr;
+			break;
+		case VAL_ARR:
+			out->arr.data = cast.arr.data;
+			break;
+		case VAL_FN:
+		case VAL_INT:
+		case VAL_UINT:
+		case VAL_CHAR:
+		case VAL_VOID:
+		case VAL_FLOAT:
+		case VAL_BOOL:
+			assert(0); return false;
+		}
+		return true;
 	case TYPE_TUPLE:
 		/* TODO: error at type checking */
 		assert(0);
@@ -320,10 +379,10 @@ static bool eval_expr(Expression *e, Value *v) {
 		break;
 	case EXPR_UNARY_OP: {
 		Expression *of_expr = e->unary.of;
+		Value of;
+		if (!eval_expr(of_expr, &of)) return false;
 		switch (e->unary.op) {
 		case UNARY_MINUS: {
-			Value of;
-			if (!eval_expr(of_expr, &of)) return false;
 		    assert(e->type.kind == TYPE_BUILTIN);
 			v->kind = of.kind;
 			if (v->kind == VAL_INT) {
@@ -338,16 +397,70 @@ static bool eval_expr(Expression *e, Value *v) {
 		}
 		case UNARY_NOT:
 			v->kind = VAL_BOOL;
-			v->boolv = !eval_truthiness(v);
+			v->boolv = !eval_truthiness(&of);
 		    return true;
-		case UNARY_ADDRESS:
+		case UNARY_ADDRESS: {
 			v->kind = VAL_PTR;
-			v->ptr = err_malloc(sizeof *v->ptr); /* OPTIM */
-			return eval_expr(e->unary.of, v->ptr);
+			get_ptr:
+			switch (of_expr->kind) {
+			case EXPR_UNARY_OP:
+				switch (of_expr->unary.op) {
+				case UNARY_DEREF:
+					/* &*x */
+					of_expr = of_expr->unary.of;
+					goto get_ptr;
+				default: assert(0); return false;
+				}
+				break;
+			case EXPR_IDENT:
+				err_print(e->where, "Cannot get address of identifiers at compile time yet.");
+			    return false;
+			case EXPR_BINARY_OP:
+				switch (of_expr->binary.op) {
+				case BINARY_AT_INDEX: {
+					Expression *lhs_expr = of_expr->binary.lhs;
+					Expression *rhs_expr = of_expr->binary.rhs;
+					Value lhs, rhs;
+					if (!eval_expr(lhs_expr, &lhs)
+						|| !eval_expr(rhs_expr, &rhs))
+						return false;
+					assert(lhs.kind == VAL_ARR && (rhs.kind == VAL_INT || rhs.kind == VAL_UINT));
+					v->ptr = (char *)lhs.arr.data + (Integer)sizeof_val_kind(lhs.arr_kind)
+						* (rhs.kind == VAL_INT ? rhs.intv : (Integer)rhs.uintv);
+				} break;
+				default: assert(0); return false;
+				}
+				break;
+				
+			default: assert(0); return false;
+			}
+		} break;
 		case UNARY_DEREF: {
-			Value ptr;
-			if (!eval_expr(of_expr, &ptr)) return false;
-			*v = *ptr.ptr;
+			v->kind = type_to_val_kind(&e->type);
+			switch (v->kind) {
+			case VAL_INT:
+				v->intv = *(Integer *)of.ptr; break;
+			case VAL_UINT:
+				v->uintv = *(UInteger *)of.ptr; break;
+			case VAL_FLOAT:
+				v->floatv = *(FloatVal *)of.ptr; break;
+			case VAL_BOOL:
+				v->boolv = *(bool *)of.ptr; break;
+			case VAL_CHAR:
+				v->charv = *(char *)of.ptr; break;
+			case VAL_ARR:
+				v->arr = *(ArrVal *)of.ptr; break;
+			case VAL_PTR:
+				v->ptr = *(void **)of.ptr; break;
+			case VAL_FN:
+				v->fn = *(FnExpr **)of.ptr; break;
+			case VAL_VOID:
+				assert(0); return false;
+			/* case VAL_INT: */
+			/* 	v->intv = *(Integer *)of.ptr; */
+			/* 	break; */
+					
+			}
 		    break;
 		} break;
 		case UNARY_DEL:	/* TODO */
@@ -542,8 +655,8 @@ static bool eval_expr(Expression *e, Value *v) {
 		break;
 	case EXPR_NEW:
 		v->kind = VAL_PTR;
-		v->ptr = err_calloc(1, sizeof *v->ptr); /* TODO(eventually): get this to work even if NULL ptrs aren't 0 */
-		v->ptr->kind = type_to_val_kind(&e->new.type);
+		v->ptr_kind = type_to_val_kind(&e->new.type);
+		v->ptr = err_calloc(1, sizeof_val_kind(v->ptr_kind)); /* TODO(eventually): get this to work even if NULL ptrs aren't 0 */
 		break;
 	case EXPR_WHILE:
 	case EXPR_CALL:

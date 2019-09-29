@@ -129,6 +129,7 @@ static bool type_must_eq(Location where, Type *expected, Type *got) {
 
 /* sometimes prints an error and returns false if the given expression is not an l-value */
 static bool expr_must_lval(Expression *e) {
+	/* NOTE: make sure you update eval_expr's UNARY_ADDRESS when you change this */
 	switch (e->kind) {
 	case EXPR_IDENT: {
 		IdentDecl *id_decl = ident_decl(e->ident);
@@ -168,6 +169,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t) {
 	if (!type_resolve(tr, &f->ret_type))
 		return false;
 	*ret_type = f->ret_type;
+	assert(f->params.item_sz == sizeof(Declaration));
 	arr_foreach(&f->params, Declaration, decl) {
 		if (!types_decl(tr, decl)) return false;
 		if (!type_resolve(tr, &decl->type))
@@ -675,6 +677,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 		case UNARY_ADDRESS:
 			if (!expr_must_lval(of)) {
 				err_print(e->where, "Cannot take address of non-lvalue."); /* FEATURE: better err */
+				return false;
+			}
+			if (of_type->kind == TYPE_TUPLE) {
+				err_print(e->where, "Cannot take address of tuple.");
 				return false;
 			}
 			t->kind = TYPE_PTR;
