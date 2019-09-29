@@ -19,6 +19,7 @@ typedef long double Floating; /* OPTIM: Switch to double */
 
 #include "location.c"
 #include "err.c"
+#include "allocator.c"
 #include "arr.c"
 #include "blockarr.c"
 #include "str.c"

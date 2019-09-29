@@ -1,5 +1,8 @@
 /* 
 TODO:
+allocator
+casting errors
+call fns at compile time
 finish evaluator
 fix void fn type
 re-do cgen
@@ -8,6 +11,8 @@ any odd number of "s for a string
 #include "toc.c"
 
 int main(int argc, char **argv) {
+	allocr_test();
+	return 0;
 	if (argc < 2) {
 		fprintf(stderr, "Please specify an input file.\n");
 		return EXIT_FAILURE;
