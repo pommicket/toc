@@ -1,6 +1,5 @@
 /* 
 TODO:
-allocator
 casting errors
 call fns at compile time
 finish evaluator

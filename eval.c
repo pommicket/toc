@@ -234,7 +234,6 @@ static bool val_cast(Location where, Value *out, Value cast, Type *type) {
 			case VAL_BOOL:
 				out->floatv = cast.boolv ? 1.0 : 0.0; break;
 			case VAL_CHAR:
-				out->floatv = (FloatVal)cast.charv; break;
 			case VAL_VOID:
 			case VAL_FN:
 			case VAL_ARR:

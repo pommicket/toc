@@ -336,6 +336,79 @@ static bool type_can_be_truthy(Type *t) {
 	return false;
 }
 
+typedef enum {
+			  STATUS_NONE,
+			  STATUS_WARN,
+			  STATUS_ERR
+} Status;
+
+static Status type_cast_status(Type *from, Type *to) {
+	if (to->kind == TYPE_UNKNOWN)
+		return STATUS_NONE;
+	switch (from->kind) {
+	case TYPE_UNKNOWN: return STATUS_NONE;
+	case TYPE_VOID: return STATUS_ERR;
+	case TYPE_BUILTIN:
+		switch (from->builtin) {
+		case BUILTIN_I8:
+		case BUILTIN_U8:
+		case BUILTIN_I16:
+		case BUILTIN_U16:
+		case BUILTIN_I32:
+		case BUILTIN_U32:
+		case BUILTIN_I64:
+		case BUILTIN_U64:
+			switch (to->kind) {
+			case TYPE_UNKNOWN: return STATUS_NONE;
+			case TYPE_VOID: return STATUS_ERR;
+			case TYPE_BUILTIN: return STATUS_NONE;
+			case TYPE_ARR: return STATUS_ERR;
+			case TYPE_PTR: return STATUS_WARN;
+			case TYPE_FN: return STATUS_WARN;
+			case TYPE_TUPLE: return STATUS_ERR;
+			}
+		case BUILTIN_F32:
+		case BUILTIN_F64:
+			if (to->kind == TYPE_BUILTIN && to->builtin != BUILTIN_CHAR)
+				return STATUS_NONE;
+			return STATUS_ERR;
+		case BUILTIN_CHAR:
+			if (to->kind == TYPE_BUILTIN && type_builtin_is_int(to->builtin))
+				return STATUS_NONE;
+			return STATUS_ERR;
+		case BUILTIN_BOOL:
+			return type_can_be_truthy(to);
+		case BUILTIN_TYPE_COUNT: assert(0); break;
+		}
+		break;
+	case TYPE_TUPLE: return STATUS_ERR;
+	case TYPE_FN:
+		if (to->kind == TYPE_BUILTIN && type_builtin_is_int(to->builtin))
+			return STATUS_WARN;
+		if (to->kind == TYPE_PTR || to->kind == TYPE_FN)
+			return STATUS_WARN;
+		return STATUS_ERR;
+	case TYPE_PTR:
+		if (to->kind == TYPE_BUILTIN && type_builtin_is_int(to->builtin))
+			return STATUS_WARN;
+		if (to->kind == TYPE_PTR)
+			return STATUS_NONE;
+		if (to->kind == TYPE_ARR && type_eq(to->arr.of, from->ptr.of))
+			return STATUS_NONE;
+		if (to->kind == TYPE_FN)
+			return STATUS_WARN;
+		return STATUS_ERR;
+	case TYPE_ARR:
+		if (to->kind == TYPE_PTR && type_eq(to->ptr.of, from->arr.of))
+			return STATUS_NONE;
+		if (to->kind == TYPE_ARR && !type_eq(to, from))
+			return STATUS_WARN;
+		return STATUS_ERR;
+	}
+	assert(0);
+    return STATUS_ERR;
+}
+
 static bool types_expr(Typer *tr, Expression *e) {
 	if (e->flags & EXPR_FLAG_FOUND_TYPE) return true;
 	Type *t = &e->type;
@@ -448,10 +521,24 @@ static bool types_expr(Typer *tr, Expression *e) {
 		if (!type_of_ident(tr, e->where, e->ident, t)) return false;
 	} break;
 	case EXPR_CAST: {
-		/* TODO: forbid/warn certain casts */
 		CastExpr *c = &e->cast;
 		if (!types_expr(tr, c->expr))
 			return false;
+		if (!type_resolve(tr, &c->type))
+			return false;
+		Status status = type_cast_status(&c->expr->type, &c->type);
+		if (status != STATUS_NONE) {
+			char *from = type_to_str(&c->expr->type);
+			char *to = type_to_str(&c->type);
+			if (status == STATUS_ERR)
+				err_print(e->where, "Cannot cast from type %s to %s.", from, to);
+			else
+				warn_print(e->where, "Casting from type %s to %s.", from, to);
+			free(from);
+			free(to);
+			if (status == STATUS_ERR)
+				return false;
+		}
 		*t = c->type;
 	} break;
 	case EXPR_NEW:
