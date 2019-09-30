@@ -6,6 +6,7 @@ deref - dereference
 direct - directive
 eof - end of file
 err - error
+evalr - evaluator
 expr - expression
 fn - function
 ident - identifier

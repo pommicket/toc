@@ -11,7 +11,7 @@ static void allocr_test(void) {
 		for (int i = 0; i < nfoos; i++)
 			assert(foos[i] == i);
 		int nbars = x;
-		int *bars = allocr_calloc(&a, (size_t)nbars * sizeof(int));
+		int *bars = allocr_calloc(&a, (size_t)nbars, sizeof(int));
 		for (int i = 0; i < nbars; i++)
 			assert(bars[i] == 0);
 		for (int i = 0; i < nbars; i++)
@@ -38,7 +38,8 @@ static void allocr_test(void) {
 	arr_create(&arr, sizeof(int));
 	int n = 1000;
 	for (int i = 0; i < n; i++) {
-		*(int *)arr_adda(&arr, &a) = i;
+		int *p = arr_adda(&arr, &a);
+		*p = i;
 	}
 	int *arr_data = arr.data;
 	for (int i = 0; i < n; i++) {

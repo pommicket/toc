@@ -1,17 +1,17 @@
 main @= fn() {
-	 // arr1 : ['a' as u8]int;
-	 // arr2 : [main as u64]int;
-	 // arr3 : [main as i64]int;
-	 // N @= (-10 + (97 as char as f32)) as u32;
-	 // arr4 : [N]int;
-	 // arr5 : [main as u64]int;
-	 // // arr6 : [main as u64 as fn() as u64]int;FIXME
-	 // arr7 : [main as u64 as fn() int as u64]int; 
+	 arr1 : ['a' as u8]int;
+	 arr2 : [main as u64]int;
+	 arr3 : [main as i64]int;
+	 N @= (-10 + (97 as char as f32)) as u32;
+	 arr4 : [N]int;
+	 arr5 : [main as u64]int;
+	 // arr6 : [main as u64 as fn() as u64]int;FIXME
+	 arr7 : [main as u64 as fn() int as u64]int; 
 
-	 // str @= "foo";
-	 // arr8 : [(str[0] as u32) + (str[1] as u32) + (str[2] as u32)]int;
-	 // asdf @= new int;
-	 // arr9 : [asdf as u64]int;
-	 // arr10 : [main as &i32 as u64]int;
+	 str @= "foo";
+	 arr8 : [(str[0] as u32) + (str[1] as u32) + (str[2] as u32)]int;
+	 asdf @= new int;
+	 arr9 : [asdf as u64]int;
+	 arr10 : [main as &i32 as u64]int;
 	 arr11 : [((main as &u64) as [4]u64)[3]]int;
 };

@@ -153,6 +153,7 @@ typedef struct {
 } Token;
 
 typedef struct {
+	Allocator allocr;
 	Array tokens;
 	char *s; /* string being parsed */
 	const char *filename;
@@ -161,13 +162,9 @@ typedef struct {
 	Identifiers *idents;
 } Tokenizer;
 
-
-
 static inline bool token_is_kw(Token *t, Keyword kw) {
 	return t->kind == TOKEN_KW && t->kw == kw;
 }
-
-
 
 static const char *token_kind_to_str(TokenKind t) {
 	switch (t) {
@@ -288,8 +285,13 @@ static void tokr_get_location(Tokenizer *tokr, Token *t) {
 static void tokr_create(Tokenizer *t, Identifiers *idents, const char *filename) {
 	arr_create(&t->tokens, sizeof(Token));
 	arr_reserve(&t->tokens, 256);
+	allocr_create(&t->allocr);
 	t->idents = idents;
 	t->filename = filename;
+}
+
+static inline void *tokr_malloc(Tokenizer *t, size_t bytes) {
+	return allocr_malloc(&t->allocr, bytes);
 }
 
 static Token *tokr_add(Tokenizer *t) {
@@ -552,7 +554,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 				len++;
 				tokr_nextchar(t);
 			}
-			char *strlit = err_malloc(len + 1);
+			char *strlit = tokr_malloc(t, len + 1);
 		    char *strptr = strlit;
 			tokr_get_location(t, token);
 			tokr_nextchar(t); /* past opening " */
@@ -599,7 +601,12 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 	return !has_err;
 }
 
-/* Does NOT free string literals!!! */
-static void tokr_free(Tokenizer *t) {
+/* ONLY frees tokens, not string literals. You can call this followed by tokr_free. */
+static void tokr_free_tokens(Tokenizer *t) {
 	arr_clear(&t->tokens);
+}
+
+static void tokr_free(Tokenizer *t) {
+	tokr_free_tokens(t);
+	allocr_free_all(&t->allocr);
 }

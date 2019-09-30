@@ -14,7 +14,6 @@ int main(int argc, char **argv) {
 #ifdef TOC_DEBUG
 	test_all();
 #endif
-	return 0;
 	if (argc < 2) {
 		fprintf(stderr, "Please specify an input file.\n");
 		return EXIT_FAILURE;
@@ -67,38 +66,31 @@ int main(int argc, char **argv) {
 		err_fprint(TEXT_IMPORTANT("Errors occured while parsing.\n"));
 		return EXIT_FAILURE;
 	}
-
+	tokr_free_tokens(&t);
 	fprint_parsed_file(stdout, &f);
-
+    
 	printf("\n\n-----\n\n");
 	
 	block_enter(NULL, &f.stmts); /* enter global scope */
-	if (!types_file(&f)) {
+	Typer tr;
+	Evaluator ev;
+	evalr_create(&ev);
+	typer_create(&tr, &ev);
+	if (!types_file(&tr, &f)) {
 		err_fprint(TEXT_IMPORTANT("Errors occured while determining types.\n"));
 		return EXIT_FAILURE;
 	}
 	parse_printing_after_types = true;
 	fprint_parsed_file(stdout, &f);
+	block_exit(NULL, &f.stmts); /* exit global scope */
 	
 	tokr_free(&t);
-
-	
-	
-	/* TODO (eventually): use a tmp file (don't overwrite old output if there's an error) */
-	/* const char *c_out_filename = "out.c"; */
-	/* const char *h_out_filename = "out.h"; */
-	/* FILE *c_out = fopen(c_out_filename, "w"); */
-	/* FILE *h_out = fopen(h_out_filename, "w"); */
-	/* CGenerator cgen; */
-	/* cgen_create(&cgen, &file_idents, c_out, h_out, h_out_filename); */
-	/* if (!cgen_file(&cgen, &f)) { */
-	/* 	err_fprint(TEXT_IMPORTANT("Errors occured while generating C code.\n")); */
-	/* 	return EXIT_FAILURE; */
-	/* } */
-	
-	block_exit(NULL, &f.stmts); /* exit global scope */
+    
 	free(contents);
-	
+
+	parser_free(&p);
+	typer_free(&tr);
+	evalr_free(&ev);
 	/* fclose(c_out); */
 	/* fclose(h_out); */
 	idents_free(&file_idents);

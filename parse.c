@@ -428,17 +428,20 @@ static char *type_to_str(Type *t) {
 	return ret;
 }
 
-/* 
-   allocate a new expression.
-*/
-static Expression *parser_new_expr(Parser *p) {
-	return allocr_malloc(&p->allocr, sizeof(Expression));
-}
-
-static void *parser_arr_add(Parser *p, Array *a) {
+static inline void *parser_arr_add(Parser *p, Array *a) {
 	return arr_adda(a, &p->allocr);
 }
 
+static inline void *parser_malloc(Parser *p, size_t bytes) {
+	return allocr_malloc(&p->allocr, bytes);
+}
+
+/* 
+   allocate a new expression.
+*/
+static inline Expression *parser_new_expr(Parser *p) {
+	return parser_malloc(p, sizeof(Expression));
+}
 
 /* TODO: check that we check which thing ends it everywhere */
 
@@ -586,7 +589,7 @@ static bool parse_type(Parser *p, Type *type) {
 			type->arr.n_expr = parser_new_expr(p);
 			if (!parse_expr(p, type->arr.n_expr, end)) return false;
 			t->token = end + 1;	/* go past ] */
-			type->arr.of = err_malloc(sizeof *type->arr.of); /* OPTIM */
+			type->arr.of = parser_malloc(p, sizeof *type->arr.of);
 			if (!parse_type(p, type->arr.of)) return false;
 			type->flags = 0;
 			type->where = start->where;
@@ -616,7 +619,7 @@ static bool parse_type(Parser *p, Type *type) {
 		case KW_AMPERSAND:
 			/* pointer */
 			type->kind = TYPE_PTR;
-			type->ptr.of = err_malloc(sizeof *type->ptr.of); /* OPTIM */
+			type->ptr.of = parser_malloc(p, sizeof *type->ptr.of);
 			t->token++;	/* move past & */
 			if (!parse_type(p, type->ptr.of)) return false;
 			break;
@@ -1565,7 +1568,6 @@ static void parser_free(Parser *p) {
 	allocr_free_all(&p->allocr);
 }
 
-
 #define PARSE_PRINT_LOCATION(l) //fprintf(out, "[l%lu]", (unsigned long)(l).line);
 
 /* in theory, this shouldn't be global, but these functions are mostly for debugging anyways */
@@ -1577,7 +1579,9 @@ static void fprint_decl(FILE *out, Declaration *d);
 
 static void fprint_type(FILE *out, Type *t) {
 	PARSE_PRINT_LOCATION(t->where);
-	fprintf(out, "%s", type_to_str(t));
+	char *s = type_to_str(t);
+	fprintf(out, "%s", s);
+	free(s);
 }
 
 
@@ -1763,5 +1767,3 @@ static void fprint_parsed_file(FILE *out, ParsedFile *f) {
 		fprint_stmt(out, stmt);
 	}
 }
-
-/* TODO: Freeing parser (remember to free args) */

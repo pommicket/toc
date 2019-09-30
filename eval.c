@@ -12,6 +12,22 @@ typedef enum {
 
 #define VAL_FLAG_FN_NULL 0x01 /* is this function null? */
 
+typedef struct {
+	Allocator allocr;
+} Evaluator;
+
+static void evalr_create(Evaluator *ev) {
+	allocr_create(&ev->allocr);
+}
+
+static void evalr_free(Evaluator *ev) {
+	allocr_free_all(&ev->allocr);
+}
+
+static inline void *evalr_malloc(Evaluator *ev, size_t bytes) {
+	return allocr_malloc(&ev->allocr, bytes);
+}
+
 typedef double FloatVal;
 
 typedef struct {
@@ -348,7 +364,7 @@ static inline void val_promote_to_float(Value *v) {
 }
 
 /* NOTE: expr must be typed before it can be evaluated */
-static bool eval_expr(Expression *e, Value *v) {
+static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	switch (e->kind) {
 	case EXPR_LITERAL_FLOAT:
 		v->kind = VAL_FLOAT;
@@ -380,7 +396,7 @@ static bool eval_expr(Expression *e, Value *v) {
 	case EXPR_UNARY_OP: {
 		Expression *of_expr = e->unary.of;
 		Value of;
-		if (!eval_expr(of_expr, &of)) return false;
+		if (!eval_expr(ev, of_expr, &of)) return false;
 		switch (e->unary.op) {
 		case UNARY_MINUS: {
 		    assert(e->type.kind == TYPE_BUILTIN);
@@ -421,8 +437,8 @@ static bool eval_expr(Expression *e, Value *v) {
 					Expression *lhs_expr = of_expr->binary.lhs;
 					Expression *rhs_expr = of_expr->binary.rhs;
 					Value lhs, rhs;
-					if (!eval_expr(lhs_expr, &lhs)
-						|| !eval_expr(rhs_expr, &rhs))
+					if (!eval_expr(ev, lhs_expr, &lhs)
+						|| !eval_expr(ev, rhs_expr, &rhs))
 						return false;
 					assert(lhs.kind == VAL_ARR && (rhs.kind == VAL_INT || rhs.kind == VAL_UINT));
 					v->ptr = (char *)lhs.arr.data + (Integer)sizeof_val_kind(lhs.arr_kind)
@@ -471,8 +487,8 @@ static bool eval_expr(Expression *e, Value *v) {
 	case EXPR_BINARY_OP: {
 		Value lhs, rhs;
 		/* NOTE: this will need to change for short-circuiting */
-		if (!eval_expr(e->binary.lhs, &lhs)) return false;
-		if (!eval_expr(e->binary.rhs, &rhs)) return false;
+		if (!eval_expr(ev, e->binary.lhs, &lhs)) return false;
+		if (!eval_expr(ev, e->binary.rhs, &rhs)) return false;
 		if (e->type.kind != TYPE_BUILTIN) {
 			err_print(e->where, "Operators can only be applied to builtin types.");
 			return false;
@@ -608,8 +624,8 @@ static bool eval_expr(Expression *e, Value *v) {
 			return false;
 		}
 		if (!d->val) {
-			d->val = err_malloc(sizeof *d->val); /* OPTIM */
-			if (!eval_expr(&d->expr, d->val))
+			d->val = evalr_malloc(ev, sizeof *d->val); /* OPTIM */
+			if (!eval_expr(ev, &d->expr, d->val))
 				return false;
 		}
 		*v = *d->val;
@@ -626,12 +642,12 @@ static bool eval_expr(Expression *e, Value *v) {
 			break;
 		}
 		Value cond;
-		if (!eval_expr(i->cond, &cond))
+		if (!eval_expr(ev, i->cond, &cond))
 			return false;
 		if (eval_truthiness(&cond)) {
 			if (!eval_block(&i->body, v)) return false;
 		} else if (i->next_elif) {
-			if (!eval_expr(i->next_elif, v)) return false;
+			if (!eval_expr(ev, i->next_elif, v)) return false;
 		} else {
 			v->kind = VAL_VOID;
 		}
@@ -641,7 +657,7 @@ static bool eval_expr(Expression *e, Value *v) {
 		return eval_block(&e->block, v);
 	case EXPR_CAST: {
 		Value cast_val;
-		if (!eval_expr(e->cast.expr, &cast_val)) return false;
+		if (!eval_expr(ev, e->cast.expr, &cast_val)) return false;
 		if (!val_cast(e->where, v, cast_val, &e->cast.type)) return false;
 		break;
 	}
@@ -665,3 +681,4 @@ static bool eval_expr(Expression *e, Value *v) {
 	}
 	return true;
 }
+

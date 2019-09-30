@@ -1,4 +1,6 @@
 typedef struct {
+	Allocator allocr;
+	Evaluator *evalr;
 	Array in_decls;	/* array of declarations we are currently inside */
 	Block *block;
 	bool can_ret;
@@ -10,6 +12,18 @@ static bool types_decl(Typer *tr, Declaration *d);
 static bool types_expr(Typer *tr, Expression *e);
 static bool types_block(Typer *tr, Block *b);
 static bool type_resolve(Typer *tr, Type *t);
+
+static inline void *typer_malloc(Typer *tr, size_t bytes) {
+	return allocr_malloc(&tr->allocr, bytes);
+}
+
+static inline void *typer_calloc(Typer *tr, size_t n, size_t sz) {
+	return allocr_calloc(&tr->allocr, n, sz);
+}
+
+static inline void *typer_arr_add(Typer *tr, Array *arr) {
+	return arr_adda(arr, &tr->allocr);
+}
 
 static bool add_ident_decls(Block *b, Declaration *d) {
 	bool ret = true;
@@ -165,7 +179,7 @@ static bool expr_must_lval(Expression *e) {
 static bool type_of_fn(Typer *tr, FnExpr *f, Type *t) {
 	t->kind = TYPE_FN;
 	arr_create(&t->fn.types, sizeof(Type));
-	Type *ret_type = arr_add(&t->fn.types);
+	Type *ret_type = typer_arr_add(tr, &t->fn.types);
 	if (!type_resolve(tr, &f->ret_type))
 		return false;
 	*ret_type = f->ret_type;
@@ -175,7 +189,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t) {
 		if (!type_resolve(tr, &decl->type))
 			return false;
 		for (size_t i = 0; i < decl->idents.len; i++) {
-			Type *param_type = arr_add(&t->fn.types);
+			Type *param_type = typer_arr_add(tr, &t->fn.types);
 			*param_type = decl->type;
 		}
 	}
@@ -267,7 +281,7 @@ static bool type_resolve(Typer *tr, Type *t) {
 			free(s);
 			return false;
 		}
-		if (!eval_expr(n_expr, &val)) return false; /* resolve N */
+		if (!eval_expr(tr->evalr, n_expr, &val)) return false; /* resolve N */
 		Integer size = val.intv;
 		if (size < 0) {
 			err_print(t->arr.n_expr->where, "Negative array length (" INTEGER_FMT ")", size);
@@ -411,7 +425,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 	case EXPR_LITERAL_STR:
 		t->kind = TYPE_ARR;
 		t->arr.n = e->strl.len;
-		t->arr.of = err_malloc(sizeof *t->arr.of);
+		t->arr.of = typer_malloc(tr, sizeof *t->arr.of);
 		t->arr.of->flags = TYPE_FLAG_RESOLVED;
 		t->arr.of->kind = TYPE_BUILTIN;
 		t->arr.of->builtin = BUILTIN_CHAR;
@@ -442,7 +456,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 	} break;
 	case EXPR_NEW:
 		t->kind = TYPE_PTR;
-		t->ptr.of = err_malloc(sizeof *t->ptr.of);
+		t->ptr.of = typer_malloc(tr, sizeof *t->ptr.of);
 		t->ptr.of = &e->new.type;
 		if (!type_resolve(tr, t))
 			return false;
@@ -534,7 +548,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		arr_create(&new_args_arr, sizeof(Expression));
 		arr_set_len(&new_args_arr, nparams);
 		Expression *new_args = new_args_arr.data;
-		bool *params_set = calloc(nparams, sizeof *params_set);
+		bool *params_set = typer_calloc(tr, nparams, sizeof *params_set);
 		if (f->kind == EXPR_IDENT) {
 			IdentDecl *decl = ident_decl(f->ident);
 			assert(decl);
@@ -684,7 +698,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				return false;
 			}
 			t->kind = TYPE_PTR;
-			t->ptr.of = err_malloc(sizeof *t->ptr.of); /* OPTIM */
+			t->ptr.of = typer_malloc(tr, sizeof *t->ptr.of); /* OPTIM */
 			*t->ptr.of = *of_type;
 			break;
 		case UNARY_DEREF:
@@ -819,19 +833,19 @@ static bool types_expr(Typer *tr, Expression *e) {
 			if (lhs_type->kind == TYPE_TUPLE) {
 				/* tuple, x => tuple */
 				arr_foreach(&lhs_type->tuple, Type, child) {
-					*(Type*)arr_add(tup_types) = *child;
+					*(Type*)typer_arr_add(tr, tup_types) = *child;
 				}
 			} else {
-				*(Type*)arr_add(tup_types) = *lhs_type;
+				*(Type*)typer_arr_add(tr, tup_types) = *lhs_type;
 			}
 			
 			if (rhs_type->kind == TYPE_TUPLE) {
 				/* x, tuple => tuple */
 				arr_foreach(&rhs_type->tuple, Type, child) {
-					*(Type*)arr_add(tup_types) = *child;
+					*(Type*)typer_arr_add(tr, tup_types) = *child;
 				}
 			} else {
-				*(Type*)arr_add(tup_types) = *rhs_type;
+				*(Type*)typer_arr_add(tr, tup_types) = *rhs_type;
 			}
 		} break;
 		}
@@ -866,7 +880,7 @@ static bool types_block(Typer *tr, Block *b) {
 static bool types_decl(Typer *tr, Declaration *d) {
 	bool success = true;
 	if (d->flags & DECL_FLAG_FOUND_TYPE) goto ret;
-	Declaration **dptr = arr_add(&tr->in_decls);
+	Declaration **dptr = typer_arr_add(tr, &tr->in_decls);
 	*dptr = d;
 	if (d->flags & DECL_FLAG_ANNOTATES_TYPE) {
 		/* type supplied */
@@ -898,8 +912,8 @@ static bool types_decl(Typer *tr, Declaration *d) {
 		}
 		if (d->flags & DECL_FLAG_CONST) {
 			if (!d->val) {
-				d->val = err_malloc(sizeof *d->val); /* OPTIM */
-				if (!eval_expr(&d->expr, d->val)) {
+				d->val = typer_malloc(tr, sizeof *d->val); /* OPTIM */
+				if (!eval_expr(tr->evalr, &d->expr, d->val)) {
 					success = false;
 					goto ret;
 				}
@@ -963,19 +977,24 @@ static bool types_stmt(Typer *tr, Statement *s) {
 	return true;
 }
 
-static void typer_create(Typer *tr) {
+static void typer_create(Typer *tr, Evaluator *ev) {
 	tr->block = NULL;
 	tr->can_ret = false;
+	tr->evalr = ev;
 	arr_create(&tr->in_decls, sizeof(Declaration *));
+	allocr_create(&tr->allocr);
 }
 
-static bool types_file(ParsedFile *f) {
-	Typer tr;
-	typer_create(&tr);
+static bool types_file(Typer *tr, ParsedFile *f) {
+	bool ret = true;
 	arr_foreach(&f->stmts, Statement, s) {
-		if (!types_stmt(&tr, s)) {
-			return false;
+		if (!types_stmt(tr, s)) {
+			ret = false;
 		}
 	}
-	return true;
+	return ret;
+}
+
+static void typer_free(Typer *tr) {
+	allocr_free_all(&tr->allocr);
 }

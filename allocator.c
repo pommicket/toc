@@ -4,10 +4,15 @@ typedef struct Page {
 	max_align_t data[];
 } Page;
 
+typedef struct DynPage {
+	struct DynPage **self;
+	max_align_t data[];
+} DynPage;
+
 typedef struct {
 	Page *first;
 	Page *last;
-	void **dyn; /* array of void*s for dynamic memory */
+    DynPage **dyn;
 	size_t dyn_len;
 	size_t dyn_cap;
 } Allocator;
@@ -17,6 +22,8 @@ typedef struct {
 
 static void allocr_create(Allocator *a) {
 	a->first = a->last = NULL;
+	a->dyn = NULL;
+	a->dyn_len = a->dyn_cap = 0;
 }
 
 static void *allocr_malloc(Allocator *a, size_t bytes) {
@@ -42,14 +49,36 @@ static void *allocr_malloc(Allocator *a, size_t bytes) {
 	}
 }
 
-static void *allocr_calloc(Allocator *a, size_t bytes) {
+static void *allocr_calloc(Allocator *a, size_t n, size_t sz) {
+	/* OPTIM: use calloc */
+	size_t bytes = n * sz;
 	void *data = allocr_malloc(a, bytes);
 	memset(data, 0, bytes);
 	return data;
 }
 
-/* IMPORTANT: this can only be called with data which was originally allocated with allocr_realloc(a, NULL, x) */
+/* IMPORTANT: this can only be called with data which was originally allocated with allocr_realloc(a, NULL, x)
+ */
 static void *allocr_realloc(Allocator *a, void *data, size_t new_size) {
+	if (data) {
+		DynPage *page = (DynPage *)((char *)data - offsetof(DynPage, data));
+	    page = err_realloc(page, new_size + sizeof(DynPage));
+		*page->self = page;
+		return page->data;
+	} else {
+		if (a->dyn_len >= a->dyn_cap) {
+			a->dyn_cap = 2 * (a->dyn_len + 1);
+			a->dyn = realloc(a->dyn, a->dyn_cap * sizeof(DynPage *));
+			for (size_t i = 0; i < a->dyn_len; i++) {
+				a->dyn[i]->self = &a->dyn[i];
+			}
+		}
+		DynPage *page = err_malloc(sizeof(DynPage) + new_size);
+		page->self = &a->dyn[a->dyn_len];
+		*page->self = page;
+		a->dyn_len++;
+		return page->data;
+	}
 	return NULL;
 }
 
@@ -62,4 +91,5 @@ static void allocr_free_all(Allocator *a) {
 	for (size_t i = 0; i < a->dyn_len; i++) {
 		free(a->dyn[i]);
 	}
+	free(a->dyn);
 }

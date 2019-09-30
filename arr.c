@@ -18,7 +18,7 @@ static inline void arr_reserve(Array *arr, size_t n) {
 
 static inline void arr_reservea(Array *arr, size_t n, Allocator *a) {
 	arr->cap = n;
-	arr->data = allocr_realloc(a, arr->data, n);
+	arr->data = allocr_realloc(a, arr->data, arr->item_sz * arr->cap);
 }
 
 /* like arr_reserve, but sets the length of the array too */
@@ -64,10 +64,6 @@ static void arr_clear(Array *arr) {
 static void arr_remove_last(Array *arr) {
 	/* OPTIM (memory): Shorten array. */
 	arr->len--;
-	if (!arr->len) {
-		arr_clear(arr);
-	}
-	
 }
 
 static void arr_free(Array *arr) {

@@ -60,6 +60,7 @@ static Identifier ident_new(Identifiers *ids, Identifier parent, unsigned char i
 	tree->parent = NULL;
 	for (size_t i = 0; i < TREE_NCHILDREN; i++)
 		tree->children[i] = NULL;
+	tree->decls.data = NULL;
 #endif
 	tree->parent = parent;
 	if (parent)
@@ -186,6 +187,14 @@ static IdentDecl *ident_decl(Identifier i) {
     return i->decls.item_sz == 0 ? NULL : (IdentDecl*)arr_last(&i->decls);
 }
 
+static void ident_tree_free(IdentTree *id) {
+	if (!id) return;
+	arr_free(&id->decls);
+	for (int i = 0; i < TREE_NCHILDREN; i++)
+		ident_tree_free(id->children[i]);
+}
+
 static void idents_free(Identifiers *ids) {
+	ident_tree_free(ids->root);
 	block_arr_free(&ids->trees);
 }
