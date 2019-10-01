@@ -1,3 +1,8 @@
+/* 
+TODO: this situation isn't ideal: 8x as much space as should be used 
+will be used for u8's (and this might have problems with pointer arithmetic,
+calling c, etc.). maybe macros will make this easier.
+*/
 typedef enum {
 			  VAL_VOID,
 			  VAL_INT,
