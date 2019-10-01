@@ -1,6 +1,5 @@
 /* 
 TODO:
-casting errors
 call fns at compile time
 finish evaluator
 fix void fn type

@@ -443,8 +443,6 @@ static inline Expression *parser_new_expr(Parser *p) {
 	return parser_malloc(p, sizeof(Expression));
 }
 
-/* TODO: check that we check which thing ends it everywhere */
-
 #define EXPR_CAN_END_WITH_COMMA 0x01 /* a comma could end the expression */
 #define EXPR_CAN_END_WITH_LBRACE 0x02
 
@@ -568,10 +566,11 @@ static bool parse_type(Parser *p, Type *type) {
 			t->token++;	/* move past ) */
 			Type *ret_type = type->fn.types.data;
 			/* if there's a symbol that isn't [ or (, that can't be the start of a type */
-			if (t->token->kind == TOKEN_KW
-				&& t->token->kw <= KW_LAST_SYMBOL
-				&& t->token->kw != KW_LSQUARE
-				&& t->token->kw != KW_LPAREN) {
+			if ((t->token->kind == TOKEN_KW
+				 && t->token->kw <= KW_LAST_SYMBOL
+				 && t->token->kw != KW_LSQUARE
+				 && t->token->kw != KW_LPAREN)
+				|| t->token->kw == KW_AS) {
 				ret_type->kind = TYPE_VOID;
 				ret_type->flags = 0;
 			} else {
