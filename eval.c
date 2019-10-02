@@ -155,6 +155,31 @@ static void eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		eval_binary_op_nums(builtin, op);		\
 	default: assert(0); break;					\
 	}
+
+
+#define eval_binary_bool_op_one(low, up, op)	\
+	case BUILTIN_##up:							\
+	v->boolv = lhs.low op rhs.low; break
+
+#define eval_binary_bool_op_nums(builtin, op)			\
+	eval_binary_bool_op_one(i8, I8, op);				\
+	eval_binary_bool_op_one(i16, I16, op);				\
+	eval_binary_bool_op_one(i32, I32, op);				\
+	eval_binary_bool_op_one(i64, I64, op);				\
+	eval_binary_bool_op_one(u8, U8, op);				\
+	eval_binary_bool_op_one(u16, U16, op);				\
+	eval_binary_bool_op_one(u32, U32, op);				\
+	eval_binary_bool_op_one(u64, U64, op);				\
+	eval_binary_bool_op_one(f32, F32, op);				\
+	eval_binary_bool_op_one(f64, F64, op);
+
+#define eval_binary_bool_op_nums_only(op)		\
+	switch (builtin) {							\
+		eval_binary_bool_op_nums(builtin, op);	\
+		default: assert(0); break;				\
+	}
+		
+    
 	
 	switch (e->kind) {
 	case EXPR_UNARY_OP: {
@@ -187,6 +212,18 @@ static void eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			eval_binary_op_nums_only(*); break;
 		case BINARY_DIV:
 			eval_binary_op_nums_only(/); break;
+		case BINARY_LT:
+			eval_binary_bool_op_nums_only(<); break;
+		case BINARY_LE:
+			eval_binary_bool_op_nums_only(<=); break;
+		case BINARY_GT:
+			eval_binary_bool_op_nums_only(>); break;
+		case BINARY_GE:
+			eval_binary_bool_op_nums_only(>=); break;
+		case BINARY_EQ:
+			eval_binary_bool_op_nums_only(==); break;
+		case BINARY_NE:
+			eval_binary_bool_op_nums_only(!=); break;
 		}	
 	} break;
 	case EXPR_LITERAL_INT:
