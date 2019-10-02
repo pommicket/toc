@@ -18,7 +18,6 @@ typedef struct IdentTree {
 	struct IdentTree *parent;
 	struct IdentTree *children[TREE_NCHILDREN];
 	Array decls; /* array of declarations of this identifier */
-	unsigned long c_fn_reps; /* number of repetitions of this identifier in the C output--only used for functions */
 } IdentTree;
 
 typedef IdentTree *Identifier;

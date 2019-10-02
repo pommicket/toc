@@ -281,11 +281,18 @@ static bool type_resolve(Typer *tr, Type *t) {
 			free(s);
 			return false;
 		}
-		if (!eval_expr(tr->evalr, n_expr, &val)) return false; /* resolve N */
-		Integer size = val.intv;
-		if (size < 0) {
-			err_print(t->arr.n_expr->where, "Negative array length (" INTEGER_FMT ")", size);
-			return false;
+		eval_expr(tr->evalr, n_expr, &val);
+
+		U64 size;
+		if (type_builtin_is_signed(n_expr->type.builtin)) {
+		    I64 ssize = val_to_i64(&val, n_expr->type.builtin);
+			if (ssize < 0) {
+				err_print(t->arr.n_expr->where, "Negative array length (" INTEGER_FMT ")", ssize);
+				return false;
+			}
+			size = (U64)ssize;
+		} else {
+			size = val_to_u64(&val, n_expr->type.builtin);
 		}
 		t->arr.n = (UInteger)size;
 	} break;
@@ -773,6 +780,11 @@ static bool types_expr(Typer *tr, Expression *e) {
 				free(s);
 				return false;
 			}
+			if (!type_builtin_is_signed(of_type->builtin)) {
+				char *s = type_to_str(of_type);
+				warn_print(e->where, "Applying unary - to unsigned type %s may cause overflow.", s);
+				free(s);
+			}
 			*t = *of_type;
 			break;
 		case UNARY_ADDRESS:
@@ -833,8 +845,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 				return false;
 			}
 			/* fallthrough */
-		case BINARY_PLUS:
-		case BINARY_MINUS:
+		case BINARY_ADD:
+		case BINARY_SUB:
 		case BINARY_MUL:
 		case BINARY_DIV:
 		case BINARY_LT:
@@ -1000,10 +1012,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 		if (d->flags & DECL_FLAG_CONST) {
 			if (!d->val) {
 				d->val = typer_malloc(tr, sizeof *d->val); /* OPTIM */
-				if (!eval_expr(tr->evalr, &d->expr, d->val)) {
-					success = false;
-					goto ret;
-				}
+				eval_expr(tr->evalr, &d->expr, d->val);
 			}
 		}
 	}

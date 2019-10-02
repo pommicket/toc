@@ -91,8 +91,8 @@ typedef enum {
 
 typedef enum {
 			  BINARY_SET, /* e.g. x = y */
-			  BINARY_PLUS,
-			  BINARY_MINUS,
+			  BINARY_ADD,
+			  BINARY_SUB,
 			  BINARY_MUL,
 			  BINARY_DIV,
 			  BINARY_COMMA,
@@ -197,7 +197,7 @@ typedef struct Declaration {
 	Type type;
 	uint16_t flags;
 	Expression expr;
-	struct Value *val; /* only for constant decls. set to NULL here, and to actual value by types.c. */
+	union Value *val; /* only for constant decls. set to NULL here, and to actual value by types.c. */
 } Declaration;
 
 typedef enum {
@@ -259,8 +259,8 @@ static const char *unary_op_to_str(UnaryOp u) {
 
 static const char *binary_op_to_str(BinaryOp b) {
 	switch (b) {
-	case BINARY_PLUS: return "+";
-	case BINARY_MINUS: return "-";
+	case BINARY_ADD: return "+";
+	case BINARY_SUB: return "-";
 	case BINARY_MUL: return "*";
 	case BINARY_DIV: return "/";
 	case BINARY_SET: return "=";
@@ -277,12 +277,12 @@ static const char *binary_op_to_str(BinaryOp b) {
 	return "";
 }
 
-static bool type_builtin_is_uint(BuiltinType b) {
+static bool type_builtin_is_signed(BuiltinType b) {
 	switch (b) {
-	case BUILTIN_U8:
-	case BUILTIN_U16:
-	case BUILTIN_U32:
-	case BUILTIN_U64:
+	case BUILTIN_I8:
+	case BUILTIN_I16:
+	case BUILTIN_I32:
+	case BUILTIN_I64:
 		return true;
 	default: return false;
 	}
@@ -1167,10 +1167,10 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		BinaryOp op; 
 		switch (lowest_precedence_op->kw) {
 		case KW_PLUS:
-			op = BINARY_PLUS;
+			op = BINARY_ADD;
 			break;
 		case KW_MINUS:
-			op = BINARY_MINUS;
+			op = BINARY_SUB;
 			break;
 		case KW_EQEQ:
 			op = BINARY_EQ;

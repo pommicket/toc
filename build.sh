@@ -11,7 +11,7 @@ ADDITIONAL_FLAGS='-Wno-unused-function -Wno-unneeded-internal-declaration'
 
 WARNINGS='-Wall -Wextra -Wpedantic -Wconversion -Wshadow'
 DEBUG_FLAGS="-O0 -g3 $WARNINGS -std=c11 -DTOC_DEBUG"
-RELEASE_FLAGS="-O3 -DNDEBUG $WARNINGS -std=c11"
+RELEASE_FLAGS="-O3 -s -DNDEBUG $WARNINGS -std=c11"
 
 COMMAND="$CC $DEBUG_FLAGS $ADDITIONAL_FLAGS -o toc main.c"
 echo $COMMAND
