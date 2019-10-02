@@ -7,11 +7,11 @@
 #include <string.h>
 #include <ctype.h>
 #include <limits.h>
-#include <stdint.h>
+#include <inttypes.h>
 #include <stdbool.h>
 
-typedef unsigned long long UInteger;
-typedef long long Integer;
+typedef uint64_t UInteger;
+typedef int64_t Integer;
 typedef long double Floating; /* OPTIM: Switch to double, but make sure floating-point literals are right */
 
 typedef uint8_t U8;
@@ -28,8 +28,8 @@ typedef float F32;
 typedef double F64;
 
 #define INTEGER_MAX INT64_MAX
-#define UINTEGER_FMT "%llu"
-#define INTEGER_FMT "%lld"
+#define UINTEGER_FMT "%"PRIu64
+#define INTEGER_FMT "%"PRId64
 
 #include "location.c"
 #include "err.c"
