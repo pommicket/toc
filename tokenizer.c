@@ -484,7 +484,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 				}
 				switch (n.kind) {
 				case NUM_LITERAL_INT:
-					if (n.intval > ULLONG_MAX / (UInteger)base ||
+					if (n.intval > UINTEGER_MAX / (UInteger)base ||
 						n.intval * (UInteger)base > ULLONG_MAX - (UInteger)digit) {
 						/* too big! */
 						tokenization_err(t, "Number too big to fit in a numeric literal.");

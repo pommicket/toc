@@ -10,9 +10,14 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
-typedef uint64_t UInteger;
 typedef int64_t Integer;
+typedef uint64_t UInteger;
 typedef long double Floating; /* OPTIM: Switch to double, but make sure floating-point literals are right */
+
+#define INTEGER_MAX INT64_MAX
+#define UINTEGER_MAX UINT64_MAX
+#define INTEGER_FMT "%"PRId64
+#define UINTEGER_FMT "%"PRIu64
 
 typedef uint8_t U8;
 typedef uint16_t U16;
@@ -27,9 +32,6 @@ typedef int64_t I64;
 typedef float F32;
 typedef double F64;
 
-#define INTEGER_MAX INT64_MAX
-#define UINTEGER_FMT "%"PRIu64
-#define INTEGER_FMT "%"PRId64
 
 #include "location.c"
 #include "err.c"

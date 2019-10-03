@@ -32,32 +32,36 @@ typedef union Value {
 	void *ptr;
 } Value;
 
+static bool builtin_truthiness(Value *v, BuiltinType b) {
+	switch (b) {
+	case BUILTIN_I8: return v->i8 != 0;
+	case BUILTIN_I16: return v->i16 != 0;
+	case BUILTIN_I32: return v->i32 != 0;
+	case BUILTIN_I64: return v->i64 != 0;
+	case BUILTIN_U8: return v->u8 != 0;
+	case BUILTIN_U16: return v->u16 != 0;
+	case BUILTIN_U32: return v->u32 != 0;
+	case BUILTIN_U64: return v->u64 != 0;
+	case BUILTIN_F32: return v->f32 != 0;
+	case BUILTIN_F64: return v->f64 != 0;
+	case BUILTIN_BOOL: return v->boolv;
+	case BUILTIN_CHAR: return v->charv != 0;
+	case BUILTIN_TYPE_COUNT: assert(0); return false;
+	}
+}
+
 static bool val_truthiness(Value *v, Type *t) {
 	switch (t->kind) {
 	case TYPE_VOID: return false;
 	case TYPE_UNKNOWN: assert(0); return false;
-	case TYPE_BUILTIN:
-		switch (t->builtin) {
-		case BUILTIN_I8: return v->i8 != 0;
-		case BUILTIN_I16: return v->i16 != 0;
-		case BUILTIN_I32: return v->i32 != 0;
-		case BUILTIN_I64: return v->i64 != 0;
-		case BUILTIN_U8: return v->u8 != 0;
-		case BUILTIN_U16: return v->u16 != 0;
-		case BUILTIN_U32: return v->u32 != 0;
-		case BUILTIN_U64: return v->u64 != 0;
-		case BUILTIN_F32: return v->f32 != 0;
-		case BUILTIN_F64: return v->f64 != 0;
-		case BUILTIN_BOOL: return v->boolv;
-		case BUILTIN_CHAR: return v->charv != 0;
-		case BUILTIN_TYPE_COUNT: assert(0); return false;
-		}
-		break;
+	case TYPE_BUILTIN: return builtin_truthiness(v, t->builtin);
 	case TYPE_PTR: return v->ptr != NULL;
 	case TYPE_FN: return v->fn != NULL;
 	case TYPE_ARR: return t->arr.n > 0;
-	case TYPE_TUPLE: assert(0); return false;
+	case TYPE_TUPLE: break;
 	}
+	assert(0);
+	return false;
 }
 
 static I64 val_to_i64(Value *v, BuiltinType v_type) {
@@ -110,7 +114,99 @@ static void u64_to_val(Value *v, BuiltinType v_type, U64 x) {
 		i64_to_val(v, v_type, (I64)x);
 }
 
+#define builtin_casts_to_int(x)					\
+	case BUILTIN_I8:							\
+	vout->i8 = (I8)vin->x; break;				\
+	case BUILTIN_I16:							\
+	vout->i16 = (I16)vin->x; break;				\
+	case BUILTIN_I32:							\
+	vout->i32 = (I32)vin->x; break;				\
+	case BUILTIN_I64:							\
+	vout->i64 = (I64)vin->x; break;				\
+	case BUILTIN_U8:							\
+	vout->u8 = (U8)vin->x; break;				\
+	case BUILTIN_U16:							\
+	vout->u16 = (U16)vin->x; break;				\
+	case BUILTIN_U32:							\
+	vout->u32 = (U32)vin->x; break;				\
+	case BUILTIN_U64:							\
+	vout->u64 = (U64)vin->x; break
 
+#define builtin_casts_to_num(x)					\
+	builtin_casts_to_int(x);					\
+	case BUILTIN_F32:							\
+	vout->f32 = (F32)vin->x; break;				\
+	case BUILTIN_F64:							\
+	vout->f64 = (F64)vin->x; break
+
+#define builtin_int_casts(low, up)										\
+	case BUILTIN_##up:													\
+	switch (to) {														\
+		builtin_casts_to_num(low);										\
+	case BUILTIN_CHAR: vout->charv = (char)vin->low; break;				\
+	case BUILTIN_BOOL: vout->boolv = vin->low != 0; break;				\
+	case BUILTIN_TYPE_COUNT: assert(0); break;							\
+	} break
+
+#define builtin_float_casts(low, up)									\
+	case BUILTIN_##up:													\
+	switch (to) {														\
+	builtin_casts_to_num(low);											\
+	case BUILTIN_BOOL: vout->boolv = vin->low != 0.0f; break;			\
+	case BUILTIN_CHAR:													\
+	case BUILTIN_TYPE_COUNT: assert(0); break;							\
+	} break
+	
+static void val_builtin_cast(Value *vin, BuiltinType from, Value *vout, BuiltinType to) {
+	if (from == to) {
+		*vout = *vin;
+		return;
+	}
+	switch (from) {
+		builtin_int_casts(i8, I8);
+		builtin_int_casts(i16, I16);
+		builtin_int_casts(i32, I32);
+		builtin_int_casts(i64, I64);
+		builtin_int_casts(u8, U8);
+		builtin_int_casts(u16, U16);
+		builtin_int_casts(u32, U32);
+		builtin_int_casts(u64, U64);
+		builtin_float_casts(f32, F32);
+		builtin_float_casts(f64, F64);
+
+	case BUILTIN_BOOL: vout->boolv = builtin_truthiness(vin, from);
+	case BUILTIN_CHAR:
+		switch (to) {
+			builtin_casts_to_int(charv);
+		case BUILTIN_CHAR: /* handled at top of func */
+		case BUILTIN_F32:
+		case BUILTIN_F64:
+		case BUILTIN_BOOL:
+		case BUILTIN_TYPE_COUNT:
+			assert(0); break;
+		}
+		break;
+	case BUILTIN_TYPE_COUNT: assert(0); break;
+	}
+}
+
+static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
+	switch (from->kind) {
+	case TYPE_VOID: assert(0); break;
+	case TYPE_UNKNOWN: assert(0); break;
+	case TYPE_TUPLE: assert(0); break;
+
+	case TYPE_BUILTIN:
+		switch (to->kind) {
+		case TYPE_VOID: assert(0); break;
+		case TYPE_UNKNOWN: assert(0); break;
+		case TYPE_TUPLE: assert(0); break;
+		case TYPE_BUILTIN:
+			val_builtin_cast(vin, from->builtin, vout, to->builtin);
+			break;
+		}
+	}
+}
 
 static void eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	/* WARNING: macros ahead */
@@ -137,7 +233,8 @@ static void eval_expr(Evaluator *ev, Expression *e, Value *v) {
 
 #define eval_binary_op_one(low, up, op)			\
 	case BUILTIN_##up:							\
-	v->low = lhs.low op rhs.low; break
+		v->low = lhs.low op rhs.low; break
+	
 #define eval_binary_op_nums(builtin, op)		\
 	eval_binary_op_one(i8, I8, op);				\
 	eval_binary_op_one(i16, I16, op);			\
@@ -201,6 +298,9 @@ static void eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		/* TODO(eventually): short-circuiting */
 		eval_expr(ev, e->binary.lhs, &lhs);
 		eval_expr(ev, e->binary.rhs, &rhs);
+		/* OPTIM: this is not ideal, but 5+3.7 will be 5:int+3.7:f32 right now */
+		val_cast(&lhs, &e->binary.lhs->type, &lhs, &e->type);
+		val_cast(&rhs, &e->binary.rhs->type, &rhs, &e->type);
 		BuiltinType builtin = e->type.builtin;
 		assert(e->type.kind == TYPE_BUILTIN);
 		switch (e->binary.op) {
@@ -239,5 +339,20 @@ static void eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		} else {
 			assert(0);
 		}
+		break;
+	case EXPR_LITERAL_BOOL:
+		v->boolv = e->booll;
+		break;
+	case EXPR_LITERAL_CHAR:
+		v->charv = e->charl;
+		break;
+	case EXPR_LITERAL_STR:
+		v->arr = e->strl.str;
+		break;
+	case EXPR_CAST: {
+		Value casted;
+		eval_expr(ev, e->cast.expr, &casted);
+		val_cast(&casted, &e->cast.expr->type, v, &e->cast.type);
+	} break;
 	}
 }

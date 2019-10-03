@@ -63,7 +63,7 @@ static Identifier ident_new(Identifiers *ids, Identifier parent, unsigned char i
 #endif
 	tree->parent = parent;
 	if (parent)
-		tree->depth = parent->depth + 1;
+		tree->depth = (uint16_t)(parent->depth + 1);
 	tree->index_in_parent = index_in_parent;
 	return tree;
 }

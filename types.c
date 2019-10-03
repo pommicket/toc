@@ -374,6 +374,7 @@ static Status type_cast_status(Type *from, Type *to) {
 			case TYPE_FN: return STATUS_WARN;
 			case TYPE_TUPLE: return STATUS_ERR;
 			}
+			break;
 		case BUILTIN_F32:
 		case BUILTIN_F64:
 			if (to->kind == TYPE_BUILTIN && to->builtin != BUILTIN_CHAR)

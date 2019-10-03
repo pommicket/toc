@@ -9,7 +9,12 @@ CC=clang
 
 ADDITIONAL_FLAGS='-Wno-unused-function -Wno-unneeded-internal-declaration'
 
-WARNINGS='-Wall -Wextra -Wpedantic -Wconversion -Wshadow'
+if [[ $CC == "clang" ]]; then
+	WARNINGS='-Wall -Wextra -Wpedantic -Wshadow -Wimplicit-fallthrough'
+else
+	WARNINGS='-Wall -Wextra -Wpedantic -Wshadow'
+fi
+
 DEBUG_FLAGS="-O0 -g3 $WARNINGS -std=c11 -DTOC_DEBUG"
 RELEASE_FLAGS="-O3 -s -DNDEBUG $WARNINGS -std=c11"
 

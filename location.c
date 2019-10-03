@@ -5,6 +5,6 @@ typedef struct {
 	const char *filename;
 } Location;
 
-bool location_after(Location a, Location b) { /* a is after b? */
+static bool location_after(Location a, Location b) { /* a is after b? */
 	return a.code > b.code;
 }

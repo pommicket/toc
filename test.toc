@@ -1,5 +1,5 @@
 main @= fn() {
-	 a : [3 + 7 - 8 / 9 * 8]int;
+	 a : [('a' as u8 as f32) / 2 + 0.5 as i8]int;
 	 // arr1 : ['a' as u8]int;
 	 // arr2 : [main as u64]int;
 	 // arr3 : [main as i64]int;
