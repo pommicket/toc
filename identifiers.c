@@ -1,32 +1,3 @@
-typedef struct {
-	struct Block *scope; /* NULL for file scope */
-	struct Declaration *decl;
-} IdentDecl;
-
-/* 
-The way you search an identifier in a tree is:
-root.children[low part of 1st char].children[high part of 1st char]
-.children[low part of 2nd char]...
-
-*/
-
-#define TREE_NCHILDREN 16
-typedef struct IdentTree {
-	/* zero value is an empty trie */
-	uint16_t depth;
-	unsigned char index_in_parent; /* index of this in .parent.children */
-	struct IdentTree *parent;
-	struct IdentTree *children[TREE_NCHILDREN];
-	Array decls; /* array of declarations of this identifier */
-} IdentTree;
-
-typedef IdentTree *Identifier;
-
-typedef struct {
-	BlockArr trees;
-	IdentTree *root;
-} Identifiers;
-
 #if CHAR_MAX - CHAR_MIN > 255
 #error "Currently only systems with 8-bit characters can compile toc."
 /* TODO: maybe do a run-time error for large characters? */
@@ -35,7 +6,7 @@ typedef struct {
 /* can this character be used in an identifier? */
 static int isident(int c) {
 	if (c >= 'a' && c <= 'z')
-		return 1;	
+		return 1;
 	if (c >= 'A' && c <= 'Z')
 		return 1;
 	if (c >= '0' && c <= '9')

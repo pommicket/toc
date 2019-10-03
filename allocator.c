@@ -1,21 +1,3 @@
-typedef struct Page {
-	struct Page *next;
-	size_t used;
-	max_align_t data[];
-} Page;
-
-typedef struct DynPage {
-	struct DynPage **self;
-	max_align_t data[];
-} DynPage;
-
-typedef struct {
-	Page *first;
-	Page *last;
-    DynPage **dyn;
-	size_t dyn_len;
-	size_t dyn_cap;
-} Allocator;
 
 /* number of bytes a page hold, not including the header */
 #define PAGE_SIZE (16384 - sizeof(Page))

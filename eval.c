@@ -1,7 +1,3 @@
-typedef struct {
-	Allocator allocr;
-} Evaluator;
-
 static void evalr_create(Evaluator *ev) {
 	allocr_create(&ev->allocr);
 }
@@ -13,24 +9,6 @@ static void evalr_free(Evaluator *ev) {
 static inline void *evalr_malloc(Evaluator *ev, size_t bytes) {
 	return allocr_malloc(&ev->allocr, bytes);
 }
-
-typedef union Value {
-	U8 u8;
-	U16 u16;
-	U32 u32;
-	U64 u64;
-	I8 i8;
-	I16 i16;
-	I32 i32;
-	I64 i64;
-	bool boolv;
-	char charv;
-	float f32;
-	double f64;
-	FnExpr *fn;
-	void *arr;
-	void *ptr;
-} Value;
 
 static bool builtin_truthiness(Value *v, BuiltinType b) {
 	switch (b) {

@@ -4,19 +4,6 @@ They ensure that pointers to values in the array are not invalidated
 when something is added to the array.
 */
 
-typedef struct {
-	void *data;
-	size_t n; /* number of things in this block so far */
-    void *last; /* last one of them */
-} ArrBlock;
-
-typedef struct {
-	size_t item_sz;
-	int lg_block_sz;
-	/* NOTE: dynamic array tends to over-allocate, so we're using our own */
-	Array blocks;
-} BlockArr;
-
 /* 
 Note: the block size must be a power of 2, to use right shifting instead of division
 (for optimization)!
