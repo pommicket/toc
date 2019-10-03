@@ -173,8 +173,8 @@ static void tokr_get_location(Tokenizer *tokr, Token *t) {
 }
 
 static void tokr_create(Tokenizer *t, Identifiers *idents, const char *filename) {
-	arr_create(&t->tokens, sizeof(Token));
-	arr_reserve(&t->tokens, 256);
+	t->tokens = NULL;
+	arr_resv(&t->tokens, 256);
 	allocr_create(&t->allocr);
 	t->idents = idents;
 	t->filename = filename;

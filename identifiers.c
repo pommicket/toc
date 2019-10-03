@@ -145,21 +145,18 @@ static char *ident_to_str(Identifier i) {
 }
 
 static void ident_add_decl(Identifier i, struct Declaration *d, struct Block *b) {
-	if (!i->decls.item_sz) {
-		arr_create(&i->decls, sizeof(IdentDecl));
-	}
 	IdentDecl *id_decl = arr_add(&i->decls);
 	id_decl->decl = d;
 	id_decl->scope = b;
 }
 
 static IdentDecl *ident_decl(Identifier i) {
-    return i->decls.item_sz == 0 ? NULL : (IdentDecl*)arr_last(&i->decls);
+    return (IdentDecl *)arr_last(i->decls);
 }
 
 static void ident_tree_free(IdentTree *id) {
 	if (!id) return;
-	arr_free(&id->decls);
+	arr_clear(&id->decls);
 	for (int i = 0; i < TREE_NCHILDREN; i++)
 		ident_tree_free(id->children[i]);
 }

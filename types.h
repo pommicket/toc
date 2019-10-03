@@ -48,13 +48,6 @@ typedef struct {
 
 typedef struct {
 	void *data;
-	size_t len;
-	size_t cap;
-	size_t item_sz;
-} Array;
-
-typedef struct {
-	void *data;
 	size_t n; /* number of things in this block so far */
     void *last; /* last one of them */
 } ArrBlock;
@@ -63,7 +56,7 @@ typedef struct {
 	size_t item_sz;
 	int lg_block_sz;
 	/* NOTE: dynamic array tends to over-allocate, so we're using our own */
-	Array blocks;
+    ArrBlock *blocks;
 } BlockArr;
 
 typedef struct {
@@ -85,7 +78,7 @@ typedef struct IdentTree {
 	unsigned char index_in_parent; /* index of this in .parent.children */
 	struct IdentTree *parent;
 	struct IdentTree *children[TREE_NCHILDREN];
-	Array decls; /* array of declarations of this identifier */
+    IdentDecl *decls; /* array of declarations of this identifier */
 } IdentTree;
 
 typedef IdentTree *Identifier;
@@ -198,7 +191,7 @@ typedef struct {
 
 typedef struct {
 	Allocator allocr;
-	Array tokens;
+	Token *tokens;
 	char *s; /* string being parsed */
 	const char *filename;
 	LineNo line;
@@ -243,9 +236,9 @@ typedef struct Type {
 	union {
 	    BuiltinType builtin;
 		struct {
-			Array types; /* [0] = ret_type, [1..] = param_types */
+			struct Type *types; /* [0] = ret_type, [1..] = param_types */
 		} fn;
-		Array tuple;
+		struct Type *tuple;
 		struct {
 			struct Type *of;
 			union {
@@ -265,7 +258,7 @@ typedef struct Block {
 	uint16_t flags;
 	Location start;
 	Location end;
-	Array stmts;
+	struct Statement *stmts;
 	struct Block *parent;
     struct Expression *ret_expr; /* the return expression of this block, e.g. {foo(); 3} => 3  NULL for no expression. */
 } Block;
@@ -315,13 +308,16 @@ typedef enum {
 
 typedef struct {
 	Directive which;
-	Array args;	/* of Argument */
+	struct Argument *args;
 } DirectExpr;
 
 
 typedef struct {
 	struct Expression *fn;
-	Array args;	/* of Argument; after typing, becomes of Expression */
+    union {
+	    struct Argument *args;
+		struct Expression *arg_exprs;
+	};
 } CallExpr;
 
 typedef struct {
@@ -336,8 +332,8 @@ typedef struct {
 } WhileExpr;
 
 typedef struct {
-    Array params; /* declarations of the parameters to this function */
-	Array ret_decls; /* array of decls, if this has named return values. otherwise, len & data will be 0. */
+    struct Declaration *params; /* declarations of the parameters to this function */
+    struct Declaration *ret_decls; /* array of decls, if this has named return values. otherwise, NULL */
 	Type ret_type;
 	Block body;
 } FnExpr; /* an expression such as fn(x: int) int { 2 * x } */
@@ -386,7 +382,7 @@ typedef struct Expression {
 	};
 } Expression;
 
-typedef struct {
+typedef struct Argument {
 	Location where;
 	Identifier name; /* NULL = no name */
 	Expression val;
@@ -401,7 +397,7 @@ typedef struct {
 /* OPTIM: Instead of using dynamic arrays, do two passes. */
 typedef struct Declaration {
 	Location where;
-	Array idents;
+	Identifier *idents;
 	Type type;
 	uint16_t flags;
 	Expression expr;
@@ -421,7 +417,7 @@ typedef struct {
 } Return;
 
 #define STMT_FLAG_VOIDED_EXPR 0x01 /* the "4;" in fn () { 4; } is a voided expression, but the "4" in fn () int { 4 } is not */
-typedef struct {
+typedef struct Statement {
 	Location where;
 	StatementKind kind;
 	unsigned short flags;
@@ -433,7 +429,7 @@ typedef struct {
 } Statement;
 
 typedef struct {
-	Array stmts;
+	Statement *stmts;
 } ParsedFile;
 
 typedef struct {
