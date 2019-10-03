@@ -46,8 +46,9 @@ static bool builtin_truthiness(Value *v, BuiltinType b) {
 	case BUILTIN_F64: return v->f64 != 0;
 	case BUILTIN_BOOL: return v->boolv;
 	case BUILTIN_CHAR: return v->charv != 0;
-	case BUILTIN_TYPE_COUNT: assert(0); return false;
+	case BUILTIN_TYPE_COUNT: break;
 	}
+	assert(0); return false;
 }
 
 static bool val_truthiness(Value *v, Type *t) {
@@ -174,7 +175,7 @@ static void val_builtin_cast(Value *vin, BuiltinType from, Value *vout, BuiltinT
 		builtin_float_casts(f32, F32);
 		builtin_float_casts(f64, F64);
 
-	case BUILTIN_BOOL: vout->boolv = builtin_truthiness(vin, from);
+	case BUILTIN_BOOL: vout->boolv = builtin_truthiness(vin, from); break;
 	case BUILTIN_CHAR:
 		switch (to) {
 			builtin_casts_to_int(charv);
@@ -191,6 +192,10 @@ static void val_builtin_cast(Value *vin, BuiltinType from, Value *vout, BuiltinT
 }
 
 static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
+	if (to->kind == TYPE_BUILTIN && to->builtin == BUILTIN_BOOL) {
+		vout->boolv = val_truthiness(vin, from);
+		return;
+	}
 	switch (from->kind) {
 	case TYPE_VOID: assert(0); break;
 	case TYPE_UNKNOWN: assert(0); break;
@@ -198,13 +203,95 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 
 	case TYPE_BUILTIN:
 		switch (to->kind) {
-		case TYPE_VOID: assert(0); break;
-		case TYPE_UNKNOWN: assert(0); break;
-		case TYPE_TUPLE: assert(0); break;
 		case TYPE_BUILTIN:
 			val_builtin_cast(vin, from->builtin, vout, to->builtin);
 			break;
+		case TYPE_PTR:
+			switch (from->builtin) {
+			case BUILTIN_I8: vout->ptr = (void *)(U64)vin->i8; break;
+			case BUILTIN_I16: vout->ptr = (void *)(U64)vin->i16; break;
+			case BUILTIN_I32: vout->ptr = (void *)(U64)vin->i32; break;
+			case BUILTIN_I64: vout->ptr = (void *)(U64)vin->i64; break;
+			case BUILTIN_U8: vout->ptr = (void *)(U64)vin->u8; break;
+			case BUILTIN_U16: vout->ptr = (void *)(U64)vin->u16; break;
+			case BUILTIN_U32: vout->ptr = (void *)(U64)vin->u32; break;
+			case BUILTIN_U64: vout->ptr = (void *)(U64)vin->u64; break;
+			default: assert(0); break;
+			}
+			break;
+		case TYPE_VOID:
+		case TYPE_UNKNOWN:
+		case TYPE_TUPLE:
+		case TYPE_FN:
+		case TYPE_ARR:
+			assert(0);
+			break;
 		}
+		break;
+		
+	case TYPE_FN:
+		switch (to->kind) {
+		case TYPE_PTR:
+			vout->ptr = (void *)vin->fn;
+			break;
+		case TYPE_FN:
+			vout->fn = vin->fn;
+			break;
+		case TYPE_UNKNOWN:
+		case TYPE_TUPLE:
+		case TYPE_VOID:
+		case TYPE_ARR:
+		case TYPE_BUILTIN:
+			assert(0); break;
+		}
+		break;
+
+	case TYPE_PTR:
+		switch (to->kind) {
+		case TYPE_BUILTIN:
+			switch (to->builtin) {
+				builtin_casts_to_int(ptr);
+			case BUILTIN_BOOL:
+			case BUILTIN_CHAR:
+			case BUILTIN_F32:
+			case BUILTIN_F64:
+			case BUILTIN_TYPE_COUNT:
+				assert(0); break;
+			}
+			break;
+		case TYPE_ARR:
+			vout->arr = vin->ptr;
+			break;
+		case TYPE_PTR:
+			vout->ptr = vin->ptr;
+			break;
+		case TYPE_FN:
+			vout->fn = vin->ptr;
+			break;
+		case TYPE_UNKNOWN:
+		case TYPE_TUPLE:
+		case TYPE_VOID:
+			assert(0);
+			break;
+		}
+		break;
+
+	case TYPE_ARR:
+		switch (to->kind) {
+		case TYPE_PTR:
+			vout->ptr = vin->arr;
+			break;
+		case TYPE_ARR:
+			vout->arr = vin->arr;
+			break;
+		case TYPE_FN:
+		case TYPE_UNKNOWN:
+		case TYPE_TUPLE:
+		case TYPE_VOID:
+		case TYPE_BUILTIN:
+			assert(0); break;
+		}
+		break;
 	}
 }
 
