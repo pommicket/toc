@@ -1,7 +1,7 @@
 typedef struct {
 	Allocator allocr;
 	Evaluator *evalr;
-	Array in_decls;	/* array of declarations we are currently inside */
+	Declaration **in_decls; /* array of declarations we are currently inside */
 	Block *block;
 	bool can_ret;
 	Type ret_type; /* the return type of the function we're currently parsing. */
@@ -21,17 +21,19 @@ static inline void *typer_calloc(Typer *tr, size_t n, size_t sz) {
 	return allocr_calloc(&tr->allocr, n, sz);
 }
 
-static inline void *typer_arr_add(Typer *tr, Array *arr) {
-	return arr_adda(arr, &tr->allocr);
+static inline void *typer_arr_add_(Typer *tr, void **arr, size_t sz) {
+	return arr_adda_(arr, sz, &tr->allocr);
 }
+
+#define typer_arr_add(tr, a) typer_arr_add_(tr, (void **)(a), sizeof **(a))
 
 static bool add_ident_decls(Block *b, Declaration *d) {
 	bool ret = true;
-	arr_foreach(&d->idents, Identifier, ident) {
-		Array *decls = &(*ident)->decls;
-		if (decls->len) {
+	arr_foreach(d->idents, Identifier, ident) {
+		IdentDecl **decls = &(*ident)->decls;
+		if (arr_len(*decls)) {
 			/* check that it hasn't been declared in this block */
-			IdentDecl *prev = arr_last(decls);
+			IdentDecl *prev = arr_last(*decls);
 			if (prev->scope == b) {
 				err_print(d->where, "Re-declaration of identifier in the same block.");
 				info_print(prev->decl->where, "Previous declaration was here.");
@@ -45,11 +47,10 @@ static bool add_ident_decls(Block *b, Declaration *d) {
 }
 
 static void remove_ident_decls(Block *b, Declaration *d) {
-	arr_foreach(&d->idents, Identifier, ident) {
+	arr_foreach(d->idents, Identifier, ident) {
 		IdentTree *id_info = *ident;
-		Array *decls = &id_info->decls;
-		assert(decls->item_sz);
-		IdentDecl *last_decl = arr_last(decls);
+	    IdentDecl **decls = &id_info->decls;
+		IdentDecl *last_decl = arr_last(*decls);
 		if (last_decl && last_decl->scope == b) {
 			arr_remove_last(decls); /* remove that declaration */
 		}
@@ -57,7 +58,7 @@ static void remove_ident_decls(Block *b, Declaration *d) {
 }
 
 /* pass NULL for block for global scope */
-static bool block_enter(Block *b, Array *stmts) {
+static bool block_enter(Block *b, Statement *stmts) {
 	bool ret = true;
 	arr_foreach(stmts, Statement, stmt) {
 		if (stmt->kind == STMT_DECL) {
@@ -69,7 +70,7 @@ static bool block_enter(Block *b, Array *stmts) {
 	return ret;
 }
 
-static void block_exit(Block *b, Array *stmts) {
+static void block_exit(Block *b, Statement *stmts) {
 	/* OPTIM: figure out some way of not re-iterating over everything */
 	arr_foreach(stmts, Statement, stmt) {
 		if (stmt->kind == STMT_DECL) {
@@ -103,9 +104,9 @@ static bool type_eq(Type *a, Type *b) {
 		return a->builtin == b->builtin;
 	case TYPE_FN: {
 		
-		if (a->fn.types.len != b->fn.types.len) return false;
-		Type *a_types = a->fn.types.data, *b_types = b->fn.types.data;
-		for (size_t i = 0; i < a->fn.types.len; i++) {
+		if (arr_len(a->fn.types) != arr_len(b->fn.types)) return false;
+		Type *a_types = a->fn.types, *b_types = b->fn.types;
+		for (size_t i = 0; i < arr_len(a->fn.types); i++) {
 			if (!type_eq(&a_types[i], &b_types[i]))
 				return false;
 			
@@ -113,9 +114,9 @@ static bool type_eq(Type *a, Type *b) {
 		return true;
 	}
 	case TYPE_TUPLE:
-		if (a->tuple.len != b->tuple.len) return false;
-		Type *a_types = a->tuple.data, *b_types = b->tuple.data;
-		for (size_t i = 0; i < a->tuple.len; i++) {
+		if (arr_len(a->tuple) != arr_len(b->tuple)) return false;
+		Type *a_types = a->tuple, *b_types = b->tuple;
+		for (size_t i = 0; i < arr_len(a->tuple); i++) {
 			if (!type_eq(&a_types[i], &b_types[i]))
 				return false;
 		}
@@ -178,22 +179,21 @@ static bool expr_must_lval(Expression *e) {
 
 static bool type_of_fn(Typer *tr, FnExpr *f, Type *t) {
 	t->kind = TYPE_FN;
-	arr_create(&t->fn.types, sizeof(Type));
+	t->fn.types = NULL;
 	Type *ret_type = typer_arr_add(tr, &t->fn.types);
 	if (!type_resolve(tr, &f->ret_type))
 		return false;
 	*ret_type = f->ret_type;
-	assert(f->params.item_sz == sizeof(Declaration));
-	arr_foreach(&f->params, Declaration, decl) {
+	arr_foreach(f->params, Declaration, decl) {
 		if (!types_decl(tr, decl)) return false;
 		if (!type_resolve(tr, &decl->type))
 			return false;
-		for (size_t i = 0; i < decl->idents.len; i++) {
+		for (size_t i = 0; i < arr_len(decl->idents); i++) {
 			Type *param_type = typer_arr_add(tr, &t->fn.types);
 			*param_type = decl->type;
 		}
 	}
-	arr_foreach(&f->ret_decls, Declaration, decl) {
+	arr_foreach(f->ret_decls, Declaration, decl) {
 		if (!types_decl(tr, decl)) return false;
 	}
 	return true;
@@ -222,7 +222,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 	}
 	/* are we inside this declaration? */
 	typedef Declaration *DeclarationPtr;
-	arr_foreach(&tr->in_decls, DeclarationPtr, in_decl) {
+	arr_foreach(tr->in_decls, DeclarationPtr, in_decl) {
 		if (d == *in_decl) {
 			assert(d->flags & DECL_FLAG_HAS_EXPR); /* we can only be in decls with an expr */
 			if (d->expr.kind != EXPR_FN) { /* it's okay if a function references itself */
@@ -297,13 +297,13 @@ static bool type_resolve(Typer *tr, Type *t) {
 		t->arr.n = (UInteger)size;
 	} break;
 	case TYPE_FN:
-		arr_foreach(&t->fn.types, Type, child_type) {
+		arr_foreach(t->fn.types, Type, child_type) {
 			if (!type_resolve(tr, child_type))
 				return false;
 		}
 		break;
 	case TYPE_TUPLE:
-		arr_foreach(&t->tuple, Type, child_type) {
+		arr_foreach(t->tuple, Type, child_type) {
 			if (!type_resolve(tr, child_type))
 				return false;
 		}
@@ -433,24 +433,24 @@ static bool types_expr(Typer *tr, Expression *e) {
 			success = false;
 			goto fn_ret;
 		}
-		bool has_named_ret_vals = e->fn.ret_decls.data != NULL;
+		bool has_named_ret_vals = e->fn.ret_decls != NULL;
 		if (has_named_ret_vals) {
 			/* set return type to void to not allow return values */
 			tr->ret_type.kind = TYPE_VOID;
 			tr->ret_type.flags = 0;
 		} else {
-			tr->ret_type = *(Type *)t->fn.types.data;
+			tr->ret_type = t->fn.types[0];
 		}
 		tr->can_ret = true;
-		arr_foreach(&f->params, Declaration, decl)
+		arr_foreach(f->params, Declaration, decl)
 			add_ident_decls(&f->body, decl);
-		arr_foreach(&f->ret_decls, Declaration, decl)
+		arr_foreach(f->ret_decls, Declaration, decl)
 			add_ident_decls(&f->body, decl);
 		bool block_success = true;
 		block_success = types_block(tr, &e->fn.body);
-		arr_foreach(&f->params, Declaration, decl)
+		arr_foreach(f->params, Declaration, decl)
 			remove_ident_decls(&f->body, decl);
-		arr_foreach(&f->ret_decls, Declaration, decl)
+		arr_foreach(f->ret_decls, Declaration, decl)
 			remove_ident_decls(&f->body, decl);
 		if (!block_success) {
 			success = false;
@@ -458,7 +458,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		}
 		Expression *ret_expr = f->body.ret_expr;
 		assert(t->kind == TYPE_FN);
-		Type *ret_type = t->fn.types.data;
+		Type *ret_type = t->fn.types;
 		if (ret_expr) {
 			if (!types_expr(tr, ret_expr)) {
 				success = false;
@@ -474,9 +474,9 @@ static bool types_expr(Typer *tr, Expression *e) {
 				goto fn_ret;
 			}
 		} else if (ret_type->kind != TYPE_VOID && !has_named_ret_vals) {
-			Array stmts = e->fn.body.stmts;
-			if (stmts.len) {
-				Statement *last_stmt = (Statement *)stmts.data + (stmts.len - 1);
+			Statement *stmts = e->fn.body.stmts;
+			if (arr_len(stmts)) {
+				Statement *last_stmt = (Statement *)stmts + (arr_len(stmts) - 1);
 				if (last_stmt->kind == STMT_RET) {
 					/*
 					  last statement is a return, so it doesn't matter that the function has no return value
@@ -623,7 +623,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		} else {
 			if (!types_expr(tr, f)) return false;
 		}
-		arr_foreach(&c->args, Argument, arg) {
+		arr_foreach(c->args, Argument, arg) {
 			if (!types_expr(tr, &arg->val))
 				return false;
 		}
@@ -632,17 +632,15 @@ static bool types_expr(Typer *tr, Expression *e) {
 			err_print(e->where, "Calling non-function (type %s).", type);
 			return false;
 		}
-		Type *ret_type = (Type *)f->type.fn.types.data;
+		Type *ret_type = f->type.fn.types;
 		Type *param_types = ret_type + 1;
-		Argument *args = c->args.data;
-		size_t nparams = f->type.fn.types.len - 1;
-		size_t nargs = c->args.len;
+		Argument *args = c->args;
+		size_t nparams = arr_len(f->type.fn.types) - 1;
+		size_t nargs = arr_len(c->args);
 		bool ret = true;
 		FnExpr *fn_decl = NULL;
-		Array new_args_arr;
-		arr_create(&new_args_arr, sizeof(Expression));
-		arr_set_len(&new_args_arr, nparams);
-		Expression *new_args = new_args_arr.data;
+		Expression *new_args = NULL;
+		arr_set_lena(&new_args, nparams, &tr->allocr);
 		bool *params_set = typer_calloc(tr, nparams, sizeof *params_set);
 		if (f->kind == EXPR_IDENT) {
 			IdentDecl *decl = ident_decl(f->ident);
@@ -667,8 +665,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 				had_named_arg = true;
 				long index = 0;
 				long arg_index = -1;
-				arr_foreach(&fn_decl->params, Declaration, param) {
-					arr_foreach(&param->idents, Identifier, ident) {
+				arr_foreach(fn_decl->params, Declaration, param) {
+					arr_foreach(param->idents, Identifier, ident) {
 						if (*ident == args[p].name) {
 							arg_index = index;
 							break;
@@ -710,9 +708,9 @@ static bool types_expr(Typer *tr, Expression *e) {
 				size_t index = 0;
 				assert(fn_decl); /* we can only miss an arg if we're using named/optional args */
 				
-				arr_foreach(&fn_decl->params, Declaration, param) {
+				arr_foreach(fn_decl->params, Declaration, param) {
 					bool is_required = !(param->flags & DECL_FLAG_HAS_EXPR);
-					arr_foreach(&param->idents, Identifier, ident) {
+					arr_foreach(param->idents, Identifier, ident) {
 						if (index == i) {
 							if (is_required) {
 								char *s = ident_to_str(*ident);
@@ -728,9 +726,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				}
 			}
 		}
-		free(params_set);
-		arr_free(&c->args);
-		c->args = new_args_arr;
+		c->arg_exprs = new_args;
 		*t = *ret_type;
 		break;
 	}
@@ -745,22 +741,19 @@ static bool types_expr(Typer *tr, Expression *e) {
 		}
 	} break;
 	case EXPR_DIRECT:
-		/* type automatically set to unknown */
-	    arr_foreach(&e->direct.args, Argument, arg) {
-			if (arg->name) {
-				err_print(arg->where, "Directives should not have named arguments.");
-				return false;
-			}
-			if (!types_expr(tr, &arg->val))
+	    arr_foreach(e->direct.args, Expression, arg) {
+			if (!types_expr(tr, arg))
 				return false;
 		}
 		switch (e->direct.which) {
 		case DIRECT_C: {
-			size_t n_args = e->direct.args.len;
+			size_t n_args = arr_len(e->direct.args);
 			if (n_args != 1) {
 				err_print(e->where, "#C call should have one string argument (got %lu arguments).", (unsigned long)n_args);
 				return false;
 			}
+			/* type automatically set to unknown */
+			
 			/* TODO: when string types are added, check */
 		} break;
 		case DIRECT_COUNT: assert(0); return false;
@@ -928,11 +921,11 @@ static bool types_expr(Typer *tr, Expression *e) {
 			break;
 		case BINARY_COMMA: {
 			t->kind = TYPE_TUPLE;
-			Array *tup_types = &t->tuple;
-			arr_create(tup_types, sizeof(Type));
+			Type **tup_types = &t->tuple;
+			*tup_types = NULL;
 			if (lhs_type->kind == TYPE_TUPLE) {
 				/* tuple, x => tuple */
-				arr_foreach(&lhs_type->tuple, Type, child) {
+				arr_foreach(lhs_type->tuple, Type, child) {
 					*(Type*)typer_arr_add(tr, tup_types) = *child;
 				}
 			} else {
@@ -941,7 +934,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			
 			if (rhs_type->kind == TYPE_TUPLE) {
 				/* x, tuple => tuple */
-				arr_foreach(&rhs_type->tuple, Type, child) {
+				arr_foreach(rhs_type->tuple, Type, child) {
 					*(Type*)typer_arr_add(tr, tup_types) = *child;
 				}
 			} else {
@@ -959,8 +952,8 @@ static bool types_block(Typer *tr, Block *b) {
 	bool success = true;
 	Block *prev_block = tr->block;
 	tr->block = b;
-	if (!block_enter(b, &b->stmts)) return false;
-	arr_foreach(&b->stmts, Statement, s) {
+	if (!block_enter(b, b->stmts)) return false;
+	arr_foreach(b->stmts, Statement, s) {
 		if (!types_stmt(tr, s))
 			success = false;
 	}
@@ -972,7 +965,7 @@ static bool types_block(Typer *tr, Block *b) {
 		    success = false;
 		}
 	}
-	block_exit(b, &b->stmts);
+	block_exit(b, b->stmts);
 	tr->block = prev_block;
 	return success;
 }
@@ -1078,13 +1071,13 @@ static void typer_create(Typer *tr, Evaluator *ev) {
 	tr->block = NULL;
 	tr->can_ret = false;
 	tr->evalr = ev;
-	arr_create(&tr->in_decls, sizeof(Declaration *));
+	tr->in_decls = NULL;
 	allocr_create(&tr->allocr);
 }
 
 static bool types_file(Typer *tr, ParsedFile *f) {
 	bool ret = true;
-	arr_foreach(&f->stmts, Statement, s) {
+	arr_foreach(f->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {
 			ret = false;
 		}

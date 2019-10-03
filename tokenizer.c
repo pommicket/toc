@@ -487,7 +487,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 	Token *token = tokr_add(t);
 	token->kind = TOKEN_EOF;
 	
-	t->token = t->tokens.data;
+	t->token = t->tokens;
 	return !has_err;
 }
 

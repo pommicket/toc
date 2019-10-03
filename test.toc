@@ -1,5 +1,12 @@
 main @= fn() {
 	 a : [('a' as u8 as f32) / 2 + 0.5 as i8 as &int as u64]int;
+
+	 foo := fn(x : int) int {
+	 	 7
+	 };
+
+	 bar := foo(3);
+
 	 // arr1 : ['a' as u8]int;
 	 // arr2 : [main as u64]int;
 	 // arr3 : [main as i64]int;

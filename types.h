@@ -308,7 +308,7 @@ typedef enum {
 
 typedef struct {
 	Directive which;
-	struct Argument *args;
+	struct Expression *args;
 } DirectExpr;
 
 

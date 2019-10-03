@@ -31,14 +31,14 @@ static void arr_resv_(void **arr, size_t n, size_t item_sz) {
 }
 static void arr_resva_(void **arr, size_t n, size_t item_sz, Allocator *a) {
 	if (*arr == NULL) {
-		ArrHeader *hdr = allocr_malloc(a, item_sz * n + sizeof(ArrHeader) + 1); /* +1 => prevent ptr overflow */
+		ArrHeader *hdr = allocr_realloc(a, NULL, item_sz * n + sizeof(ArrHeader)); /* +1 => prevent ptr overflow */
 		hdr->len = 0;
 		hdr->cap = n;
 		*arr = hdr->data;
 	} else {
 		ArrHeader *hdr = arr_hdr(*arr);
 		hdr->cap = n;
-		hdr = allocr_realloc(a, hdr, item_sz * n + sizeof(ArrHeader) + 1);
+		hdr = allocr_realloc(a, hdr, item_sz * n + sizeof(ArrHeader));
 		if (hdr->len > hdr->cap) hdr->len = hdr->cap;
 		*arr = hdr->data;
 	}		
@@ -47,6 +47,10 @@ static void arr_resva_(void **arr, size_t n, size_t item_sz, Allocator *a) {
 
 static void arr_set_len_(void **arr, size_t n, size_t item_sz) {
 	arr_resv_(arr, n, item_sz);
+	arr_hdr(arr)->len = n;
+}
+static void arr_set_lena_(void **arr, size_t n, size_t item_sz, Allocator *a) {
+	arr_resva_(arr, n, item_sz, a);
 	arr_hdr(arr)->len = n;
 }
 
@@ -89,10 +93,15 @@ static void arr_clear_(void **arr) {
 static void *arr_last_(void *arr, size_t item_sz) {
 	if (arr) {
 		ArrHeader *hdr = arr_hdr(arr);
-		return (char *)hdr->data + hdr->len * item_sz;
+		return hdr->len == 0 ? NULL : (char *)hdr->data + (hdr->len-1) * item_sz;
 	} else {
 		return NULL;
 	}
+}
+
+/* OPTIM: shrink array */
+static void arr_remove_last_(void **arr, size_t item_sz) {
+	arr_hdr(*arr)->len--; (void)item_sz;
 }
 
 #define arr_add(arr) arr_add_((void **)(arr), sizeof **(arr))
@@ -100,9 +109,11 @@ static void *arr_last_(void *arr, size_t item_sz) {
 #define arr_resv(arr, n) arr_resv_((void **)(arr), n, sizeof **(arr))
 #define arr_resva(arr, n, allocr) arr_resva_((void **)(arr), n, sizeof **(arr), allocr)
 #define arr_set_len(arr, n) arr_set_len_((void **)(arr), n, sizeof **(arr))
+#define arr_set_lena(arr, n, a) arr_set_lena_((void **)(arr), n, sizeof **(arr), a)
 #define arr_clear(arr) arr_clear_((void **)(arr))
 #define arr_last(arr) arr_last_((void *)(arr), sizeof *(arr))
-#define arr_foreach(arr, type, var) for (type *var = arr, *var##_foreach_end = arr_last(arr); var != var##_foreach_end; var++)
+#define arr_foreach(arr, type, var) for (type *var = arr_len(arr) ? arr : NULL, *var##_foreach_end = arr_last(arr); var; var == var##_foreach_end ? var = NULL : var++)
+#define arr_remove_last(arr) arr_remove_last_((void **)(arr), sizeof **(arr))
 
 static void arr_test(void) {
 	int *foos = NULL;

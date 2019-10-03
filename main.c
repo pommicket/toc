@@ -51,8 +51,8 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 	
-	arr_foreach(&t.tokens, Token, token) {
-		if (token != t.tokens.data)
+	arr_foreach(t.tokens, Token, token) {
+		if (token != t.tokens)
 			printf("    ");
 		fprint_token(stdout, token);
 	}
@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
     
 	printf("\n\n-----\n\n");
 	
-	block_enter(NULL, &f.stmts); /* enter global scope */
+	block_enter(NULL, f.stmts); /* enter global scope */
 	Typer tr;
 	Evaluator ev;
 	evalr_create(&ev);
@@ -80,7 +80,7 @@ int main(int argc, char **argv) {
 	}
 	parse_printing_after_types = true;
 	fprint_parsed_file(stdout, &f);
-	block_exit(NULL, &f.stmts); /* exit global scope */
+	block_exit(NULL, f.stmts); /* exit global scope */
 	
 	tokr_free(&t);
     

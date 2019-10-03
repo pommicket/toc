@@ -34,16 +34,14 @@ static void allocr_test(void) {
 	for (int i = 0; i < nfoos2; i++)
 		assert(foos[i] == i);
 	
-	Array arr;
-	arr_create(&arr, sizeof(int));
+	int *arr = NULL;
 	int n = 1000;
 	for (int i = 0; i < n; i++) {
 		int *p = arr_adda(&arr, &a);
 		*p = i;
 	}
-	int *arr_data = arr.data;
 	for (int i = 0; i < n; i++) {
-		assert(arr_data[i] == i);
+		assert(arr[i] == i);
 	}
 	
 	allocr_free_all(&a);
@@ -51,4 +49,5 @@ static void allocr_test(void) {
 
 static void test_all(void) {
 	allocr_test();
+	arr_test();
 }

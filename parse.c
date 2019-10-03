@@ -130,9 +130,9 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 	case TYPE_FN: {
 		/* number of chars written */
 		size_t written = str_copy(buffer, bufsize, "fn (");
-		Type *ret_type = t->fn.types.data;
+		Type *ret_type = t->fn.types;
 		Type *param_types = ret_type + 1;
-		size_t nparams = t->fn.types.len - 1;
+		size_t nparams = arr_len(t->fn.types) - 1;
 		for (size_t i = 0; i < nparams; i++) {
 			if (i > 0)
 				written += str_copy(buffer + written, bufsize - written, ", ");
@@ -159,8 +159,8 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 	} break;
 	case TYPE_TUPLE: {
 		size_t written = str_copy(buffer, bufsize, "(");
-		arr_foreach(&t->tuple, Type, child) {
-			if (child != t->tuple.data)
+		arr_foreach(t->tuple, Type, child) {
+			if (child != t->tuple)
 				written += str_copy(buffer + written, bufsize - written, ", ");
 			written += type_to_str_(child, buffer + written, bufsize - written);
 		}
@@ -186,9 +186,11 @@ static char *type_to_str(Type *t) {
 	return ret;
 }
 
-static inline void *parser_arr_add(Parser *p, Array *a) {
-	return arr_adda(a, &p->allocr);
+static inline void *parser_arr_add_(Parser *p, void **a, size_t sz) {
+	return arr_adda_(a, sz, &p->allocr);
 }
+
+#define parser_arr_add(p, a) parser_arr_add_(p, (void **)(a), sizeof **(a))
 
 static inline void *parser_malloc(Parser *p, size_t bytes) {
 	return allocr_malloc(&p->allocr, bytes);
@@ -300,7 +302,7 @@ static bool parse_type(Parser *p, Type *type) {
 		case KW_FN: {
 			/* function type */
 			type->kind = TYPE_FN;
-			arr_create(&type->fn.types, sizeof(Type));
+			type->fn.types = NULL;
 			t->token++;
 			if (!token_is_kw(t->token, KW_LPAREN)) {
 				tokr_err(t, "Expected ( for function type.");
@@ -322,7 +324,7 @@ static bool parse_type(Parser *p, Type *type) {
 				}
 			}
 			t->token++;	/* move past ) */
-			Type *ret_type = type->fn.types.data;
+			Type *ret_type = type->fn.types;
 			/* if there's a symbol that isn't [ or (, that can't be the start of a type */
 			if ((t->token->kind == TOKEN_KW
 				 && t->token->kw <= KW_LAST_SYMBOL
@@ -355,7 +357,7 @@ static bool parse_type(Parser *p, Type *type) {
 		case KW_LPAREN:
 			/* tuple! */
 			type->kind = TYPE_TUPLE;
-			arr_create(&type->tuple, sizeof(Type));
+		    type->tuple = NULL;
 			t->token++;	/* move past ( */
 			while (1) {
 				Type *child = parser_arr_add(p, &type->tuple);
@@ -407,7 +409,7 @@ static bool parse_block(Parser *p, Block *b) {
 	}
 	b->start = t->token->where;
 	t->token++;	/* move past { */
-	arr_create(&b->stmts, sizeof(Statement));
+	b->stmts = NULL;
 	bool ret = true;
 	b->ret_expr = NULL; /* default to no return unless overwritten later */
 	if (!token_is_kw(t->token, KW_RBRACE)) {
@@ -455,7 +457,7 @@ static bool parse_block(Parser *p, Block *b) {
 
 static bool is_decl(Tokenizer *t);
 	
-static bool parse_decl_list(Parser *p, Array *decls, DeclEndKind decl_end) {
+static bool parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end) {
 	Tokenizer *t = p->tokr;
 	bool ret = true;
 	bool first = true;
@@ -478,8 +480,7 @@ static bool parse_decl_list(Parser *p, Array *decls, DeclEndKind decl_end) {
 
 static bool parse_fn_expr(Parser *p, FnExpr *f) {
 	Tokenizer *t = p->tokr;
-	f->ret_decls.len = 0;
-	f->ret_decls.data = NULL;
+	f->ret_decls = NULL;
 	/* only called when token is fn */
 	assert(token_is_kw(t->token, KW_FN));
 	t->token++;
@@ -488,7 +489,7 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 		return false;
 	}
 	t->token++;
-	arr_create(&f->params, sizeof(Declaration));
+	f->params = NULL;
 	bool ret = true;
 	if (token_is_kw(t->token, KW_RPAREN)) {
 		t->token++;
@@ -507,23 +508,22 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 		f->ret_type.kind = TYPE_VOID;
 		f->ret_type.flags = 0;
 	} else if (is_decl(t)) {
-		arr_create(&f->ret_decls, sizeof(Declaration));
+	    f->ret_decls = NULL;
 		if (!parse_decl_list(p, &f->ret_decls, DECL_END_LBRACE_COMMA))
 			return false;
 		t->token--;	/* move back to { */
-		assert(f->ret_decls.len);
-		if (f->ret_decls.len > 1 || ((Declaration *)f->ret_decls.data)[0].idents.len) {
+		if (arr_len(f->ret_decls) > 1 || arr_len(f->ret_decls[0].idents)) {
 			f->ret_type.kind = TYPE_TUPLE;
 			f->ret_type.flags = 0;
-			arr_create(&f->ret_type.tuple, sizeof(Type));
-			arr_foreach(&f->ret_decls, Declaration, decl) {
-				for (size_t i = 0; i < decl->idents.len; i++) {
+			f->ret_type.tuple = NULL;
+			arr_foreach(f->ret_decls, Declaration, decl) {
+				for (size_t i = 0, len = arr_len(decl->idents); i < len; i++) {
 					Type *tuple_type = parser_arr_add(p, &f->ret_type.tuple);
 					*tuple_type = decl->type;
 				}
 			}
 		} else {
-			f->ret_type = ((Declaration *)f->ret_decls.data)[0].type;
+			f->ret_type = f->ret_decls[0].type;
 		}
 	} else {
 		if (!parse_type(p, &f->ret_type)) {
@@ -537,11 +537,11 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 }
 
 /* parses, e.g. "(3, 5, foo)" */
-static bool parse_args(Parser *p, Array *args) {
+static bool parse_args(Parser *p, Argument **args) {
 	Tokenizer *t = p->tokr;
 	Token *start = t->token;
 	assert(token_is_kw(start, KW_LPAREN));
-	arr_create(args, sizeof(Argument));
+	*args = NULL;
 	t->token++; /* move past ( */
 	if (!token_is_kw(t->token, KW_RPAREN)) {
 		/* non-empty arg list */
@@ -1006,7 +1006,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				switch (token->kw) {
 				case KW_LPAREN:
 					if (square_level == 0 && paren_level == 0 && brace_level == 0
-						&& token != t->tokens.data
+						&& token != t->tokens
 						&& token[-1].kind != TOKEN_DIRECT /* don't include directives */)
 						opening_bracket = token; /* maybe this left parenthesis opens the function call */
 					paren_level++;
@@ -1081,13 +1081,24 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			/* it's a directive */
 			e->kind = EXPR_DIRECT;
 			e->direct.which = t->token->direct;
+			e->direct.args = NULL;
 			if (token_is_kw(&t->token[1], KW_LPAREN)) {
+				Argument *args = NULL;
 				/* has args (but maybe it's just "#foo()") */
 				t->token++;	/* move to ( */
-				return parse_args(p, &e->direct.args);
+				if (!parse_args(p, &args)) return false;
+				arr_foreach(args, Argument, arg) {
+					if (arg->name != NULL) {
+						err_print(arg->where, "Directives cannot have named arguments.");
+						return false;
+					}
+					*(Expression *)arr_add(&e->direct.args) = arg->val;
+				}
+				arr_clear(&args);
+				return true;
 			} else {
 				/* no args */
-				arr_create(&e->direct.args, sizeof(Expression));
+				e->direct.args = NULL;
 				t->token++;
 				return true;
 			}
@@ -1125,7 +1136,7 @@ static inline bool ends_decl(Token *t, DeclEndKind ends_with) {
 static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_t flags) {
 	d->val = NULL;
 	d->where = p->tokr->token->where;
-	arr_create(&d->idents, sizeof(Identifier));
+    d->idents = NULL;
 	Tokenizer *t = p->tokr;
 	d->flags = 0;
 	
@@ -1307,7 +1318,7 @@ static void parser_from_tokenizer(Parser *p, Tokenizer *t) {
 
 static bool parse_file(Parser *p, ParsedFile *f) {
 	Tokenizer *t = p->tokr;
-	arr_create(&f->stmts, sizeof(Statement));
+    f->stmts = NULL;
 	bool ret = true;
 	while (t->token->kind != TOKEN_EOF) {
 		Statement *stmt = parser_arr_add(p, &f->stmts);
@@ -1344,7 +1355,7 @@ static void fprint_type(FILE *out, Type *t) {
 
 static void fprint_block(FILE *out,  Block *b) {
 	fprintf(out, "{\n");
-	arr_foreach(&b->stmts, Statement, stmt) {
+	arr_foreach(b->stmts, Statement, stmt) {
 		fprint_stmt(out, stmt);
 	}
 	fprintf(out, "}");
@@ -1357,8 +1368,8 @@ static void fprint_block(FILE *out,  Block *b) {
 
 static void fprint_fn_expr(FILE *out, FnExpr *f) {
 	fprintf(out, "fn (");
-	arr_foreach(&f->params, Declaration, decl) {
-		if (decl != f->params.data)
+	arr_foreach(f->params, Declaration, decl) {
+		if (decl != f->params)
 			fprintf(out, ", ");
 		fprint_decl(out, decl);
 	}
@@ -1368,24 +1379,24 @@ static void fprint_fn_expr(FILE *out, FnExpr *f) {
 	fprint_block(out, &f->body);
 }
 
-static void fprint_args(FILE *out, Array *args) {
+static void fprint_args(FILE *out, Argument *args) {
 	fprintf(out, "(");
-	if (parse_printing_after_types) {
-		assert(args->item_sz == sizeof(Expression));
-		arr_foreach(args, Expression, arg) {
-			if (arg != args->data) fprintf(out, ", ");
-			fprint_expr(out, arg);
+	arr_foreach(args, Argument, arg) {
+		if (arg != args) fprintf(out, ", ");
+		if (arg->name) {
+			fprint_ident(out, arg->name);
+			fprintf(out, " = ");
 		}
-	} else {
-		assert(args->item_sz == sizeof(Argument));
-		arr_foreach(args, Argument, arg) {
-			if (arg != args->data) fprintf(out, ", ");
-			if (arg->name) {
-				fprint_ident(out, arg->name);
-				fprintf(out, " = ");
-			}
-			fprint_expr(out, &arg->val);
-		}
+		fprint_expr(out, &arg->val);
+	}
+	fprintf(out, ")");
+}
+
+static void fprint_arg_exprs(FILE *out, Expression *args) {
+	fprintf(out, "(");
+	arr_foreach(args, Expression, arg) {
+		if (arg != args) fprintf(out, ", ");
+		fprint_expr(out, arg);
 	}
 	fprintf(out, ")");
 }
@@ -1457,7 +1468,11 @@ static void fprint_expr(FILE *out, Expression *e) {
 		break;
 	case EXPR_CALL:
 		fprint_expr(out, e->call.fn);
-		fprint_args(out, &e->call.args);
+		if (parse_printing_after_types) {
+			fprint_arg_exprs(out, e->call.arg_exprs);
+		} else {
+			fprint_args(out, e->call.args);
+		}
 		break;
 	case EXPR_BLOCK:
 		fprint_block(out, &e->block);
@@ -1465,7 +1480,7 @@ static void fprint_expr(FILE *out, Expression *e) {
 	case EXPR_DIRECT:
 		fprintf(out, "#");
 		fprintf(out, "%s", directives[e->direct.which]);
-		fprint_args(out, &e->direct.args);
+		fprint_arg_exprs(out, e->direct.args);
 		break;
 	}
 	if (parse_printing_after_types) {
@@ -1477,8 +1492,8 @@ static void fprint_expr(FILE *out, Expression *e) {
 
 static void fprint_decl(FILE *out, Declaration *d) {
 	PARSE_PRINT_LOCATION(d->where);
-	arr_foreach(&d->idents, Identifier, ident) {
-		if (ident != d->idents.data) fprintf(out, ", ");
+	arr_foreach(d->idents, Identifier, ident) {
+		if (ident != d->idents) fprintf(out, ", ");
 		fprint_ident(out, *ident);
 	}
 	if (d->flags & DECL_FLAG_CONST) {
@@ -1520,7 +1535,7 @@ static void fprint_stmt(FILE *out, Statement *s) {
 }
 
 static void fprint_parsed_file(FILE *out, ParsedFile *f) {
-	arr_foreach(&f->stmts, Statement, stmt) {
+	arr_foreach(f->stmts, Statement, stmt) {
 		fprint_stmt(out, stmt);
 	}
 }
