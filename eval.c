@@ -1,3 +1,5 @@
+static void eval_block(Evaluator *ev, Block *b, Value *v);
+
 static void evalr_create(Evaluator *ev) {
 	allocr_create(&ev->allocr);
 }
@@ -273,6 +275,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 	}
 }
 
+
 static void eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	/* WARNING: macros ahead */
 #define eval_unary_op_one(low, up, op)			\
@@ -405,6 +408,35 @@ static void eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			assert(0);
 		}
 		break;
+	case EXPR_IF: {
+		IfExpr *i = &e->if_;
+		if (i->cond) {
+			Value cond;
+			eval_expr(ev, i->cond, &cond);
+			if (val_truthiness(&cond, &i->cond->type)) {
+				eval_block(ev, &i->body, v);
+			} else if (i->next_elif) {
+				eval_expr(ev, i->next_elif, v);
+				return;
+			}
+		} else {
+			eval_block(ev, &i->body, v);
+		}
+	} break;
+	case EXPR_WHILE: {
+		Value cond;
+		WhileExpr *w = &e->while_;
+		bool looped_once = false;
+		while (1) {
+			eval_expr(ev, w->cond, &cond);
+			if (!val_truthiness(&cond, &w->cond->type))
+				break;
+			eval_block(ev, &w->body, v);
+		}
+	} break;
+	case EXPR_BLOCK:
+		eval_block(ev, &e->block, v);
+		break;
 	case EXPR_LITERAL_BOOL:
 		v->boolv = e->booll;
 		break;
@@ -419,5 +451,29 @@ static void eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		eval_expr(ev, e->cast.expr, &casted);
 		val_cast(&casted, &e->cast.expr->type, v, &e->cast.type);
 	} break;
+	}
+}
+
+static void eval_stmt(Evaluator *ev, Statement *stmt) {
+	switch (stmt->kind) {
+	case STMT_DECL:
+		/* TODO */
+		break;
+	case STMT_EXPR: {
+		Value unused;
+		eval_expr(ev, &stmt->expr, &unused);
+	} break;
+	case STMT_RET:
+		/* TODO */
+		break;
+	}
+}
+
+static void eval_block(Evaluator *ev, Block *b, Value *v) {
+	arr_foreach(b->stmts, Statement, stmt) {
+		eval_stmt(ev, stmt);
+	}
+	if (b->ret_expr) {
+		eval_expr(ev, b->ret_expr, v);
 	}
 }

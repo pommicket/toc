@@ -1,7 +1,9 @@
 /* 
 TODO:
+whiles should not return values, unless they have no condition
 call fns at compile time
 finish evaluator
+improve casting: do you really need "as"?
 fix void fn type
 re-do cgen
 any odd number of "s for a string

@@ -7,6 +7,9 @@ main @= fn() {
 
 	 bar := foo(3);
 
+	 a238674 : [if 5 - 5 { 12 } else { 6 }]int;
+	 a2394823 : [{ 3; 7 }]int;
+	 gfdsdgf : [ while 3 { 5 }]int;
 	 // arr1 : ['a' as u8]int;
 	 // arr2 : [main as u64]int;
 	 // arr3 : [main as i64]int;
