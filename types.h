@@ -33,17 +33,9 @@ typedef struct Page {
 	max_align_t data[];
 } Page;
 
-typedef struct DynPage {
-	struct DynPage **self;
-	max_align_t data[];
-} DynPage;
-
 typedef struct {
 	Page *first;
 	Page *last;
-    DynPage **dyn;
-	size_t dyn_len;
-	size_t dyn_cap;
 } Allocator;
 
 typedef struct {

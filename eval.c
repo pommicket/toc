@@ -426,11 +426,12 @@ static void eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	case EXPR_WHILE: {
 		Value cond;
 		WhileExpr *w = &e->while_;
-		bool looped_once = false;
 		while (1) {
-			eval_expr(ev, w->cond, &cond);
-			if (!val_truthiness(&cond, &w->cond->type))
-				break;
+			if (w->cond) {
+				eval_expr(ev, w->cond, &cond);
+				if (!val_truthiness(&cond, &w->cond->type))
+					break;
+			}
 			eval_block(ev, &w->body, v);
 		}
 	} break;

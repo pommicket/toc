@@ -31,14 +31,14 @@ static void arr_resv_(void **arr, size_t n, size_t item_sz) {
 }
 static void arr_resva_(void **arr, size_t n, size_t item_sz, Allocator *a) {
 	if (*arr == NULL) {
-		ArrHeader *hdr = allocr_realloc(a, NULL, item_sz * n + sizeof(ArrHeader)); /* +1 => prevent ptr overflow */
+		ArrHeader *hdr = allocr_malloc(a, item_sz * n + sizeof(ArrHeader));
 		hdr->len = 0;
 		hdr->cap = n;
 		*arr = hdr->data;
 	} else {
 		ArrHeader *hdr = arr_hdr(*arr);
+		hdr = allocr_realloc(a, hdr, item_sz * hdr->cap + sizeof(ArrHeader), item_sz * n + sizeof(ArrHeader));
 		hdr->cap = n;
-		hdr = allocr_realloc(a, hdr, item_sz * n + sizeof(ArrHeader));
 		if (hdr->len > hdr->cap) hdr->len = hdr->cap;
 		*arr = hdr->data;
 	}		

@@ -19,31 +19,6 @@ static void allocr_test(void) {
 		for (int i = 0; i < nbars; i++)
 			assert(bars[i] == i);
 	}
-
-	int nfoos1 = 5;
-	int *foos = allocr_realloc(&a, NULL, (size_t)nfoos1 * sizeof(int));
-	for (int i = 0; i < nfoos1; i++)
-		foos[i] = i;
-	for (int i = 0; i < nfoos1; i++)
-		assert(foos[i] == i);
-
-	int nfoos2 = 10;
-	foos = allocr_realloc(&a, foos, (size_t)nfoos2 * sizeof(int));
-	for (int i = nfoos1; i < nfoos2; i++)
-		foos[i] = i;
-	for (int i = 0; i < nfoos2; i++)
-		assert(foos[i] == i);
-	
-	int *arr = NULL;
-	int n = 1000;
-	for (int i = 0; i < n; i++) {
-		int *p = arr_adda(&arr, &a);
-		*p = i;
-	}
-	for (int i = 0; i < n; i++) {
-		assert(arr[i] == i);
-	}
-	
 	allocr_free_all(&a);
 }
 

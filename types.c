@@ -607,12 +607,19 @@ static bool types_expr(Typer *tr, Expression *e) {
 	case EXPR_WHILE: {
 		WhileExpr *w = &e->while_;
 		bool ret = true;
-		if (!types_expr(tr, w->cond))
+		if (w->cond && !types_expr(tr, w->cond))
 			ret = false;
 		if (!types_block(tr, &w->body))
 			ret = false;
 		if (!ret) return false;
-		*t = w->body.ret_expr->type;
+		if (w->cond != NULL && w->body.ret_expr != NULL) {
+			err_print(e->where, "A finite loop can't have a return expression (for an infinite loop, use while { ... }).");
+			return false;
+		}
+		if (w->body.ret_expr)
+			*t = w->body.ret_expr->type;
+		else
+			t->kind = TYPE_VOID;
 	} break;
 	case EXPR_CALL: {
 		CallExpr *c = &e->call;

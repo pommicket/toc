@@ -1,15 +1,15 @@
 main @= fn() {
-	 a : [('a' as u8 as f32) / 2 + 0.5 as i8 as &int as u64]int;
+	 // a : [('a' as u8 as f32) / 2 + 0.5 as i8 as &int as u64]int;
 
-	 foo := fn(x : int) int {
-	 	 7
-	 };
+	 // foo := fn(x : int) int {
+	 	 // 7
+	 // };
 
-	 bar := foo(3);
+	 // bar := foo(3);
 
 	 a238674 : [if 5 - 5 { 12 } else { 6 }]int;
 	 a2394823 : [{ 3; 7 }]int;
-	 gfdsdgf : [ while 3 { 5 }]int;
+	 gfdsdgf : [ while { 3 } ]int;
 	 // arr1 : ['a' as u8]int;
 	 // arr2 : [main as u64]int;
 	 // arr3 : [main as i64]int;
