@@ -1,28 +1,3 @@
 main @= fn() {
-	 // a : [('a' as u8 as f32) / 2 + 0.5 as i8 as &int as u64]int;
-
-	 // foo := fn(x : int) int {
-	 	 // 7
-	 // };
-
-	 // bar := foo(3);
-
-	 a238674 : [if 5 - 5 { 12 } else { 6 }]int;
-	 a2394823 : [{ 3; 7 }]int;
-	 gfdsdgf : [ while { 3 } ]int;
-	 // arr1 : ['a' as u8]int;
-	 // arr2 : [main as u64]int;
-	 // arr3 : [main as i64]int;
-	 // N @= (-10 + (97 as char as u8 as f32)) as u32;
-	 // arr4 : [N]int;
-	 // arr5 : [main as u64]int;
-	 // arr6 : [main as u64 as fn() as u64]int;
-	 // arr7 : [main as u64 as fn() int as u64]int; 
-
-	 // str @= "foo";
-	 // arr8 : [(str[0] as u32) + (str[1] as u32) + (str[2] as u32)]int;
-	 // asdf @= new int;
-	 // arr9 : [asdf as u64]int;
-	 // arr10 : [main as &i32 as u64]int;
-	 // arr11 : [((main as &u64) as [4]u64)[3]]int;
+	 x : [{ 3; 5 }] int;
 };

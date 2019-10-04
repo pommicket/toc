@@ -2,6 +2,11 @@ typedef int64_t Integer;
 typedef uint64_t UInteger;
 typedef long double Floating; /* OPTIM: Switch to double, but make sure floating-point literals are right */
 
+#if __STDC_VERSION__ < 201112
+/* assume long double has the strictest alignment */
+typedef long double max_align_t;
+#endif
+
 #define INTEGER_MAX INT64_MAX
 #define UINTEGER_MAX UINT64_MAX
 #define INTEGER_FMT "%"PRId64

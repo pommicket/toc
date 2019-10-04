@@ -104,8 +104,31 @@ static void arr_remove_last_(void **arr, size_t item_sz) {
 	arr_hdr(*arr)->len--; (void)item_sz;
 }
 
-#define arr_add(arr) arr_add_((void **)(arr), sizeof **(arr))
-#define arr_adda(arr, allocr) arr_adda_((void **)(arr), sizeof **(arr), allocr)
+#ifdef __GNUC__
+#define typeof __typeof__
+#endif
+
+#if defined(__GNUC__) || defined(__TINYC__)
+#define HAS_TYPEOF 1
+#endif
+
+#if HAS_TYPEOF
+/* 
+this is to cast the return value of arr_add so that gcc produces a warning if you
+do something like:
+float *arr = NULL;
+// ...
+int *x = arr_add(&arr);
+You shouldn't rely on this, though, e.g. by doing
+*arr_add(&arr) = 17;
+ */
+#define arr_ptr_type(arr) __typeof__(*(arr))
+#else
+#define arr_ptr_type(arr) void *
+#endif
+
+#define arr_add(arr) (arr_ptr_type(arr))arr_add_((void **)(arr), sizeof **(arr))
+#define arr_adda(arr, allocr) (arr_ptr_type(arr))arr_adda_((void **)(arr), sizeof **(arr), allocr)
 #define arr_resv(arr, n) arr_resv_((void **)(arr), n, sizeof **(arr))
 #define arr_resva(arr, n, allocr) arr_resva_((void **)(arr), n, sizeof **(arr), allocr)
 #define arr_set_len(arr, n) arr_set_len_((void **)(arr), n, sizeof **(arr))

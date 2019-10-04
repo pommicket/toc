@@ -30,7 +30,7 @@ static Identifier ident_new(Identifiers *ids, Identifier parent, unsigned char i
 	tree->parent = NULL;
 	for (size_t i = 0; i < TREE_NCHILDREN; i++)
 		tree->children[i] = NULL;
-	tree->decls.data = NULL;
+	tree->decls = NULL;
 #endif
 	tree->parent = parent;
 	if (parent)
@@ -164,4 +164,14 @@ static void ident_tree_free(IdentTree *id) {
 static void idents_free(Identifiers *ids) {
 	ident_tree_free(ids->root);
 	block_arr_free(&ids->trees);
+}
+
+static void idents_test(void) {
+	Identifiers ids;
+	char b[] = "foo_variable bar";
+	char *s = b;
+	idents_create(&ids);
+	ident_insert(&ids, &s);
+	assert(strcmp(s, " bar") == 0);
+	idents_free(&ids);
 }

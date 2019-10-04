@@ -1,5 +1,8 @@
 #!/bin/bash
-CC=gcc
+if [[ $CC == "" ]]; then
+	CC=gcc
+fi
+	
 
 # Possible extra build flags
 # these are for compiling the compiler, and NOT for compiling the program itself.

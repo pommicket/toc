@@ -1,6 +1,5 @@
 /* 
 TODO:
-whiles should not return values, unless they have no condition
 call fns at compile time
 finish evaluator
 improve casting: do you really need "as"?
@@ -43,7 +42,6 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 	fclose(in);
-
 	Identifiers file_idents;
 	idents_create(&file_idents);
 	Tokenizer t;

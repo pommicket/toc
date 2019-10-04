@@ -194,14 +194,13 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 	int has_err = 0;
 	t->s = str;
 	t->line = 1;
-	
 	while (1) {
-	    if (*t->s == 0) break;
+		if (*t->s == 0) break;
 		if (isspace(*t->s)) {
 			tokr_nextchar(t);
 	    	continue;
 		}
-
+		
 		if (*t->s == '/') {
 			/* maybe it's a comment */
 			int is_comment = 1;
@@ -470,7 +469,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 			tokr_nextchar(t); /* move past closing " */
 			continue;
 		}
-		
+
 		if (isident(*t->s)) {
 			/* it's an identifier */
 			Token *token = tokr_add(t);
