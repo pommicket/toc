@@ -22,7 +22,6 @@ static const char *binary_op_to_str(BinaryOp b) {
 	case BINARY_MUL: return "*";
 	case BINARY_DIV: return "/";
 	case BINARY_SET: return "=";
-	case BINARY_COMMA: return ",";
 	case BINARY_AT_INDEX: return "[]";
 	case BINARY_LT: return "<";
 	case BINARY_LE: return "<=";
@@ -927,8 +926,29 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			return true;
 		}
 	
-	
-		BinaryOp op; 
+		if (lowest_precedence_op->kw == KW_COMMA) {
+			Expression lhs, rhs;
+			if (!parse_expr(p, &lhs, lowest_precedence_op)) return false;
+			t->token = lowest_precedence_op + 1;
+			if (!parse_expr(p, &rhs, end)) return false;
+			/* create tuple expr out of lhs, rhs */
+			e->kind = EXPR_TUPLE;
+			e->tuple = NULL;
+			if (lhs.kind == EXPR_TUPLE) {
+				e->tuple = lhs.tuple;
+			} else {
+				*(Expression *)parser_arr_add(p, &e->tuple) = lhs;
+			}
+			if (rhs.kind == EXPR_TUPLE) {
+				arr_foreach(rhs.tuple, Expression, r) {
+					*(Expression *)parser_arr_add(p, &e->tuple) = *r;
+				}
+			} else {
+				*(Expression *)parser_arr_add(p, &e->tuple) = rhs;
+			}
+			return true;
+		}
+		BinaryOp op;
 		switch (lowest_precedence_op->kw) {
 		case KW_PLUS:
 			op = BINARY_ADD;
@@ -957,9 +977,6 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		case KW_EQ:
 			op = BINARY_SET;
 			break;
-		case KW_COMMA:
-			op = BINARY_COMMA;
-			break;
 		case KW_ASTERISK:
 			op = BINARY_MUL;
 			break;
@@ -975,7 +992,6 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		}
 		e->binary.op = op;
 		e->kind = EXPR_BINARY_OP;
-
 		Expression *lhs = parser_new_expr(p);
 		e->binary.lhs = lhs;
 		if (!parse_expr(p, lhs, lowest_precedence_op)) {
@@ -987,8 +1003,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		e->binary.rhs = rhs;
 		if (!parse_expr(p, rhs, end)) {
 			return false;
-		}
-	
+		}		
 		return true;
 	} else {
 		/* function calls, array accesses, etc. */
@@ -1482,6 +1497,14 @@ static void fprint_expr(FILE *out, Expression *e) {
 		break;
 	case EXPR_BLOCK:
 		fprint_block(out, &e->block);
+		break;
+	case EXPR_TUPLE:
+		fprintf(out, "(");
+		arr_foreach(e->tuple, Expression, x) {
+			if (x != e->tuple) fprintf(out, ", ");
+			fprint_expr(out, x);
+		}
+		fprintf(out, ")");
 		break;
 	case EXPR_DIRECT:
 		fprintf(out, "#");

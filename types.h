@@ -276,6 +276,7 @@ typedef enum {
 			  EXPR_NEW,
 			  EXPR_CALL,
 			  EXPR_BLOCK,
+			  EXPR_TUPLE,
 			  EXPR_DIRECT
 } ExprKind;
 
@@ -293,7 +294,6 @@ typedef enum {
 			  BINARY_SUB,
 			  BINARY_MUL,
 			  BINARY_DIV,
-			  BINARY_COMMA,
 			  BINARY_GT,
 			  BINARY_LT,
 			  BINARY_GE,
@@ -376,6 +376,7 @@ typedef struct Expression {
 		FnExpr fn;
 		CastExpr cast;
 		Block block;
+		struct Expression *tuple;
 	};
 } Expression;
 

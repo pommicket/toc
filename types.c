@@ -165,12 +165,17 @@ static bool expr_must_lval(Expression *e) {
 	case EXPR_BINARY_OP:
 		switch (e->binary.op) {
 		case BINARY_AT_INDEX: return true;
-		case BINARY_COMMA:
-			/* x, y is an lval, but 3, "hello" is not. */
-			return expr_must_lval(e->binary.lhs) && expr_must_lval(e->binary.rhs);
 		default: break;
 		}
 		break;
+	case EXPR_TUPLE: {
+		/* x, y is an lval, but 3, "hello" is not. */
+		arr_foreach(e->tuple, Expression, x) {
+			if (!expr_must_lval(x)) 
+				return false;
+		}
+		return true;
+	} break;
 	default:
 		break;
 	}
@@ -240,7 +245,20 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 	}
 	
 	if (d->flags & DECL_FLAG_FOUND_TYPE) {
-		*t = d->type;
+		if (d->type.kind == TYPE_TUPLE) {
+			/* get correct item in tuple */
+			long index = 0;
+			arr_foreach(d->idents, Identifier, decl_i) {
+				if (*decl_i == i) {
+					break;
+				}
+				index++;
+				assert(index < (long)arr_len(d->idents)); /* identifier got its declaration set to here, but it's not here */
+			}
+			*t = d->type.tuple[index];
+		} else {
+			*t = d->type;
+		}
 		return true;
 	} else {
 		if ((d->flags & DECL_FLAG_HAS_EXPR) && (d->expr.kind == EXPR_FN)) {
@@ -563,7 +581,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 		bool has_else = false;
 		if (!types_block(tr, &curr->body))
 			return false;
-		*t = curr->body.ret_expr->type;
+		if (curr->body.ret_expr)
+			*t = curr->body.ret_expr->type;
+		else
+			t->kind = TYPE_VOID;
 		while (1) {
 			if (curr->cond) {
 				if (!types_expr(tr, curr->cond))
@@ -583,7 +604,12 @@ static bool types_expr(Typer *tr, Expression *e) {
 			    if (!types_block(tr, &nexti->body)) {
 					return false;
 				}
-				*next_type = nexti->body.ret_expr->type;
+				if (nexti->body.ret_expr) {
+					*next_type = nexti->body.ret_expr->type;
+				} else {
+					next_type->kind = TYPE_VOID;
+					next_type->flags = 0;
+				}
 				if (!type_eq(curr_type, next_type)) {
 					char *currstr = type_to_str(curr_type);
 					char *nextstr = type_to_str(next_type);
@@ -926,30 +952,17 @@ static bool types_expr(Typer *tr, Expression *e) {
 			}
 			*t = *lhs_type->arr.of;
 			break;
-		case BINARY_COMMA: {
-			t->kind = TYPE_TUPLE;
-			Type **tup_types = &t->tuple;
-			*tup_types = NULL;
-			if (lhs_type->kind == TYPE_TUPLE) {
-				/* tuple, x => tuple */
-				arr_foreach(lhs_type->tuple, Type, child) {
-					*(Type*)typer_arr_add(tr, tup_types) = *child;
-				}
-			} else {
-				*(Type*)typer_arr_add(tr, tup_types) = *lhs_type;
-			}
-			
-			if (rhs_type->kind == TYPE_TUPLE) {
-				/* x, tuple => tuple */
-				arr_foreach(rhs_type->tuple, Type, child) {
-					*(Type*)typer_arr_add(tr, tup_types) = *child;
-				}
-			} else {
-				*(Type*)typer_arr_add(tr, tup_types) = *rhs_type;
-			}
 		} break;
-		}
 	} break;
+	case EXPR_TUPLE:
+		t->kind = TYPE_TUPLE;
+		t->tuple = NULL;
+		arr_foreach(e->tuple, Expression, x) {
+			Type *x_type = typer_arr_add(tr, &t->tuple);
+			types_expr(tr, x);
+			*x_type = x->type;
+		}
+		break;
 	}
     
 	return true;
@@ -989,6 +1002,10 @@ static bool types_decl(Typer *tr, Declaration *d) {
 			success = false;
 			goto ret;
 		}
+	} else {
+		/* if we can't find the type, default to unknown */
+		d->type.flags = 0;
+		d->type.kind = TYPE_UNKNOWN;
 	}
 	if (d->flags & DECL_FLAG_HAS_EXPR) {
 		if (!types_expr(tr, &d->expr)) {
@@ -1017,10 +1034,13 @@ static bool types_decl(Typer *tr, Declaration *d) {
 			}
 		}
 	}
+	size_t n_idents = arr_len(d->idents);
 	if (d->type.kind == TYPE_TUPLE) {
-		/* TODO(eventually): Should this be allowed? */
-		err_print(d->where, "Declaring a tuple is not allowed.");
-		return false;
+		if (n_idents != arr_len(d->type.tuple)) {
+			err_print(d->where, "Expected to have %lu things declared in declaration, but got %lu.", (unsigned long)n_idents);
+			success = false;
+			goto ret;
+		}
 	}
  ret:
 	/* pretend we found the type even if we didn't to prevent too many errors */
