@@ -23,6 +23,11 @@ static void remove_ident_decls(Block *b, Declaration *d) {
 	    IdentDecl **decls = &id_info->decls;
 		IdentDecl *last_decl = arr_last(*decls);
 		if (last_decl && last_decl->scope == b) {
+			if ((last_decl->flags & IDECL_FLAG_HAS_VAL)
+				&& last_decl->decl->type.kind == TYPE_ARR) {
+				/* free array on stack */
+				free(last_decl->val.arr);
+			}
 			arr_remove_last(decls); /* remove that declaration */
 		}
 	}

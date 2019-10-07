@@ -3,5 +3,5 @@ main @= fn() {
 	 // N, M @= 8 * if foo { 8 } else { 3} - 3, 894;
 	 // foo @= new[3]int;
 	 // x : [foo[0]]int;
-	 y : [{x : [3]int; x[0] = 7; x[0] }]f32;
+	 y : [{x : [3]int; p : &int = &x[2]; *p = 734; x[2] }]f32;
 };

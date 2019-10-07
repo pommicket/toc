@@ -82,7 +82,7 @@ static bool type_must_eq(Location where, Type *expected, Type *got) {
 
 /* sometimes prints an error and returns false if the given expression is not an l-value */
 static bool expr_must_lval(Expression *e) {
-	/* NOTE: make sure you update eval_expr's UNARY_ADDRESS when you change this */
+	/* NOTE: make sure you update eval when you change this */
 	switch (e->kind) {
 	case EXPR_IDENT: {
 		IdentDecl *id_decl = ident_decl(e->ident);

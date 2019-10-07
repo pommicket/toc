@@ -396,6 +396,7 @@ static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 		case UNARY_DEREF: {
 			Value ptr;
 			if (!eval_expr(ev, set->unary.of, &ptr)) return false; 
+			printf("%p\n",ptr.ptr);
 			eval_deref_set(ptr.ptr, to, &set->type);
 		} break;
 		default: assert(0); break;
@@ -519,11 +520,65 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	switch (e->kind) {
 	case EXPR_UNARY_OP: {
 		Value of;
-		if (!eval_expr(ev, e->unary.of, &of)) return false;
+		if (e->unary.op != UNARY_ADDRESS) {
+			if (!eval_expr(ev, e->unary.of, &of)) return false;
+		}
 		switch (e->unary.op) {
-		case UNARY_ADDRESS:
-			/* TODO */
-			break;
+		case UNARY_ADDRESS: {
+			Expression *o = e->unary.of;
+			switch (o->kind) {
+			case EXPR_IDENT: {
+				IdentDecl *id = ident_decl(o->ident);
+				if (!(id->flags & IDECL_FLAG_HAS_VAL)) {
+					err_print(e->where, "Cannot take address of run time variable at compile time.");
+					return false;
+				}
+			    v->ptr = &id->val;
+			} break;
+			case EXPR_UNARY_OP:
+				switch (o->unary.op) {
+				case UNARY_DEREF: {
+					Value ptr;
+					if (!eval_expr(ev, o, &ptr)) return false;
+					v->ptr = ptr.ptr;
+				} break;
+				default: assert(0); break;
+				}
+				break;
+			case EXPR_BINARY_OP:
+				switch (o->binary.op) {
+				case BINARY_AT_INDEX: {
+					Value arr;
+					if (!eval_expr(ev, o->binary.lhs, &arr)) return false;
+					Value index;
+					if (!eval_expr(ev, o->binary.rhs, &index)) return false;
+					U64 i;
+					U64 arr_sz = o->binary.lhs->type.arr.n;
+					assert(o->binary.rhs->type.kind == TYPE_BUILTIN);
+					if (o->binary.rhs->type.builtin == BUILTIN_U64) {
+						i = index.u64;
+					} else {
+						I64 signed_index = val_to_i64(&index, o->binary.rhs->type.builtin);
+						if (signed_index < 0) {
+							err_print(o->where, "Array out of bounds (%ld, array size = %lu)\n", (long)signed_index, (unsigned long)arr_sz);
+							return false;
+						}
+						i = (U64)signed_index;
+					}
+					if (i >= arr_sz) {
+						err_print(o->where, "Array out of bounds (%lu, array size = %lu)\n", (unsigned long)i, (unsigned long)arr_sz);
+						return false;
+					}
+				    v->ptr = (char *)arr.arr + compiler_sizeof(&o->binary.lhs->type) * i;
+				} break;
+				default: break;
+				}
+				break;
+			default:
+				assert(0);
+				break;
+			}
+		} break;
 		case UNARY_DEREF:
 			eval_deref(v, of.ptr, &e->type);
 			break;
@@ -727,6 +782,9 @@ static bool eval_decl(Evaluator *ev, Declaration *d) {
 		if (d->flags & DECL_FLAG_HAS_EXPR) {
 			if (!eval_expr(ev, &d->expr, &id->val))
 				return false;
+		} else if (d->type.kind == TYPE_ARR) {
+			/* stack array allocation */
+			id->val.arr = err_calloc(d->type.arr.n, compiler_sizeof(d->type.arr.of));
 		} else {
 			id->val = (Value){0};
 		}
