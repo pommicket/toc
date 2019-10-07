@@ -1,5 +1,6 @@
 /* 
 TODO:
+compile-time tuples
 call fns at compile time
 finish evaluator
 improve casting: do you really need "as"?

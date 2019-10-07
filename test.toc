@@ -1,12 +1,5 @@
 main @= fn() {
-	 x : [{ 3; 5 }] int;
-	 foo, bar := 3, 5;
-	 asjdfh, asdfkjh := 3.2, 91;
-	 if foo {
-	 	bar;
-		} else {	
-		foo;
-		}
-		
-	 test, test2 := (fn() {}), asjdfh * 2;
+	 foo @= true;
+	 N, M @= 8 * if foo { 8 } else { 3} - 3, 894;
+	 x : [N + M]int;
 };

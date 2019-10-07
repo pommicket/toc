@@ -386,11 +386,31 @@ typedef struct Argument {
 	Expression val;
 } Argument;
 
+typedef union Value {
+	U8 u8;
+	U16 u16;
+	U32 u32;
+	U64 u64;
+	I8 i8;
+	I16 i16;
+	I32 i32;
+	I64 i64;
+	bool boolv;
+	char charv;
+	float f32;
+	double f64;
+	FnExpr *fn;
+	void *arr;
+	void *ptr;
+	union Value *tuple;
+} Value;
+
 #define DECL_FLAG_ANNOTATES_TYPE 0x01
 #define DECL_FLAG_CONST 0x02
 #define DECL_FLAG_HAS_EXPR 0x04
 #define DECL_FLAG_FOUND_TYPE 0x08
 #define DECL_FLAG_ERRORED_ABOUT_SELF_REFERENCE 0x10 /* has there been an error about this decl referencing itself? */
+#define DECL_FLAG_FOUND_VAL 0x20
 
 /* OPTIM: Instead of using dynamic arrays, do two passes. */
 typedef struct Declaration {
@@ -399,7 +419,7 @@ typedef struct Declaration {
 	Type type;
 	uint16_t flags;
 	Expression expr;
-	union Value *val; /* only for constant decls. set to NULL here, and to actual value by types.c. */
+	Value val; /* only for constant decls. */
 } Declaration;
 
 typedef enum {
@@ -445,21 +465,3 @@ typedef enum {
 typedef struct {
 	Allocator allocr;
 } Evaluator;
-
-typedef union Value {
-	U8 u8;
-	U16 u16;
-	U32 u32;
-	U64 u64;
-	I8 i8;
-	I16 i16;
-	I32 i32;
-	I64 i64;
-	bool boolv;
-	char charv;
-	float f32;
-	double f64;
-	FnExpr *fn;
-	void *arr;
-	void *ptr;
-} Value;

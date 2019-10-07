@@ -1028,9 +1028,9 @@ static bool types_decl(Typer *tr, Declaration *d) {
 			d->type.flags &= ~TYPE_FLAG_FLEXIBLE; /* x := 5; => x is not flexible */
 		}
 		if (d->flags & DECL_FLAG_CONST) {
-			if (!d->val) {
-				d->val = typer_malloc(tr, sizeof *d->val); /* OPTIM */
-				eval_expr(tr->evalr, &d->expr, d->val);
+			if (!(d->flags & DECL_FLAG_FOUND_VAL)) {
+				eval_expr(tr->evalr, &d->expr, &d->val);
+				d->flags |= DECL_FLAG_FOUND_VAL;
 			}
 		}
 	}

@@ -452,6 +452,47 @@ static void eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		eval_expr(ev, e->cast.expr, &casted);
 		val_cast(&casted, &e->cast.expr->type, v, &e->cast.type);
 	} break;
+	case EXPR_FN:
+		v->fn = &e->fn;
+		break;
+	case EXPR_IDENT: {
+		IdentDecl *idecl = ident_decl(e->ident);
+		Declaration *d = idecl->decl;
+		if (d->flags & DECL_FLAG_CONST) {
+			if (!(d->flags & DECL_FLAG_FOUND_VAL)) {
+				eval_expr(ev, &d->expr, &d->val);
+				d->flags |= DECL_FLAG_FOUND_VAL;
+			}
+			if (d->type.kind == TYPE_TUPLE) {
+				long index = 0;
+				arr_foreach(d->idents, Identifier, decl_i) {
+					if (*decl_i == e->ident) {
+						break;
+					}
+					index++;
+					assert(index < (long)arr_len(d->idents)); /* identifier got its declaration set to here, but it's not here */
+				}
+				*v = d->val.tuple[index];
+			} else {
+				*v = d->val;
+			}
+		}
+	} break;
+	case EXPR_TUPLE: {
+		size_t i, n = arr_len(e->tuple);
+		v->tuple = evalr_malloc(ev, n * sizeof *v->tuple);
+		for (i = 0; i < n; i++) {
+			eval_expr(ev, &e->tuple[i], &v->tuple[i]);
+		}
+	} break;
+	case EXPR_DIRECT: {
+		DirectExpr *d = &e->direct;
+		switch (d->which) {
+		case DIRECT_C:
+			/* TODO: return error? */
+			break;
+		}
+	}
 	}
 }
 

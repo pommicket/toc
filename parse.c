@@ -1155,7 +1155,6 @@ static inline bool ends_decl(Token *t, DeclEndKind ends_with) {
 }
 
 static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_t flags) {
-	d->val = NULL;
 	d->where = p->tokr->token->where;
     d->idents = NULL;
 	Tokenizer *t = p->tokr;
