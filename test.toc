@@ -1,5 +1,6 @@
 main @= fn() {
 	 // foo @= true;
 	 // N, M @= 8 * if foo { 8 } else { 3} - 3, 894;
-	 x : [#C("3")]int;
+	 foo @= new[3]int;
+	 x : [foo[0]]int;
 };

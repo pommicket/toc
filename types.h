@@ -464,4 +464,15 @@ typedef enum {
 
 typedef struct {
 	Allocator allocr;
+	struct Typer *typer;
 } Evaluator;
+
+typedef struct Typer {
+	Allocator allocr;
+	Evaluator *evalr;
+	Declaration **in_decls; /* array of declarations we are currently inside */
+	Block *block;
+	bool can_ret;
+	Type ret_type; /* the return type of the function we're currently parsing. */
+} Typer;
+

@@ -1,7 +1,9 @@
 static bool eval_block(Evaluator *ev, Block *b, Value *v);
+static bool type_resolve(Typer *tr, Type *t);
 
-static void evalr_create(Evaluator *ev) {
+static void evalr_create(Evaluator *ev, Typer *tr) {
 	allocr_create(&ev->allocr);
+	ev->typer = tr;
 }
 
 static void evalr_free(Evaluator *ev) {
@@ -10,6 +12,47 @@ static void evalr_free(Evaluator *ev) {
 
 static inline void *evalr_malloc(Evaluator *ev, size_t bytes) {
 	return allocr_malloc(&ev->allocr, bytes);
+}
+
+static size_t compiler_sizeof_builtin(BuiltinType b) {
+	switch (b) {
+	case BUILTIN_I8: return sizeof(I8);
+	case BUILTIN_U8: return sizeof(U8);
+	case BUILTIN_I16: return sizeof(I16);
+	case BUILTIN_U16: return sizeof(U16);
+	case BUILTIN_I32: return sizeof(I32);
+	case BUILTIN_U32: return sizeof(U32);
+	case BUILTIN_I64: return sizeof(I64);
+	case BUILTIN_U64: return sizeof(U64);
+	case BUILTIN_F32: return sizeof(F32);
+	case BUILTIN_F64: return sizeof(F64);
+	case BUILTIN_CHAR: return sizeof(char); /* = 1 */
+	case BUILTIN_BOOL: return sizeof(bool);
+	case BUILTIN_TYPE_COUNT: break;
+	}
+	assert(0);
+	return 0;
+}
+
+/* size of a type at compile time */
+static size_t compiler_sizeof(Type *t) {
+	switch (t->kind) {
+	case TYPE_BUILTIN:
+		return compiler_sizeof_builtin(t->builtin);
+	case TYPE_FN:
+		return sizeof(FnExpr *);
+	case TYPE_PTR:
+		return sizeof(void *);
+	case TYPE_ARR:
+		return t->arr.n * compiler_sizeof(t->arr.of);
+	case TYPE_TUPLE:
+		return arr_len(t->tuple) * sizeof(Value);
+	case TYPE_VOID:
+	case TYPE_UNKNOWN:
+		return 0;
+	}
+	assert(0);
+	return 0;
 }
 
 static bool builtin_truthiness(Value *v, BuiltinType b) {
@@ -275,6 +318,9 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 	}
 }
 
+static void eval_deref(Value *v, void *ptr, Type *type) {
+	/* TODO */
+}
 
 static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	/* WARNING: macros ahead */
@@ -315,10 +361,12 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	eval_binary_op_one(f32, F32, op);			\
 	eval_binary_op_one(f64, F64, op)
 
-#define eval_binary_op_nums_only(op)			\
-	switch (builtin) {							\
-		eval_binary_op_nums(builtin, op);		\
-	default: assert(0); break;					\
+#define eval_binary_op_nums_only(op)						\
+	val_cast(&lhs, &e->binary.lhs->type, &lhs, &e->type);	\
+	val_cast(&rhs, &e->binary.rhs->type, &rhs, &e->type);	\
+	switch (builtin) {										\
+		eval_binary_op_nums(builtin, op);					\
+	default: assert(0); break;								\
 	}
 
 
@@ -339,6 +387,8 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	eval_binary_bool_op_one(f64, F64, op);
 
 #define eval_binary_bool_op_nums_only(op)		\
+	val_cast(&lhs, &e->binary.lhs->type, &lhs, &e->type);	\
+	val_cast(&rhs, &e->binary.rhs->type, &rhs, &e->type);	\
 	switch (builtin) {							\
 		eval_binary_bool_op_nums(builtin, op);	\
 		default: assert(0); break;				\
@@ -366,9 +416,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		/* TODO(eventually): short-circuiting */
 		if (!eval_expr(ev, e->binary.lhs, &lhs)) return false;
 		if (!eval_expr(ev, e->binary.rhs, &rhs)) return false;
-		/* OPTIM: this is not ideal, but 5+3.7 will be 5:int+3.7:f32 right now */
-		val_cast(&lhs, &e->binary.lhs->type, &lhs, &e->type);
-		val_cast(&rhs, &e->binary.rhs->type, &rhs, &e->type);
 		BuiltinType builtin = e->type.builtin;
 		assert(e->type.kind == TYPE_BUILTIN);
 		switch (e->binary.op) {
@@ -392,6 +439,26 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			eval_binary_bool_op_nums_only(==); break;
 		case BINARY_NE:
 			eval_binary_bool_op_nums_only(!=); break;
+		case BINARY_AT_INDEX: {
+			U64 index;
+			U64 arr_sz = e->binary.lhs->type.arr.n;
+			assert(e->binary.rhs->type.kind == TYPE_BUILTIN);
+			if (e->binary.rhs->type.builtin == BUILTIN_U64) {
+				index = rhs.u64;
+			} else {
+				I64 signed_index = val_to_i64(&rhs, e->binary.rhs->type.builtin);
+				if (signed_index < 0) {
+					err_print(e->where, "Array out of bounds (%ld, array size = %lu)\n", (long)signed_index, (unsigned long)arr_sz);
+					return false;
+				}
+				index = (U64)signed_index;
+			}
+			if (index >= arr_sz) {
+				err_print(e->where, "Array out of bounds (%lu, array size = %lu)\n", (long)index, (unsigned long)arr_sz);
+				return false;
+			}
+			eval_deref(v, (void *)((char *)(lhs.arr) + index * compiler_sizeof(&e->type)), &e->type);
+		} break;
 		}	
 	} break;
 	case EXPR_LITERAL_INT:
@@ -498,7 +565,16 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			return false;
 		case DIRECT_COUNT: assert(0); return false;
 		}
-	}
+	} break;
+	case EXPR_NEW:
+		/* it's not strictly necessary to do the if here */
+		if (!type_resolve(ev->typer, &e->new.type))
+			return false;
+		if (e->new.type.kind == TYPE_ARR)
+			v->arr = err_malloc(compiler_sizeof(&e->new.type));
+		else
+			v->ptr = err_malloc(compiler_sizeof(&e->new.type));
+		break;
 	}
 	return true;
 }

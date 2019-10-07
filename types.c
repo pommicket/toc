@@ -1,12 +1,3 @@
-typedef struct {
-	Allocator allocr;
-	Evaluator *evalr;
-	Declaration **in_decls; /* array of declarations we are currently inside */
-	Block *block;
-	bool can_ret;
-	Type ret_type; /* the return type of the function we're currently parsing. */
-} Typer;
-
 static bool types_stmt(Typer *tr, Statement *s);
 static bool types_decl(Typer *tr, Declaration *d);
 static bool types_expr(Typer *tr, Expression *e);
@@ -570,10 +561,12 @@ static bool types_expr(Typer *tr, Expression *e) {
 	} break;
 	case EXPR_NEW:
 		t->kind = TYPE_PTR;
-		t->ptr.of = typer_malloc(tr, sizeof *t->ptr.of);
-		t->ptr.of = &e->new.type;
-		if (!type_resolve(tr, t))
-			return false;
+		if (e->new.type.kind == TYPE_ARR) {
+			*t = e->new.type;
+		} else {
+			t->ptr.of = typer_malloc(tr, sizeof *t->ptr.of);
+			t->ptr.of = &e->new.type;
+		}
 		break;
 	case EXPR_IF: {
 		IfExpr *i = &e->if_;
@@ -1117,3 +1110,4 @@ static bool types_file(Typer *tr, ParsedFile *f) {
 static void typer_free(Typer *tr) {
 	allocr_free_all(&tr->allocr);
 }
+
