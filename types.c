@@ -290,8 +290,8 @@ static bool type_resolve(Typer *tr, Type *t) {
 		Expression *n_expr = t->arr.n_expr;
 		if (!types_expr(tr, n_expr)) return false;
 		if (n_expr->type.kind == TYPE_UNKNOWN) {
-			t->arr.n = 0;
-			break;
+			err_print(n_expr->where, "Cannot determine type of array size at compile time.");
+			return false;
 		}
 		if (n_expr->type.kind != TYPE_BUILTIN || !type_builtin_is_int(n_expr->type.builtin)) {
 			char *s = type_to_str(&n_expr->type);
@@ -299,7 +299,8 @@ static bool type_resolve(Typer *tr, Type *t) {
 			free(s);
 			return false;
 		}
-		eval_expr(tr->evalr, n_expr, &val);
+		if (!eval_expr(tr->evalr, n_expr, &val))
+			return false;
 
 		U64 size;
 		if (type_builtin_is_signed(n_expr->type.builtin)) {
@@ -1029,7 +1030,8 @@ static bool types_decl(Typer *tr, Declaration *d) {
 		}
 		if (d->flags & DECL_FLAG_CONST) {
 			if (!(d->flags & DECL_FLAG_FOUND_VAL)) {
-				eval_expr(tr->evalr, &d->expr, &d->val);
+				if (!eval_expr(tr->evalr, &d->expr, &d->val))
+					return false;
 				d->flags |= DECL_FLAG_FOUND_VAL;
 			}
 		}

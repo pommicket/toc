@@ -1115,7 +1115,6 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					}
 					*(Expression *)arr_add(&e->direct.args) = arg->val;
 				}
-				arr_clear(&args);
 				return true;
 			} else {
 				/* no args */

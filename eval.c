@@ -1,4 +1,4 @@
-static void eval_block(Evaluator *ev, Block *b, Value *v);
+static bool eval_block(Evaluator *ev, Block *b, Value *v);
 
 static void evalr_create(Evaluator *ev) {
 	allocr_create(&ev->allocr);
@@ -276,7 +276,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 }
 
 
-static void eval_expr(Evaluator *ev, Expression *e, Value *v) {
+static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	/* WARNING: macros ahead */
 #define eval_unary_op_one(low, up, op)			\
 	case BUILTIN_##up:							\
@@ -349,7 +349,7 @@ static void eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	switch (e->kind) {
 	case EXPR_UNARY_OP: {
 		Value of;
-		eval_expr(ev, e->unary.of, &of);
+		if (!eval_expr(ev, e->unary.of, &of)) return false;
 		switch (e->unary.op) {
 		case UNARY_MINUS: {
 			BuiltinType builtin = e->type.builtin;
@@ -364,8 +364,8 @@ static void eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	case EXPR_BINARY_OP: {
 		Value lhs, rhs;
 		/* TODO(eventually): short-circuiting */
-		eval_expr(ev, e->binary.lhs, &lhs);
-		eval_expr(ev, e->binary.rhs, &rhs);
+		if (!eval_expr(ev, e->binary.lhs, &lhs)) return false;
+		if (!eval_expr(ev, e->binary.rhs, &rhs)) return false;
 		/* OPTIM: this is not ideal, but 5+3.7 will be 5:int+3.7:f32 right now */
 		val_cast(&lhs, &e->binary.lhs->type, &lhs, &e->type);
 		val_cast(&rhs, &e->binary.rhs->type, &rhs, &e->type);
@@ -412,15 +412,14 @@ static void eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		IfExpr *i = &e->if_;
 		if (i->cond) {
 			Value cond;
-			eval_expr(ev, i->cond, &cond);
+			if (!eval_expr(ev, i->cond, &cond)) return false;
 			if (val_truthiness(&cond, &i->cond->type)) {
-				eval_block(ev, &i->body, v);
+				if (!eval_block(ev, &i->body, v)) return false;
 			} else if (i->next_elif) {
-				eval_expr(ev, i->next_elif, v);
-				return;
+				if (!eval_expr(ev, i->next_elif, v)) return false;
 			}
 		} else {
-			eval_block(ev, &i->body, v);
+			if (!eval_block(ev, &i->body, v)) return false;
 		}
 	} break;
 	case EXPR_WHILE: {
@@ -428,15 +427,15 @@ static void eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		WhileExpr *w = &e->while_;
 		while (1) {
 			if (w->cond) {
-				eval_expr(ev, w->cond, &cond);
+				if (!eval_expr(ev, w->cond, &cond)) return false;
 				if (!val_truthiness(&cond, &w->cond->type))
 					break;
 			}
-			eval_block(ev, &w->body, v);
+			if (!eval_block(ev, &w->body, v)) return false;
 		}
 	} break;
 	case EXPR_BLOCK:
-		eval_block(ev, &e->block, v);
+		if (!eval_block(ev, &e->block, v)) return false;
 		break;
 	case EXPR_LITERAL_BOOL:
 		v->boolv = e->booll;
@@ -449,7 +448,7 @@ static void eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		break;
 	case EXPR_CAST: {
 		Value casted;
-		eval_expr(ev, e->cast.expr, &casted);
+		if (!eval_expr(ev, e->cast.expr, &casted)) return false;
 		val_cast(&casted, &e->cast.expr->type, v, &e->cast.type);
 	} break;
 	case EXPR_FN:
@@ -460,7 +459,7 @@ static void eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		Declaration *d = idecl->decl;
 		if (d->flags & DECL_FLAG_CONST) {
 			if (!(d->flags & DECL_FLAG_FOUND_VAL)) {
-				eval_expr(ev, &d->expr, &d->val);
+				if (!eval_expr(ev, &d->expr, &d->val)) return false;
 				d->flags |= DECL_FLAG_FOUND_VAL;
 			}
 			if (d->type.kind == TYPE_TUPLE) {
@@ -476,46 +475,59 @@ static void eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			} else {
 				*v = d->val;
 			}
+		} else {
+			char *s = ident_to_str(e->ident);
+			err_print(e->where, "Cannot evaluate non-constant '%s' at compile time.", s);
+			free(s);
+			return false;
 		}
 	} break;
 	case EXPR_TUPLE: {
 		size_t i, n = arr_len(e->tuple);
 		v->tuple = evalr_malloc(ev, n * sizeof *v->tuple);
 		for (i = 0; i < n; i++) {
-			eval_expr(ev, &e->tuple[i], &v->tuple[i]);
+			if (!eval_expr(ev, &e->tuple[i], &v->tuple[i]))
+				return false;
 		}
 	} break;
 	case EXPR_DIRECT: {
 		DirectExpr *d = &e->direct;
 		switch (d->which) {
 		case DIRECT_C:
-			/* TODO: return error? */
-			break;
+			err_print(e->where, "Cannot run C code at compile time.");
+			return false;
+		case DIRECT_COUNT: assert(0); return false;
 		}
 	}
 	}
+	return true;
 }
 
-static void eval_stmt(Evaluator *ev, Statement *stmt) {
+static bool eval_stmt(Evaluator *ev, Statement *stmt) {
 	switch (stmt->kind) {
 	case STMT_DECL:
 		/* TODO */
 		break;
 	case STMT_EXPR: {
 		Value unused;
-		eval_expr(ev, &stmt->expr, &unused);
+		if (!eval_expr(ev, &stmt->expr, &unused))
+			return false;
 	} break;
 	case STMT_RET:
 		/* TODO */
 		break;
 	}
+	return true;
 }
 
-static void eval_block(Evaluator *ev, Block *b, Value *v) {
+static bool eval_block(Evaluator *ev, Block *b, Value *v) {
 	arr_foreach(b->stmts, Statement, stmt) {
-		eval_stmt(ev, stmt);
+		if (!eval_stmt(ev, stmt))
+			return false;
 	}
 	if (b->ret_expr) {
-		eval_expr(ev, b->ret_expr, v);
+		if (!eval_expr(ev, b->ret_expr, v))
+			return false;
 	}
+	return true;
 }
