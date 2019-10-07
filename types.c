@@ -2,7 +2,7 @@ static bool types_stmt(Typer *tr, Statement *s);
 static bool types_decl(Typer *tr, Declaration *d);
 static bool types_expr(Typer *tr, Expression *e);
 static bool types_block(Typer *tr, Block *b);
-static bool type_resolve(Typer *tr, Type *t);
+static bool types_type(Typer *tr, Type *t);
 
 static inline void *typer_malloc(Typer *tr, size_t bytes) {
 	return allocr_malloc(&tr->allocr, bytes);
@@ -17,59 +17,6 @@ static inline void *typer_arr_add_(Typer *tr, void **arr, size_t sz) {
 }
 
 #define typer_arr_add(tr, a) typer_arr_add_(tr, (void **)(a), sizeof **(a))
-
-static bool add_ident_decls(Block *b, Declaration *d) {
-	bool ret = true;
-	arr_foreach(d->idents, Identifier, ident) {
-		IdentDecl **decls = &(*ident)->decls;
-		if (arr_len(*decls)) {
-			/* check that it hasn't been declared in this block */
-			IdentDecl *prev = arr_last(*decls);
-			if (prev->scope == b) {
-				err_print(d->where, "Re-declaration of identifier in the same block.");
-				info_print(prev->decl->where, "Previous declaration was here.");
-				ret = false;
-				continue;
-			}
-		}
-		ident_add_decl(*ident, d, b);
-	}
-	return ret;
-}
-
-static void remove_ident_decls(Block *b, Declaration *d) {
-	arr_foreach(d->idents, Identifier, ident) {
-		IdentTree *id_info = *ident;
-	    IdentDecl **decls = &id_info->decls;
-		IdentDecl *last_decl = arr_last(*decls);
-		if (last_decl && last_decl->scope == b) {
-			arr_remove_last(decls); /* remove that declaration */
-		}
-	}
-}
-
-/* pass NULL for block for global scope */
-static bool block_enter(Block *b, Statement *stmts) {
-	bool ret = true;
-	arr_foreach(stmts, Statement, stmt) {
-		if (stmt->kind == STMT_DECL) {
-			Declaration *decl = &stmt->decl;
-			if (!add_ident_decls(b, decl))
-				ret = false;
-		}
-	}
-	return ret;
-}
-
-static void block_exit(Block *b, Statement *stmts) {
-	/* OPTIM: figure out some way of not re-iterating over everything */
-	arr_foreach(stmts, Statement, stmt) {
-		if (stmt->kind == STMT_DECL) {
-			Declaration *decl = &stmt->decl;
-			remove_ident_decls(b, decl);
-		}
-	}
-}
 
 static bool type_eq(Type *a, Type *b) {
 	if (a->kind == TYPE_UNKNOWN || b->kind == TYPE_UNKNOWN)
@@ -177,12 +124,12 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t) {
 	t->kind = TYPE_FN;
 	t->fn.types = NULL;
 	Type *ret_type = typer_arr_add(tr, &t->fn.types);
-	if (!type_resolve(tr, &f->ret_type))
+	if (!types_type(tr, &f->ret_type) || !type_resolve(tr->evalr, &f->ret_type))
 		return false;
 	*ret_type = f->ret_type;
 	arr_foreach(f->params, Declaration, decl) {
 		if (!types_decl(tr, decl)) return false;
-		if (!type_resolve(tr, &decl->type))
+		if (!types_type(tr, &decl->type) || !type_resolve(tr->evalr, &decl->type))
 			return false;
 		for (size_t i = 0; i < arr_len(decl->idents); i++) {
 			Type *param_type = typer_arr_add(tr, &t->fn.types);
@@ -271,15 +218,13 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 }
 
 /* fixes the type (replaces [5+3]int with [8]int, etc.) */
-static bool type_resolve(Typer *tr, Type *t) {
+static bool type_resolve(Evaluator *ev, Type *t) {
 	if (t->flags & TYPE_FLAG_RESOLVED) return true;
 	switch (t->kind) {
 	case TYPE_ARR: {
 		/* it's an array */
-		if (!type_resolve(tr, t->arr.of)) return false; /* resolve inner type */
 		Value val;
 		Expression *n_expr = t->arr.n_expr;
-		if (!types_expr(tr, n_expr)) return false;
 		if (n_expr->type.kind == TYPE_UNKNOWN) {
 			err_print(n_expr->where, "Cannot determine type of array size at compile time.");
 			return false;
@@ -290,7 +235,7 @@ static bool type_resolve(Typer *tr, Type *t) {
 			free(s);
 			return false;
 		}
-		if (!eval_expr(tr->evalr, n_expr, &val))
+		if (!eval_expr(ev, n_expr, &val))
 			return false;
 
 		U64 size;
@@ -308,18 +253,18 @@ static bool type_resolve(Typer *tr, Type *t) {
 	} break;
 	case TYPE_FN:
 		arr_foreach(t->fn.types, Type, child_type) {
-			if (!type_resolve(tr, child_type))
+			if (!type_resolve(ev, child_type))
 				return false;
 		}
 		break;
 	case TYPE_TUPLE:
 		arr_foreach(t->tuple, Type, child_type) {
-			if (!type_resolve(tr, child_type))
+			if (!type_resolve(ev, child_type))
 				return false;
 		}
 		break;
 	case TYPE_PTR:
-		if (!type_resolve(tr, t->ptr.of))
+		if (!type_resolve(ev, t->ptr.of))
 			return false;
 		break;
 	case TYPE_UNKNOWN:
@@ -331,6 +276,32 @@ static bool type_resolve(Typer *tr, Type *t) {
 	return true;
 }
 
+static bool types_type(Typer *tr, Type *t) {
+	switch (t->kind) {
+	case TYPE_ARR:
+		if (!types_expr(tr, t->arr.n_expr)) return false;
+		if (!types_type(tr, t->arr.of)) return false;
+		break;
+	case TYPE_PTR:
+		if (!types_type(tr, t->ptr.of)) return false;
+		break;
+	case TYPE_TUPLE: {
+		arr_foreach(t->tuple, Type, x)
+			if (!types_type(tr, x))
+				return false;
+	} break;
+	case TYPE_FN:
+		arr_foreach(t->fn.types, Type, x)
+			if (!types_type(tr, x))
+				return false;
+		break;
+	case TYPE_UNKNOWN:
+	case TYPE_BUILTIN:
+	case TYPE_VOID:
+		break;
+	}
+	return true;
+}
 
 static bool type_can_be_truthy(Type *t) {
 	switch (t->kind) {
@@ -542,7 +513,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		CastExpr *c = &e->cast;
 		if (!types_expr(tr, c->expr))
 			return false;
-		if (!type_resolve(tr, &c->type))
+		if (!types_type(tr, &c->type) || !type_resolve(tr->evalr, &c->type))
 			return false;
 		Status status = type_cast_status(&c->expr->type, &c->type);
 		if (status != STATUS_NONE) {
@@ -561,6 +532,9 @@ static bool types_expr(Typer *tr, Expression *e) {
 	} break;
 	case EXPR_NEW:
 		t->kind = TYPE_PTR;
+		/* type the type, but don't resolve it (e.g. fn(x:int)int{(new [x]int)[0]}) */
+		if (!types_type(tr, &e->new.type))
+			return false;
 		if (e->new.type.kind == TYPE_ARR) {
 			*t = e->new.type;
 		} else {
@@ -828,6 +802,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				free(s);
 				return false;
 			}
+			
 			*t = *of_type->ptr.of;
 			break;
 		case UNARY_DEL:
@@ -992,7 +967,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 	if (d->flags & DECL_FLAG_ANNOTATES_TYPE) {
 		/* type supplied */
 		assert(d->type.kind != TYPE_VOID); /* there's no way to annotate void */
-		if (!type_resolve(tr, &d->type)) {
+		if (!types_type(tr, &d->type) || !type_resolve(tr->evalr, &d->type)) {
 			success = false;
 			goto ret;
 		}

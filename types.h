@@ -34,7 +34,7 @@ typedef struct {
 
 typedef struct Page {
 	struct Page *next;
-	size_t used;
+	size_t used; /* number of max_align_t's used, not bytes */
 	max_align_t data[];
 } Page;
 
@@ -56,9 +56,31 @@ typedef struct {
     ArrBlock *blocks;
 } BlockArr;
 
+typedef union Value {
+	U8 u8;
+	U16 u16;
+	U32 u32;
+	U64 u64;
+	I8 i8;
+	I16 i16;
+	I32 i32;
+	I64 i64;
+	bool boolv;
+	char charv;
+	float f32;
+	double f64;
+	struct FnExpr *fn;
+	void *arr;
+	void *ptr;
+	union Value *tuple;
+} Value;
+
+#define IDECL_FLAG_HAS_VAL 0x01
 typedef struct {
-	struct Block *scope; /* NULL for file scope */
 	struct Declaration *decl;
+	struct Block *scope; /* NULL for file scope */
+	Value val;
+	uint16_t flags;
 } IdentDecl;
 
 /* 
@@ -328,7 +350,7 @@ typedef struct {
 	Block body;
 } WhileExpr;
 
-typedef struct {
+typedef struct FnExpr {
     struct Declaration *params; /* declarations of the parameters to this function */
     struct Declaration *ret_decls; /* array of decls, if this has named return values. otherwise, NULL */
 	Type ret_type;
@@ -385,25 +407,6 @@ typedef struct Argument {
 	Identifier name; /* NULL = no name */
 	Expression val;
 } Argument;
-
-typedef union Value {
-	U8 u8;
-	U16 u16;
-	U32 u32;
-	U64 u64;
-	I8 i8;
-	I16 i16;
-	I32 i32;
-	I64 i64;
-	bool boolv;
-	char charv;
-	float f32;
-	double f64;
-	FnExpr *fn;
-	void *arr;
-	void *ptr;
-	union Value *tuple;
-} Value;
 
 #define DECL_FLAG_ANNOTATES_TYPE 0x01
 #define DECL_FLAG_CONST 0x02
@@ -464,7 +467,6 @@ typedef enum {
 
 typedef struct {
 	Allocator allocr;
-	struct Typer *typer;
 } Evaluator;
 
 typedef struct Typer {

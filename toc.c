@@ -21,6 +21,7 @@
 #include "identifiers.c"
 #include "tokenizer.c"
 #include "parse.c"
+#include "scope.c"
 #include "eval.c"
 #include "types.c"
 

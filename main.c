@@ -72,7 +72,7 @@ int main(int argc, char **argv) {
 	block_enter(NULL, f.stmts); /* enter global scope */
 	Typer tr;
 	Evaluator ev;
-	evalr_create(&ev, &tr);
+	evalr_create(&ev);
 	typer_create(&tr, &ev);
 	if (!types_file(&tr, &f)) {
 		err_fprint(TEXT_IMPORTANT("Errors occured while determining types.\n"));

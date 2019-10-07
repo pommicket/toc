@@ -148,6 +148,7 @@ static void ident_add_decl(Identifier i, struct Declaration *d, struct Block *b)
 	IdentDecl *id_decl = arr_add(&i->decls);
 	id_decl->decl = d;
 	id_decl->scope = b;
+	id_decl->flags = 0;
 }
 
 static IdentDecl *ident_decl(Identifier i) {

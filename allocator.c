@@ -1,22 +1,29 @@
-
+/* #define NO_ALLOCATOR 1 */
 /* number of bytes a page hold, not including the header */
-#define PAGE_SIZE (16384 - sizeof(Page))
+#define PAGE_BYTES (16384 - sizeof(Page))
+#define PAGE_MAX_ALIGNS (PAGE_BYTES / sizeof(max_align_t))
 
 static void allocr_create(Allocator *a) {
 	a->first = a->last = NULL;
 }
 
 static void *allocr_malloc(Allocator *a, size_t bytes) {
+	assert(bytes);
+#if NO_ALLOCATOR
+	(void)a;
+	return err_malloc(bytes);
+#else
 	/* position in this page to return */
-	size_t pos = PAGE_SIZE;
+	size_t pos = PAGE_MAX_ALIGNS;
 	if (a->last)
-		pos = (a->last->used + sizeof(max_align_t) - 1) / sizeof(max_align_t);
+		pos = a->last->used;
+	size_t max_aligns = (bytes + sizeof(max_align_t) - 1) / sizeof(max_align_t);
 	
-	if (pos * sizeof(max_align_t) + bytes > PAGE_SIZE) {
+	if (pos + max_aligns > PAGE_MAX_ALIGNS) {
 		/* make a new page for this data */
-		Page *page = err_malloc(sizeof *page + (bytes > PAGE_SIZE ? bytes : PAGE_SIZE));
+		Page *page = err_malloc(sizeof *page + (bytes > PAGE_BYTES ? bytes : PAGE_BYTES));
 		page->next = NULL;
-		page->used = bytes;
+		page->used = max_aligns;
 		if (a->last)
 			a->last->next = page;
 		else
@@ -24,24 +31,36 @@ static void *allocr_malloc(Allocator *a, size_t bytes) {
 		a->last = page;
 		return page->data;
 	} else {
-		a->last->used += bytes;
+		a->last->used += max_aligns;
 		return &a->last->data[pos];
 	}
+#endif
 }
 
 static void *allocr_calloc(Allocator *a, size_t n, size_t sz) {
+#if NO_ALLOCATOR
+	(void)a;
+	return err_calloc(n, sz);
+#else
 	/* OPTIM: use calloc */
 	size_t bytes = n * sz;
 	void *data = allocr_malloc(a, bytes);
 	memset(data, 0, bytes);
 	return data;
+#endif
 }
 
 /* OPTIM */
 static void *allocr_realloc(Allocator *a, void *data, size_t old_size, size_t new_size) {
+#if NO_ALLOCATOR
+	(void)a;
+	(void)old_size;
+	return err_realloc(data, new_size);
+#else
     void *ret = allocr_malloc(a, new_size);
 	memcpy(ret, data, old_size);
 	return ret;
+#endif
 }
 
 static void allocr_free_all(Allocator *a) {

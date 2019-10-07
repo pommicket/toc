@@ -1,6 +1,7 @@
 main @= fn() {
 	 // foo @= true;
 	 // N, M @= 8 * if foo { 8 } else { 3} - 3, 894;
-	 foo @= new[3]int;
-	 x : [foo[0]]int;
+	 // foo @= new[3]int;
+	 // x : [foo[0]]int;
+	 y : [{x := (439 as &u8); *x = 7; *x }]f32;
 };

@@ -1,9 +1,11 @@
 static bool eval_block(Evaluator *ev, Block *b, Value *v);
-static bool type_resolve(Typer *tr, Type *t);
+static bool eval_expr(Evaluator *ev, Expression *e, Value *v);
+static bool type_resolve(Evaluator *ev, Type *t);
+static bool block_enter(Block *b, Statement *stmts);
+static void block_exit(Block *b, Statement *stmts);
 
-static void evalr_create(Evaluator *ev, Typer *tr) {
+static void evalr_create(Evaluator *ev) {
 	allocr_create(&ev->allocr);
-	ev->typer = tr;
 }
 
 static void evalr_free(Evaluator *ev) {
@@ -318,8 +320,102 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 	}
 }
 
+/* type is the underlying type, not the pointer type. */
 static void eval_deref(Value *v, void *ptr, Type *type) {
-	/* TODO */
+	switch (type->kind) {
+	case TYPE_PTR: v->ptr = *(void **)ptr; break;
+	case TYPE_ARR: v->arr = *(void **)ptr; break;
+	case TYPE_FN: v->fn = *(FnExpr **)ptr; break;
+	case TYPE_TUPLE: v->tuple = *(Value **)ptr; break;
+	case TYPE_BUILTIN:
+		switch (type->builtin) {
+		case BUILTIN_I8: v->i8 = *(I8 *)ptr; break;
+		case BUILTIN_U8: v->u8 = *(U8 *)ptr; break;
+		case BUILTIN_I16: v->i16 = *(I16 *)ptr; break;
+		case BUILTIN_U16: v->u16 = *(U16 *)ptr; break;
+		case BUILTIN_I32: v->i32 = *(I32 *)ptr; break;
+		case BUILTIN_U32: v->u32 = *(U32 *)ptr; break;
+		case BUILTIN_I64: v->i64 = *(I64 *)ptr; break;
+		case BUILTIN_U64: v->u64 = *(U64 *)ptr; break;
+		case BUILTIN_F32: v->f32 = *(F32 *)ptr; break;
+		case BUILTIN_F64: v->f64 = *(F64 *)ptr; break;
+		case BUILTIN_CHAR: v->charv = *(char *)ptr; break;
+		case BUILTIN_BOOL: v->boolv = *(bool *)ptr; break;
+		case BUILTIN_TYPE_COUNT: assert(0); break;
+		}
+		break;
+	case TYPE_VOID:
+	case TYPE_UNKNOWN:
+		assert(0);
+		break;
+	}
+}
+/* inverse of eval_deref */
+static void eval_deref_set(void *set, Value *to, Type *type) {
+	switch (type->kind) {
+	case TYPE_PTR: *(void **)set = to->ptr; break;
+	case TYPE_ARR: *(void **)set = to->arr; break;
+	case TYPE_FN: *(FnExpr **)set = to->fn; break;
+	case TYPE_TUPLE: *(Value **)set = to->tuple; break;
+	case TYPE_BUILTIN:
+		switch (type->builtin) {
+		case BUILTIN_I8: *(I8 *)set = to->i8; break;
+		case BUILTIN_U8: *(U8 *)set = to->u8; break;
+		case BUILTIN_I16: *(I16 *)set = to->i16; break;
+		case BUILTIN_U16: *(U16 *)set = to->u16; break;
+		case BUILTIN_I32: *(I32 *)set = to->i32; break;
+		case BUILTIN_U32: *(U32 *)set = to->u32; break;
+		case BUILTIN_I64: *(I64 *)set = to->i64; break;
+		case BUILTIN_U64: *(U64 *)set = to->u64; break;
+		case BUILTIN_F32: *(F32 *)set = to->f32; break;
+		case BUILTIN_F64: *(F64 *)set = to->f64; break;
+		case BUILTIN_CHAR: *(char *)set = to->charv; break;
+		case BUILTIN_BOOL: *(bool *)set = to->boolv; break;
+		case BUILTIN_TYPE_COUNT: assert(0); break;
+		}
+		break;
+	case TYPE_VOID:
+	case TYPE_UNKNOWN:
+		assert(0);
+		break;
+	}
+}
+
+static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
+	switch (set->kind) {
+	case EXPR_IDENT: {
+		IdentDecl *id = ident_decl(set->ident);
+		if (!(id->flags & IDECL_FLAG_HAS_VAL)) {
+			err_print(set->where, "Cannot set value of run time variable at compile time.");
+			return false;
+		}
+		id->val = *to;
+	} break;
+	case EXPR_UNARY_OP:
+		switch (set->unary.op) {
+		case UNARY_DEREF: {
+			Value ptr;
+			if (!eval_expr(ev, set->unary.of, &ptr)) return false; 
+			eval_deref_set(ptr.ptr, to, &set->type);
+		} break;
+		default: assert(0); break;
+		}
+		break;
+	case EXPR_BINARY_OP:
+		switch (set->binary.op) {
+		case BINARY_AT_INDEX:
+			/* TODO */
+			break;
+		default: break;
+		}
+	case EXPR_TUPLE:
+		/* TODO */
+		break;
+	default:
+		assert(0);
+		break;
+	}
+	return true;
 }
 
 static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
@@ -364,6 +460,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 #define eval_binary_op_nums_only(op)						\
 	val_cast(&lhs, &e->binary.lhs->type, &lhs, &e->type);	\
 	val_cast(&rhs, &e->binary.rhs->type, &rhs, &e->type);	\
+	assert(e->type.kind == TYPE_BUILTIN);					\
 	switch (builtin) {										\
 		eval_binary_op_nums(builtin, op);					\
 	default: assert(0); break;								\
@@ -386,12 +483,13 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	eval_binary_bool_op_one(f32, F32, op);				\
 	eval_binary_bool_op_one(f64, F64, op);
 
-#define eval_binary_bool_op_nums_only(op)		\
+#define eval_binary_bool_op_nums_only(op)					\
 	val_cast(&lhs, &e->binary.lhs->type, &lhs, &e->type);	\
 	val_cast(&rhs, &e->binary.rhs->type, &rhs, &e->type);	\
+	assert(e->type.kind == TYPE_BUILTIN);					\
 	switch (builtin) {							\
 		eval_binary_bool_op_nums(builtin, op);	\
-		default: assert(0); break;				\
+	default: assert(0); break;					\
 	}
 		
     
@@ -401,6 +499,9 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		Value of;
 		if (!eval_expr(ev, e->unary.of, &of)) return false;
 		switch (e->unary.op) {
+		case UNARY_DEREF:
+			eval_deref(v, of.ptr, &e->type);
+			break;
 		case UNARY_MINUS: {
 			BuiltinType builtin = e->type.builtin;
 			assert(e->type.kind == TYPE_BUILTIN);
@@ -409,15 +510,23 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		case UNARY_NOT:
 			v->boolv = !val_truthiness(v, &e->unary.of->type);
 			break;
+		case UNARY_DEL:
+			if (e->unary.of->type.kind == TYPE_PTR)
+				free(of.ptr);
+			else {
+				assert(e->unary.of->type.kind == TYPE_ARR);
+				free(of.arr);
+			}
+			break;
 		}
 	} break;
 	case EXPR_BINARY_OP: {
 		Value lhs, rhs;
 		/* TODO(eventually): short-circuiting */
-		if (!eval_expr(ev, e->binary.lhs, &lhs)) return false;
+		if (e->binary.op != BINARY_SET)
+			if (!eval_expr(ev, e->binary.lhs, &lhs)) return false;
 		if (!eval_expr(ev, e->binary.rhs, &rhs)) return false;
 		BuiltinType builtin = e->type.builtin;
-		assert(e->type.kind == TYPE_BUILTIN);
 		switch (e->binary.op) {
 		case BINARY_ADD:
 			eval_binary_op_nums_only(+); break;
@@ -439,6 +548,9 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			eval_binary_bool_op_nums_only(==); break;
 		case BINARY_NE:
 			eval_binary_bool_op_nums_only(!=); break;
+		case BINARY_SET:
+			if (!eval_set(ev, e->binary.lhs, &rhs)) return false;
+			break;
 		case BINARY_AT_INDEX: {
 			U64 index;
 			U64 arr_sz = e->binary.lhs->type.arr.n;
@@ -524,7 +636,9 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	case EXPR_IDENT: {
 		IdentDecl *idecl = ident_decl(e->ident);
 		Declaration *d = idecl->decl;
-		if (d->flags & DECL_FLAG_CONST) {
+		if (idecl->flags & IDECL_FLAG_HAS_VAL) {
+			*v = idecl->val;
+		} else if (d->flags & DECL_FLAG_CONST) {
 			if (!(d->flags & DECL_FLAG_FOUND_VAL)) {
 				if (!eval_expr(ev, &d->expr, &d->val)) return false;
 				d->flags |= DECL_FLAG_FOUND_VAL;
@@ -567,14 +681,30 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		}
 	} break;
 	case EXPR_NEW:
-		/* it's not strictly necessary to do the if here */
-		if (!type_resolve(ev->typer, &e->new.type))
+		if (!type_resolve(ev, &e->new.type))
 			return false;
+		/* it's not strictly necessary to do the if here */
 		if (e->new.type.kind == TYPE_ARR)
-			v->arr = err_malloc(compiler_sizeof(&e->new.type));
+			v->arr = err_calloc(1, compiler_sizeof(&e->new.type));
 		else
-			v->ptr = err_malloc(compiler_sizeof(&e->new.type));
+			v->ptr = err_calloc(1, compiler_sizeof(&e->new.type));
+		
 		break;
+	}
+	return true;
+}
+
+static bool eval_decl(Evaluator *ev, Declaration *d) {
+	arr_foreach(d->idents, Identifier, i) {
+		IdentDecl *id = ident_decl(*i);
+		id->flags |= IDECL_FLAG_HAS_VAL;
+		assert(id->decl == d);
+		if (d->flags & DECL_FLAG_HAS_EXPR) {
+			if (!eval_expr(ev, &d->expr, &id->val))
+				return false;
+		} else {
+			id->val = (Value){0};
+		}
 	}
 	return true;
 }
@@ -582,7 +712,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 static bool eval_stmt(Evaluator *ev, Statement *stmt) {
 	switch (stmt->kind) {
 	case STMT_DECL:
-		/* TODO */
+		if (!eval_decl(ev, &stmt->decl)) return false;
 		break;
 	case STMT_EXPR: {
 		Value unused;
@@ -597,6 +727,7 @@ static bool eval_stmt(Evaluator *ev, Statement *stmt) {
 }
 
 static bool eval_block(Evaluator *ev, Block *b, Value *v) {
+	block_enter(b, b->stmts);
 	arr_foreach(b->stmts, Statement, stmt) {
 		if (!eval_stmt(ev, stmt))
 			return false;
@@ -605,5 +736,7 @@ static bool eval_block(Evaluator *ev, Block *b, Value *v) {
 		if (!eval_expr(ev, b->ret_expr, v))
 			return false;
 	}
+	block_exit(b, b->stmts);
+	
 	return true;
 }
