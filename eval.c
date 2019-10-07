@@ -403,9 +403,31 @@ static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 		break;
 	case EXPR_BINARY_OP:
 		switch (set->binary.op) {
-		case BINARY_AT_INDEX:
+		case BINARY_AT_INDEX: {
 			/* TODO */
-			break;
+		    Value arr;
+			if (!eval_expr(ev, set->binary.lhs, &arr)) return false;
+			Value index;
+			if (!eval_expr(ev, set->binary.rhs, &index)) return false;
+			U64 i;
+			U64 arr_sz = set->binary.lhs->type.arr.n;
+			assert(set->binary.rhs->type.kind == TYPE_BUILTIN);
+			if (set->binary.rhs->type.builtin == BUILTIN_U64) {
+				i = index.u64;
+			} else {
+				I64 signed_index = val_to_i64(&index, set->binary.rhs->type.builtin);
+				if (signed_index < 0) {
+					err_print(set->where, "Array out of bounds (%ld, array size = %lu)\n", (long)signed_index, (unsigned long)arr_sz);
+					return false;
+				}
+				i = (U64)signed_index;
+			}
+			if (i >= arr_sz) {
+				err_print(set->where, "Array out of bounds (%lu, array size = %lu)\n", (unsigned long)i, (unsigned long)arr_sz);
+				return false;
+			}
+			eval_deref_set((char *)arr.arr + compiler_sizeof(&set->binary.lhs->type) * i, to, &set->binary.lhs->type);
+		} break;
 		default: break;
 		}
 	case EXPR_TUPLE:
@@ -499,6 +521,9 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		Value of;
 		if (!eval_expr(ev, e->unary.of, &of)) return false;
 		switch (e->unary.op) {
+		case UNARY_ADDRESS:
+			/* TODO */
+			break;
 		case UNARY_DEREF:
 			eval_deref(v, of.ptr, &e->type);
 			break;
@@ -566,7 +591,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				index = (U64)signed_index;
 			}
 			if (index >= arr_sz) {
-				err_print(e->where, "Array out of bounds (%lu, array size = %lu)\n", (long)index, (unsigned long)arr_sz);
+				err_print(e->where, "Array out of bounds (%lu, array size = %lu)\n", (unsigned long)index, (unsigned long)arr_sz);
 				return false;
 			}
 			eval_deref(v, (void *)((char *)(lhs.arr) + index * compiler_sizeof(&e->type)), &e->type);
