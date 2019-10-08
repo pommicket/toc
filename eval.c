@@ -395,8 +395,7 @@ static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 		switch (set->unary.op) {
 		case UNARY_DEREF: {
 			Value ptr;
-			if (!eval_expr(ev, set->unary.of, &ptr)) return false; 
-			printf("%p\n",ptr.ptr);
+			if (!eval_expr(ev, set->unary.of, &ptr)) return false;
 			eval_deref_set(ptr.ptr, to, &set->type);
 		} break;
 		default: assert(0); break;
@@ -427,7 +426,7 @@ static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 				err_print(set->where, "Array out of bounds (%lu, array size = %lu)\n", (unsigned long)i, (unsigned long)arr_sz);
 				return false;
 			}
-			eval_deref_set((char *)arr.arr + compiler_sizeof(&set->binary.lhs->type) * i, to, &set->binary.lhs->type);
+			eval_deref_set((char *)arr.arr + compiler_sizeof(set->binary.lhs->type.arr.of) * i, to, &set->binary.lhs->type);
 		} break;
 		default: break;
 		}
@@ -569,7 +568,8 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 						err_print(o->where, "Array out of bounds (%lu, array size = %lu)\n", (unsigned long)i, (unsigned long)arr_sz);
 						return false;
 					}
-				    v->ptr = (char *)arr.arr + compiler_sizeof(&o->binary.lhs->type) * i;
+				    v->ptr = ((char *)arr.arr) + compiler_sizeof(o->binary.lhs->type.arr.of) * i;
+					printf("%p\n",v->ptr);
 				} break;
 				default: break;
 				}
@@ -611,7 +611,9 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		case BINARY_ADD:
 			eval_binary_op_nums_only(+); break;
 		case BINARY_SUB:
-			eval_binary_op_nums_only(-); break;
+			eval_binary_op_nums_only(-);
+			printf("%p %p\n", lhs.ptr, rhs.ptr);
+			break;
 		case BINARY_MUL:
 			eval_binary_op_nums_only(*); break;
 		case BINARY_DIV:
@@ -768,25 +770,30 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			v->arr = err_calloc(1, compiler_sizeof(&e->new.type));
 		else
 			v->ptr = err_calloc(1, compiler_sizeof(&e->new.type));
-		
 		break;
 	}
 	return true;
 }
 
 static bool eval_decl(Evaluator *ev, Declaration *d) {
+	Value val = {0};
+	int has_expr = d->flags & DECL_FLAG_HAS_EXPR;
+	if (has_expr) {
+		if (!eval_expr(ev, &d->expr, &val))
+			return false;
+		d->flags |= DECL_FLAG_HAS_EXPR;
+	}
+	long index = 0;
 	arr_foreach(d->idents, Identifier, i) {
 		IdentDecl *id = ident_decl(*i);
 		id->flags |= IDECL_FLAG_HAS_VAL;
-		assert(id->decl == d);
-		if (d->flags & DECL_FLAG_HAS_EXPR) {
-			if (!eval_expr(ev, &d->expr, &id->val))
-				return false;
-		} else if (d->type.kind == TYPE_ARR) {
-			/* stack array allocation */
+		if (has_expr && d->expr.kind == EXPR_TUPLE) {
+			id->val = val.tuple[index++];
+		} else if (!has_expr && d->type.kind == TYPE_ARR) {
+			/* "stack" array */
 			id->val.arr = err_calloc(d->type.arr.n, compiler_sizeof(d->type.arr.of));
 		} else {
-			id->val = (Value){0};
+			id->val = val;
 		}
 	}
 	return true;

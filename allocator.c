@@ -1,4 +1,4 @@
-/* #define NO_ALLOCATOR 1 */
+#define NO_ALLOCATOR 1
 /* number of bytes a page hold, not including the header */
 #define PAGE_BYTES (16384 - sizeof(Page))
 #define PAGE_MAX_ALIGNS (PAGE_BYTES / sizeof(max_align_t))

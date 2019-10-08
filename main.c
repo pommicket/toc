@@ -1,5 +1,6 @@
 /* 
 TODO:
+fix double eval_expr problem
 call fns at compile time
 finish evaluator
 improve casting: do you really need "as"?

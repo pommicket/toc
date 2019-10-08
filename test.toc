@@ -1,7 +1,3 @@
 main @= fn() {
-	 // foo @= true;
-	 // N, M @= 8 * if foo { 8 } else { 3} - 3, 894;
-	 // foo @= new[3]int;
-	 // x : [foo[0]]int;
-	 y : [{x : [3]int; p : &int = &x[2]; *p = 734; x[2] }]f32;
+	 ASDF : [{x:[3]int; p, q := &x[0], &x[2]; *q = 3412; *q}]f32;
 };
