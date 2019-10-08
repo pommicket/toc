@@ -771,6 +771,31 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		else
 			v->ptr = err_calloc(1, compiler_sizeof(&e->new.type));
 		break;
+	case EXPR_CALL: {
+		Value fnv;
+		if (!eval_expr(ev, e->call.fn, &fnv))
+			return false;
+		FnExpr *fn = fnv.fn;
+		/* set parameter declaration values */
+		long arg = 0;
+		Declaration *params = fn->params;
+		fn_enter(fn);
+		arr_foreach(params, Declaration, p) {
+			arr_foreach(p->idents, Identifier, i) {
+				IdentDecl *id = ident_decl(*i);
+				Value *paramval = &id->val;
+				if (!eval_expr(ev, &e->call.arg_exprs[arg], paramval))
+					return false;
+				id->flags |= IDECL_FLAG_HAS_VAL;
+				arg++;
+			}
+		}
+		if (!eval_block(ev, &fn->body, v)) {
+			fn_exit(fn);
+			return false;
+		}
+		fn_exit(fn);
+	} break;
 	}
 	return true;
 }
@@ -786,7 +811,6 @@ static bool eval_decl(Evaluator *ev, Declaration *d) {
 	long index = 0;
 	arr_foreach(d->idents, Identifier, i) {
 		IdentDecl *id = ident_decl(*i);
-		id->flags |= IDECL_FLAG_HAS_VAL;
 		if (has_expr && d->expr.kind == EXPR_TUPLE) {
 			id->val = val.tuple[index++];
 		} else if (!has_expr && d->type.kind == TYPE_ARR) {
@@ -795,6 +819,7 @@ static bool eval_decl(Evaluator *ev, Declaration *d) {
 		} else {
 			id->val = val;
 		}
+		id->flags |= IDECL_FLAG_HAS_VAL;
 	}
 	return true;
 }

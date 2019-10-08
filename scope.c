@@ -54,3 +54,18 @@ static void block_exit(Block *b, Statement *stmts) {
 		}
 	}
 }
+
+/* does NOT enter function's block body */
+static void fn_enter(FnExpr *f) {
+	arr_foreach(f->params, Declaration, decl)
+		add_ident_decls(&f->body, decl);
+	arr_foreach(f->ret_decls, Declaration, decl)
+		add_ident_decls(&f->body, decl);
+}
+
+static void fn_exit(FnExpr *f) {
+	arr_foreach(f->params, Declaration, decl)
+		remove_ident_decls(&f->body, decl);
+	arr_foreach(f->ret_decls, Declaration, decl)
+		remove_ident_decls(&f->body, decl);
+}

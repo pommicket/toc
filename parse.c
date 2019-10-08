@@ -670,7 +670,10 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				return false;
 			
 			if (t->token != end) {
-				tokr_err(t, "Direct function calling in an expression is not supported.\nYou can wrap the function in parentheses.");
+				if (token_is_kw(t->token, KW_LPAREN))
+					tokr_err(t, "Direct function calling in an expression is not supported.\nYou can wrap the function in parentheses.");
+				else
+					tokr_err(t, "Expected end of expression.");
 				return false;
 			}
 			return true;

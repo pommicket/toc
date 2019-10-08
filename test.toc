@@ -1,3 +1,14 @@
 main @= fn() {
-	 ASDF : [{x:[3]int; p, q := &x[0], &x[2]; *q = 3412; *q}]f32;
+	 add3 @= fn(x : int, y : int, z : int) int {
+	 	  x + y + z	
+	};
+	add2 @= fn(x : int, y : int) int {
+		 x + y
+	};
+	id @= fn(x : int) int { x };
+
+	 a1 : [id(7)]int;
+	 a2 : [add2(53, 3)]int;
+	 a3 : [add3(3,1,2)]f32;
+	 GHJK : [{x := 5; x}]f32;
 };

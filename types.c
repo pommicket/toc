@@ -423,16 +423,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 			tr->ret_type = t->fn.types[0];
 		}
 		tr->can_ret = true;
-		arr_foreach(f->params, Declaration, decl)
-			add_ident_decls(&f->body, decl);
-		arr_foreach(f->ret_decls, Declaration, decl)
-			add_ident_decls(&f->body, decl);
+		fn_enter(f);
 		bool block_success = true;
 		block_success = types_block(tr, &e->fn.body);
-		arr_foreach(f->params, Declaration, decl)
-			remove_ident_decls(&f->body, decl);
-		arr_foreach(f->ret_decls, Declaration, decl)
-			remove_ident_decls(&f->body, decl);
+		fn_exit(f);
 		if (!block_success) {
 			success = false;
 			goto fn_ret;
