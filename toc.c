@@ -24,5 +24,7 @@
 #include "scope.c"
 #include "eval.c"
 #include "types.c"
+#include "cgen.c"
+#include "decls_cgen.c"
 
 #include "tests.c"

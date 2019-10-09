@@ -94,6 +94,7 @@ root.children[low part of 1st char].children[high part of 1st char]
 typedef struct IdentTree {
 	/* zero value is an empty trie */
 	uint16_t depth;
+	uint16_t flags;
 	unsigned char index_in_parent; /* index of this in .parent.children */
 	struct IdentTree *parent;
 	struct IdentTree *children[TREE_NCHILDREN];

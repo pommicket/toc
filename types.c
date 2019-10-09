@@ -352,7 +352,7 @@ static Status type_cast_status(Type *from, Type *to) {
 			case TYPE_BUILTIN: return STATUS_NONE;
 			case TYPE_ARR: return STATUS_ERR;
 			case TYPE_PTR: return STATUS_WARN;
-			case TYPE_FN: return STATUS_WARN;
+			case TYPE_FN: return STATUS_ERR;
 			case TYPE_TUPLE: return STATUS_ERR;
 			}
 			break;
@@ -372,8 +372,6 @@ static Status type_cast_status(Type *from, Type *to) {
 		break;
 	case TYPE_TUPLE: return STATUS_ERR;
 	case TYPE_FN:
-		if (to->kind == TYPE_BUILTIN && type_builtin_is_int(to->builtin))
-			return STATUS_WARN;
 		if (to->kind == TYPE_PTR || to->kind == TYPE_FN)
 			return STATUS_WARN;
 		return STATUS_ERR;
@@ -1068,11 +1066,13 @@ static void typer_create(Typer *tr, Evaluator *ev) {
 
 static bool types_file(Typer *tr, ParsedFile *f) {
 	bool ret = true;
+	block_enter(NULL, f->stmts); /* enter global scope */
 	arr_foreach(f->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {
 			ret = false;
 		}
-	}
+	}	
+	block_exit(NULL, f->stmts); /* exit global scope */
 	return ret;
 }
 

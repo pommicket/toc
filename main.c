@@ -1,7 +1,5 @@
 /* 
 TODO:
-improve casting: do you really need "as"?
-fix void fn type
 re-do cgen
 any odd number of "s for a string
  */
@@ -67,7 +65,6 @@ int main(int argc, char **argv) {
     
 	printf("\n\n-----\n\n");
 	
-	block_enter(NULL, f.stmts); /* enter global scope */
 	Typer tr;
 	Evaluator ev;
 	evalr_create(&ev);
@@ -78,7 +75,15 @@ int main(int argc, char **argv) {
 	}
 	parse_printing_after_types = true;
 	fprint_parsed_file(stdout, &f);
-	block_exit(NULL, f.stmts); /* exit global scope */
+
+	FILE *out = fopen("out.c", "w");
+	if (!out) {
+		err_fprint(TEXT_IMPORTANT("Could not open output file (out.c).\n"));
+		return EXIT_FAILURE;
+	}
+	CGenerator g;
+	cgen_create(&g, out);
+	cgen_file(&g, &f);
 	
 	tokr_free(&t);
     
@@ -87,7 +92,7 @@ int main(int argc, char **argv) {
 	parser_free(&p);
 	typer_free(&tr);
 	evalr_free(&ev);
-	/* fclose(c_out); */
+	fclose(out);
 	/* fclose(h_out); */
 	idents_free(&file_idents);
 }
