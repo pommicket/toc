@@ -1,21 +1,24 @@
 static bool cgen_decls_expr(CGenerator *g, Expression *e) {
+	return true;
 }
 
 static bool cgen_decls_block(CGenerator *g, Block *b) {
+	return true;
 }
 
 static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 	if ((d->flags & DECL_FLAG_HAS_EXPR) && d->expr.kind == EXPR_FN && arr_len(d->idents) == 1) {
-		d->expr.fn.name = d->idents[0];
-		if (!cgen_fn_header(g, &d->expr.fn))
+		d->expr.fn.c.name = d->idents[0];
+		if (!cgen_fn_header(g, &d->expr.fn, d->where))
 			return false;
-		cgen_write(g, ";");
+		cgen_write(g, ";\n");
 		if (!cgen_decls_block(g, &d->expr.fn.body))
 			return false;
 	} else if (d->flags & DECL_FLAG_HAS_EXPR) {
 		if (!cgen_decls_expr(g, &d->expr))
 			return false;
 	}
+	return true;
 }
 
 static bool cgen_decls_stmt(CGenerator *g, Statement *s) {

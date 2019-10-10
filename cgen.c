@@ -3,11 +3,13 @@ typedef struct {
 	unsigned long ident_counter;
 	ParsedFile *file;
 	Block *block;
+	Identifier main_ident;
 } CGenerator;
 
-static void cgen_create(CGenerator *g, FILE *out) {
+static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids) {
 	g->outc = out;
 	g->ident_counter = 0;
+	g->main_ident = ident_get(ids, "main");
 }
 
 static void cgen_block_enter(CGenerator *g, Block *b) {
@@ -44,6 +46,14 @@ static void cgen_write(CGenerator *g, const char *fmt, ...) {
 	va_end(args);
 }
 
+static void cgen_ident(CGenerator *g, Identifier i) {
+	if (i == g->main_ident) {
+		/* don't conflict with C's main! */
+		cgen_write(g, "main__");
+	} else {
+		fprint_ident(cgen_writing_to(g), i);
+	}
+}
 
 static bool cgen_type_post(CGenerator *g, Type *t, Location where);
 static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
@@ -62,18 +72,40 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
 		case BUILTIN_BOOL: cgen_write(g, "bool"); break;
 		case BUILTIN_F32: cgen_write(g, "f32"); break;
 		case BUILTIN_F64: cgen_write(g, "f64"); break;
-		}
+		} break;
 	case TYPE_VOID: cgen_write(g, "void"); break;
 	case TYPE_UNKNOWN:
 		err_print(t->where, "Can't determine type.");
-		break;
+		return false;
 	}
+	return true;
 }
 
 static bool cgen_type_post(CGenerator *g, Type *t, Location where) {
+	return true;
 }
 
-static bool cgen_fn_header(CGenerator *g, FnExpr *f, Identifier name, long id) {
+static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where) {
+	if (!cgen_type_pre(g, &f->ret_type, where)) return false;
+	cgen_write(g, " ");
+	if (f->c.name) {
+		cgen_ident(g, f->c.name);
+	} else {
+		/* TODO */
+	}
+	if (!cgen_type_post(g, &f->ret_type, where)) return false;
+	cgen_write(g, "(");
+	arr_foreach(f->params, Declaration, d) {
+		arr_foreach(d->idents, Identifier, i) {
+			if (!cgen_type_pre(g, &d->type, where))
+				return false;
+			cgen_ident(g, *i);
+			if (!cgen_type_post(g, &d->type, where))
+				return false;
+		}
+	}
+	cgen_write(g, ")");
+	return true;
 }
 
 static bool cgen_decls_file(CGenerator *g, ParsedFile *f);
@@ -95,7 +127,10 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 			   "#define false ((bool)0)\n"
 			   "#define true ((bool)1)\n\n\n");
 	cgen_block_enter(g, NULL);
-	cgen_decls_file(g, f);
+	if (!cgen_decls_file(g, f))
+		return false;
 	cgen_write(g, "/* code */\n");
 	cgen_block_exit(g, NULL);
+	cgen_write(g, "int main() {\n\tmain__();\n\treturn 0;\n}\n");
+	return true;
 }

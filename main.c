@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 	CGenerator g;
-	cgen_create(&g, out);
+	cgen_create(&g, out, &file_idents);
 	cgen_file(&g, &f);
 	
 	tokr_free(&t);
