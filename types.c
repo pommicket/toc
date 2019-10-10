@@ -367,7 +367,6 @@ static Status type_cast_status(Type *from, Type *to) {
 			return STATUS_ERR;
 		case BUILTIN_BOOL:
 			return type_can_be_truthy(to);
-		case BUILTIN_TYPE_COUNT: assert(0); break;
 		}
 		break;
 	case TYPE_TUPLE: return STATUS_ERR;

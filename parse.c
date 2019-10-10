@@ -74,8 +74,8 @@ static bool type_builtin_is_numerical(BuiltinType b) {
 }
 
 
-/* returns BUILTIN_TYPE_COUNT on failure */
-static BuiltinType kw_to_builtin_type(Keyword kw) {
+/* returns -1 on failure */
+static int kw_to_builtin_type(Keyword kw) {
 	switch (kw) {
 	case KW_I8: return BUILTIN_I8;
 	case KW_I16: return BUILTIN_I16;
@@ -91,8 +91,9 @@ static BuiltinType kw_to_builtin_type(Keyword kw) {
 	case KW_F64: return BUILTIN_F64;
 	case KW_BOOL: return BUILTIN_BOOL;
 	case KW_CHAR: return BUILTIN_CHAR;
-	default: return BUILTIN_TYPE_COUNT;
+	default: return -1;
 	}
+	return -1;
 }
 
 static Keyword builtin_type_to_kw(BuiltinType t) {
@@ -109,7 +110,6 @@ static Keyword builtin_type_to_kw(BuiltinType t) {
 	case BUILTIN_F64: return KW_F64;
 	case BUILTIN_BOOL: return KW_BOOL;
 	case BUILTIN_CHAR: return KW_CHAR;
-	case BUILTIN_TYPE_COUNT: break;
 	}
 	assert(0);
 	return KW_COUNT;
@@ -291,10 +291,13 @@ static bool parse_type(Parser *p, Type *type) {
 	switch (t->token->kind) {
 	case TOKEN_KW:
 		type->kind = TYPE_BUILTIN;
-		type->builtin = kw_to_builtin_type(t->token->kw);
-		if (type->builtin != BUILTIN_TYPE_COUNT) {
-			t->token++;
-			break;
+	    {
+			int b = kw_to_builtin_type(t->token->kw);
+			if (b != -1) {
+				type->builtin = b;
+				t->token++;
+				break;
+			}
 		}
 		/* Not a builtin */
 		switch (t->token->kw) {

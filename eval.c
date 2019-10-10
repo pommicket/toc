@@ -30,7 +30,6 @@ static size_t compiler_sizeof_builtin(BuiltinType b) {
 	case BUILTIN_F64: return sizeof(F64);
 	case BUILTIN_CHAR: return sizeof(char); /* = 1 */
 	case BUILTIN_BOOL: return sizeof(bool);
-	case BUILTIN_TYPE_COUNT: break;
 	}
 	assert(0);
 	return 0;
@@ -71,7 +70,6 @@ static bool builtin_truthiness(Value *v, BuiltinType b) {
 	case BUILTIN_F64: return v->f64 != 0;
 	case BUILTIN_BOOL: return v->boolv;
 	case BUILTIN_CHAR: return v->charv != 0;
-	case BUILTIN_TYPE_COUNT: break;
 	}
 	assert(0); return false;
 }
@@ -171,7 +169,6 @@ static void u64_to_val(Value *v, BuiltinType v_type, U64 x) {
 		builtin_casts_to_num(low);										\
 	case BUILTIN_CHAR: vout->charv = (char)vin->low; break;				\
 	case BUILTIN_BOOL: vout->boolv = vin->low != 0; break;				\
-	case BUILTIN_TYPE_COUNT: assert(0); break;							\
 	} break
 
 #define builtin_float_casts(low, up)									\
@@ -180,7 +177,7 @@ static void u64_to_val(Value *v, BuiltinType v_type, U64 x) {
 	builtin_casts_to_num(low);											\
 	case BUILTIN_BOOL: vout->boolv = vin->low != 0.0f; break;			\
 	case BUILTIN_CHAR:													\
-	case BUILTIN_TYPE_COUNT: assert(0); break;							\
+		assert(0); break;												\
 	} break
 	
 static void val_builtin_cast(Value *vin, BuiltinType from, Value *vout, BuiltinType to) {
@@ -208,11 +205,9 @@ static void val_builtin_cast(Value *vin, BuiltinType from, Value *vout, BuiltinT
 		case BUILTIN_F32:
 		case BUILTIN_F64:
 		case BUILTIN_BOOL:
-		case BUILTIN_TYPE_COUNT:
 			assert(0); break;
 		}
 		break;
-	case BUILTIN_TYPE_COUNT: assert(0); break;
 	}
 }
 
@@ -280,7 +275,6 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 			case BUILTIN_CHAR:
 			case BUILTIN_F32:
 			case BUILTIN_F64:
-			case BUILTIN_TYPE_COUNT:
 				assert(0); break;
 			}
 			break;
@@ -341,7 +335,6 @@ static void eval_deref(Value *v, void *ptr, Type *type) {
 		case BUILTIN_F64: v->f64 = *(F64 *)ptr; break;
 		case BUILTIN_CHAR: v->charv = *(char *)ptr; break;
 		case BUILTIN_BOOL: v->boolv = *(bool *)ptr; break;
-		case BUILTIN_TYPE_COUNT: assert(0); break;
 		}
 		break;
 	case TYPE_VOID:
@@ -371,7 +364,6 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 		case BUILTIN_F64: *(F64 *)set = to->f64; break;
 		case BUILTIN_CHAR: *(char *)set = to->charv; break;
 		case BUILTIN_BOOL: *(bool *)set = to->boolv; break;
-		case BUILTIN_TYPE_COUNT: assert(0); break;
 		}
 		break;
 	case TYPE_VOID:

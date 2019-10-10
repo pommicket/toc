@@ -1,2 +1,2 @@
 /* declarations */
-/* code */
+;/* code */

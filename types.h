@@ -242,8 +242,7 @@ typedef enum {
 			  BUILTIN_F32,
 			  BUILTIN_F64,
 			  BUILTIN_CHAR,
-			  BUILTIN_BOOL,
-			  BUILTIN_TYPE_COUNT
+			  BUILTIN_BOOL
 } BuiltinType;
 
 #define TYPE_FLAG_FLEXIBLE 0x01
@@ -356,6 +355,11 @@ typedef struct FnExpr {
     struct Declaration *ret_decls; /* array of decls, if this has named return values. otherwise, NULL */
 	Type ret_type;
 	Block body;
+	struct {
+		/* if name = NULL, this is an anonymous function, and id will be the ID of the fn. */
+		Identifier name;
+		unsigned long id;
+	} c;
 } FnExpr; /* an expression such as fn(x: int) int { 2 * x } */
 
 typedef struct {
