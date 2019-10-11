@@ -17,6 +17,7 @@ typedef unsigned char bool;
 
 /* declarations */
 void puti(i64 i);
+void asdf(i64 i, i64( (*ret__)[3]));
 void main__();
 /* code */
 int main() {
@@ -26,6 +27,14 @@ int main() {
 
 void puti(i64 i) {
 printf("%ld\n", i);
+}
+
+void asdf(i64 i, i64( (*ret__)[3])) {
+i64( ret[3]) = {0}; 
+((ret[0])=(0*i));
+((ret[1])=(1*i));
+((ret[2])=(2*i));
+return;
 }
 
 void main__() {
@@ -38,6 +47,7 @@ if (((*x)==0)) {
 };
 (puti((*x)));
 (free(x));
+void (* fptr)(i64, i64((*)[3])); fptr = asdf; 
 }
 
 i64 foo = 5; 

@@ -927,7 +927,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		}
 		break;
 	}
-    
+    e->type.flags |= TYPE_FLAG_RESOLVED;
 	return true;
 }
 
