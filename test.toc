@@ -1,12 +1,16 @@
+puti @= fn(i: int) {
+	 #C("printf(\"%ld\\n\", i)");
+};
+
 main @= fn() {
-	 adsf @= fn(x,asdf,sadf,sdf,fds : i64, y,zdfsadf,sd: &&f32) u8 {
-	 	  0
-	 };
 	 x := new int;
-	 *x = 1+2+3-5/62;
-	 adsfklk : [5]int;
-	 adsfklk[0] = 521;
-	 #C("printf(\"%ld %ld\\n\", *x, adsfklk[0]);"); 
+	 *x = 17;
+	 if *x == 0 {
+	 	*x = 1+2+3-5/62;
+		} else {
+		  *x = 4+5+6;
+		}
+		puti(*x);
 del x;
 };
 

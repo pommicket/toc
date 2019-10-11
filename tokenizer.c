@@ -427,7 +427,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 			Token *token = tokr_add(t);
 			tokr_put_location(t, token);
 			tokr_nextchar(t);
-			size_t len = 0;
+			size_t len = 0; /* counts \n as 2 chars */
 			size_t backslashes = 0;
 			while (*t->s != '"' || backslashes % 2 == 1) {
 				if (*t->s == '\\') {
@@ -464,7 +464,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 			}
 			*strptr = 0;
 			token->kind = TOKEN_STR_LITERAL;
-			token->str.len = len;
+			token->str.len = strptr - strlit;
 			token->str.str = strlit;
 			tokr_nextchar(t); /* move past closing " */
 			continue;

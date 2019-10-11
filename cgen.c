@@ -8,6 +8,7 @@ typedef struct {
 } CGenerator;
 
 static bool cgen_stmt(CGenerator *g, Statement *s);
+static bool cgen_block(CGenerator *g, Block *b);
 
 static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *ev) {
 	g->outc = out;
@@ -264,18 +265,54 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		cgen_write(g, ")");
 	} break;
 	case EXPR_NEW:
-		cgen_write(g, "calloc(1, sizeof(");
+		cgen_write(g, "((");
+		if (!cgen_type_pre(g, &e->type, e->where))
+			return false;
+		if (!cgen_type_post(g, &e->type, e->where))
+			return false;
+		cgen_write(g, ")calloc(1, sizeof(");
 		if (!cgen_type_pre(g, &e->new.type, e->where))
 			return false;
 		if (!cgen_type_post(g, &e->new.type, e->where))
 			return false;
+		cgen_write(g, ")))");
+		break;
+	case EXPR_IF: {
+		IfExpr *curr = &e->if_;
+		while (1) {
+			if (curr->cond) {
+				cgen_write(g, "if (");
+				if (!cgen_expr(g, curr->cond))
+					return false;
+				cgen_write(g, ") ");
+			}
+			if (!cgen_block(g, &curr->body))
+				return false;
+			if (curr->next_elif) {
+				cgen_write(g, " else ");
+				curr = &curr->next_elif->if_;
+			} else break;
+		}
+	} break;
+	case EXPR_CALL:
+		cgen_write(g, "(");
+		if (!cgen_expr(g, e->call.fn))
+			return false;
+		cgen_write(g, "(");
+		arr_foreach(e->call.arg_exprs, Expression, arg) {
+			if (arg != e->call.arg_exprs)
+				cgen_write(g, ", ");
+			if (!cgen_expr(g, arg))
+				return false;
+		}
 		cgen_write(g, "))");
 		break;
 	case EXPR_DIRECT:
 		switch (e->direct.which) {
 		case DIRECT_C: {
 			Value val;
-			eval_expr(g->evalr, &e->direct.args[0], &val);
+			if (!eval_expr(g->evalr, &e->direct.args[0], &val))
+				return false;
 			fwrite(val.arr, 1, e->direct.args[0].type.arr.n, cgen_writing_to(g));
 		} break;
 		case DIRECT_COUNT: assert(0); break;
@@ -376,7 +413,8 @@ static bool cgen_stmt(CGenerator *g, Statement *s) {
 		cgen_nl(g);
 		break;
 	case STMT_RET:
-		/* TODO */
+		cgen_write(g, "return ");
+		if (!cgen_expr(g, &s->ret.expr)) return false;
 		break;
 	}
 	return true;

@@ -47,11 +47,11 @@ static void arr_resva_(void **arr, size_t n, size_t item_sz, Allocator *a) {
 
 static void arr_set_len_(void **arr, size_t n, size_t item_sz) {
 	arr_resv_(arr, n, item_sz);
-	arr_hdr(arr)->len = n;
+	arr_hdr(*arr)->len = n;
 }
 static void arr_set_lena_(void **arr, size_t n, size_t item_sz, Allocator *a) {
 	arr_resva_(arr, n, item_sz, a);
-	arr_hdr(arr)->len = n;
+	arr_hdr(*arr)->len = n;
 }
 
 static void *arr_add_(void **arr, size_t item_sz) {
