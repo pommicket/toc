@@ -21,3 +21,13 @@ int main() {
 	main__();
 	return 0;
 }
+
+void main__() {
+}
+
+i64 foo = 5; 
+char( bar[5]) = "\x48\x65\x6c\x6c\x6f"; 
+i64 a = 123; i64 b = 123; 
+char x = ((char)97); 
+i64 sadkfj = -1293812; 
+char kjdshaf = *&*&*&*&*&x; 

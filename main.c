@@ -1,6 +1,7 @@
 /* 
 TODO:
 re-do cgen
+make sure initializers for global variables are compile-time constants
 any odd number of "s for a string
  */
 #include "toc.c"
