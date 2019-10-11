@@ -327,11 +327,12 @@ static bool parse_type(Parser *p, Type *type) {
 			}
 			t->token++;	/* move past ) */
 			Type *ret_type = type->fn.types;
-			/* if there's a symbol that isn't [ or (, that can't be the start of a type */
+			/* if there's a symbol that isn't [, (, or &, that can't be the start of a type */
 			if ((t->token->kind == TOKEN_KW
 				 && t->token->kw <= KW_LAST_SYMBOL
 				 && t->token->kw != KW_LSQUARE
-				 && t->token->kw != KW_LPAREN)
+				 && t->token->kw != KW_LPAREN
+				 && t->token->kw != KW_AMPERSAND)
 				|| t->token->kw == KW_AS) {
 				ret_type->kind = TYPE_VOID;
 				ret_type->flags = 0;

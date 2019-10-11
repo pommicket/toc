@@ -250,6 +250,8 @@ static bool type_resolve(Evaluator *ev, Type *t) {
 			size = val_to_u64(&val, n_expr->type.builtin);
 		}
 		t->arr.n = (UInteger)size;
+		if (!type_resolve(ev, t->arr.of))
+			return false;
 	} break;
 	case TYPE_FN:
 		arr_foreach(t->fn.types, Type, child_type) {
@@ -277,6 +279,7 @@ static bool type_resolve(Evaluator *ev, Type *t) {
 }
 
 static bool types_type(Typer *tr, Type *t) {
+	if (t->flags & TYPE_FLAG_RESOLVED) return true;
 	switch (t->kind) {
 	case TYPE_ARR:
 		if (!types_expr(tr, t->arr.n_expr)) return false;
@@ -1065,7 +1068,8 @@ static void typer_create(Typer *tr, Evaluator *ev) {
 
 static bool types_file(Typer *tr, ParsedFile *f) {
 	bool ret = true;
-	block_enter(NULL, f->stmts); /* enter global scope */
+	if (!block_enter(NULL, f->stmts)) /* enter global scope */
+		return false;
 	arr_foreach(f->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {
 			ret = false;

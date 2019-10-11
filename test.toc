@@ -1,3 +1,10 @@
 main @= fn() {
-	 x := 5;
+
 };
+
+foo := 5;
+bar := "Hello";
+a, b := 123;
+x := 'a';
+sadkfj := -1293812;
+kjdshaf := *&*&*&*&*&x;
