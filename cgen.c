@@ -3,13 +3,17 @@ typedef struct {
 	unsigned long ident_counter;
 	ParsedFile *file;
 	Block *block;
+	Evaluator *evalr;
 	Identifier main_ident;
 } CGenerator;
 
-static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids) {
+static bool cgen_stmt(CGenerator *g, Statement *s);
+
+static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *ev) {
 	g->outc = out;
 	g->ident_counter = 0;
 	g->main_ident = ident_get(ids, "main");
+	g->evalr = ev;
 }
 
 static void cgen_block_enter(CGenerator *g, Block *b) {
@@ -62,6 +66,10 @@ static void cgen_ident(CGenerator *g, Identifier i) {
 	} else {
 		fprint_ident(cgen_writing_to(g), i);
 	}
+}
+
+static void cgen_ident_id(CGenerator *g, unsigned long id) {
+	cgen_write(g, "a%lu_", id);
 }
 
 static bool cgen_type_post(CGenerator *g, Type *t, Location where);
@@ -150,12 +158,14 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where) {
 	if (f->c.name) {
 		cgen_ident(g, f->c.name);
 	} else {
-		/* TODO */
+		cgen_ident_id(g, f->c.id);
 	}
 	if (!cgen_type_post(g, &f->ret_type, where)) return false;
 	cgen_write(g, "(");
 	arr_foreach(f->params, Declaration, d) {
 		arr_foreach(d->idents, Identifier, i) {
+			if (d != f->params || i != d->idents)
+				cgen_write(g, ", ");
 			if (!cgen_type_pre(g, &d->type, where))
 				return false;
 			cgen_write(g, " ");
@@ -193,6 +203,44 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 	case EXPR_IDENT:
 		cgen_ident(g, e->ident);
 		break;
+	case EXPR_BINARY_OP: {
+		const char *s = "";
+		switch (e->binary.op) {
+		case BINARY_SUB:
+			s = "-"; break;
+		case BINARY_ADD:
+			s = "+"; break;
+		case BINARY_MUL:
+			s = "*"; break;
+		case BINARY_DIV:
+			s = "/"; break;
+		case BINARY_SET:
+			s = "="; break;
+		case BINARY_GT:
+			s = ">"; break;
+		case BINARY_LT:
+			s = "<"; break;
+		case BINARY_GE:
+			s = ">="; break;
+		case BINARY_LE:
+			s = "<="; break;
+		case BINARY_EQ:
+			s = "=="; break;
+		case BINARY_NE:
+			s = "!="; break;
+		case BINARY_AT_INDEX:
+			s = "["; break;
+		}
+		cgen_write(g, "(");
+		if (!cgen_expr(g, e->binary.lhs))
+			return false; 
+		cgen_write(g, "%s", s);
+		if (!cgen_expr(g, e->binary.rhs))
+			return false;
+		if (e->binary.op == BINARY_AT_INDEX)
+			cgen_write(g, "]");
+		cgen_write(g, ")");
+	} break;
 	case EXPR_UNARY_OP: {
 		const char *s = "";
 		switch (e->unary.op) {
@@ -207,23 +255,79 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		case UNARY_DEL:
 			s = "free("; break;
 		}
-		cgen_write(g, s);
+		cgen_write(g, "(");
+		cgen_write(g, "%s", s);
 		if (!cgen_expr(g, e->unary.of))
 			return false;
 		if (e->unary.op == UNARY_DEL)
 			cgen_write(g, ")");
+		cgen_write(g, ")");
 	} break;
+	case EXPR_NEW:
+		cgen_write(g, "calloc(1, sizeof(");
+		if (!cgen_type_pre(g, &e->new.type, e->where))
+			return false;
+		if (!cgen_type_post(g, &e->new.type, e->where))
+			return false;
+		cgen_write(g, "))");
+		break;
+	case EXPR_DIRECT:
+		switch (e->direct.which) {
+		case DIRECT_C: {
+			Value val;
+			eval_expr(g->evalr, &e->direct.args[0], &val);
+			fwrite(val.arr, 1, e->direct.args[0].type.arr.n, cgen_writing_to(g));
+		} break;
+		case DIRECT_COUNT: assert(0); break;
+		}
+		break;
 	}
 	return true;
+}
+
+static bool cgen_block(CGenerator *g, Block *b) {
+	Block *prev = g->block;
+	cgen_block_enter(g, b);
+	cgen_write(g, "{");
+	cgen_nl(g);
+	arr_foreach(b->stmts, Statement, s)
+		if (!cgen_stmt(g, s))
+			return false;
+	
+	cgen_block_exit(g, prev);
+	cgen_write(g, "}");
+	return true;
+}
+
+static void cgen_zero_value(CGenerator *g, Type *t) {
+	switch (t->kind) {
+	case TYPE_BUILTIN:
+		cgen_write(g, "0");
+		break;
+	case TYPE_PTR:
+	case TYPE_FN:
+		cgen_write(g, "NULL");
+		break;
+	case TYPE_ARR:
+		cgen_write(g, "{");
+		cgen_zero_value(g, t->arr.of);
+		cgen_write(g, "}");
+		break;
+	case TYPE_VOID:
+	case TYPE_UNKNOWN:
+	case TYPE_TUPLE:
+		assert(0);
+		break;
+	}
 }
 
 static bool cgen_decl(CGenerator *g, Declaration *d) {
 	if (cgen_is_fn_direct(g, d)) {
 		if (!cgen_fn_header(g, &d->expr.fn, d->where))
 			return false;
-		cgen_write(g, " {");
-		cgen_nl(g);
-		cgen_write(g, "}");
+		cgen_write(g, " ");
+		if (!cgen_block(g, &d->expr.fn.body))
+			return false;
 		cgen_nl(g);
 		cgen_nl(g);
 	} else if (d->flags & DECL_FLAG_CONST) {
@@ -234,20 +338,25 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 			cgen_write(g, " ");
 			cgen_ident(g, *i);
 			if (!cgen_type_post(g, &d->type, d->where)) return false;
-			if (g->block == NULL) {
-				/* repeat expression for each ident iff we are in global scope */
+			if (g->block == NULL && (d->flags & DECL_FLAG_HAS_EXPR)) {
 				cgen_write(g, " = ");
+				/* repeat expression for each ident iff we are in global scope */
 				if (!cgen_expr(g, &d->expr))
 					return false;
+			} else if (!(d->flags & DECL_FLAG_HAS_EXPR)) {
+				cgen_write(g, " = ");
+		    	cgen_zero_value(g, &d->type);
 			}
+				
 			cgen_write(g, "; ");
 		}
-		if (g->block != NULL) {
+		if (g->block != NULL && (d->flags & DECL_FLAG_HAS_EXPR)) {
 			arr_foreach(d->idents, Identifier, i) {
 				cgen_ident(g, *i);
 				cgen_write(g, " = ");
 				if (!cgen_expr(g, &d->expr))
 					return false;
+				cgen_write(g, "; ");
 			}
 		}
 		cgen_nl(g);
@@ -263,6 +372,8 @@ static bool cgen_stmt(CGenerator *g, Statement *s) {
 		break;
 	case STMT_EXPR:
 		if (!cgen_expr(g, &s->expr)) return false;
+		cgen_write(g, ";");
+		cgen_nl(g);
 		break;
 	case STMT_RET:
 		/* TODO */
@@ -276,6 +387,7 @@ static bool cgen_decls_file(CGenerator *g, ParsedFile *f);
 static bool cgen_file(CGenerator *g, ParsedFile *f) {
 	g->file = f;
 	cgen_write(g, "#include <stdint.h>\n"
+			   "#include <stdlib.h>\n"
 			   "typedef int8_t i8;\n"
 			   "typedef int16_t i16;\n"
 			   "typedef int32_t i32;\n"

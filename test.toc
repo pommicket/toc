@@ -1,5 +1,13 @@
 main @= fn() {
-
+	 adsf @= fn(x,asdf,sadf,sdf,fds : i64, y,zdfsadf,sd: &&f32) u8 {
+	 	  0
+	 };
+	 x := new int;
+	 *x = 1+2+3-5/62;
+	 adsfklk : [5]int;
+	 adsfklk[0] = 521;
+	 #C("printf(\"%ld %ld\\n\", *x, adsfklk[0]);"); 
+del x;
 };
 
 foo := 5;
@@ -7,4 +15,3 @@ bar := "Hello";
 a, b := 123;
 x := 'a';
 sadkfj := -1293812;
-kjdshaf := *&*&*&*&*&x;
