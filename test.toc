@@ -1,13 +1,16 @@
+
 puti @= fn(i: int) {
 	 #C("printf(\"%ld\\n\", i)");
 };
 
 asdf @= fn(i: int) [3]int {
 	 ret : [3]int;
+	 asdf : [3]int;
 	 ret[0] = 0*i;
 	 ret[1] = 1*i;
 	 ret[2] = 2*i;
-	 return ret;
+	 asdf = ret;
+	 return asdf;
 };
 
 main @= fn() {

@@ -31,23 +31,33 @@ printf("%ld\n", i);
 
 void asdf(i64 i, i64( (*ret__)[3])) {
 i64( ret[3]) = {0}; 
-((ret[0])=(0*i));
-((ret[1])=(1*i));
-((ret[2])=(2*i));
-return;
+i64( asdf[3]) = {0}; 
+(ret[0]) = (0*i);;
+(ret[1]) = (1*i);;
+(ret[2]) = (2*i);;
+{
+size_t i;i64(*arr__in) = asdf; i64(*arr__out) = ret;
+for (i = 0; i < 3; i++) arr__out[i] = arr__in[i];
+};
+{
+size_t i;i64(*arr__in) = *ret__; i64(*arr__out) = asdf;
+for (i = 0; i < 3; i++) arr__out[i] = arr__in[i];
+}return;
 }
 
 void main__() {
-i64(* x); x = ((i64(*))calloc(1, sizeof(i64))); 
-((*x)=17);
+i64(* x); {
+i64(*expr__); expr__ = ((i64(*))calloc(1, sizeof(i64)));x = expr__;}
+(*x) = 17;;
 if (((*x)==0)) {
-((*x)=((1+2)+(3-(5/62))));
+(*x) = ((1+2)+(3-(5/62)));;
 } else {
-((*x)=((4+5)+6));
+(*x) = ((4+5)+6);;
 };
 (puti((*x)));
 (free(x));
-void (* fptr)(i64, i64((*)[3])); fptr = asdf; 
+void (* fptr)(i64, i64((*)[3])); {
+void (*expr__)(i64, i64((*)[3])); expr__ = asdf;fptr = expr__;}
 }
 
 i64 foo = 5; 

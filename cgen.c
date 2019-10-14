@@ -3,12 +3,16 @@ typedef struct {
 	unsigned long ident_counter;
 	ParsedFile *file;
 	Block *block;
+	FnExpr *fn; /* which function are we in? (NULL for none) - not used during decls */
 	Evaluator *evalr;
 	Identifier main_ident;
 } CGenerator;
 
 static bool cgen_stmt(CGenerator *g, Statement *s);
 static bool cgen_block(CGenerator *g, Block *b);
+static bool cgen_expr(CGenerator *g, Expression *e);
+static bool cgen_type_pre(CGenerator *g, Type *t, Location where);
+static bool cgen_type_post(CGenerator *g, Type *t, Location where);
 
 static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *ev) {
 	g->outc = out;
@@ -228,6 +232,77 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where) {
 	return true;
 }
 
+
+/* 
+Either set_expr or set_str should be NULL and either to_expr or to_str should be NULL 
+Also, set_str and/or to_str should be NULL
+*/
+static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, Expression *to_expr,
+					 const char *to_str) {
+	Type *type;
+	Location where;
+	if (set_expr) {
+		type = &set_expr->type;
+		where = set_expr->where;
+	} else {
+		assert(to_expr);
+		type = &to_expr->type;
+		where = to_expr->where;
+	}
+	switch (type->kind) {
+	case TYPE_BUILTIN:
+	case TYPE_FN:
+	case TYPE_PTR:
+	case TYPE_UNKNOWN:
+		if (set_expr) {
+			if (!cgen_expr(g, set_expr)) return false;
+		} else {
+			cgen_write(g, set_str);
+		}
+		cgen_write(g, " = ");
+		if (to_expr) {
+			if (!cgen_expr(g, to_expr)) return false;
+		} else {
+			cgen_write(g, to_str);
+		}
+		cgen_write(g, ";");
+		break;
+	case TYPE_ARR:
+		cgen_write(g, "{");
+		cgen_nl(g);
+		cgen_write(g, "size_t i;");
+		if (!cgen_type_pre(g, type->arr.of, where)) return false;
+		cgen_write(g, "(*arr__in)");
+		if (!cgen_type_post(g, type->arr.of, where)) return false;
+		cgen_write(g, " = ");
+		if (set_expr) {
+			if (!cgen_expr(g, set_expr)) return false;
+		} else {
+			cgen_write(g, set_str);
+		}
+		cgen_write(g, "; ");
+		if (!cgen_type_pre(g, type->arr.of, where)) return false;
+		cgen_write(g, "(*arr__out)");
+		if (!cgen_type_post(g, type->arr.of, where)) return false;
+		cgen_write(g, " = ");
+		if (to_expr) {
+			if (!cgen_expr(g, to_expr)) return false;
+		} else {
+			cgen_write(g, to_str);
+		}
+		cgen_write(g, ";");
+		cgen_nl(g);
+		cgen_write(g, "for (i = 0; i < %lu; i++) arr__out[i] = arr__in[i];", (unsigned long)type->arr.n);
+		cgen_nl(g);
+		cgen_write(g, "}");
+		break;
+	case TYPE_VOID:
+		assert(0);
+		return false;
+	}
+	return true;
+}
+
 static bool cgen_expr(CGenerator *g, Expression *e) {
 	switch (e->kind) {
 	case EXPR_LITERAL_FLOAT:
@@ -255,6 +330,10 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		break;
 	case EXPR_BINARY_OP: {
 		const char *s = "";
+		if (e->binary.op == BINARY_SET) {
+			if (!cgen_set(g, e->binary.lhs, NULL, e->binary.rhs, NULL)) return false;
+			break;
+		}
 		switch (e->binary.op) {
 		case BINARY_SUB:
 			s = "-"; break;
@@ -264,8 +343,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			s = "*"; break;
 		case BINARY_DIV:
 			s = "/"; break;
-		case BINARY_SET:
-			s = "="; break;
+		case BINARY_SET: assert(0); break;
 		case BINARY_GT:
 			s = ">"; break;
 		case BINARY_LT:
@@ -412,8 +490,11 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 		if (!cgen_fn_header(g, &d->expr.fn, d->where))
 			return false;
 		cgen_write(g, " ");
+		FnExpr *prev_fn = g->fn;
+		g->fn = &d->expr.fn;
 		if (!cgen_block(g, &d->expr.fn.body))
 			return false;
+		g->fn = prev_fn;
 		cgen_nl(g);
 		cgen_nl(g);
 	} else if (d->flags & DECL_FLAG_CONST) {
@@ -426,7 +507,7 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 			if (!cgen_type_post(g, &d->type, d->where)) return false;
 			if (g->block == NULL && (d->flags & DECL_FLAG_HAS_EXPR)) {
 				cgen_write(g, " = ");
-				/* repeat expression for each ident iff we are in global scope */
+				/* directly initialize iff we are in global scope */
 				if (!cgen_expr(g, &d->expr))
 					return false;
 			} else if (!(d->flags & DECL_FLAG_HAS_EXPR)) {
@@ -436,14 +517,26 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 				
 			cgen_write(g, "; ");
 		}
+		/* TODO: tuples */
 		if (g->block != NULL && (d->flags & DECL_FLAG_HAS_EXPR)) {
+			cgen_write(g, "{");
+			cgen_nl(g);
+			if (!cgen_type_pre(g, &d->expr.type, d->expr.where)) return false;
+			cgen_write(g, "expr__");
+			if (!cgen_type_post(g, &d->expr.type, d->expr.where)) return false;
+			cgen_write(g, "; ");
+			if (!cgen_set(g, NULL, "expr__", &d->expr, NULL))
+				return false;
 			arr_foreach(d->idents, Identifier, i) {
-				cgen_ident(g, *i);
-				cgen_write(g, " = ");
-				if (!cgen_expr(g, &d->expr))
+				Expression e;
+				e.flags = 0;
+				e.kind = EXPR_IDENT;
+				e.type = d->type;
+				e.ident = *i;
+				if (!cgen_set(g, &e, NULL, NULL, "expr__"))
 					return false;
-				cgen_write(g, "; ");
 			}
+			cgen_write(g, "}");
 		}
 		cgen_nl(g);
 	}
@@ -462,19 +555,15 @@ static bool cgen_stmt(CGenerator *g, Statement *s) {
 		cgen_nl(g);
 		break;
 	case STMT_RET:
-		/* TODO (this doesn't work -- add fn to CGenerator) */
-		if (g->block->ret_expr) {
-			if (cgen_uses_out_param(&g->block->ret_expr->type)) {
-				cgen_write(g, "*ret__ = ");
-				if (!cgen_expr(g, &s->ret.expr)) return false;
-				cgen_write(g, ";");
-			} else {
-				cgen_write(g, "return ");
-			
-				if (!cgen_expr(g, &s->ret.expr)) return false;
-			}
-		} else {
+		if (g->fn->ret_type.kind == TYPE_VOID) {
 			cgen_write(g, "return");
+		} else if (cgen_uses_out_param(&g->fn->ret_type)) {
+			if (!cgen_set(g, NULL, "*ret__", &s->ret.expr, NULL)) return false;
+			cgen_write(g, "return");
+		} else {
+			cgen_write(g, "return ");
+			
+			if (!cgen_expr(g, &s->ret.expr)) return false;
 		}
 		cgen_write(g, ";");
 		cgen_nl(g);
