@@ -25,6 +25,8 @@ typedef int64_t I64;
 typedef float F32;
 typedef double F64;
 
+typedef U32 IdentID; /* identifier ID for cgen (anonymous variables) */
+
 typedef uint32_t LineNo;
 typedef struct {
 	LineNo line;
@@ -342,11 +344,17 @@ typedef struct {
 typedef struct {
 	struct Expression *cond; /* NULL = this is an else */
 	struct Expression *next_elif; /* next elif/else of this statement */
+	struct {
+		IdentID id;
+	} c;
 	Block body;
 } IfExpr;
 
 typedef struct {
 	struct Expression *cond;
+	struct {
+		IdentID id;
+	} c;
 	Block body;
 } WhileExpr;
 
@@ -358,7 +366,7 @@ typedef struct FnExpr {
 	struct {
 		/* if name = NULL, this is an anonymous function, and id will be the ID of the fn. */
 		Identifier name;
-		unsigned long id;
+	    IdentID id;
 	} c;
 } FnExpr; /* an expression such as fn(x: int) int { 2 * x } */
 
@@ -370,12 +378,13 @@ typedef struct {
 #define EXPR_FLAG_FOUND_TYPE 0x01
 
 typedef struct Expression {
+	Type type;
 	Location where;
 	ExprKind kind;
 	uint16_t flags;
-	Type type;
 	union {
 		Floating floatl;
+		/* Floating floatl; */
 		UInteger intl;
 		StrLiteral strl;
 		bool booll;
@@ -402,7 +411,10 @@ typedef struct Expression {
 		WhileExpr while_;
 		FnExpr fn;
 		CastExpr cast;
-		Block block;
+		struct {
+			Block block;
+			IdentID block_ret_id;
+		};
 		struct Expression *tuple;
 	};
 } Expression;
@@ -419,6 +431,7 @@ typedef struct Argument {
 #define DECL_FLAG_FOUND_TYPE 0x08
 #define DECL_FLAG_ERRORED_ABOUT_SELF_REFERENCE 0x10 /* has there been an error about this decl referencing itself? */
 #define DECL_FLAG_FOUND_VAL 0x20
+#define DECL_FLAG_PARAM 0x40 /* is this a parameter declaration? (needed because parameters are immutable) */
 
 /* OPTIM: Instead of using dynamic arrays, do two passes. */
 typedef struct Declaration {
@@ -483,3 +496,12 @@ typedef struct Typer {
 	Type ret_type; /* the return type of the function we're currently parsing. */
 } Typer;
 
+typedef struct {
+	FILE *outc;
+	IdentID ident_counter;
+	ParsedFile *file;
+	Block *block;
+	FnExpr *fn; /* which function are we in? (NULL for none) - not used during decls */
+	Evaluator *evalr;
+	Identifier main_ident;
+} CGenerator;

@@ -1,5 +1,5 @@
-#!/bin/bash
-if [[ $CC == "" ]]; then
+#!/bin/sh
+if [ "$CC" = "" ]; then
 	CC=gcc
 fi
 	
@@ -12,10 +12,10 @@ fi
 
 ADDITIONAL_FLAGS='-Wno-unused-function'
 
-if [[ $CC == "clang" ]]; then
-	WARNINGS='-Wall -Wextra -Wpedantic -Wshadow -Wimplicit-fallthrough -Wno-unused-parameter'
+if [ "$CC" = "clang" ]; then
+	WARNINGS='-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wimplicit-fallthrough -Wno-unused-parameter'
 else
-	WARNINGS='-Wall -Wextra -Wpedantic -Wshadow -Wno-pointer-to-int-cast -Wno-unused-parameter'
+	WARNINGS='-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wno-pointer-to-int-cast -Wno-unused-parameter'
 fi
 
 DEBUG_FLAGS="-O0 -g3 $WARNINGS -std=c11 -DTOC_DEBUG"

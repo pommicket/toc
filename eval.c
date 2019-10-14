@@ -436,7 +436,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	/* WARNING: macros ahead */
 #define eval_unary_op_one(low, up, op)			\
 	case BUILTIN_##up:							\
-	v->low = op of.low; break
+		v->low = (up)(op of.low); break
 #define eval_unary_op_nums(builtin, op)			\
 	eval_unary_op_one(i8, I8, op);				\
 	eval_unary_op_one(i16, I16, op);			\
@@ -457,7 +457,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 
 #define eval_binary_op_one(low, up, op)			\
 	case BUILTIN_##up:							\
-		v->low = lhs.low op rhs.low; break
+		v->low = (up)(lhs.low op rhs.low); break
 	
 #define eval_binary_op_nums(builtin, op)		\
 	eval_binary_op_one(i8, I8, op);				\

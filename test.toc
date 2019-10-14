@@ -1,33 +1,18 @@
 
-puti @= fn(i: int) {
+puti @= fn(i: int) int {
 	 #C("printf(\"%ld\\n\", i)");
+	 i
 };
 
-asdf @= fn(i: int) [3]int {
-	 ret : [3]int;
-	 asdf : [3]int;
-	 ret[0] = 0*i;
-	 ret[1] = 1*i;
-	 ret[2] = 2*i;
-	 asdf = ret;
-	 return asdf;
+dbl @= fn(x: &[3]int) {
+    (*x)[0] = (*x)[0] * 2;
+    (*x)[1] = (*x)[1] * 2;
+    (*x)[2] = (*x)[2] * 2;
 };
 
 main @= fn() {
-	 x := new int;
-	 *x = 17;
-	 if *x == 0 {
-	 	*x = 1+2+3-5/62;
-		} else {
-		  *x = 4+5+6;
-		}
-		puti(*x);
-del x;
-	fptr := asdf;
+     a : [3]int;
+     a[0] = 1;
+     dbl(&a);
+     puti(a[0]);
 };
-
-foo := 5;
-bar := "Hello";
-a, b := 123;
-x := 'a';
-sadkfj := -1293812;

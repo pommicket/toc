@@ -80,7 +80,61 @@ static bool type_must_eq(Location where, Type *expected, Type *got) {
 	return true;
 }
 
-/* sometimes prints an error and returns false if the given expression is not an l-value */
+
+/*
+this expression, which is an array, must be mutable (otherwise print an error,
+return false)!
+*/
+static bool expr_arr_must_mut(Expression *e) {
+	switch (e->kind) {
+	case EXPR_IDENT: {
+		IdentDecl *idecl = ident_decl(e->ident);
+		Declaration *d = idecl->decl;
+		if (d->flags & DECL_FLAG_CONST) {
+			err_print(e->where, "Cannot modify a constant array.");
+			return false;
+		}
+		if (d->flags & DECL_FLAG_PARAM) {
+			err_print(e->where, "Parameters are immutable.");
+			return false;
+		}
+	} return true;
+	case EXPR_CAST:
+	case EXPR_CALL:
+	case EXPR_NEW:
+	case EXPR_UNARY_OP:
+		return true;
+	case EXPR_WHILE:
+		assert(e->while_.body.ret_expr);
+		return expr_arr_must_mut(e->while_.body.ret_expr);
+	case EXPR_IF:
+		for (IfExpr *i = &e->if_; i; i->next_elif ? i = &i->next_elif->if_ : (i = NULL)) {
+			assert(i->body.ret_expr);
+			if (!expr_arr_must_mut(i->body.ret_expr))
+				return false;
+		}
+		return true;
+	case EXPR_BLOCK:
+		assert(e->block.ret_expr);
+		return expr_arr_must_mut(e->block.ret_expr);
+	case EXPR_LITERAL_STR:
+		err_print(e->where, "String constants are immutable.");
+		return false;
+	case EXPR_LITERAL_BOOL:
+	case EXPR_FN:
+	case EXPR_TUPLE:
+	case EXPR_LITERAL_FLOAT:
+	case EXPR_LITERAL_CHAR:
+	case EXPR_LITERAL_INT:
+	case EXPR_BINARY_OP:
+	case EXPR_DIRECT:
+		break;
+	}
+	assert(0);
+	return false;
+}
+
+/* prints an error and returns false if the given expression is not an l-value */
 static bool expr_must_lval(Expression *e) {
 	/* NOTE: make sure you update eval when you change this */
 	switch (e->kind) {
@@ -94,6 +148,11 @@ static bool expr_must_lval(Expression *e) {
 			info_print(d->where, "%s was declared here.", istr);
 			return false;
 		}
+		if (d->flags & DECL_FLAG_PARAM) {
+			char *istr = ident_to_str(e->ident);
+			err_print(e->where, "You cannot modify or take the address of a parameter (%s).", istr);
+			return false;		
+		}
 		
 		return true;
 	}
@@ -102,7 +161,7 @@ static bool expr_must_lval(Expression *e) {
 		break;
 	case EXPR_BINARY_OP:
 		switch (e->binary.op) {
-		case BINARY_AT_INDEX: return true;
+		case BINARY_AT_INDEX: return expr_arr_must_mut(e->binary.lhs);
 		default: break;
 		}
 		break;
@@ -114,9 +173,24 @@ static bool expr_must_lval(Expression *e) {
 		}
 		return true;
 	} break;
-	default:
-		break;
+	case EXPR_CAST:
+	case EXPR_NEW:
+	case EXPR_FN:
+	case EXPR_LITERAL_FLOAT:
+	case EXPR_LITERAL_CHAR:
+	case EXPR_LITERAL_STR:
+	case EXPR_LITERAL_INT:
+	case EXPR_LITERAL_BOOL:
+	case EXPR_IF:
+	case EXPR_WHILE:
+	case EXPR_CALL:
+	case EXPR_DIRECT:
+	case EXPR_BLOCK: {
+		err_print(e->where, "Cannot use %s as l-value.", expr_kind_to_str(e->kind));
+		return false;
 	}
+	}
+	assert(0);
 	return false;
 }
 
@@ -622,11 +696,16 @@ static bool types_expr(Typer *tr, Expression *e) {
 			if (!types_expr(tr, &arg->val))
 				return false;
 		}
+		if (f->type.kind == TYPE_UNKNOWN) {
+			e->type.kind = TYPE_UNKNOWN;
+			return true;
+		}
 		if (f->type.kind != TYPE_FN) {
 			char *type = type_to_str(&f->type);
 			err_print(e->where, "Calling non-function (type %s).", type);
 			return false;
 		}
+		
 		Type *ret_type = f->type.fn.types;
 		Type *param_types = ret_type + 1;
 		Argument *args = c->args;
@@ -831,7 +910,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 		switch (e->binary.op) {
 		case BINARY_SET:
 			if (!expr_must_lval(e->binary.lhs)) {
-				err_print(e->where, "You can only assign to an lvalue."); /* FEATURE: better err */
 				return false;
 			}
 			/* fallthrough */
@@ -988,7 +1066,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 				goto ret;
 			}
 			d->type = d->expr.type;
-			d->type.flags &= ~TYPE_FLAG_FLEXIBLE; /* x := 5; => x is not flexible */
+			d->type.flags &= (uint16_t)~(uint16_t)TYPE_FLAG_FLEXIBLE; /* x := 5; => x is not flexible */
 		}
 		if (d->flags & DECL_FLAG_CONST) {
 			if (!(d->flags & DECL_FLAG_FOUND_VAL)) {

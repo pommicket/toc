@@ -11,6 +11,7 @@ expr - expression
 fn - function
 ident - identifier
 kw - keyword
+mut - mutable
 num - number
 op - operator
 param - parameter

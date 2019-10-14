@@ -3,6 +3,30 @@ static bool parse_expr(Parser *p, Expression *e, Token *end);
 #define PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR 0x01
 static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_t flags);
 
+static const char *expr_kind_to_str(ExprKind k) {
+	switch (k) {
+	case EXPR_LITERAL_FLOAT: return "float literal";
+	case EXPR_LITERAL_INT: return "integer literal";
+	case EXPR_LITERAL_STR: return "string literal";
+	case EXPR_LITERAL_BOOL: return "boolean literal";
+	case EXPR_LITERAL_CHAR: return "character literal";
+	case EXPR_IF: return "if expression";
+	case EXPR_WHILE: return "while expression";
+	case EXPR_CALL: return "function call";
+	case EXPR_DIRECT: return "directive";
+	case EXPR_NEW: return "new expression";
+	case EXPR_CAST: return "cast expression";
+	case EXPR_UNARY_OP: return "unary operator";
+	case EXPR_BINARY_OP: return "binary operator";
+	case EXPR_FN: return "function expression";
+	case EXPR_TUPLE: return "tuple";
+	case EXPR_BLOCK: return "block";
+	case EXPR_IDENT: return "identifier";
+	}
+	assert(0);
+	return "";
+}
+
 static const char *unary_op_to_str(UnaryOp u) {
 	switch (u) {
 	case UNARY_MINUS: return "-";
@@ -459,7 +483,8 @@ static bool parse_block(Parser *p, Block *b) {
 }
 
 static bool is_decl(Tokenizer *t);
-	
+static inline bool ends_decl(Token *t, DeclEndKind ends_with);
+
 static bool parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end) {
 	Tokenizer *t = p->tokr;
 	bool ret = true;
@@ -472,8 +497,8 @@ static bool parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end
 		Declaration *decl = parser_arr_add(p, decls);
 		if (!parse_decl(p, decl, decl_end, PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR)) {
 			ret = false;
-			/* skip to end of param list */
-			while (t->token->kind != TOKEN_EOF && !token_is_kw(t->token, KW_RPAREN))
+			/* skip to end of list */
+			while (t->token->kind != TOKEN_EOF && !ends_decl(t->token, decl_end))
 				t->token++;
 			break;
 		}
@@ -499,6 +524,8 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 	} else {
 		if (!parse_decl_list(p, &f->params, DECL_END_RPAREN_COMMA))
 		    return false;
+		arr_foreach(f->params, Declaration, pdecl)
+			pdecl->flags |= DECL_FLAG_PARAM;
 	}
 	
 	if (t->token->kind == TOKEN_EOF) {

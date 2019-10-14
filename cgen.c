@@ -1,13 +1,3 @@
-typedef struct {
-	FILE *outc;
-	unsigned long ident_counter;
-	ParsedFile *file;
-	Block *block;
-	FnExpr *fn; /* which function are we in? (NULL for none) - not used during decls */
-	Evaluator *evalr;
-	Identifier main_ident;
-} CGenerator;
-
 static bool cgen_stmt(CGenerator *g, Statement *s);
 static bool cgen_block(CGenerator *g, Block *b);
 static bool cgen_expr(CGenerator *g, Expression *e);
@@ -89,8 +79,8 @@ static void cgen_ident(CGenerator *g, Identifier i) {
 	}
 }
 
-static void cgen_ident_id(CGenerator *g, unsigned long id) {
-	cgen_write(g, "a%lu_", id);
+static void cgen_ident_id(CGenerator *g, IdentID id) {
+	cgen_write(g, "a%lu_", (unsigned long)id);
 }
 
 static bool cgen_type_post(CGenerator *g, Type *t, Location where);
@@ -522,7 +512,7 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 			cgen_write(g, "{");
 			cgen_nl(g);
 			if (!cgen_type_pre(g, &d->expr.type, d->expr.where)) return false;
-			cgen_write(g, "expr__");
+			cgen_write(g, " expr__");
 			if (!cgen_type_post(g, &d->expr.type, d->expr.where)) return false;
 			cgen_write(g, "; ");
 			if (!cgen_set(g, NULL, "expr__", &d->expr, NULL))
