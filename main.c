@@ -1,7 +1,6 @@
 /* 
 TODO:
 re-do cgen
-arrs are pointers
 make sure initializers for global variables are compile-time constants
 allow, e.g.: x := "foo"; x[0] = 'g';
 any odd number of "s for a string

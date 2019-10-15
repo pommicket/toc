@@ -10,6 +10,15 @@ dbl @= fn(x: &[3]int) {
     (*x)[2] = (*x)[2] * 2;
 };
 
+foo @= fn() a: int {
+    a = 3;
+    if true {
+       a = 4;
+    } elif false {
+       a = 17+1/0;
+    }
+};
+
 main @= fn() {
      a : [3]int;
      a[0] = 1;

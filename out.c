@@ -18,7 +18,8 @@ typedef unsigned char bool;
 /* declarations */
 i64 puti(i64 i);
 void dbl(i64((* x)[3]));
-void main__();
+i64 foo(void);
+void main__(void);
 /* code */
 int main() {
 	main__();
@@ -26,19 +27,28 @@ int main() {
 }
 
 i64 puti(i64 i) {
-printf("%ld\n", i);
+	printf("%ld\n", i);
 }
 
 void dbl(i64((* x)[3])) {
-((*x)[0]) = (((*x)[0])*2);;
-((*x)[1]) = (((*x)[1])*2);;
-((*x)[2]) = (((*x)[2])*2);;
+	((*x)[0]) = (((*x)[0])*2);;
+	((*x)[1]) = (((*x)[1])*2);;
+	((*x)[2]) = (((*x)[2])*2);;
 }
 
-void main__() {
-i64( a[3]) = {0}; 
-(a[0]) = 1;;
-(dbl((&a)));
-(puti((a[0])));
+i64 foo(void) {
+	a = 3;;
+	if (true) {
+		a = 4;;
+	} else if (false) {
+		a = (17+(1/0));;
+	};
+}
+
+void main__(void) {
+	i64( a[3]) = {0}; 
+	(a[0]) = 1;;
+	(dbl((&a)));
+	(puti((a[0])));
 }
 

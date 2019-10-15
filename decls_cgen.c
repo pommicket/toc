@@ -54,7 +54,8 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 	    e->fn.c.id = g->ident_counter++;
 		if (!cgen_fn_header(g, &e->fn, e->where))
 			return false;
-		cgen_write(g, ";\n");
+		cgen_write(g, ";");
+		cgen_nl(g);
 		if (!cgen_decls_block(g, &e->fn.body))
 			return false;
 		break;
@@ -85,7 +86,8 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 		d->expr.fn.c.name = d->idents[0];
 		if (!cgen_fn_header(g, &d->expr.fn, d->where))
 			return false;
-		cgen_write(g, ";\n");
+		cgen_write(g, ";");
+		cgen_nl(g);
 		if (!cgen_decls_block(g, &d->expr.fn.body))
 			return false;
 	} else if (d->flags & DECL_FLAG_HAS_EXPR) {

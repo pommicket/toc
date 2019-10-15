@@ -499,6 +499,8 @@ typedef struct Typer {
 typedef struct {
 	FILE *outc;
 	IdentID ident_counter;
+	int indent_lvl; /* how many levels of indentation? */
+	bool will_indent; /* will the next thing be indented? */
 	ParsedFile *file;
 	Block *block;
 	FnExpr *fn; /* which function are we in? (NULL for none) - not used during decls */

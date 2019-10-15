@@ -542,7 +542,7 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 		if (!parse_decl_list(p, &f->ret_decls, DECL_END_LBRACE_COMMA))
 			return false;
 		t->token--;	/* move back to { */
-		if (arr_len(f->ret_decls) > 1 || arr_len(f->ret_decls[0].idents)) {
+		if (arr_len(f->ret_decls) > 1 || arr_len(f->ret_decls[0].idents) > 1) {
 			f->ret_type.kind = TYPE_TUPLE;
 			f->ret_type.flags = 0;
 			f->ret_type.tuple = NULL;

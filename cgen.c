@@ -9,6 +9,8 @@ static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *e
 	g->ident_counter = 0;
 	g->main_ident = ident_get(ids, "main");
 	g->evalr = ev;
+	g->will_indent = true;
+	g->indent_lvl = 0;
 }
 
 static void cgen_block_enter(CGenerator *g, Block *b) {
@@ -19,6 +21,7 @@ static void cgen_block_enter(CGenerator *g, Block *b) {
 	} else {
 		stmts = b->stmts;
 	}
+	if (b) g->indent_lvl++;
 	block_enter(b, stmts);
 }
 
@@ -31,6 +34,7 @@ static void cgen_block_exit(CGenerator *g, Block *into) {
 		stmts = b->stmts;
 	}
 	block_exit(b, stmts);
+	if (b) g->indent_lvl--;
 	g->block = into;
 }
 
@@ -38,15 +42,26 @@ static inline FILE *cgen_writing_to(CGenerator *g) {
 	return g->outc;	/* for now */
 }
 
-static void cgen_write(CGenerator *g, const char *fmt, ...) {
+/* indent iff needed */
+static inline void cgen_indent(CGenerator *g) {
+	if (g->will_indent) {
+		for (int i = 0; i < g->indent_lvl; i++)
+			fprintf(cgen_writing_to(g), "\t");
+		g->will_indent = false;
+	}
+}
+
+static inline void cgen_write(CGenerator *g, const char *fmt, ...) {
 	va_list args;
+	cgen_indent(g);
 	va_start(args, fmt);
 	vfprintf(cgen_writing_to(g), fmt, args);
 	va_end(args);
 }
 
-static void cgen_nl(CGenerator *g) {
+static inline void cgen_nl(CGenerator *g) {
 	fprintf(cgen_writing_to(g), "\n");
+	g->will_indent = true;
 }
 
 /* should declaration be a direct function declaration C (as opposed to using a function pointer or not being a function) */
@@ -54,7 +69,7 @@ static bool cgen_fn_is_direct(CGenerator *g, Declaration *d) {
 	return g->block == NULL && (d->flags & DECL_FLAG_HAS_EXPR) && d->expr.kind == EXPR_FN && arr_len(d->idents) == 1;
 }
 
-static bool cgen_uses_out_param(Type *t) {
+static bool cgen_uses_ptr(Type *t) {
 	switch (t->kind) {
 	case TYPE_TUPLE:
 	case TYPE_ARR:
@@ -75,6 +90,7 @@ static void cgen_ident(CGenerator *g, Identifier i) {
 		/* don't conflict with C's main! */
 		cgen_write(g, "main__");
 	} else {
+		cgen_indent(g);
 		fprint_ident(cgen_writing_to(g), i);
 	}
 }
@@ -112,7 +128,7 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
 		cgen_write(g, "(");
 		break;
 	case TYPE_FN:
-		if (cgen_uses_out_param(&t->fn.types[0])) {
+		if (cgen_uses_ptr(&t->fn.types[0])) {
 			cgen_write(g, "void");
 		} else {
 			if (!cgen_type_pre(g, &t->fn.types[0], where))
@@ -145,7 +161,7 @@ static bool cgen_type_post(CGenerator *g, Type *t, Location where) {
 			return false;
 		break;
 	case TYPE_FN: {
-		bool out_param = cgen_uses_out_param(&t->fn.types[0]);
+		bool out_param = cgen_uses_ptr(&t->fn.types[0]);
 		cgen_write(g, ")(");
 		for (size_t i = 1; i < arr_len(t->fn.types); i++) {
 			if (i != 1)
@@ -164,6 +180,8 @@ static bool cgen_type_post(CGenerator *g, Type *t, Location where) {
 			if (!cgen_type_post(g, &t->fn.types[0], where))
 				return false;
 		}
+		if (arr_len(t->fn.types) == 1 && !out_param)
+			cgen_write(g, "void");
 		cgen_write(g, ")");
 		if (!out_param)
 			if (!cgen_type_post(g, &t->fn.types[0], where))
@@ -179,7 +197,7 @@ static bool cgen_type_post(CGenerator *g, Type *t, Location where) {
 }
 
 static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where) {
-	bool out_param = cgen_uses_out_param(&f->ret_type);
+	bool out_param = cgen_uses_ptr(&f->ret_type);
 	bool any_params = false;
 	if (out_param) {
 		cgen_write(g, "void ");
@@ -218,6 +236,8 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where) {
 		if (!cgen_type_post(g, &f->ret_type, where))
 			return false;
 	}
+	if (!out_param && arr_len(f->params) == 0)
+		cgen_write(g, "void");
 	cgen_write(g, ")");
 	return true;
 }
@@ -430,6 +450,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			Value val;
 			if (!eval_expr(g->evalr, &e->direct.args[0], &val))
 				return false;
+			cgen_indent(g);
 			fwrite(val.arr, 1, e->direct.args[0].type.arr.n, cgen_writing_to(g));
 		} break;
 		case DIRECT_COUNT: assert(0); break;
@@ -547,7 +568,7 @@ static bool cgen_stmt(CGenerator *g, Statement *s) {
 	case STMT_RET:
 		if (g->fn->ret_type.kind == TYPE_VOID) {
 			cgen_write(g, "return");
-		} else if (cgen_uses_out_param(&g->fn->ret_type)) {
+		} else if (cgen_uses_ptr(&g->fn->ret_type)) {
 			if (!cgen_set(g, NULL, "*ret__", &s->ret.expr, NULL)) return false;
 			cgen_write(g, "return");
 		} else {
