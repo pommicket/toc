@@ -1,30 +1,14 @@
-
-puti @= fn(i: int) int {
-	 #C("printf(\"%ld\\n\", i)");
-	 i
+puti @= fn(x: int) {
+	 #C("printf(\"%lu\", x)");
 };
 
-dbl @= fn(x: &[3]int) {
-    (*x)[0] = (*x)[0] * 2;
-    (*x)[1] = (*x)[1] * 2;
-    (*x)[2] = (*x)[2] * 2;
+mktup @= fn(a: int, b: int) (int, int) {
+	  a, a+b
 };
 
-foo @= fn() a: int {
-    a = 3;
-    if true {
-       a = 4;
-    } elif false {
-       a = 17+1/0;
-    }
-};
+
 
 main @= fn() {
-     a : [3]int;
-     a[0] = 1;
-	 a[0], a[1] = 5, 8+a[0];
-	 dbl(&a);
-	 asdfnahsdf:=fn() {};
-     puti(a[0]);
-	 puti(foo());
+	 a, b := mktup(10, 20);
+	 // x := mktup;
 };

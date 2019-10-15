@@ -1,9 +1,12 @@
 /* 
 TODO:
+cgen tuples
+unicode variable names
 re-do cgen
 make sure initializers for global variables are compile-time constants
-allow, e.g.: x := "foo"; x[0] = 'g';
 any odd number of "s for a string
+modifiable strings:
+s := {"sakjdfhkjh ksjdahfkjsd ahs ahdf hsdaf khsadkjfh"};
  */
 #include "toc.c"
 

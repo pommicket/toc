@@ -106,6 +106,10 @@ static void cgen_ident(CGenerator *g, Identifier i) {
 	}
 }
 
+static char *cgen_ident_to_str(Identifier i) {
+	return ident_to_str(i);
+}
+
 static void cgen_ident_id(CGenerator *g, IdentID id) {
 	cgen_write(g, "a%lu_", (unsigned long)id);
 }
@@ -243,13 +247,25 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where) {
 		}
 	}
 	if (out_param) {
-		if (any_params)
-			cgen_write(g, ", ");
-		if (!cgen_type_pre(g, &f->ret_type, where))
-			return false;
-		cgen_write(g, " (*ret__)");
-		if (!cgen_type_post(g, &f->ret_type, where))
-			return false;
+		if (f->ret_type.kind == TYPE_TUPLE) {
+			/* multiple return variables */
+			for (size_t i = 0; i < arr_len(f->ret_type.tuple); i++) {
+				Type *x = &f->ret_type.tuple[i];
+				if (any_params || i > 0)
+					cgen_write(g, ", ");
+				if (!cgen_type_pre(g, x, where)) return false;
+				cgen_write(g, "(*ret%lu__)", (unsigned long)i);
+				if (!cgen_type_post(g, x, where)) return false;
+			}
+		} else {
+			if (any_params)
+				cgen_write(g, ", ");
+			if (!cgen_type_pre(g, &f->ret_type, where))
+				return false;
+			cgen_write(g, " (*ret__)");
+			if (!cgen_type_post(g, &f->ret_type, where))
+				return false;
+		}
 	}
 	if (!out_param && arr_len(f->params) == 0)
 		cgen_write(g, "void");
@@ -338,6 +354,57 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 		}
 		break;
 	case TYPE_VOID:
+		assert(0);
+		return false;
+	}
+	return true;
+}
+
+
+/* Either exprs or idents should be NULL */
+static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents, Expression *to) {
+	switch (to->kind) {
+	case EXPR_TUPLE:
+		/* e.g. a, b = 3, 5; */
+		for (size_t i = 0; i < arr_len(to->tuple); i++) {
+			char *s = NULL;
+			Expression *e = NULL;
+			if (idents)
+				s = cgen_ident_to_str(idents[i]);
+			else
+				e = &exprs[i];
+			if (!cgen_set(g, e, s, to, NULL)) return false;
+			free(s);
+		}
+		break;
+	case EXPR_CALL: {
+		/* e.g. a, b = fn_which_returns_tuple(); */
+		if (!cgen_expr(g, to->call.fn)) return false;
+		cgen_write(g, "(");
+		bool any_args = arr_len(to->call.arg_exprs) != 0;
+		arr_foreach(to->call.arg_exprs, Expression, arg) {
+			if (arg != to->call.arg_exprs)
+				cgen_write(g, ", ");
+			if (!cgen_expr(g, arg))
+				return false;
+		}
+		/* out params */
+		size_t len = exprs ? arr_len(exprs) : arr_len(idents);
+
+		for (size_t i = 0; i < len; i++) {
+			if (any_args || i > 0)
+				cgen_write(g, ", ");
+			cgen_write(g, "&");
+			if (exprs) {
+				if (!cgen_expr(g, &exprs[i]))
+					return false;
+			} else {
+				cgen_ident(g, idents[i]);
+			}
+		}
+		cgen_writeln(g, ");");
+	} break;
+	default:
 		assert(0);
 		return false;
 	}
@@ -586,26 +653,31 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 				
 			cgen_write(g, "; ");
 		}
-		/* TODO: tuples */
+		/* TODO: global tuples */
 		if (g->block != NULL && (d->flags & DECL_FLAG_HAS_EXPR)) {
-			cgen_write(g, "{");
-			cgen_nl(g);
-			if (!cgen_type_pre(g, &d->expr.type, d->expr.where)) return false;
-			cgen_write(g, " expr__");
-			if (!cgen_type_post(g, &d->expr.type, d->expr.where)) return false;
-			cgen_write(g, "; ");
-			if (!cgen_set(g, NULL, "expr__", &d->expr, NULL))
-				return false;
-			arr_foreach(d->idents, Identifier, i) {
-				Expression e;
-				e.flags = 0;
-				e.kind = EXPR_IDENT;
-				e.type = d->type;
-				e.ident = *i;
-				if (!cgen_set(g, &e, NULL, NULL, "expr__"))
+			if (d->expr.type.kind == TYPE_TUPLE) {
+				if (!cgen_set_tuple(g, NULL, d->idents, &d->expr)) return false;
+			} else {
+				cgen_write(g, "{");
+		 
+				cgen_nl(g);
+				if (!cgen_type_pre(g, &d->expr.type, d->expr.where)) return false;
+				cgen_write(g, " expr__");
+				if (!cgen_type_post(g, &d->expr.type, d->expr.where)) return false;
+				cgen_write(g, "; ");
+				if (!cgen_set(g, NULL, "expr__", &d->expr, NULL))
 					return false;
+				arr_foreach(d->idents, Identifier, i) {
+					Expression e;
+					e.flags = 0;
+					e.kind = EXPR_IDENT;
+					e.type = d->type;
+					e.ident = *i;
+					if (!cgen_set(g, &e, NULL, NULL, "expr__"))
+						return false;
+				}
+				cgen_write(g, "}");
 			}
-			cgen_write(g, "}");
 		}
 		cgen_nl(g);
 	}
