@@ -504,6 +504,7 @@ typedef struct {
 	ParsedFile *file;
 	Block *block;
 	FnExpr *fn; /* which function are we in? (NULL for none) - not used during decls */
+	Expression **anon_fns; /* array of pointers to expressions of anonymous functions */
 	Evaluator *evalr;
 	Identifier main_ident;
 } CGenerator;

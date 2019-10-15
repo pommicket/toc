@@ -3,6 +3,7 @@ static bool cgen_block(CGenerator *g, Block *b);
 static bool cgen_expr(CGenerator *g, Expression *e);
 static bool cgen_type_pre(CGenerator *g, Type *t, Location where);
 static bool cgen_type_post(CGenerator *g, Type *t, Location where);
+static bool cgen_decl(CGenerator *g, Declaration *d);
 
 static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *ev) {
 	g->outc = out;
@@ -11,6 +12,7 @@ static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *e
 	g->evalr = ev;
 	g->will_indent = true;
 	g->indent_lvl = 0;
+	g->anon_fns = NULL;
 }
 
 static void cgen_block_enter(CGenerator *g, Block *b) {
@@ -62,6 +64,15 @@ static inline void cgen_write(CGenerator *g, const char *fmt, ...) {
 static inline void cgen_nl(CGenerator *g) {
 	fprintf(cgen_writing_to(g), "\n");
 	g->will_indent = true;
+}
+
+static inline void cgen_writeln(CGenerator *g, const char *fmt, ...) {
+	va_list args;
+	cgen_indent(g);
+	va_start(args, fmt);
+	vfprintf(cgen_writing_to(g), fmt, args);
+	va_end(args);
+	cgen_nl(g);
 }
 
 /* should declaration be a direct function declaration C (as opposed to using a function pointer or not being a function) */
@@ -196,6 +207,14 @@ static bool cgen_type_post(CGenerator *g, Type *t, Location where) {
 	return true;
 }
 
+static inline void cgen_fn_name(CGenerator *g, FnExpr *f) {
+	if (f->c.name) {
+		cgen_ident(g, f->c.name);
+	} else {
+		cgen_ident_id(g, f->c.id);
+	}
+}
+
 static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where) {
 	bool out_param = cgen_uses_ptr(&f->ret_type);
 	bool any_params = false;
@@ -205,11 +224,7 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where) {
 		if (!cgen_type_pre(g, &f->ret_type, where)) return false;
 		cgen_write(g, " ");
 	}
-	if (f->c.name) {
-		cgen_ident(g, f->c.name);
-	} else {
-		cgen_ident_id(g, f->c.id);
-	}
+	cgen_fn_name(g, f);
 	if (!out_param) {
 		if (!cgen_type_post(g, &f->ret_type, where)) return false;
 	}
@@ -305,6 +320,22 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 		cgen_write(g, "for (i = 0; i < %lu; i++) arr__out[i] = arr__in[i];", (unsigned long)type->arr.n);
 		cgen_nl(g);
 		cgen_write(g, "}");
+		break;
+	case TYPE_TUPLE:
+		assert(set_expr);
+		assert(to_expr);
+		switch (to_expr->kind) {
+		case EXPR_TUPLE:
+			for (size_t i = 0; i < arr_len(to_expr->tuple); i++) {
+				cgen_set(g, &set_expr->tuple[i], NULL, &to_expr->tuple[i], NULL);
+			}
+			break;
+		case EXPR_CALL:
+			/* TODO */
+			break;
+		default:
+			assert(0); break;
+		}
 		break;
 	case TYPE_VOID:
 		assert(0);
@@ -456,6 +487,13 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		case DIRECT_COUNT: assert(0); break;
 		}
 		break;
+	case EXPR_FN: {
+		if (g->block != NULL) {
+			Expression **eptr = arr_add(&g->anon_fns);
+			*eptr = e;
+		}
+		cgen_fn_name(g, &e->fn);
+	} break;
 	}
 	return true;
 }
@@ -496,18 +534,38 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 	}
 }
 
+static bool cgen_fn(CGenerator *g, FnExpr *f, Location where) {
+	if (!cgen_fn_header(g, f, where))
+		return false;
+	cgen_write(g, " ");
+	FnExpr *prev_fn = g->fn;
+	g->fn = f;
+	cgen_write(g, "{");
+	cgen_nl(g);
+	arr_foreach(f->ret_decls, Declaration, d) {
+		cgen_decl(g, d);
+	}
+	if (!cgen_block(g, &f->body))
+		return false;
+	if (f->ret_decls) {
+		if (cgen_uses_ptr(&f->ret_type)) {
+		} else {
+			cgen_write(g, "return ");
+			cgen_ident(g, f->ret_decls[0].idents[0]);
+			cgen_writeln(g, ";");
+		}
+	}
+	cgen_write(g, "}");
+	cgen_nl(g);
+	g->fn = prev_fn;
+	cgen_nl(g);
+	cgen_nl(g);
+	return true;
+}
+
 static bool cgen_decl(CGenerator *g, Declaration *d) {
 	if (cgen_fn_is_direct(g, d)) {
-		if (!cgen_fn_header(g, &d->expr.fn, d->where))
-			return false;
-		cgen_write(g, " ");
-		FnExpr *prev_fn = g->fn;
-		g->fn = &d->expr.fn;
-		if (!cgen_block(g, &d->expr.fn.body))
-			return false;
-		g->fn = prev_fn;
-		cgen_nl(g);
-		cgen_nl(g);
+		cgen_fn(g, &d->expr.fn, d->where);
 	} else if (d->flags & DECL_FLAG_CONST) {
 		/* TODO */
 	} else {
@@ -613,5 +671,11 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 		if (!cgen_stmt(g, s))
 			return false;
 
+	typedef Expression *ExprPtr;
+	arr_foreach(g->anon_fns, ExprPtr, eptr) {
+		Expression *e = *eptr;
+		cgen_fn(g, &e->fn, e->where);
+	}
+	
 	return true;
 }

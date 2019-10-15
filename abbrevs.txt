@@ -1,4 +1,5 @@
 allocr - allocator
+anon - anonymous
 arg - argument
 decl - declaration
 del - delete

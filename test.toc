@@ -22,6 +22,9 @@ foo @= fn() a: int {
 main @= fn() {
      a : [3]int;
      a[0] = 1;
-     dbl(&a);
+	 a[0], a[1] = 5, 8+a[0];
+	 dbl(&a);
+	 asdfnahsdf:=fn() {};
      puti(a[0]);
+	 puti(foo());
 };
