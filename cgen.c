@@ -1,6 +1,7 @@
 static bool cgen_stmt(CGenerator *g, Statement *s);
 static bool cgen_block(CGenerator *g, Block *b);
 static bool cgen_expr(CGenerator *g, Expression *e);
+static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents, Expression *to);
 static bool cgen_type_pre(CGenerator *g, Type *t, Location where);
 static bool cgen_type_post(CGenerator *g, Type *t, Location where);
 static bool cgen_decl(CGenerator *g, Declaration *d);
@@ -340,18 +341,9 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 	case TYPE_TUPLE:
 		assert(set_expr);
 		assert(to_expr);
-		switch (to_expr->kind) {
-		case EXPR_TUPLE:
-			for (size_t i = 0; i < arr_len(to_expr->tuple); i++) {
-				cgen_set(g, &set_expr->tuple[i], NULL, &to_expr->tuple[i], NULL);
-			}
-			break;
-		case EXPR_CALL:
-			/* TODO */
-			break;
-		default:
-			assert(0); break;
-		}
+	    assert(set_expr->kind == EXPR_TUPLE);
+		if (!cgen_set_tuple(g, set_expr->tuple, NULL, to_expr))
+			return false;
 		break;
 	case TYPE_VOID:
 		assert(0);
@@ -636,11 +628,13 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 	} else if (d->flags & DECL_FLAG_CONST) {
 		/* TODO */
 	} else {
-		arr_foreach(d->idents, Identifier, i) {
-			if (!cgen_type_pre(g, &d->type, d->where)) return false;
+		for (size_t idx = 0; idx < arr_len(d->idents); idx++) {
+			Identifier *i = &d->idents[idx];
+			Type *t = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx] : &d->type;
+			if (!cgen_type_pre(g, t, d->where)) return false;
 			cgen_write(g, " ");
 			cgen_ident(g, *i);
-			if (!cgen_type_post(g, &d->type, d->where)) return false;
+			if (!cgen_type_post(g, t, d->where)) return false;
 			if (g->block == NULL && (d->flags & DECL_FLAG_HAS_EXPR)) {
 				cgen_write(g, " = ");
 				/* directly initialize iff we are in global scope */
@@ -648,7 +642,7 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 					return false;
 			} else if (!(d->flags & DECL_FLAG_HAS_EXPR)) {
 				cgen_write(g, " = ");
-		    	cgen_zero_value(g, &d->type);
+		    	cgen_zero_value(g, t);
 			}
 				
 			cgen_write(g, "; ");

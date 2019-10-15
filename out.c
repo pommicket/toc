@@ -38,3 +38,8 @@ void mktup(i64 a, i64 b, i64(*ret0__), i64(*ret1__)) {
 
 void main__(void) {
 	{
+	i64 a; i64 b; mktup(10, 20, &a, &b);
+
+}}
+
+
