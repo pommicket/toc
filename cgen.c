@@ -5,6 +5,7 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 static bool cgen_type_pre(CGenerator *g, Type *t, Location where);
 static bool cgen_type_post(CGenerator *g, Type *t, Location where);
 static bool cgen_decl(CGenerator *g, Declaration *d);
+static bool cgen_ret(CGenerator *g, Expression *ret);
 
 static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *ev) {
 	g->outc = out;
@@ -255,7 +256,7 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where) {
 				if (any_params || i > 0)
 					cgen_write(g, ", ");
 				if (!cgen_type_pre(g, x, where)) return false;
-				cgen_write(g, "(*ret%lu__)", (unsigned long)i);
+				cgen_write(g, "(*ret%lu_)", (unsigned long)i);
 				if (!cgen_type_post(g, x, where)) return false;
 			}
 		} else {
@@ -263,7 +264,7 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where) {
 				cgen_write(g, ", ");
 			if (!cgen_type_pre(g, &f->ret_type, where))
 				return false;
-			cgen_write(g, " (*ret__)");
+			cgen_write(g, " (*ret_)");
 			if (!cgen_type_post(g, &f->ret_type, where))
 				return false;
 		}
@@ -353,20 +354,24 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 }
 
 
-/* Either exprs or idents should be NULL */
+/* exprs and/or idents should be NULL. if both are NULL, *retN_ will be used. */
 static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents, Expression *to) {
 	switch (to->kind) {
 	case EXPR_TUPLE:
 		/* e.g. a, b = 3, 5; */
 		for (size_t i = 0; i < arr_len(to->tuple); i++) {
-			char *s = NULL;
+			char *s = NULL, buf[32];
 			Expression *e = NULL;
 			if (idents)
 				s = cgen_ident_to_str(idents[i]);
-			else
+			else if (exprs)
 				e = &exprs[i];
-			if (!cgen_set(g, e, s, to, NULL)) return false;
-			free(s);
+			else {
+				snprintf(buf, sizeof buf, "(*ret%lu_)", i);
+				s = buf;
+			}
+			if (!cgen_set(g, e, s, &to->tuple[i], NULL)) return false;
+			if (s != buf) free(s);
 		}
 		break;
 	case EXPR_CALL: {
@@ -386,12 +391,15 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 		for (size_t i = 0; i < len; i++) {
 			if (any_args || i > 0)
 				cgen_write(g, ", ");
-			cgen_write(g, "&");
 			if (exprs) {
+				cgen_write(g, "&");
 				if (!cgen_expr(g, &exprs[i]))
 					return false;
-			} else {
+			} else if (idents) {
+				cgen_write(g, "&");
 				cgen_ident(g, idents[i]);
+			} else {
+				cgen_write(g, "ret%lu_", i);
 			}
 		}
 		cgen_writeln(g, ");");
@@ -613,7 +621,10 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where) {
 			cgen_ident(g, f->ret_decls[0].idents[0]);
 			cgen_writeln(g, ";");
 		}
+	} else if (f->body.ret_expr) {
+		if (!cgen_ret(g, f->body.ret_expr)) return false;
 	}
+	
 	cgen_write(g, "}");
 	cgen_nl(g);
 	g->fn = prev_fn;
@@ -626,7 +637,7 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 	if (cgen_fn_is_direct(g, d)) {
 		cgen_fn(g, &d->expr.fn, d->where);
 	} else if (d->flags & DECL_FLAG_CONST) {
-		/* TODO */
+		/* TODO? */
 	} else {
 		for (size_t idx = 0; idx < arr_len(d->idents); idx++) {
 			Identifier *i = &d->idents[idx];
@@ -678,6 +689,28 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 	return true;
 }
 
+static bool cgen_ret(CGenerator *g, Expression *ret) {
+	assert((g->fn->ret_type.kind == TYPE_VOID) == (ret == NULL));
+	if (!ret) {
+		cgen_write(g, "return");
+	} else if (cgen_uses_ptr(&g->fn->ret_type)) {
+		if (g->fn->ret_type.kind == TYPE_TUPLE) {
+			if (!cgen_set_tuple(g, NULL, NULL, ret))
+				return false;
+		} else {
+			if (!cgen_set(g, NULL, "*ret_", ret, NULL)) return false;
+		}
+		cgen_write(g, "return");
+	} else {
+		cgen_write(g, "return ");
+			
+		if (!cgen_expr(g, ret)) return false;
+	}
+	cgen_write(g, ";");
+	cgen_nl(g);
+	return true;
+
+}
 
 static bool cgen_stmt(CGenerator *g, Statement *s) {
 	switch (s->kind) {
@@ -690,18 +723,8 @@ static bool cgen_stmt(CGenerator *g, Statement *s) {
 		cgen_nl(g);
 		break;
 	case STMT_RET:
-		if (g->fn->ret_type.kind == TYPE_VOID) {
-			cgen_write(g, "return");
-		} else if (cgen_uses_ptr(&g->fn->ret_type)) {
-			if (!cgen_set(g, NULL, "*ret__", &s->ret.expr, NULL)) return false;
-			cgen_write(g, "return");
-		} else {
-			cgen_write(g, "return ");
-			
-			if (!cgen_expr(g, &s->ret.expr)) return false;
-		}
-		cgen_write(g, ";");
-		cgen_nl(g);
+		if (!cgen_ret(g, s->ret.flags & RET_FLAG_EXPR ? &s->ret.expr : NULL))
+			return false;
 		break;
 	}
 	return true;

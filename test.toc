@@ -1,14 +1,18 @@
 puti @= fn(x: int) {
-	 #C("printf(\"%lu\", x)");
+	 #C("printf(\"%lu\\n\", x)");
 };
 
 mktup @= fn(a: int, b: int) (int, int) {
 	  a, a+b
 };
 
-
+asdf @= fn() int {
+	 7
+};
 
 main @= fn() {
 	 a, b := mktup(10, 20);
 	 // x := mktup;
+	 puti(asdf());
+	 puti(a); puti(b);
 };
