@@ -58,6 +58,11 @@ typedef struct {
     ArrBlock *blocks;
 } BlockArr;
 
+typedef struct {
+    U64 n;
+	void *data;
+} Slice;
+
 typedef union Value {
 	U8 u8;
 	U16 u16;
@@ -75,6 +80,7 @@ typedef union Value {
 	void *arr;
 	void *ptr;
 	union Value *tuple;
+	Slice slice;
 } Value;
 
 #define IDECL_FLAG_HAS_VAL 0x01
@@ -229,7 +235,8 @@ typedef enum {
 			  TYPE_FN,
 			  TYPE_TUPLE,
 			  TYPE_ARR,
-			  TYPE_PTR
+			  TYPE_PTR,
+			  TYPE_SLICE
 } TypeKind;
 
 typedef enum {
@@ -267,9 +274,8 @@ typedef struct Type {
 				struct Expression *n_expr;
 			};
 		} arr;
-		struct {
-			struct Type *of;
-		} ptr;
+	    struct Type *ptr;
+		struct Type *slice;
 	};
 } Type;
 

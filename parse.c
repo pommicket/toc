@@ -180,6 +180,12 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 		written += type_to_str_(t->arr.of, buffer + written, bufsize - written);
 		return written;
 	} break;
+	case TYPE_SLICE: {
+		size_t written = str_copy(buffer, bufsize, "[");
+		written += str_copy(buffer + written, bufsize - written, "]");
+		written += type_to_str_(t->slice, buffer + written, bufsize - written);
+		return written;
+	} break;
 	case TYPE_TUPLE: {
 		size_t written = str_copy(buffer, bufsize, "(");
 		arr_foreach(t->tuple, Type, child) {
@@ -192,7 +198,7 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 	}
 	case TYPE_PTR: {
 		size_t written = str_copy(buffer, bufsize, "&");
-		written += type_to_str_(t->ptr.of, buffer + written, bufsize - written);
+		written += type_to_str_(t->ptr, buffer + written, bufsize - written);
 		return written;
 	}
 	}
@@ -371,10 +377,22 @@ static bool parse_type(Parser *p, Type *type) {
 			break;
 		}
 		case KW_LSQUARE: {
-			/* array type */
-			Token *start = t->token;
+			/* array/slice */
+			type->where = t->token->where;
 			type->kind = TYPE_ARR;
 			t->token++;	/* move past [ */
+			if (token_is_kw(t->token, KW_RSQUARE)) {
+				/* slice */
+				type->kind = TYPE_SLICE;
+				type->slice = parser_malloc(p, sizeof *type->slice);
+				t->token++; /* move past ] */
+				if (!parse_type(p, type->slice)) return false;
+				if (type->slice->kind == TYPE_TUPLE) {
+					err_print(type->where, "You cannot have a slice of tuples.");
+					return false;
+				}
+				break;
+			}
 			Token *end = expr_find_end(p, 0, NULL);
 			type->arr.n_expr = parser_new_expr(p);
 			if (!parse_expr(p, type->arr.n_expr, end)) return false;
@@ -382,13 +400,10 @@ static bool parse_type(Parser *p, Type *type) {
 			type->arr.of = parser_malloc(p, sizeof *type->arr.of);
 			if (!parse_type(p, type->arr.of)) return false;
 			if (type->arr.of->kind == TYPE_TUPLE) {
-				err_print(type->arr.of->where, "You cannot have an array of tuples.");
+				err_print(type->where, "You cannot have an array of tuples.");
 				return false;
 			}
-			type->flags = 0;
-			type->where = start->where;
-			break;
-		}
+		} break;
 		case KW_LPAREN:
 			/* tuple! */
 			type->kind = TYPE_TUPLE;
@@ -417,11 +432,11 @@ static bool parse_type(Parser *p, Type *type) {
 		case KW_AMPERSAND:
 			/* pointer */
 			type->kind = TYPE_PTR;
-			type->ptr.of = parser_malloc(p, sizeof *type->ptr.of);
+			type->ptr = parser_malloc(p, sizeof *type->ptr);
 			t->token++;	/* move past & */
-			if (!parse_type(p, type->ptr.of)) return false;
-			if (type->ptr.of->kind == TYPE_TUPLE) {
-				err_print(type->ptr.of->where, "You cannot have a pointer to a tuple.");
+			if (!parse_type(p, type->ptr)) return false;
+			if (type->ptr->kind == TYPE_TUPLE) {
+				err_print(type->ptr->where, "You cannot have a pointer to a tuple.");
 				return false;
 			}
 			break;

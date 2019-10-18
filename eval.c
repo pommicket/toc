@@ -41,13 +41,15 @@ static size_t compiler_sizeof(Type *t) {
 	case TYPE_BUILTIN:
 		return compiler_sizeof_builtin(t->builtin);
 	case TYPE_FN:
-		return sizeof(FnExpr *);
+		return sizeof t->fn;
 	case TYPE_PTR:
-		return sizeof(void *);
+		return sizeof t->ptr;
 	case TYPE_ARR:
-		return t->arr.n * compiler_sizeof(t->arr.of);
+		return sizeof t->arr;
 	case TYPE_TUPLE:
-		return arr_len(t->tuple) * sizeof(Value);
+		return sizeof t->tuple;
+	case TYPE_SLICE:
+		return sizeof t->slice;
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 		return 0;
@@ -82,6 +84,7 @@ static bool val_truthiness(Value *v, Type *t) {
 	case TYPE_PTR: return v->ptr != NULL;
 	case TYPE_FN: return v->fn != NULL;
 	case TYPE_ARR: return t->arr.n > 0;
+	case TYPE_SLICE: return v->slice.n > 0;
 	case TYPE_TUPLE: break;
 	}
 	assert(0);
@@ -239,6 +242,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 			default: assert(0); break;
 			}
 			break;
+		case TYPE_SLICE:
 		case TYPE_VOID:
 		case TYPE_UNKNOWN:
 		case TYPE_TUPLE:
@@ -257,6 +261,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_FN:
 			vout->fn = vin->fn;
 			break;
+		case TYPE_SLICE:
 		case TYPE_UNKNOWN:
 		case TYPE_TUPLE:
 		case TYPE_VOID:
@@ -287,6 +292,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_FN:
 			vout->fn = vin->ptr;
 			break;
+		case TYPE_SLICE:
 		case TYPE_UNKNOWN:
 		case TYPE_TUPLE:
 		case TYPE_VOID:
@@ -302,6 +308,26 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 			break;
 		case TYPE_ARR:
 			vout->arr = vin->arr;
+			break;
+		case TYPE_SLICE:
+		case TYPE_FN:
+		case TYPE_UNKNOWN:
+		case TYPE_TUPLE:
+		case TYPE_VOID:
+		case TYPE_BUILTIN:
+			assert(0); break;
+		}
+		break;
+	case TYPE_SLICE:
+		switch (to->kind) {
+		case TYPE_PTR:
+			vout->ptr = vin->slice.data;
+			break;
+		case TYPE_ARR:
+			vout->arr = vin->slice.data;
+			break;
+		case TYPE_SLICE:
+			vout->slice = vin->slice;
 			break;
 		case TYPE_FN:
 		case TYPE_UNKNOWN:
@@ -337,6 +363,9 @@ static void eval_deref(Value *v, void *ptr, Type *type) {
 		case BUILTIN_BOOL: v->boolv = *(bool *)ptr; break;
 		}
 		break;
+	case TYPE_SLICE:
+		v->slice = *(Slice *)ptr;
+		break;
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 		assert(0);
@@ -365,6 +394,9 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 		case BUILTIN_CHAR: *(char *)set = to->charv; break;
 		case BUILTIN_BOOL: *(bool *)set = to->boolv; break;
 		}
+		break;
+	case TYPE_SLICE:
+		*(Slice *)set = to->slice;
 		break;
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:

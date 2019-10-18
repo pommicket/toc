@@ -91,6 +91,7 @@ static bool cgen_uses_ptr(Type *t) {
 	case TYPE_BUILTIN:
 	case TYPE_PTR:
 	case TYPE_FN:
+	case TYPE_SLICE:
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 		return false;
@@ -141,7 +142,7 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
 		case BUILTIN_F64: cgen_write(g, "f64"); break;
 		} break;
 	case TYPE_PTR:
-		if (!cgen_type_pre(g, t->ptr.of, where))
+		if (!cgen_type_pre(g, t->ptr, where))
 			return false;
 		cgen_write(g, "(*");
 		break;
@@ -159,6 +160,9 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
 		}
 		cgen_write(g, " (*");
 		break;
+	case TYPE_SLICE:
+		cgen_write(g, "slice_");
+		break;
 	case TYPE_VOID: cgen_write(g, "void"); break;
 	case TYPE_UNKNOWN:
 		err_print(t->where, "Can't determine type.");
@@ -175,7 +179,7 @@ static bool cgen_type_post(CGenerator *g, Type *t, Location where) {
 	switch (t->kind) {
 	case TYPE_PTR:
 		cgen_write(g, ")");
-		if (!cgen_type_post(g, t->ptr.of, where))
+		if (!cgen_type_post(g, t->ptr, where))
 			return false;
 		break;
 	case TYPE_ARR:
@@ -221,6 +225,7 @@ static bool cgen_type_post(CGenerator *g, Type *t, Location where) {
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 	case TYPE_TUPLE:
+	case TYPE_SLICE:
 		break;
 	}
 	return true;
@@ -312,6 +317,7 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 	case TYPE_BUILTIN:
 	case TYPE_FN:
 	case TYPE_PTR:
+	case TYPE_SLICE:
 	case TYPE_UNKNOWN:
 		if (set_expr) {
 			if (!cgen_expr(g, set_expr)) return false;
@@ -771,6 +777,9 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 	case TYPE_FN:
 		cgen_write(g, "NULL");
 		break;
+	case TYPE_SLICE:
+		cgen_write(g, "{NULL, 0}");
+		break;
 	case TYPE_ARR:
 		cgen_write(g, "{");
 		cgen_zero_value(g, t->arr.of);
@@ -941,6 +950,7 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 			   "typedef float f32;\n"
 			   "typedef double f64;\n"
 			   "typedef unsigned char bool;\n"
+			   "typedef struct { void *data; u64 n; } slice_;\n"
 			   "#define false ((bool)0)\n"
 			   "#define true ((bool)1)\n\n\n");
 	cgen_block_enter(g, NULL);

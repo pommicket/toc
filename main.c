@@ -1,7 +1,8 @@
 /* 
 TODO:
-slices
-new run-time type resolution
+fix casting for slice => ptr/arr
+parameters can be passed as pointers
+new returns a *slice*
 unicode variable names
 make sure initializers for global variables are compile-time constants
 structs

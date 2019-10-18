@@ -62,8 +62,10 @@ static bool type_eq(Type *a, Type *b) {
 	case TYPE_ARR:
 		if (a->arr.n != b->arr.n) return false;
 		return type_eq(a->arr.of, b->arr.of);
+	case TYPE_SLICE:
+		return type_eq(a->slice, b->slice);
 	case TYPE_PTR:
-		return type_eq(a->ptr.of, b->ptr.of);
+		return type_eq(a->ptr, b->ptr);
 	}
 	assert(0);
 	return false;
@@ -340,7 +342,11 @@ static bool type_resolve(Evaluator *ev, Type *t) {
 		}
 		break;
 	case TYPE_PTR:
-		if (!type_resolve(ev, t->ptr.of))
+		if (!type_resolve(ev, t->ptr))
+			return false;
+		break;
+	case TYPE_SLICE:
+		if (!type_resolve(ev, t->slice))
 			return false;
 		break;
 	case TYPE_UNKNOWN:
@@ -360,7 +366,10 @@ static bool types_type(Typer *tr, Type *t) {
 		if (!types_type(tr, t->arr.of)) return false;
 		break;
 	case TYPE_PTR:
-		if (!types_type(tr, t->ptr.of)) return false;
+		if (!types_type(tr, t->ptr)) return false;
+		break;
+	case TYPE_SLICE:
+		if (!types_type(tr, t->slice)) return false;
 		break;
 	case TYPE_TUPLE: {
 		arr_foreach(t->tuple, Type, x)
@@ -396,6 +405,8 @@ static bool type_can_be_truthy(Type *t) {
 		return false;
 	case TYPE_PTR:
 		return true;
+	case TYPE_SLICE:
+		return true;
 	}
 	assert(0);
 	return false;
@@ -424,13 +435,17 @@ static Status type_cast_status(Type *from, Type *to) {
 		case BUILTIN_I64:
 		case BUILTIN_U64:
 			switch (to->kind) {
-			case TYPE_UNKNOWN: return STATUS_NONE;
-			case TYPE_VOID: return STATUS_ERR;
-			case TYPE_BUILTIN: return STATUS_NONE;
-			case TYPE_ARR: return STATUS_ERR;
-			case TYPE_PTR: return STATUS_WARN;
-			case TYPE_FN: return STATUS_ERR;
-			case TYPE_TUPLE: return STATUS_ERR;
+			case TYPE_BUILTIN:
+			case TYPE_UNKNOWN:
+				return STATUS_NONE;
+			case TYPE_PTR:
+				return STATUS_WARN;
+			case TYPE_FN:
+			case TYPE_TUPLE:
+			case TYPE_SLICE:
+			case TYPE_ARR:
+			case TYPE_VOID:
+				return STATUS_ERR;
 			}
 			break;
 		case BUILTIN_F32:
@@ -456,17 +471,23 @@ static Status type_cast_status(Type *from, Type *to) {
 			return STATUS_WARN;
 		if (to->kind == TYPE_PTR)
 			return STATUS_NONE;
-		if (to->kind == TYPE_ARR && type_eq(to->arr.of, from->ptr.of))
+		if (to->kind == TYPE_ARR && type_eq(from->ptr, to->arr.of))
 			return STATUS_NONE;
 		if (to->kind == TYPE_FN)
 			return STATUS_WARN;
 		return STATUS_ERR;
 	case TYPE_ARR:
-		if (to->kind == TYPE_PTR && type_eq(to->ptr.of, from->arr.of))
+		if (to->kind == TYPE_PTR && type_eq(from->arr.of, to->ptr))
 			return STATUS_NONE;
-		if (to->kind == TYPE_ARR && !type_eq(to, from))
+		if (to->kind == TYPE_ARR && !type_eq(from, to))
 			return STATUS_WARN;
 		return STATUS_ERR;
+	case TYPE_SLICE:
+		if (to->kind == TYPE_PTR && type_eq(from->slice, to->ptr))
+			return STATUS_NONE;
+		if (to->kind == TYPE_ARR && type_eq(from->slice, to->arr.of))
+			return STATUS_NONE;
+	    return STATUS_ERR;
 	}
 	assert(0);
     return STATUS_ERR;
@@ -606,8 +627,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 		if (e->new.type.kind == TYPE_ARR) {
 			*t = e->new.type;
 		} else {
-			t->ptr.of = typer_malloc(tr, sizeof *t->ptr.of);
-			t->ptr.of = &e->new.type;
+			t->ptr = typer_malloc(tr, sizeof *t->ptr);
+			t->ptr = &e->new.type;
 		}
 		break;
 	case EXPR_IF: {
@@ -865,8 +886,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 				return false;
 			}
 			t->kind = TYPE_PTR;
-			t->ptr.of = typer_malloc(tr, sizeof *t->ptr.of); /* OPTIM */
-			*t->ptr.of = *of_type;
+			t->ptr = typer_malloc(tr, sizeof *t->ptr);
+			*t->ptr = *of_type;
 			break;
 		case UNARY_DEREF:
 			if (of_type->kind != TYPE_PTR) {
@@ -876,7 +897,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				return false;
 			}
 			
-			*t = *of_type->ptr.of;
+			*t = *of_type->ptr;
 			break;
 		case UNARY_DEL:
 			if (of_type->kind != TYPE_PTR) {
