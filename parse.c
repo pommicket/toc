@@ -1536,7 +1536,7 @@ static void fprint_expr(FILE *out, Expression *e) {
 		break;
 	case EXPR_WHILE:
 	    fprintf(out, "while ");
-		fprint_expr(out, e->while_.cond);
+		if (e->while_.cond) fprint_expr(out, e->while_.cond);
 		fprint_block(out, &e->while_.body);
 		break;
 	case EXPR_CALL:

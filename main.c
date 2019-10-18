@@ -3,8 +3,8 @@ TODO:
 blocks which return tuples
 new run-time type resolution
 unicode variable names
-re-do cgen
 make sure initializers for global variables are compile-time constants
+don't allow while {3; 5} (once break is added)
 any odd number of "s for a string
 modifiable strings:
 s := ["sakjdfhkjh ksjdahfkjsd ahs ahdf hsdaf khsadkjfh"];

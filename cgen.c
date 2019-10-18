@@ -362,49 +362,6 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 	return true;
 }
 
-static bool cgen_if_pre(CGenerator *g, Expression *e) {
-	char ret_name[64];
-	IfExpr *curr = &e->if_;
-	curr->c.id = g->ident_counter++;
-	cgen_ident_id_to_str(ret_name, curr->c.id);
-	char *p = ret_name + strlen(ret_name);
-	if (e->type.kind != TYPE_VOID) {
-		if (e->type.kind == TYPE_TUPLE) {
-			for (unsigned long i = 0; i < arr_len(e->type.tuple); i++) {
-				sprintf(p, "%lu_", i);
-				if (!cgen_type_pre(g, &e->type.tuple[i], e->where)) return false;
-				cgen_write(g, " %s", ret_name);
-				if (!cgen_type_post(g, &e->type.tuple[i], e->where)) return false;
-				cgen_write(g, "; ");
-			}
-			
-		} else {
-			cgen_type_pre(g, &e->type, e->where);
-			cgen_write(g, " %s", ret_name);
-			cgen_type_post(g, &e->type, e->where);
-			cgen_write(g, ";");
-			cgen_nl(g);
-		}
-	}
-	*p = 0; /* clear tuple suffixes */
-		
-	while (1) {
-		if (curr->cond) {
-			cgen_write(g, "if (");
-			if (!cgen_expr(g, curr->cond))
-				return false;
-			cgen_write(g, ") ");
-		}
-		if (!cgen_block(g, &curr->body, ret_name))
-			return false;
-		if (curr->next_elif) {
-			cgen_write(g, " else ");
-			curr = &curr->next_elif->if_;
-		} else break;
-	}
-	return true;
-}
-
 /* one of exprs, idents, and prefix should be NULL. */
 static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents, const char *prefix, Expression *to) {
 	IdentID prefix_id; /* ID of prefix for block */
@@ -459,6 +416,12 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 	case EXPR_IF:
 	    prefix_id = to->if_.c.id;
 		goto prefixed;
+	case EXPR_BLOCK:
+		prefix_id = to->block_ret_id;
+		goto prefixed;
+	case EXPR_WHILE:
+		prefix_id = to->while_.c.id;
+		goto prefixed;
 	prefixed:
 		for (unsigned long i = 0; i < (unsigned long)arr_len(to->type.tuple); i++) {
 			cgen_write(g, "(");
@@ -495,13 +458,77 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 }
 
 static bool cgen_expr_pre(CGenerator *g, Expression *e) {
+	IdentID id;
+	char ret_name[64];
 	switch (e->kind) {
 	case EXPR_IF:
-		cgen_if_pre(g, e);
-		break;
 	case EXPR_WHILE:
-		break;
+	case EXPR_BLOCK: {
+		id = g->ident_counter++;
+		
+		cgen_ident_id_to_str(ret_name, id);
+		char *p = ret_name + strlen(ret_name);
+		if (e->type.kind != TYPE_VOID) {
+			if (e->type.kind == TYPE_TUPLE) {
+				for (unsigned long i = 0; i < arr_len(e->type.tuple); i++) {
+					sprintf(p, "%lu_", i);
+					if (!cgen_type_pre(g, &e->type.tuple[i], e->where)) return false;
+					cgen_write(g, " %s", ret_name);
+					if (!cgen_type_post(g, &e->type.tuple[i], e->where)) return false;
+					cgen_write(g, "; ");
+				}
+			
+			} else {
+				cgen_type_pre(g, &e->type, e->where);
+				cgen_write(g, " %s", ret_name);
+				cgen_type_post(g, &e->type, e->where);
+				cgen_write(g, ";");
+				cgen_nl(g);
+			}
+		}
+		*p = 0; /* clear tuple suffixes */
+		
+	} break;
+	default: break;
+	}
+	
+	switch (e->kind) {
+	case EXPR_IF: {
+		IfExpr *curr = &e->if_;
+		curr->c.id = id;
+		while (1) {
+			if (curr->cond) {
+				cgen_write(g, "if (");
+				if (!cgen_expr(g, curr->cond))
+					return false;
+				cgen_write(g, ") ");
+			}
+			if (!cgen_block(g, &curr->body, ret_name))
+				return false;
+			if (curr->next_elif) {
+				cgen_write(g, " else ");
+				curr = &curr->next_elif->if_;
+			} else break;
+		}
+	} break;
+	case EXPR_WHILE: {
+		WhileExpr *w = &e->while_;
+		w->c.id = id;
+		cgen_write(g, "while (");
+		if (w->cond) {
+			if (!cgen_expr(g, w->cond))
+				return false;
+		} else {
+			cgen_write(g, "true");
+		}
+		cgen_write(g, ") ");
+		if (!cgen_block(g, &w->body, ret_name))
+			return false;
+	} break;
 	case EXPR_BLOCK:
+		e->block_ret_id = id;
+		if (!cgen_block(g, &e->block, ret_name))
+			return false;
 		break;
 	case EXPR_CALL:
 		if (!cgen_expr_pre(g, e->call.fn)) return false;
@@ -641,6 +668,13 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 	case EXPR_IF:
 		cgen_ident_id(g, e->if_.c.id);
 		break;
+	case EXPR_WHILE:
+		if (e->type.kind != TYPE_VOID)
+			cgen_ident_id(g, e->while_.c.id);
+		break;
+	case EXPR_BLOCK:
+		cgen_ident_id(g, e->block_ret_id);
+		break;
 	case EXPR_CALL:
 		cgen_write(g, "(");
 		if (!cgen_expr(g, e->call.fn))
@@ -699,8 +733,8 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 */
 static bool cgen_block(CGenerator *g, Block *b, const char *ret_name) {
 	Block *prev = g->block;
-	cgen_block_enter(g, b);
 	cgen_write(g, "{");
+	cgen_block_enter(g, b);
 	cgen_nl(g);
 	arr_foreach(b->stmts, Statement, s)
 		if (!cgen_stmt(g, s))

@@ -9,5 +9,9 @@ main @= fn() {
 	 // A, B := 3, 5;
 	 puti(A);
 	 puti(B);
-	 asdfas := new (int, int);
+	 y:int;
+	 while y < 10 {
+		   puti({y = y + 1; y});
+	 }
+	 
 };

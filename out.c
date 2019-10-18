@@ -27,13 +27,13 @@ int main() {
 #include <stdio.h>
 ;
 void puti(i64 x) {
-	{
+{
 	printf("%ld\n", (long)x);
 }}
 
 
 void main__(void) {
-	{
+{
 	i64 a0_0_; i64 a0_1_; if (0) {
 		(a0_0_) = 3;(a0_1_) = 5;
 	} else {
@@ -41,3 +41,14 @@ void main__(void) {
 	}i64 A; i64 B; (A) = a0_0_; (B) = a0_1_; 
 	(puti(A));
 	(puti(B));
+	i64 y = 0; 
+	while ((y<10)) {
+		i64 a2_;
+		{
+			y = (y+1);;
+			a2_ = y;
+		}(puti(a2_));
+	};
+}}
+
+
