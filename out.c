@@ -49,6 +49,14 @@ void main__(void) {
 			a2_ = y;
 		}(puti(a2_));
 	};
+	i64( asdf[78636112]); {
+	i64( expr__[78636112]); {
+	size_t i;i64(*arr__in) = expr__; i64(*arr__out) = ((i64([78636112]))calloc(1, sizeof(i64([100])));
+	for (i = 0; i < 78636112; i++) arr__out[i] = arr__in[i];
+	}{
+	size_t i;i64(*arr__in) = asdf; i64(*arr__out) = expr__;
+	for (i = 0; i < 78636112; i++) arr__out[i] = arr__in[i];
+	}}
 }}
 
 

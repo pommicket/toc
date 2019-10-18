@@ -179,7 +179,14 @@ static bool cgen_type_post(CGenerator *g, Type *t, Location where) {
 			return false;
 		break;
 	case TYPE_ARR:
-		cgen_write(g, "[%lu])", (unsigned long)t->arr.n);
+		if (t->flags & TYPE_FLAG_RESOLVED)
+			cgen_write(g, "[%lu])", (unsigned long)t->arr.n);
+		else {
+			cgen_write(g, "[");
+			if (!cgen_expr(g, t->arr.n_expr))
+				return false;
+			cgen_write(g, "]");
+		}
 		if (!cgen_type_post(g, t->arr.of, where))
 			return false;
 		break;

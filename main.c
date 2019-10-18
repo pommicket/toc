@@ -1,5 +1,6 @@
 /* 
 TODO:
+slices
 new run-time type resolution
 unicode variable names
 make sure initializers for global variables are compile-time constants

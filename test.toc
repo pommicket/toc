@@ -13,5 +13,4 @@ main @= fn() {
 	 while y < 10 {
 		   puti({y = y + 1; y});
 	 }
-	 
 };
