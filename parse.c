@@ -318,7 +318,7 @@ static bool parse_type(Parser *p, Type *type) {
 	    {
 			int b = kw_to_builtin_type(t->token->kw);
 			if (b != -1) {
-				type->builtin = b;
+				type->builtin = (BuiltinType)b;
 				t->token++;
 				break;
 			}
