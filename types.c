@@ -1102,6 +1102,10 @@ static bool types_stmt(Typer *tr, Statement *s) {
 		if (!types_expr(tr, &s->expr)) {
 			return false;
 		}
+		if (s->expr.type.kind == TYPE_TUPLE) {
+			err_print(s->where, "Statement of a tuple is not allowed. The comma operator does not exist in toc; use a semicolon instead.");
+			return false;
+		}
 		break;
 	case STMT_DECL:
 		if (!types_decl(tr, &s->decl))

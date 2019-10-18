@@ -28,7 +28,7 @@ int main() {
 
 void puti(i64 x) {
 	{
-	printf("%lu\n", x);
+	printf("%ld\n", (long)x);
 }}
 
 
@@ -40,7 +40,7 @@ void mktup(i64 a, i64 b, i64(*ret0_), i64(*ret1_)) {
 
 i64 asdf(void) {
 	{
-}return 7;
+}return 32187318;
 }
 
 
@@ -48,9 +48,22 @@ void main__(void) {
 	{
 	i64 a; i64 b; mktup(10, 20, &a, &b);
 
-	(puti((asdf())));
+	(puti(((i64)(((u8)((asdf())))))));
 	(puti(a));
 	(puti(b));
+	i64 a0_;
+	if (5) {
+		a0_ = 6;
+	} else {
+		a0_ = 7;
+	}i64 x; {
+	i64 expr__; i64 a1_;
+	if (5) {
+		a1_ = 6;
+	} else {
+		a1_ = 7;
+	}expr__ = (5+(-a1_));x = expr__;}
+	(puti(x));
 }}
 
 

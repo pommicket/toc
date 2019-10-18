@@ -1,5 +1,5 @@
 puti @= fn(x: int) {
-	 #C("printf(\"%lu\\n\", x)");
+	 #C("printf(\"%ld\\n\", (long)x)");
 };
 
 mktup @= fn(a: int, b: int) (int, int) {
@@ -7,12 +7,14 @@ mktup @= fn(a: int, b: int) (int, int) {
 };
 
 asdf @= fn() int {
-	 7
+	 32187318
 };
 
 main @= fn() {
 	 a, b := mktup(10, 20);
 	 // x := mktup;
-	 puti(asdf());
+	 puti(asdf() as u8 as i64);
 	 puti(a); puti(b);
+	 x := 5+-if 5 { 6 } else { 7 };
+	 puti(x);
 };

@@ -1,6 +1,7 @@
 /* 
 TODO:
-cgen tuples
+blocks which return tuples
+new run-time type resolution
 unicode variable names
 re-do cgen
 make sure initializers for global variables are compile-time constants
