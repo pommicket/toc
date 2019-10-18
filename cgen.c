@@ -2,7 +2,7 @@ static bool cgen_stmt(CGenerator *g, Statement *s);
 static bool cgen_block(CGenerator *g, Block *b, const char *ret_name);
 static bool cgen_expr_pre(CGenerator *g, Expression *e);
 static bool cgen_expr(CGenerator *g, Expression *e);
-static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents, Expression *to);
+static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents, const char *prefix, Expression *to);
 static bool cgen_type_pre(CGenerator *g, Type *t, Location where);
 static bool cgen_type_post(CGenerator *g, Type *t, Location where);
 static bool cgen_decl(CGenerator *g, Declaration *d);
@@ -352,7 +352,7 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 		assert(set_expr);
 		assert(to_expr);
 	    assert(set_expr->kind == EXPR_TUPLE);
-		if (!cgen_set_tuple(g, set_expr->tuple, NULL, to_expr))
+		if (!cgen_set_tuple(g, set_expr->tuple, NULL, NULL, to_expr))
 			return false;
 		break;
 	case TYPE_VOID:
@@ -362,21 +362,64 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 	return true;
 }
 
+static bool cgen_if_pre(CGenerator *g, Expression *e) {
+	char ret_name[64];
+	IfExpr *curr = &e->if_;
+	curr->c.id = g->ident_counter++;
+	cgen_ident_id_to_str(ret_name, curr->c.id);
+	char *p = ret_name + strlen(ret_name);
+	if (e->type.kind != TYPE_VOID) {
+		if (e->type.kind == TYPE_TUPLE) {
+			for (unsigned long i = 0; i < arr_len(e->type.tuple); i++) {
+				sprintf(p, "%lu_", i);
+				if (!cgen_type_pre(g, &e->type.tuple[i], e->where)) return false;
+				cgen_write(g, " %s", ret_name);
+				if (!cgen_type_post(g, &e->type.tuple[i], e->where)) return false;
+				cgen_write(g, "; ");
+			}
+			
+		} else {
+			cgen_type_pre(g, &e->type, e->where);
+			cgen_write(g, " %s", ret_name);
+			cgen_type_post(g, &e->type, e->where);
+			cgen_write(g, ";");
+			cgen_nl(g);
+		}
+	}
+	*p = 0; /* clear tuple suffixes */
+		
+	while (1) {
+		if (curr->cond) {
+			cgen_write(g, "if (");
+			if (!cgen_expr(g, curr->cond))
+				return false;
+			cgen_write(g, ") ");
+		}
+		if (!cgen_block(g, &curr->body, ret_name))
+			return false;
+		if (curr->next_elif) {
+			cgen_write(g, " else ");
+			curr = &curr->next_elif->if_;
+		} else break;
+	}
+	return true;
+}
 
-/* exprs and/or idents should be NULL. if both are NULL, *retN_ will be used. */
-static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents, Expression *to) {
+/* one of exprs, idents, and prefix should be NULL. */
+static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents, const char *prefix, Expression *to) {
+	IdentID prefix_id; /* ID of prefix for block */
 	switch (to->kind) {
 	case EXPR_TUPLE:
 		/* e.g. a, b = 3, 5; */
 		for (size_t i = 0; i < arr_len(to->tuple); i++) {
-			char *s = NULL, buf[32];
+			char *s = NULL, buf[64];
 			Expression *e = NULL;
 			if (idents)
 				s = cgen_ident_to_str(idents[i]);
 			else if (exprs)
 				e = &exprs[i];
 			else {
-				snprintf(buf, sizeof buf, "(*ret%lu_)", i);
+				snprintf(buf, sizeof buf, "(%s%lu_)", prefix, i);
 				s = buf;
 			}
 			if (!cgen_set(g, e, s, &to->tuple[i], NULL)) return false;
@@ -397,7 +440,7 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 		/* out params */
 		size_t len = exprs ? arr_len(exprs) : arr_len(idents);
 
-		for (size_t i = 0; i < len; i++) {
+		for (unsigned long i = 0; i < (unsigned long)len; i++) {
 			if (any_args || i > 0)
 				cgen_write(g, ", ");
 			if (exprs) {
@@ -408,12 +451,43 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 				cgen_write(g, "&");
 				cgen_ident(g, idents[i]);
 			} else {
-				cgen_write(g, "ret%lu_", i);
+				cgen_write(g, "&(%s%lu_)", prefix, i);
 			}
 		}
 		cgen_writeln(g, ");");
 	} break;
-	default:
+	case EXPR_IF:
+	    prefix_id = to->if_.c.id;
+		goto prefixed;
+	prefixed:
+		for (unsigned long i = 0; i < (unsigned long)arr_len(to->type.tuple); i++) {
+			cgen_write(g, "(");
+			if (exprs) {
+				if (!cgen_expr(g, &exprs[i]))
+					return false;
+			} else if (idents) {
+				cgen_ident(g, idents[i]);
+			} else {
+				cgen_write(g, "%s%lu_", prefix, i);
+			}
+			cgen_write(g, ") = ");
+			cgen_ident_id(g, prefix_id);
+			cgen_write(g, "%lu_", i);
+			cgen_write(g, "; ");
+		}
+	    break;
+    case EXPR_IDENT:
+	case EXPR_LITERAL_INT:
+	case EXPR_LITERAL_CHAR:
+	case EXPR_LITERAL_BOOL:
+	case EXPR_LITERAL_STR:
+	case EXPR_LITERAL_FLOAT:
+	case EXPR_UNARY_OP:
+	case EXPR_BINARY_OP:
+	case EXPR_FN:
+	case EXPR_CAST:
+	case EXPR_NEW:
+	case EXPR_DIRECT:
 		assert(0);
 		return false;
 	}
@@ -422,34 +496,9 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 
 static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 	switch (e->kind) {
-	case EXPR_IF: {
-		char ret_name[32];
-		IfExpr *curr = &e->if_;
-		curr->c.id = g->ident_counter++;
-		cgen_ident_id_to_str(ret_name, curr->c.id);
-		if (e->type.kind != TYPE_VOID) {
-			cgen_type_pre(g, &e->type, e->where);
-			cgen_write(g, " %s", ret_name);
-			cgen_type_post(g, &e->type, e->where);
-			cgen_write(g, ";");
-			cgen_nl(g);
-		}
-		
-		while (1) {
-			if (curr->cond) {
-				cgen_write(g, "if (");
-				if (!cgen_expr(g, curr->cond))
-					return false;
-				cgen_write(g, ") ");
-			}
-			if (!cgen_block(g, &curr->body, ret_name))
-				return false;
-			if (curr->next_elif) {
-				cgen_write(g, " else ");
-				curr = &curr->next_elif->if_;
-			} else break;
-		}
-	} break;
+	case EXPR_IF:
+		cgen_if_pre(g, e);
+		break;
 	case EXPR_WHILE:
 		break;
 	case EXPR_BLOCK:
@@ -482,8 +531,8 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 	case EXPR_DIRECT:
 		break;
 	case EXPR_TUPLE:
-		assert(0);
-		return false;
+		arr_foreach(e->tuple, Expression, x)
+			if (!cgen_expr_pre(g, x)) return false;
 	}
 	return true;
 }
@@ -658,8 +707,13 @@ static bool cgen_block(CGenerator *g, Block *b, const char *ret_name) {
 			return false;
 
 	if (b->ret_expr && ret_name) {
-		if (!cgen_set(g, NULL, ret_name, b->ret_expr, NULL))
-			return false;
+		if (b->ret_expr->type.kind == TYPE_TUPLE) {
+			if (!cgen_set_tuple(g, NULL, NULL, ret_name, b->ret_expr))
+				return false;
+		} else {
+			if (!cgen_set(g, NULL, ret_name, b->ret_expr, NULL))
+				return false;
+		}
 		cgen_nl(g);
 	}
 	cgen_block_exit(g, prev);
@@ -755,7 +809,7 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 		/* TODO: global tuples */
 		if (g->block != NULL && (d->flags & DECL_FLAG_HAS_EXPR)) {
 			if (d->expr.type.kind == TYPE_TUPLE) {
-				if (!cgen_set_tuple(g, NULL, d->idents, &d->expr)) return false;
+				if (!cgen_set_tuple(g, NULL, d->idents, NULL, &d->expr)) return false;
 			} else {
 				cgen_write(g, "{");
 		 
@@ -789,7 +843,7 @@ static bool cgen_ret(CGenerator *g, Expression *ret) {
 		cgen_write(g, "return");
 	} else if (cgen_uses_ptr(&g->fn->ret_type)) {
 		if (g->fn->ret_type.kind == TYPE_TUPLE) {
-			if (!cgen_set_tuple(g, NULL, NULL, ret))
+			if (!cgen_set_tuple(g, NULL, NULL, "*ret", ret))
 				return false;
 		} else {
 			if (!cgen_set(g, NULL, "*ret_", ret, NULL)) return false;

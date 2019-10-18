@@ -17,8 +17,6 @@ typedef unsigned char bool;
 
 /* declarations */
 void puti(i64 x);
-void mktup(i64 a, i64 b, i64(*ret0_), i64(*ret1_));
-i64 asdf(void);
 void main__(void);
 /* code */
 int main() {
@@ -26,44 +24,20 @@ int main() {
 	return 0;
 }
 
+#include <stdio.h>
+;
 void puti(i64 x) {
 	{
 	printf("%ld\n", (long)x);
 }}
 
 
-void mktup(i64 a, i64 b, i64(*ret0_), i64(*ret1_)) {
-	{
-}(*ret0_) = a;(*ret1_) = (a+b);return;
-}
-
-
-i64 asdf(void) {
-	{
-}return 32187318;
-}
-
-
 void main__(void) {
 	{
-	i64 a; i64 b; mktup(10, 20, &a, &b);
-
-	(puti(((i64)(((u8)((asdf())))))));
-	(puti(a));
-	(puti(b));
-	i64 a0_;
-	if (5) {
-		a0_ = 6;
+	i64 a0_0_; i64 a0_1_; if (0) {
+		(a0_0_) = 3;(a0_1_) = 5;
 	} else {
-		a0_ = 7;
-	}i64 x; {
-	i64 expr__; i64 a1_;
-	if (5) {
-		a1_ = 6;
-	} else {
-		a1_ = 7;
-	}expr__ = (5+(-a1_));x = expr__;}
-	(puti(x));
-}}
-
-
+		(a0_0_) = 4;(a0_1_) = 6;
+	}i64 A; i64 B; (A) = a0_0_; (B) = a0_1_; 
+	(puti(A));
+	(puti(B));

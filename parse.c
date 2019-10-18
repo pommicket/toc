@@ -340,6 +340,10 @@ static bool parse_type(Parser *p, Type *type) {
 				while (1) {
 					Type *param_type = parser_arr_add(p, &type->fn.types);
 					if (!parse_type(p, param_type)) return false;
+					if (param_type->kind == TYPE_TUPLE) {
+						err_print(param_type->where, "Functions cannot have tuples as parameters.");
+						return false;
+					}
 					if (token_is_kw(t->token, KW_RPAREN))
 						break;
 					if (!token_is_kw(t->token, KW_COMMA)) {
@@ -377,6 +381,10 @@ static bool parse_type(Parser *p, Type *type) {
 			t->token = end + 1;	/* go past ] */
 			type->arr.of = parser_malloc(p, sizeof *type->arr.of);
 			if (!parse_type(p, type->arr.of)) return false;
+			if (type->arr.of->kind == TYPE_TUPLE) {
+				err_print(type->arr.of->where, "You cannot have an array of tuples.");
+				return false;
+			}
 			type->flags = 0;
 			type->where = start->where;
 			break;
@@ -389,6 +397,10 @@ static bool parse_type(Parser *p, Type *type) {
 			while (1) {
 				Type *child = parser_arr_add(p, &type->tuple);
 				if (!parse_type(p, child)) return false;
+				if (child->kind == TYPE_TUPLE) {
+					err_print(child->where, "Tuples cannot contain tuples.");
+					return false;
+				}
 				if (token_is_kw(t->token, KW_RPAREN)) { /* we're done with the tuple */
 					t->token++;	/* move past ) */
 					break;
@@ -408,6 +420,10 @@ static bool parse_type(Parser *p, Type *type) {
 			type->ptr.of = parser_malloc(p, sizeof *type->ptr.of);
 			t->token++;	/* move past & */
 			if (!parse_type(p, type->ptr.of)) return false;
+			if (type->ptr.of->kind == TYPE_TUPLE) {
+				err_print(type->ptr.of->where, "You cannot have a pointer to a tuple.");
+				return false;
+			}
 			break;
 		default:
 			tokr_err(t, "Unrecognized type.");
@@ -923,6 +939,10 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				t->token++;
 				e->kind = EXPR_NEW;
 				if (!parse_type(p, &e->new.type)) return false;
+				if (e->new.type.kind == TYPE_TUPLE) {
+					err_print(e->where, "You cannot new a tuple.");
+					return false;
+				}
 				return true;
 			case KW_DEL:
 				op = UNARY_DEL;
