@@ -84,6 +84,7 @@ typedef union Value {
 } Value;
 
 #define IDECL_FLAG_HAS_VAL 0x01
+#define IDECL_FLAG_CGEN_PTR 0x02 /* is a pointer being used for this identifier? */
 typedef struct {
 	struct Declaration *decl;
 	struct Block *scope; /* NULL for file scope */

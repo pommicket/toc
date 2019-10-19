@@ -18,7 +18,7 @@ static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *e
 	g->anon_fns = NULL;
 }
 
-static void cgen_block_enter(CGenerator *g, Block *b) {
+static bool cgen_block_enter(CGenerator *g, Block *b) {
 	g->block = b;
 	Statement *stmts;
 	if (b == NULL) {
@@ -27,7 +27,7 @@ static void cgen_block_enter(CGenerator *g, Block *b) {
 		stmts = b->stmts;
 	}
 	if (b) g->indent_lvl++;
-	block_enter(b, stmts);
+	return block_enter(b, stmts);
 }
 
 static void cgen_block_exit(CGenerator *g, Block *into) {
@@ -106,7 +106,12 @@ static void cgen_ident(CGenerator *g, Identifier i) {
 		cgen_write(g, "main__");
 	} else {
 		cgen_indent(g);
+		IdentDecl *idecl = ident_decl(i);
+		if (idecl->flags & IDECL_FLAG_CGEN_PTR)
+			cgen_write(g, "(*");
 		fprint_ident(cgen_writing_to(g), i);
+		if (idecl->flags & IDECL_FLAG_CGEN_PTR)
+			cgen_write(g, ")");
 	}
 }
 
@@ -202,17 +207,33 @@ static bool cgen_type_post(CGenerator *g, Type *t, Location where) {
 				cgen_write(g, ", ");
 			if (!cgen_type_pre(g, &t->fn.types[i], where))
 				return false;
+			if (cgen_uses_ptr(&t->fn.types[i]))
+				cgen_write(g, "(*)");
 			if (!cgen_type_post(g, &t->fn.types[i], where))
 				return false;
 		}
 		if (out_param) {
+			Type *ret_type = &t->fn.types[0];
 			if (arr_len(t->fn.types) > 1)
 				cgen_write(g, ", ");
-			if (!cgen_type_pre(g, &t->fn.types[0], where))
-				return false;
-			cgen_write(g, "(*)");
-			if (!cgen_type_post(g, &t->fn.types[0], where))
-				return false;
+			if (ret_type->kind == TYPE_TUPLE) {
+				arr_foreach(ret_type->tuple, Type, x) {
+					if (!cgen_type_pre(g, x, where))
+						return false;
+					cgen_write(g, "(*)");
+					if (!cgen_type_post(g, x, where))
+						return false;
+					if (x != arr_last(ret_type->tuple)) {
+						cgen_write(g, ", ");
+					}
+				}
+			} else {
+				if (!cgen_type_pre(g, ret_type, where))
+					return false;
+				cgen_write(g, "(*)");
+				if (!cgen_type_post(g, ret_type, where))
+					return false;
+			}
 		}
 		if (arr_len(t->fn.types) == 1 && !out_param)
 			cgen_write(g, "void");
@@ -261,6 +282,14 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where) {
 			if (!cgen_type_pre(g, &d->type, where))
 				return false;
 			cgen_write(g, " ");
+			bool ptr = cgen_uses_ptr(&d->type);
+			if (ptr) {
+				fprint_type(stdout, &d->type);
+				puts("");
+				IdentDecl *idecl = ident_decl(*i);
+				assert(idecl);
+				idecl->flags |= IDECL_FLAG_CGEN_PTR;
+			}
 			cgen_ident(g, *i);
 			if (!cgen_type_post(g, &d->type, where))
 				return false;
@@ -340,20 +369,20 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 		cgen_write(g, "(*arr__in)");
 		if (!cgen_type_post(g, type->arr.of, where)) return false;
 		cgen_write(g, " = ");
-		if (set_expr) {
-			if (!cgen_expr(g, set_expr)) return false;
+		if (to_expr) {
+			if (!cgen_expr(g, to_expr)) return false;
 		} else {
-			cgen_write(g, set_str);
+			cgen_write(g, to_str);
 		}
 		cgen_write(g, "; ");
 		if (!cgen_type_pre(g, type->arr.of, where)) return false;
 		cgen_write(g, "(*arr__out)");
 		if (!cgen_type_post(g, type->arr.of, where)) return false;
 		cgen_write(g, " = ");
-		if (to_expr) {
-			if (!cgen_expr(g, to_expr)) return false;
+		if (set_expr) {
+			if (!cgen_expr(g, set_expr)) return false;
 		} else {
-			cgen_write(g, to_str);
+			cgen_write(g, set_str);
 		}
 		cgen_write(g, ";");
 		cgen_nl(g);
@@ -404,6 +433,8 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 		arr_foreach(to->call.arg_exprs, Expression, arg) {
 			if (arg != to->call.arg_exprs)
 				cgen_write(g, ", ");
+			if (cgen_uses_ptr(&arg->type))
+				cgen_write(g, "&");
 			if (!cgen_expr(g, arg))
 				return false;
 		}
@@ -720,7 +751,11 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		cgen_write(g, ")(");
 		if (!cgen_expr(g, e->cast.expr))
 			return false;
-		cgen_write(g, "))");
+		cgen_write(g, ")");
+		if (e->cast.expr->type.kind == TYPE_SLICE
+			&& e->cast.type.kind != TYPE_SLICE) /* casting from a slice to a non-slice */
+			cgen_write(g, ".data");
+		cgen_write(g, ")");
 		break;
 	case EXPR_TUPLE:
 		/* the only time this should happen is if you're stating
@@ -747,7 +782,8 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 static bool cgen_block(CGenerator *g, Block *b, const char *ret_name) {
 	Block *prev = g->block;
 	cgen_write(g, "{");
-	cgen_block_enter(g, b);
+	if (!cgen_block_enter(g, b))
+		return false;
 	cgen_nl(g);
 	arr_foreach(b->stmts, Statement, s)
 		if (!cgen_stmt(g, s))
@@ -794,6 +830,7 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 }
 
 static bool cgen_fn(CGenerator *g, FnExpr *f, Location where) {
+	fn_enter(f);
 	if (!cgen_fn_header(g, f, where))
 		return false;
 	cgen_write(g, " ");
@@ -802,7 +839,8 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where) {
 	cgen_write(g, "{");
 	cgen_nl(g);
 	arr_foreach(f->ret_decls, Declaration, d) {
-		cgen_decl(g, d);
+		if (!cgen_decl(g, d))
+			return false;
 	}
 	if (!cgen_block(g, &f->body, NULL))
 		return false;
@@ -818,6 +856,7 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where) {
 	}
 	
 	cgen_write(g, "}");
+	fn_exit(f);
 	cgen_nl(g);
 	g->fn = prev_fn;
 	cgen_nl(g);
@@ -936,6 +975,7 @@ static bool cgen_stmt(CGenerator *g, Statement *s) {
 static bool cgen_decls_file(CGenerator *g, ParsedFile *f);
 
 static bool cgen_file(CGenerator *g, ParsedFile *f) {
+	g->block = NULL;
 	g->file = f;
 	cgen_write(g, "#include <stdint.h>\n"
 			   "#include <stdlib.h>\n"
@@ -953,11 +993,9 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 			   "typedef struct { void *data; u64 n; } slice_;\n"
 			   "#define false ((bool)0)\n"
 			   "#define true ((bool)1)\n\n\n");
-	cgen_block_enter(g, NULL);
 	if (!cgen_decls_file(g, f))
 		return false;
 	cgen_write(g, "/* code */\n");
-	cgen_block_exit(g, NULL);
 	cgen_write(g, "int main() {\n\tmain__();\n\treturn 0;\n}\n\n");
 
 	arr_foreach(f->stmts, Statement, s)

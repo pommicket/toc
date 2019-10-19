@@ -471,21 +471,15 @@ static Status type_cast_status(Type *from, Type *to) {
 			return STATUS_WARN;
 		if (to->kind == TYPE_PTR)
 			return STATUS_NONE;
-		if (to->kind == TYPE_ARR && type_eq(from->ptr, to->arr.of))
-			return STATUS_NONE;
 		if (to->kind == TYPE_FN)
 			return STATUS_WARN;
 		return STATUS_ERR;
 	case TYPE_ARR:
 		if (to->kind == TYPE_PTR && type_eq(from->arr.of, to->ptr))
 			return STATUS_NONE;
-		if (to->kind == TYPE_ARR && !type_eq(from, to))
-			return STATUS_WARN;
 		return STATUS_ERR;
 	case TYPE_SLICE:
 		if (to->kind == TYPE_PTR && type_eq(from->slice, to->ptr))
-			return STATUS_NONE;
-		if (to->kind == TYPE_ARR && type_eq(from->slice, to->arr.of))
 			return STATUS_NONE;
 	    return STATUS_ERR;
 	}
@@ -1171,14 +1165,11 @@ static void typer_create(Typer *tr, Evaluator *ev) {
 
 static bool types_file(Typer *tr, ParsedFile *f) {
 	bool ret = true;
-	if (!block_enter(NULL, f->stmts)) /* enter global scope */
-		return false;
 	arr_foreach(f->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {
 			ret = false;
 		}
-	}	
-	block_exit(NULL, f->stmts); /* exit global scope */
+	}
 	return ret;
 }
 

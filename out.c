@@ -18,6 +18,7 @@ typedef struct { void *data; u64 n; } slice_;
 
 /* declarations */
 void puti(i64 x);
+void asdf(i64( (*x)[3]), i64 y, i64(*ret0_), i64((*ret1_)[3]));
 void main__(void);
 /* code */
 int main() {
@@ -33,25 +34,27 @@ void puti(i64 x) {
 }}
 
 
+void asdf(i64( (*x)[3]), i64 y, i64(*ret0_), i64((*ret1_)[3])) {
+{
+}(*ret0_) = y;{
+size_t i;i64(*arr__in) = (*x); i64(*arr__out) = (*ret1_);
+for (i = 0; i < 3; i++) arr__out[i] = arr__in[i];
+}return;
+}
+
+
 void main__(void) {
 {
-	i64 a0_0_; i64 a0_1_; if (0) {
-		(a0_0_) = 3;(a0_1_) = 5;
-	} else {
-		(a0_0_) = 4;(a0_1_) = 6;
-	}i64 A; i64 B; (A) = a0_0_; (B) = a0_1_; 
-	(puti(A));
-	(puti(B));
-	i64 y = 0; 
-	while ((y<10)) {
-		i64 a2_;
-		{
-			y = (y+1);;
-			a2_ = y;
-		}(puti(a2_));
-	};
-	slice_ foo = {NULL, 0}; 
-	slice_ bar = {NULL, 0}; 
+	i64( a[3]) = {0}; 
+	i64 b = 0; 
+	(a[0]) = 17;;
+	b = 5489;;
+	i64 c; i64( d[3]); asdf(&a, b, &c, &d);
+
+	(puti(c));
+	(puti((d[0])));
+	void (* asdfasdf)(i64((*)[3]), i64, i64(*), i64((*)[3])); {
+	void (* expr__)(i64((*)[3]), i64, i64(*), i64((*)[3])); expr__ = asdf;asdfasdf = expr__;}
 }}
 
 

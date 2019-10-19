@@ -74,7 +74,8 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 
 static bool cgen_decls_block(CGenerator *g, Block *b) {
 	Block *prev = g->block;
-	cgen_block_enter(g, b);
+	if (!cgen_block_enter(g, b))
+		return false;
 	arr_foreach(b->stmts, Statement, s)
 		cgen_decls_stmt(g, s);
 	cgen_block_exit(g, prev);
@@ -84,12 +85,14 @@ static bool cgen_decls_block(CGenerator *g, Block *b) {
 static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 	if (cgen_fn_is_direct(g, d)) {
 		d->expr.fn.c.name = d->idents[0];
+		fn_enter(&d->expr.fn);
 		if (!cgen_fn_header(g, &d->expr.fn, d->where))
 			return false;
 		cgen_write(g, ";");
 		cgen_nl(g);
 		if (!cgen_decls_block(g, &d->expr.fn.body))
 			return false;
+		fn_exit(&d->expr.fn);
 	} else if (d->flags & DECL_FLAG_HAS_EXPR) {
 		if (!cgen_decls_expr(g, &d->expr))
 			return false;

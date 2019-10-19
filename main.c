@@ -1,7 +1,5 @@
 /* 
 TODO:
-fix casting for slice => ptr/arr
-parameters can be passed as pointers
 new returns a *slice*
 unicode variable names
 make sure initializers for global variables are compile-time constants
@@ -77,6 +75,10 @@ int main(int argc, char **argv) {
 	Evaluator ev;
 	evalr_create(&ev);
 	typer_create(&tr, &ev);
+
+	if (!block_enter(NULL, f.stmts)) /* enter global scope */
+		return false;
+
 	if (!types_file(&tr, &f)) {
 		err_fprint(TEXT_IMPORTANT("Errors occured while determining types.\n"));
 		return EXIT_FAILURE;
@@ -92,6 +94,8 @@ int main(int argc, char **argv) {
 	CGenerator g;
 	cgen_create(&g, out, &file_idents, &ev);
 	cgen_file(&g, &f);
+	
+	block_exit(NULL, f.stmts); /* exit global scope */
 	
 	tokr_free(&t);
     

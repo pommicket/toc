@@ -4,16 +4,16 @@ puti @= fn(x: int) {
 	 #C("printf(\"%ld\\n\", (long)x)");
 };
 
+asdf @= fn(x: [3]int, y : int) (int, [3]int) {
+	 y, x
+};
+
 main @= fn() {
-	 A, B := if 0 { 3, 5 } else { 4, 6 };
-	 // A, B := 3, 5;
-	 puti(A);
-	 puti(B);
-	 y:int;
-	 while y < 10 {
-		   puti({y = y + 1; y});
-	 }
-	 foo : []int;
-	 bar : []float;
-	 
+	 a : [3]int;
+	 b : int;
+	 a[0] = 17;
+	 b = 5489;
+	 c, d := asdf(a, b);
+	 puti(c); puti(d[0]);
+	 asdfasdf := asdf;
 };
