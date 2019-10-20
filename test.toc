@@ -5,7 +5,22 @@ puti @= fn(x: int) {
 	 // #C("printf(\"%ld\\n\", (long)x)");
 };
 
+foo @= fn() int {
+	X := new([100]int);
+	i := 0;
+	while i < 100 {
+		  (*X)[i] = i;
+		  i = i + 1;
+	}
+	total := 0;
+	i = 0;
+	while i < 100 {
+		  total = total + (*X)[i];
+		  i = i + 1;
+	}
+	total
+};
+
 main @= fn() {
-	 Ar := new([5]int);
-	 A:=new(int, 100);
+	 Ar : [foo()]int;
 };

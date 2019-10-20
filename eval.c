@@ -44,7 +44,7 @@ static size_t compiler_sizeof(Type *t) {
 	case TYPE_PTR:
 		return sizeof t->ptr;
 	case TYPE_ARR:
-		return sizeof t->arr;
+		return compiler_sizeof(t->arr.of) * t->arr.n;
 	case TYPE_TUPLE:
 		return sizeof t->tuple;
 	case TYPE_SLICE:
@@ -787,10 +787,16 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	} break;
 	case EXPR_NEW:
 		/* it's not strictly necessary to do the if here */
-		if (e->new.type.kind == TYPE_ARR)
-			v->arr = err_calloc(1, compiler_sizeof(&e->new.type));
-		else
+		if (e->new.n) {
+			Value n;
+			if (!eval_expr(ev, e->new.n, &n))
+				return false;
+			U64 n64 = val_to_u64(&n, e->new.n->type.builtin);
+			v->slice.data = err_calloc(n64, compiler_sizeof(&e->new.type));
+			v->slice.n = n64;
+		} else {
 			v->ptr = err_calloc(1, compiler_sizeof(&e->new.type));
+		}
 		break;
 	case EXPR_CALL: {
 		Value fnv;
