@@ -1,6 +1,5 @@
 static bool eval_block(Evaluator *ev, Block *b, Value *v);
 static bool eval_expr(Evaluator *ev, Expression *e, Value *v);
-static bool type_resolve(Evaluator *ev, Type *t);
 static bool block_enter(Block *b, Statement *stmts);
 static void block_exit(Block *b, Statement *stmts);
 
@@ -787,8 +786,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		}
 	} break;
 	case EXPR_NEW:
-		if (!type_resolve(ev, &e->new.type))
-			return false;
 		/* it's not strictly necessary to do the if here */
 		if (e->new.type.kind == TYPE_ARR)
 			v->arr = err_calloc(1, compiler_sizeof(&e->new.type));

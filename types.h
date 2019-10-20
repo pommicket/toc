@@ -382,6 +382,14 @@ typedef struct {
 	struct Expression *expr;
 } CastExpr;
 
+typedef struct {
+	Type type;
+	struct Expression *n; /* e.g. for new(int, 5) */
+	struct {
+		IdentID id;
+	} c;
+} NewExpr;
+
 #define EXPR_FLAG_FOUND_TYPE 0x01
 
 typedef struct Expression {
@@ -408,9 +416,7 @@ typedef struct Expression {
 		CallExpr call;
 	    DirectExpr direct;
 		Identifier ident;
-		struct {
-			Type type;
-		} new;
+		NewExpr new;
 		struct {
 			Type type;
 		} del;

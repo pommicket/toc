@@ -1,19 +1,11 @@
-#C("#include <stdio.h>\n");
+// #C("#include <stdio.h>
+// #define kasfdhkjasdfhjk ");
 
 puti @= fn(x: int) {
-	 #C("printf(\"%ld\\n\", (long)x)");
-};
-
-asdf @= fn(x: [3]int, y : int) (int, [3]int) {
-	 y, x
+	 // #C("printf(\"%ld\\n\", (long)x)");
 };
 
 main @= fn() {
-	 a : [3]int;
-	 b : int;
-	 a[0] = 17;
-	 b = 5489;
-	 c, d := asdf(a, b);
-	 puti(c); puti(d[0]);
-	 asdfasdf := asdf;
+	 Ar := new([5]int);
+	 A:=new(int, 100);
 };

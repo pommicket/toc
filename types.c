@@ -2,7 +2,7 @@ static bool types_stmt(Typer *tr, Statement *s);
 static bool types_decl(Typer *tr, Declaration *d);
 static bool types_expr(Typer *tr, Expression *e);
 static bool types_block(Typer *tr, Block *b);
-static bool types_type(Typer *tr, Type *t);
+static bool type_resolve(Typer *tr, Type *t);
 
 static inline void *typer_malloc(Typer *tr, size_t bytes) {
 	return allocr_malloc(&tr->allocr, bytes);
@@ -200,12 +200,12 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t) {
 	t->kind = TYPE_FN;
 	t->fn.types = NULL;
 	Type *ret_type = typer_arr_add(tr, &t->fn.types);
-	if (!types_type(tr, &f->ret_type) || !type_resolve(tr->evalr, &f->ret_type))
+	if (!type_resolve(tr, &f->ret_type))
 		return false;
 	*ret_type = f->ret_type;
 	arr_foreach(f->params, Declaration, decl) {
 		if (!types_decl(tr, decl)) return false;
-		if (!types_type(tr, &decl->type) || !type_resolve(tr->evalr, &decl->type))
+		if (!type_resolve(tr, &decl->type))
 			return false;
 		for (size_t i = 0; i < arr_len(decl->idents); i++) {
 			Type *param_type = typer_arr_add(tr, &t->fn.types);
@@ -294,13 +294,16 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 }
 
 /* fixes the type (replaces [5+3]int with [8]int, etc.) */
-static bool type_resolve(Evaluator *ev, Type *t) {
+static bool type_resolve(Typer *tr, Type *t) {
+	Evaluator *ev = tr->evalr;
 	if (t->flags & TYPE_FLAG_RESOLVED) return true;
 	switch (t->kind) {
 	case TYPE_ARR: {
 		/* it's an array */
 		Value val;
 		Expression *n_expr = t->arr.n_expr;
+		if (!types_expr(tr, n_expr)) return false;
+		
 		if (n_expr->type.kind == TYPE_UNKNOWN) {
 			err_print(n_expr->where, "Cannot determine type of array size at compile time.");
 			return false;
@@ -326,27 +329,27 @@ static bool type_resolve(Evaluator *ev, Type *t) {
 			size = val_to_u64(&val, n_expr->type.builtin);
 		}
 		t->arr.n = (UInteger)size;
-		if (!type_resolve(ev, t->arr.of))
+		if (!type_resolve(tr, t->arr.of))
 			return false;
 	} break;
 	case TYPE_FN:
 		arr_foreach(t->fn.types, Type, child_type) {
-			if (!type_resolve(ev, child_type))
+			if (!type_resolve(tr, child_type))
 				return false;
 		}
 		break;
 	case TYPE_TUPLE:
 		arr_foreach(t->tuple, Type, child_type) {
-			if (!type_resolve(ev, child_type))
+			if (!type_resolve(tr, child_type))
 				return false;
 		}
 		break;
 	case TYPE_PTR:
-		if (!type_resolve(ev, t->ptr))
+		if (!type_resolve(tr, t->ptr))
 			return false;
 		break;
 	case TYPE_SLICE:
-		if (!type_resolve(ev, t->slice))
+		if (!type_resolve(tr, t->slice))
 			return false;
 		break;
 	case TYPE_UNKNOWN:
@@ -355,37 +358,6 @@ static bool type_resolve(Evaluator *ev, Type *t) {
 		break;
 	}
 	t->flags |= TYPE_FLAG_RESOLVED;
-	return true;
-}
-
-static bool types_type(Typer *tr, Type *t) {
-	if (t->flags & TYPE_FLAG_RESOLVED) return true;
-	switch (t->kind) {
-	case TYPE_ARR:
-		if (!types_expr(tr, t->arr.n_expr)) return false;
-		if (!types_type(tr, t->arr.of)) return false;
-		break;
-	case TYPE_PTR:
-		if (!types_type(tr, t->ptr)) return false;
-		break;
-	case TYPE_SLICE:
-		if (!types_type(tr, t->slice)) return false;
-		break;
-	case TYPE_TUPLE: {
-		arr_foreach(t->tuple, Type, x)
-			if (!types_type(tr, x))
-				return false;
-	} break;
-	case TYPE_FN:
-		arr_foreach(t->fn.types, Type, x)
-			if (!types_type(tr, x))
-				return false;
-		break;
-	case TYPE_UNKNOWN:
-	case TYPE_BUILTIN:
-	case TYPE_VOID:
-		break;
-	}
 	return true;
 }
 
@@ -596,7 +568,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		CastExpr *c = &e->cast;
 		if (!types_expr(tr, c->expr))
 			return false;
-		if (!types_type(tr, &c->type) || !type_resolve(tr->evalr, &c->type))
+		if (!type_resolve(tr, &c->type))
 			return false;
 		Status status = type_cast_status(&c->expr->type, &c->type);
 		if (status != STATUS_NONE) {
@@ -614,14 +586,20 @@ static bool types_expr(Typer *tr, Expression *e) {
 		*t = c->type;
 	} break;
 	case EXPR_NEW:
-		t->kind = TYPE_PTR;
-		/* type the type, but don't resolve it (e.g. fn(x:int)int{(new [x]int)[0]}) */
-		if (!types_type(tr, &e->new.type))
+		if (!type_resolve(tr, &e->new.type))
 			return false;
-		if (e->new.type.kind == TYPE_ARR) {
-			*t = e->new.type;
+		if (e->new.n) {
+			if (!types_expr(tr, e->new.n)) return false;
+			if (e->new.n->type.kind != TYPE_BUILTIN || !type_builtin_is_int(e->new.n->type.builtin)) {
+				char *got = type_to_str(&e->new.n->type);
+				err_print(e->where, "Expected integer as second argument to new, but got %s.", got);
+				free(got);
+				return false;
+			}
+			t->kind = TYPE_SLICE;
+			t->slice = &e->new.type;
 		} else {
-			t->ptr = typer_malloc(tr, sizeof *t->ptr);
+			t->kind = TYPE_PTR;
 			t->ptr = &e->new.type;
 		}
 		break;
@@ -1003,7 +981,9 @@ static bool types_expr(Typer *tr, Expression *e) {
 				return false;
 			}
 			if (lhs_type->kind != TYPE_ARR) {
-				err_print(e->where, "Trying to take index of non-array.");
+				char *s = type_to_str(lhs_type);
+				err_print(e->where, "Trying to take index of non-array type %s.", s);
+				free(s);
 				return false;
 			}
 			*t = *lhs_type->arr.of;
@@ -1054,7 +1034,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 	if (d->flags & DECL_FLAG_ANNOTATES_TYPE) {
 		/* type supplied */
 		assert(d->type.kind != TYPE_VOID); /* there's no way to annotate void */
-		if (!types_type(tr, &d->type) || !type_resolve(tr->evalr, &d->type)) {
+		if (!type_resolve(tr, &d->type)) {
 			success = false;
 			goto ret;
 		}

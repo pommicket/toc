@@ -2,4 +2,6 @@
 valgrind -q --track-origins=yes ./toc test.toc || exit 1
 if [ "$1" = "c" ]; then
 	gcc out.c && ./a.out
+elif [ "$1" = "pc" ]; then
+	cat out.c
 fi

@@ -235,6 +235,7 @@ static inline Expression *parser_new_expr(Parser *p) {
 #define EXPR_CAN_END_WITH_COMMA 0x01 /* a comma could end the expression */
 #define EXPR_CAN_END_WITH_LBRACE 0x02
 
+/* is_vbs can be NULL */
 static Token *expr_find_end(Parser *p, uint16_t flags, bool *is_vbs)  {
 	Tokenizer *t = p->tokr;
 	int paren_level = 0;
@@ -951,15 +952,37 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				op = UNARY_NOT;
 				break;
 			case KW_NEW:
-				t->token++;
 				e->kind = EXPR_NEW;
+				t->token++;
+				if (!token_is_kw(t->token, KW_LPAREN)) {
+					err_print(t->token->where, "Expected ( to follow new.");
+				}
+				t->token++;
 				if (!parse_type(p, &e->new.type)) return false;
+				if (token_is_kw(t->token, KW_COMMA)) {
+					/* new(int, 5) */
+					t->token++;
+					Token *n_end = expr_find_end(p, 0, NULL);
+					e->new.n = parser_new_expr(p);
+					if (!parse_expr(p, e->new.n, n_end))
+						return false;
+				} else e->new.n = NULL;
+				if (!token_is_kw(t->token, KW_RPAREN)) {
+					err_print(t->token->where, "Expected ).");
+					return false;
+				}
+				t->token++;
 				if (e->new.type.kind == TYPE_TUPLE) {
 					err_print(e->where, "You cannot new a tuple.");
 					return false;
 				}
 				return true;
 			case KW_DEL:
+				if (!token_is_kw(t->token + 1, KW_LPAREN)) {
+					/* for the future, when del could be a function */
+					err_print(e->where, "Expected ( after del.");
+					return false;
+				}
 				op = UNARY_DEL;
 				break;
 			default:

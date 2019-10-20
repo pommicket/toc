@@ -18,7 +18,6 @@ typedef struct { void *data; u64 n; } slice_;
 
 /* declarations */
 void puti(i64 x);
-void asdf(i64( (*x)[3]), i64 y, i64(*ret0_), i64((*ret1_)[3]));
 void main__(void);
 /* code */
 int main() {
@@ -26,35 +25,17 @@ int main() {
 	return 0;
 }
 
-#include <stdio.h>
-;
 void puti(i64 x) {
-{
-	printf("%ld\n", (long)x);
-}}
-
-
-void asdf(i64( (*x)[3]), i64 y, i64(*ret0_), i64((*ret1_)[3])) {
-{
-}(*ret0_) = y;{
-size_t i;i64(*arr__in) = (*x); i64(*arr__out) = (*ret1_);
-for (i = 0; i < 3; i++) arr__out[i] = arr__in[i];
-}return;
-}
+	{
+	}}
 
 
 void main__(void) {
-{
-	i64( a[3]) = {0}; 
-	i64 b = 0; 
-	(a[0]) = 17;;
-	b = 5489;;
-	i64 c; i64( d[3]); asdf(&a, b, &c, &d);
-
-	(puti(c));
-	(puti((d[0])));
-	void (* asdfasdf)(i64((*)[3]), i64, i64(*), i64((*)[3])); {
-	void (* expr__)(i64((*)[3]), i64, i64(*), i64((*)[3])); expr__ = asdf;asdfasdf = expr__;}
-}}
+	{
+	i64((* Ar)[5]); {
+	i64((* expr__)[5]); expr__ = ((i64((*)[5]))calloc(1, sizeof(i64([5]))));Ar = expr__;}
+	slice_ A; {
+	slice_ expr__; slice_ a0_; a0_.data = calloc(100, sizeof(i64)); a0_.n = 100;expr__ = a0_;A = expr__;}
+	}}
 
 

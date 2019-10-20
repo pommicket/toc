@@ -1,6 +1,10 @@
 /* 
 TODO:
-new returns a *slice*
+fix compile time new
+arr => slice casting
+del slices
+slice at index
+bf interpreter
 unicode variable names
 make sure initializers for global variables are compile-time constants
 structs
