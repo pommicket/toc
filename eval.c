@@ -44,7 +44,7 @@ static size_t compiler_sizeof(Type *t) {
 	case TYPE_PTR:
 		return sizeof t->ptr;
 	case TYPE_ARR:
-		return sizeof t->arr;
+		return compiler_sizeof(t->arr.of) * t->arr.n;
 	case TYPE_TUPLE:
 		return sizeof t->tuple;
 	case TYPE_SLICE:
@@ -502,7 +502,9 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	eval_binary_op_one(f32, F32, op);			\
 	eval_binary_op_one(f64, F64, op)
 
+	
 #define eval_binary_op_nums_only(op)						\
+	/* fix casting to bool */
 	val_cast(&lhs, &e->binary.lhs->type, &lhs, &e->type);	\
 	val_cast(&rhs, &e->binary.rhs->type, &rhs, &e->type);	\
 	assert(e->type.kind == TYPE_BUILTIN);					\
@@ -534,7 +536,8 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	assert(e->type.kind == TYPE_BUILTIN);					\
 	switch (builtin) {							\
 		eval_binary_bool_op_nums(builtin, op);	\
-	default: assert(0); break;					\
+	default:printf("%d\n",(int)builtin);		\
+	assert(!"Invalid builtin to "#op); break;	\
 	}
 		
     
@@ -629,7 +632,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		if (e->binary.op != BINARY_SET)
 			if (!eval_expr(ev, e->binary.lhs, &lhs)) return false;
 		if (!eval_expr(ev, e->binary.rhs, &rhs)) return false;
-		BuiltinType builtin = e->type.builtin;
+		BuiltinType builtin = e->binary.lhs->type.builtin;
 		switch (e->binary.op) {
 		case BINARY_ADD:
 			eval_binary_op_nums_only(+); break;
@@ -787,10 +790,16 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	} break;
 	case EXPR_NEW:
 		/* it's not strictly necessary to do the if here */
-		if (e->new.type.kind == TYPE_ARR)
-			v->arr = err_calloc(1, compiler_sizeof(&e->new.type));
-		else
+		if (e->new.n) {
+			Value n;
+			if (!eval_expr(ev, e->new.n, &n))
+				return false;
+			U64 n64 = val_to_u64(&n, e->new.n->type.builtin);
+			v->slice.data = err_calloc(n64, compiler_sizeof(&e->new.type));
+			v->slice.n = n64;
+		} else {
 			v->ptr = err_calloc(1, compiler_sizeof(&e->new.type));
+		}
 		break;
 	case EXPR_CALL: {
 		Value fnv;
