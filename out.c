@@ -17,7 +17,7 @@ typedef struct { void *data; u64 n; } slice_;
 
 
 /* declarations */
-void puti(i64 x);
+i64 foo(void);
 void main__(void);
 /* code */
 int main() {
@@ -25,17 +25,20 @@ int main() {
 	return 0;
 }
 
-void puti(i64 x) {
+i64 foo(void) {
 	{
-	}}
+	i64 i; {
+	i64 expr__; expr__ = 0;i = expr__;}
+	while ((i<100)) {
+	i = (i+1);;
+	};
+	}return i;
+}
 
 
 void main__(void) {
 	{
-	i64((* Ar)[5]); {
-	i64((* expr__)[5]); expr__ = ((i64((*)[5]))calloc(1, sizeof(i64([5]))));Ar = expr__;}
-	slice_ A; {
-	slice_ expr__; slice_ a0_; a0_.data = calloc(100, sizeof(i64)); a0_.n = 100;expr__ = a0_;A = expr__;}
+	i64( Ar[1]) = {0}; 
 	}}
 
 

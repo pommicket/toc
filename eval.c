@@ -502,7 +502,9 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	eval_binary_op_one(f32, F32, op);			\
 	eval_binary_op_one(f64, F64, op)
 
+	
 #define eval_binary_op_nums_only(op)						\
+	/* fix casting to bool */
 	val_cast(&lhs, &e->binary.lhs->type, &lhs, &e->type);	\
 	val_cast(&rhs, &e->binary.rhs->type, &rhs, &e->type);	\
 	assert(e->type.kind == TYPE_BUILTIN);					\
@@ -534,7 +536,8 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	assert(e->type.kind == TYPE_BUILTIN);					\
 	switch (builtin) {							\
 		eval_binary_bool_op_nums(builtin, op);	\
-	default: assert(0); break;					\
+	default:printf("%d\n",(int)builtin);		\
+	assert(!"Invalid builtin to "#op); break;	\
 	}
 		
     
@@ -629,7 +632,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		if (e->binary.op != BINARY_SET)
 			if (!eval_expr(ev, e->binary.lhs, &lhs)) return false;
 		if (!eval_expr(ev, e->binary.rhs, &rhs)) return false;
-		BuiltinType builtin = e->type.builtin;
+		BuiltinType builtin = e->binary.lhs->type.builtin;
 		switch (e->binary.op) {
 		case BINARY_ADD:
 			eval_binary_op_nums_only(+); break;
