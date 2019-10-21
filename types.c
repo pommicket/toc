@@ -445,10 +445,9 @@ static Status type_cast_status(Type *from, Type *to) {
 			return STATUS_NONE;
 		if (to->kind == TYPE_FN)
 			return STATUS_WARN;
+		/* TODO: Cast from ptr to arr */
 		return STATUS_ERR;
 	case TYPE_ARR:
-		if (to->kind == TYPE_PTR && type_eq(from->arr.of, to->ptr))
-			return STATUS_NONE;
 		return STATUS_ERR;
 	case TYPE_SLICE:
 		if (to->kind == TYPE_PTR && type_eq(from->slice, to->ptr))
