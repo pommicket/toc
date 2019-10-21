@@ -498,6 +498,7 @@ typedef enum {
 
 typedef struct {
 	Allocator allocr;
+	Value *returning; /* NULL = not returning anything */
 } Evaluator;
 
 typedef struct Typer {

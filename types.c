@@ -979,13 +979,20 @@ static bool types_expr(Typer *tr, Expression *e) {
 				err_print(e->where, "The index of an array must be a builtin numerical type.");
 				return false;
 			}
-			if (lhs_type->kind != TYPE_ARR) {
-				char *s = type_to_str(lhs_type);
+			switch (lhs_type->kind) {
+			case TYPE_ARR:
+				*t = *lhs_type->arr.of;
+				break;
+			case TYPE_SLICE:
+				*t = *lhs_type->slice;
+				break;
+			default: {
+		    	char *s = type_to_str(lhs_type);
 				err_print(e->where, "Trying to take index of non-array type %s.", s);
 				free(s);
 				return false;
 			}
-			*t = *lhs_type->arr.of;
+			}
 			break;
 		} break;
 	} break;

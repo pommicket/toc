@@ -1,31 +1,43 @@
 // #C("#include <stdio.h>
 // #define kasfdhkjasdfhjk ");
 
-// puti @= fn(x: int) {
-	 // #C("printf(\"%ld\\n\", (long)x)");
+puti @= fn(x: int) {
+	 #C("printf(\"%ld\\n\", (long)x)");
+};
+
+// foo @= fn(x:int) int {
+// 	if x < 4 {
+// 	return 7;
+// 	} else {
+// 	return 5;
+// 	}
+// 	4
 // };
 
-foo @= fn() int {
-	X := new([100]int,5);
-	asdf : [100]int;
-	(*(&asdf))[5] = 12;
+foo @= fn(x: int) int {
+	 C := new(int, x);
+	 i := 0;
+	 while i < x {
+	 C[i] = i;
+	 i = i + 1;
+	 }
+	 total := 0;
+	 while i < x {
+	 total = total + C[i];
+	 i = i + 1;
+	 }
+	 total
 	
-	
-	// i := 0;
-	// while i < 100 {
-		  // (*X)[i] = i;
-		  // i = i + 1;
-	// }
-	// total := 0;
-	// i = 0;
-	// while i < 100 {
-		  // total = total + (*X)[i];
-		  // i = i + 1;
-	// }
-	// total
-	asdf[5]
 };
 
 main @= fn() {
-	 Ar : [foo()]int;
+	 A : [foo(10)]int;
+	 B : [foo(100)]int;
+	 // C := new(int, 10);
+	 // i := 0;
+	 // while i < 10 {
+	 // C[i] = 7;
+	 // i = i + 1;
+	 // }
+	 // puti(C[9]);
 };

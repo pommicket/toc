@@ -1,7 +1,7 @@
 /* 
 TODO:
-compile time return statements
 slice at index
+fix recursion with block_enter/exit
 arr => slice casting
 del slices
 run time return statements

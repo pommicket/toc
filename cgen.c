@@ -706,10 +706,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		break;
 	case EXPR_BINARY_OP: {
 		const char *s = "";
-		if (e->binary.op == BINARY_SET) {
-			if (!cgen_set(g, e->binary.lhs, NULL, e->binary.rhs, NULL)) return false;
-			break;
-		}
+		bool handled = false;
 		switch (e->binary.op) {
 		case BINARY_SUB:
 			s = "-"; break;
@@ -719,7 +716,10 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			s = "*"; break;
 		case BINARY_DIV:
 			s = "/"; break;
-		case BINARY_SET: assert(0); break;
+		case BINARY_SET: 
+			if (!cgen_set(g, e->binary.lhs, NULL, e->binary.rhs, NULL)) return false;
+			handled = true;
+			break;
 		case BINARY_GT:
 			s = ">"; break;
 		case BINARY_LT:
@@ -733,16 +733,46 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		case BINARY_NE:
 			s = "!="; break;
 		case BINARY_AT_INDEX:
-			s = "["; break;
+			cgen_write(g, "(");
+			switch (e->binary.lhs->type.kind) {
+			case TYPE_ARR:
+				if (!cgen_expr(g, e->binary.lhs))
+					return false;
+				cgen_write(g, "[");
+				if (!cgen_expr(g, e->binary.rhs))
+					return false;
+				cgen_write(g, "]");
+				break;
+			case TYPE_SLICE:
+				cgen_write(g, "((");
+				if (!cgen_type_pre(g, &e->type, e->where))
+					return false;
+				cgen_write(g, "(*)");
+				if (!cgen_type_post(g, &e->type, e->where))
+					return false;
+				cgen_write(g, ")(");
+				if (!cgen_expr(g, e->binary.lhs))
+					return false;
+				cgen_write(g, ".data))[");
+				if (!cgen_expr(g, e->binary.rhs))
+					return false;
+				cgen_write(g, "]");
+				break;
+			default:
+				assert(0);
+				break;
+			}
+			cgen_write(g, ")");
+			handled = true;
+			break;
 		}
+		if (handled) break;
 		cgen_write(g, "(");
 		if (!cgen_expr(g, e->binary.lhs))
 			return false; 
 		cgen_write(g, "%s", s);
 		if (!cgen_expr(g, e->binary.rhs))
 			return false;
-		if (e->binary.op == BINARY_AT_INDEX)
-			cgen_write(g, "]");
 		cgen_write(g, ")");
 	} break;
 	case EXPR_UNARY_OP: {

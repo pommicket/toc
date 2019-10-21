@@ -5,6 +5,7 @@ static void block_exit(Block *b, Statement *stmts);
 
 static void evalr_create(Evaluator *ev) {
 	allocr_create(&ev->allocr);
+	ev->returning = NULL;
 }
 
 static void evalr_free(Evaluator *ev) {
@@ -404,6 +405,49 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 	}
 }
 
+static bool eval_pointer_at_index(Evaluator *ev, Expression *e, void **ptr, Type **type) {
+	Value arr;
+	if (!eval_expr(ev, e->binary.lhs, &arr)) return false;
+	Value index;
+	if (!eval_expr(ev, e->binary.rhs, &index)) return false;
+	U64 i;
+	Type *ltype = &e->binary.lhs->type;
+	Type *rtype = &e->binary.rhs->type;
+	assert(rtype->kind == TYPE_BUILTIN);
+	if (rtype->builtin == BUILTIN_U64) {
+		i = index.u64;
+	} else {
+		I64 signed_index = val_to_i64(&index, rtype->builtin);
+		if (signed_index < 0) {
+			err_print(e->where, "Array or slice out of bounds (index = %ld)\n", (long)signed_index);
+			return false;
+		}
+		i = (U64)signed_index;
+	}
+	switch (ltype->kind) {
+	case TYPE_ARR: {
+		U64 arr_sz = ltype->arr.n;
+		if (i >= arr_sz) {
+			err_print(e->where, "Array out of bounds (%lu, array size = %lu)\n", (unsigned long)i, (unsigned long)arr_sz);
+			return false;
+		}
+		*ptr = (char *)arr.arr + compiler_sizeof(ltype->arr.of) * i;
+		*type = ltype->arr.of;
+	} break;
+	case TYPE_SLICE: {
+		U64 slice_sz = arr.slice.n;
+		if (i >= slice_sz) {
+			err_print(e->where, "Slice out of bounds (%lu, slice size = %lu)\n", (unsigned long)i, (unsigned long)slice_sz);
+			return false;
+		}
+		*ptr = (char *)arr.slice.data + compiler_sizeof(ltype->slice) * i;
+		*type = ltype->slice;
+	} break;
+	default: assert(0); break;
+	}
+	return true;
+}
+
 static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 	switch (set->kind) {
 	case EXPR_IDENT: {
@@ -427,29 +471,11 @@ static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 	case EXPR_BINARY_OP:
 		switch (set->binary.op) {
 		case BINARY_AT_INDEX: {
-			/* TODO */
-		    Value arr;
-			if (!eval_expr(ev, set->binary.lhs, &arr)) return false;
-			Value index;
-			if (!eval_expr(ev, set->binary.rhs, &index)) return false;
-			U64 i;
-			U64 arr_sz = set->binary.lhs->type.arr.n;
-			assert(set->binary.rhs->type.kind == TYPE_BUILTIN);
-			if (set->binary.rhs->type.builtin == BUILTIN_U64) {
-				i = index.u64;
-			} else {
-				I64 signed_index = val_to_i64(&index, set->binary.rhs->type.builtin);
-				if (signed_index < 0) {
-					err_print(set->where, "Array out of bounds (%ld, array size = %lu)\n", (long)signed_index, (unsigned long)arr_sz);
-					return false;
-				}
-				i = (U64)signed_index;
-			}
-			if (i >= arr_sz) {
-				err_print(set->where, "Array out of bounds (%lu, array size = %lu)\n", (unsigned long)i, (unsigned long)arr_sz);
+			void *ptr;
+			Type *type;
+			if (!eval_pointer_at_index(ev, set, &ptr, &type))
 				return false;
-			}
-			eval_deref_set((char *)arr.arr + compiler_sizeof(set->binary.lhs->type.arr.of) * i, to, set->binary.lhs->type.arr.of);
+			eval_deref_set(ptr, to, type);
 		} break;
 		default: break;
 		}
@@ -579,28 +605,11 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			case EXPR_BINARY_OP:
 				switch (o->binary.op) {
 				case BINARY_AT_INDEX: {
-					Value arr;
-					if (!eval_expr(ev, o->binary.lhs, &arr)) return false;
-					Value index;
-					if (!eval_expr(ev, o->binary.rhs, &index)) return false;
-					U64 i;
-					U64 arr_sz = o->binary.lhs->type.arr.n;
-					assert(o->binary.rhs->type.kind == TYPE_BUILTIN);
-					if (o->binary.rhs->type.builtin == BUILTIN_U64) {
-						i = index.u64;
-					} else {
-						I64 signed_index = val_to_i64(&index, o->binary.rhs->type.builtin);
-						if (signed_index < 0) {
-							err_print(o->where, "Array out of bounds (%ld, array size = %lu)\n", (long)signed_index, (unsigned long)arr_sz);
-							return false;
-						}
-						i = (U64)signed_index;
-					}
-					if (i >= arr_sz) {
-						err_print(o->where, "Array out of bounds (%lu, array size = %lu)\n", (unsigned long)i, (unsigned long)arr_sz);
+					void *ptr;
+					Type *type;
+					if (!eval_pointer_at_index(ev, o, &ptr, &type))
 						return false;
-					}
-				    v->ptr = ((char *)arr.arr) + compiler_sizeof(o->binary.lhs->type.arr.of) * i;
+					v->ptr = ptr;
 				} break;
 				default: break;
 				}
@@ -827,6 +836,11 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			fn_exit(fn);
 			return false;
 		}
+		if (ev->returning) {
+			*v = *ev->returning;
+			free(ev->returning);
+			ev->returning = NULL;
+		}
 		fn_exit(fn);
 	} break;
 	}
@@ -868,7 +882,9 @@ static bool eval_stmt(Evaluator *ev, Statement *stmt) {
 			return false;
 	} break;
 	case STMT_RET:
-		/* TODO */
+		ev->returning = err_malloc(sizeof *ev->returning);
+		if (!eval_expr(ev, &stmt->ret.expr, ev->returning))
+			return false;
 		break;
 	}
 	return true;
@@ -879,8 +895,9 @@ static bool eval_block(Evaluator *ev, Block *b, Value *v) {
 	arr_foreach(b->stmts, Statement, stmt) {
 		if (!eval_stmt(ev, stmt))
 			return false;
+		if (ev->returning) break;
 	}
-	if (b->ret_expr) {
+	if (!ev->returning && b->ret_expr) {
 		if (!eval_expr(ev, b->ret_expr, v))
 			return false;
 	}
