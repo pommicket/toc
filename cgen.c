@@ -1,5 +1,7 @@
 static bool cgen_stmt(CGenerator *g, Statement *s);
-static bool cgen_block(CGenerator *g, Block *b, const char *ret_name, bool enter_and_exit);
+#define CGEN_BLOCK_FLAG_NOENTER 0x01 /* should cgen_block actually enter and exit the block? */
+#define CGEN_BLOCK_FLAG_NOBRACES 0x02 /* should it use braces? */
+static bool cgen_block(CGenerator *g, Block *b, const char *ret_name, uint16_t flags);
 static bool cgen_expr_pre(CGenerator *g, Expression *e);
 static bool cgen_expr(CGenerator *g, Expression *e);
 static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents, const char *prefix, Expression *to);
@@ -598,7 +600,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 					return false;
 				cgen_write(g, ") ");
 			}
-			if (!cgen_block(g, &curr->body, ret_name, false))
+			if (!cgen_block(g, &curr->body, ret_name, 0))
 				return false;
 			if (curr->next_elif) {
 				cgen_write(g, " else ");
@@ -617,12 +619,12 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			cgen_write(g, "true");
 		}
 		cgen_write(g, ") ");
-		if (!cgen_block(g, &w->body, ret_name, false))
+		if (!cgen_block(g, &w->body, ret_name, 0))
 			return false;
 	} break;
 	case EXPR_BLOCK:
 		e->block_ret_id = id;
-		if (!cgen_block(g, &e->block, ret_name, false))
+		if (!cgen_block(g, &e->block, ret_name, 0))
 			return false;
 		break;
 	case EXPR_CALL:
@@ -853,10 +855,11 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
   functions always call with NULL as ret_name, even if they use out params, for now
   at least. 
 */
-static bool cgen_block(CGenerator *g, Block *b, const char *ret_name, bool enter_and_exit) {
+static bool cgen_block(CGenerator *g, Block *b, const char *ret_name, uint16_t flags) {
 	Block *prev = g->block;
-	cgen_write(g, "{");
-	if (enter_and_exit)
+	if (!(flags & CGEN_BLOCK_FLAG_NOBRACES))
+		cgen_write(g, "{");
+	if (!(flags & CGEN_BLOCK_FLAG_NOENTER))
 		if (!cgen_block_enter(g, b))
 			return false;
 	cgen_nl(g);
@@ -874,9 +877,10 @@ static bool cgen_block(CGenerator *g, Block *b, const char *ret_name, bool enter
 		}
 		cgen_nl(g);
 	}
-	if (enter_and_exit)
+	if (!(flags & CGEN_BLOCK_FLAG_NOENTER))
 		cgen_block_exit(g, prev);
-	cgen_write(g, "}");
+	if (!(flags & CGEN_BLOCK_FLAG_NOBRACES))
+		cgen_write(g, "}");
 	return true;
 }
 
@@ -920,7 +924,7 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where) {
 			return false;
 	}
 	if (!cgen_block_enter(g, &f->body)) return false;
-	if (!cgen_block(g, &f->body, NULL, false))
+	if (!cgen_block(g, &f->body, NULL, CGEN_BLOCK_FLAG_NOENTER | CGEN_BLOCK_FLAG_NOBRACES))
 		return false;
 
 	if (f->ret_decls) {

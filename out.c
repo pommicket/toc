@@ -26,19 +26,18 @@ int main() {
 }
 
 i64 foo(void) {
-	{
-	i64 i; {
-	i64 expr__; expr__ = 0;i = expr__;}
-	while ((i<100)) {
-	i = (i+1);;
-	};
-	}return i;
+
+	slice_ X; {
+	slice_ expr__; slice_ a0_; a0_.data = calloc(5, sizeof(i64([100]))); a0_.n = 5;expr__ = a0_;X = expr__;}
+	i64( asdf[100]) = {0}; 
+	((*(&asdf))[5]) = 12;;
+	return (asdf[5]);
 }
 
 
 void main__(void) {
-	{
-	i64( Ar[1]) = {0}; 
-	}}
+
+	i64( Ar[12]) = {0}; 
+}
 
 

@@ -1,10 +1,12 @@
 /* 
 TODO:
-fix compile time new
+compile time return statements
+slice at index
 arr => slice casting
 del slices
-slice at index
+run time return statements
 bf interpreter
+error on failed calloc in output
 unicode variable names
 make sure initializers for global variables are compile-time constants
 structs

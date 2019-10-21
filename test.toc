@@ -6,13 +6,16 @@
 // };
 
 foo @= fn() int {
-	// X := new([100]int);
-	i := 0;
-	while i < 100 {
+	X := new([100]int,5);
+	asdf : [100]int;
+	(*(&asdf))[5] = 12;
+	
+	
+	// i := 0;
+	// while i < 100 {
 		  // (*X)[i] = i;
-		  i = i + 1;
-	}
-	i
+		  // i = i + 1;
+	// }
 	// total := 0;
 	// i = 0;
 	// while i < 100 {
@@ -20,6 +23,7 @@ foo @= fn() int {
 		  // i = i + 1;
 	// }
 	// total
+	asdf[5]
 };
 
 main @= fn() {

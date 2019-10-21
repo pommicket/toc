@@ -5,3 +5,4 @@ if [ "$1" = "c" ]; then
 elif [ "$1" = "pc" ]; then
 	cat out.c
 fi
+rm vgcore* 2> /dev/null

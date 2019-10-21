@@ -44,7 +44,7 @@ static size_t compiler_sizeof(Type *t) {
 	case TYPE_PTR:
 		return sizeof t->ptr;
 	case TYPE_ARR:
-		return compiler_sizeof(t->arr.of) * t->arr.n;
+		return t->arr.n * compiler_sizeof(t->arr.of);
 	case TYPE_TUPLE:
 		return sizeof t->tuple;
 	case TYPE_SLICE:
@@ -343,7 +343,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 static void eval_deref(Value *v, void *ptr, Type *type) {
 	switch (type->kind) {
 	case TYPE_PTR: v->ptr = *(void **)ptr; break;
-	case TYPE_ARR: v->arr = *(void **)ptr; break;
+	case TYPE_ARR: v->arr = ptr; break; /* when we have a pointer to an array, it points directly to the data in that array. */
 	case TYPE_FN: v->fn = *(FnExpr **)ptr; break;
 	case TYPE_TUPLE: v->tuple = *(Value **)ptr; break;
 	case TYPE_BUILTIN:
@@ -449,7 +449,7 @@ static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 				err_print(set->where, "Array out of bounds (%lu, array size = %lu)\n", (unsigned long)i, (unsigned long)arr_sz);
 				return false;
 			}
-			eval_deref_set((char *)arr.arr + compiler_sizeof(set->binary.lhs->type.arr.of) * i, to, &set->binary.lhs->type);
+			eval_deref_set((char *)arr.arr + compiler_sizeof(set->binary.lhs->type.arr.of) * i, to, set->binary.lhs->type.arr.of);
 		} break;
 		default: break;
 		}
@@ -504,7 +504,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 
 	
 #define eval_binary_op_nums_only(op)						\
-	/* fix casting to bool */
 	val_cast(&lhs, &e->binary.lhs->type, &lhs, &e->type);	\
 	val_cast(&rhs, &e->binary.rhs->type, &rhs, &e->type);	\
 	assert(e->type.kind == TYPE_BUILTIN);					\
@@ -531,15 +530,19 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	eval_binary_bool_op_one(f64, F64, op);
 
 #define eval_binary_bool_op_nums_only(op)					\
-	val_cast(&lhs, &e->binary.lhs->type, &lhs, &e->type);	\
-	val_cast(&rhs, &e->binary.rhs->type, &rhs, &e->type);	\
-	assert(e->type.kind == TYPE_BUILTIN);					\
-	switch (builtin) {							\
-		eval_binary_bool_op_nums(builtin, op);	\
-	default:printf("%d\n",(int)builtin);		\
-	assert(!"Invalid builtin to "#op); break;	\
-	}
-		
+	{Type *ltype=&e->binary.lhs->type,						\
+	 *rtype=&e->binary.rhs->type;							\
+	 Type *cast_to =	ltype->flags & TYPE_FLAG_FLEXIBLE ?	\
+	 rtype : ltype;											\
+	 val_cast(&lhs, ltype, &lhs, cast_to);					\
+	 val_cast(&rhs, rtype, &rhs, cast_to);					\
+	 assert(e->type.kind == TYPE_BUILTIN);					\
+	 switch (builtin) {										\
+		 eval_binary_bool_op_nums(builtin, op);				\
+	 default:printf("%d\n",(int)builtin);					\
+		 assert(!"Invalid builtin to "#op); break;			\
+	 }}
+	
     
 	
 	switch (e->kind) {
@@ -558,7 +561,10 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 					err_print(e->where, "Cannot take address of run time variable at compile time.");
 					return false;
 				}
-			    v->ptr = &id->val;
+				if (o->type.kind == TYPE_ARR)
+					v->ptr = id->val.arr; /* point directly to data */
+				else
+					v->ptr = &id->val;
 			} break;
 			case EXPR_UNARY_OP:
 				switch (o->unary.op) {
@@ -595,7 +601,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 						return false;
 					}
 				    v->ptr = ((char *)arr.arr) + compiler_sizeof(o->binary.lhs->type.arr.of) * i;
-					printf("%p\n",v->ptr);
 				} break;
 				default: break;
 				}
@@ -637,9 +642,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		case BINARY_ADD:
 			eval_binary_op_nums_only(+); break;
 		case BINARY_SUB:
-			eval_binary_op_nums_only(-);
-			printf("%p %p\n", lhs.ptr, rhs.ptr);
-			break;
+			eval_binary_op_nums_only(-); break;
 		case BINARY_MUL:
 			eval_binary_op_nums_only(*); break;
 		case BINARY_DIV:
