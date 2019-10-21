@@ -308,7 +308,8 @@ typedef enum {
 			  EXPR_CALL,
 			  EXPR_BLOCK,
 			  EXPR_TUPLE,
-			  EXPR_DIRECT
+			  EXPR_DIRECT,
+			  EXPR_SLICE
 } ExprKind;
 
 typedef enum {
@@ -390,6 +391,15 @@ typedef struct {
 	} c;
 } NewExpr;
 
+typedef struct {
+	struct Expression *of;
+	struct Expression *from;
+	struct Expression *to;
+	struct {
+		IdentID id;
+	} c;
+} SliceExpr;
+
 #define EXPR_FLAG_FOUND_TYPE 0x01
 
 typedef struct Expression {
@@ -424,6 +434,7 @@ typedef struct Expression {
 		WhileExpr while_;
 		FnExpr fn;
 		CastExpr cast;
+		SliceExpr slice;
 		struct {
 			Block block;
 			IdentID block_ret_id;

@@ -22,6 +22,7 @@ static const char *expr_kind_to_str(ExprKind k) {
 	case EXPR_TUPLE: return "tuple";
 	case EXPR_BLOCK: return "block";
 	case EXPR_IDENT: return "identifier";
+	case EXPR_SLICE: return "slice";
 	}
 	assert(0);
 	return "";
@@ -234,7 +235,7 @@ static inline Expression *parser_new_expr(Parser *p) {
 
 #define EXPR_CAN_END_WITH_COMMA 0x01 /* a comma could end the expression */
 #define EXPR_CAN_END_WITH_LBRACE 0x02
-
+#define EXPR_CAN_END_WITH_COLON 0x04
 /* is_vbs can be NULL */
 static Token *expr_find_end(Parser *p, uint16_t flags, bool *is_vbs)  {
 	Tokenizer *t = p->tokr;
@@ -290,6 +291,10 @@ static Token *expr_find_end(Parser *p, uint16_t flags, bool *is_vbs)  {
 					return token;
 				could_be_vbs = true;
 				break;
+			case KW_COLON:
+				if ((flags & EXPR_CAN_END_WITH_COLON)
+					&& brace_level == 0 && square_level == 0 && paren_level == 0)
+					return token;
 			default: break;
 			}
 			if (token->kw != KW_RBRACE && token->kw != KW_SEMICOLON && token->kw != KW_LBRACE)
@@ -1169,18 +1174,66 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				return parse_args(p, &e->call.args);
 			}
 			case KW_LSQUARE: {
-				/* it's an array access */
-				e->kind = EXPR_BINARY_OP;
-				e->binary.op = BINARY_AT_INDEX;
-				e->binary.lhs = parser_new_expr(p);
-				e->binary.rhs = parser_new_expr(p);
+				Expression *arr = parser_new_expr(p);
+				/* it's an array access or slice */
 				/* parse array */
-				if (!parse_expr(p, e->binary.lhs, opening_bracket)) return false;
-				/* parse index */
+				if (!parse_expr(p, arr, opening_bracket)) return false;
+				
 				t->token = opening_bracket + 1;
-				Token *index_end = expr_find_end(p, 0, NULL);
-				if (!parse_expr(p, e->binary.rhs, index_end))
+				Token *iend = NULL;
+				if (token_is_kw(t->token, KW_COLON)) {
+					/* slice */
+					goto expr_is_slice;
+				}
+				iend = expr_find_end(p, EXPR_CAN_END_WITH_COLON, NULL);
+				if (iend->kind != TOKEN_KW) {
+					err_print(iend->where, "Expected ] or : after index.");
 					return false;
+				}
+				switch (iend->kw) {
+				case KW_RSQUARE:
+					/* array access */
+					e->kind = EXPR_BINARY_OP;
+					e->binary.op = BINARY_AT_INDEX;
+					e->binary.lhs = arr;
+					e->binary.rhs = parser_new_expr(p);
+					if (!parse_expr(p, e->binary.rhs, iend))
+						return false;
+					break;
+				expr_is_slice: 
+				case KW_COLON: {
+					/* slice */
+					SliceExpr *s = &e->slice;
+					e->kind = EXPR_SLICE;
+					s->of = arr;
+					if (iend) {
+						s->from = parser_new_expr(p);
+						if (!parse_expr(p, s->from, iend))
+							return false;
+					} else {
+						/* e.g. x[:5] */
+						s->from = NULL;
+					}
+					assert(token_is_kw(t->token, KW_COLON));
+					t->token++;
+					if (token_is_kw(t->token, KW_RSQUARE)) {
+						/* e.g. x[5:] */
+						s->to = NULL;
+					} else {
+						s->to = parser_new_expr(p);
+						Token *to_end = expr_find_end(p, 0, NULL);
+						if (!token_is_kw(to_end, KW_RSQUARE)) {
+							err_print(iend->where, "Expected ] at end of slice.");
+							return false;
+						}
+						if (!parse_expr(p, s->to, to_end))
+							return false;
+					}
+				} break;
+				default:
+					err_print(iend->where, "Expected ] or : after index.");
+					return false;
+				}
 				t->token++;	/* move past ] */
 			    return true;
 			}
@@ -1601,6 +1654,15 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprintf(out, "%s", directives[e->direct.which]);
 		fprint_arg_exprs(out, e->direct.args);
 		break;
+	case EXPR_SLICE: {
+		SliceExpr *s = &e->slice;
+		fprint_expr(out, s->of);
+		fprintf(out, "[");
+		if (s->from) fprint_expr(out, s->from);
+		fprintf(out, ":");
+		if (s->from) fprint_expr(out, s->to);
+		fprintf(out, "]");
+	} break;
 	}
 	if (parse_printing_after_types) {
 		fprintf(out, ":");

@@ -84,7 +84,7 @@ static bool type_must_eq(Location where, Type *expected, Type *got) {
 
 
 /*
-this expression, which is an array, must be mutable (otherwise print an error,
+this expression, which is an array (or slice), must be mutable (otherwise print an error,
 return false)!
 */
 static bool expr_arr_must_mut(Expression *e) {
@@ -106,6 +106,8 @@ static bool expr_arr_must_mut(Expression *e) {
 	case EXPR_NEW:
 	case EXPR_UNARY_OP:
 		return true;
+	case EXPR_SLICE:
+		return expr_arr_must_mut(e->slice.of);
 	case EXPR_WHILE:
 		assert(e->while_.body.ret_expr);
 		return expr_arr_must_mut(e->while_.body.ret_expr);
@@ -187,7 +189,8 @@ static bool expr_must_lval(Expression *e) {
 	case EXPR_WHILE:
 	case EXPR_CALL:
 	case EXPR_DIRECT:
-	case EXPR_BLOCK: {
+	case EXPR_BLOCK:
+	case EXPR_SLICE: {
 		err_print(e->where, "Cannot use %s as l-value.", expr_kind_to_str(e->kind));
 		return false;
 	}
@@ -1005,6 +1008,31 @@ static bool types_expr(Typer *tr, Expression *e) {
 			*x_type = x->type;
 		}
 		break;
+	case EXPR_SLICE: {
+		t->kind = TYPE_SLICE;
+		SliceExpr *s = &e->slice;
+		if (!types_expr(tr, s->of))
+			return false;
+		if (e->slice.from && !types_expr(tr, s->from))
+			return false;
+		if (e->slice.to && !types_expr(tr, s->to))
+			return false;
+		switch (s->of->type.kind) {
+		case TYPE_ARR:
+			t->slice = s->of->type.arr.of;
+			break;
+		case TYPE_SLICE:
+			t->slice = s->of->type.slice;
+			break;
+		default: {
+			char *str = type_to_str(&s->of->type);
+			err_print(e->where, "Cannot take slice of non-array, non-slice type %s.", str);
+			free(str);
+			return false;
+		}
+		}
+		break;
+	}
 	}
     e->type.flags |= TYPE_FLAG_RESOLVED;
 	return true;

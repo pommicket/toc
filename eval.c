@@ -405,14 +405,39 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 	}
 }
 
-static bool eval_ptr_at_index(Evaluator *ev, Expression *e, void **ptr, Type **type) {
+static bool eval_val_ptr_at_index(Evaluator *ev, Location where, Value *arr, U64 i, Type *arr_type, Type *idx_type, void **ptr, Type **type) {
+	switch (arr_type->kind) {
+	case TYPE_ARR: {
+		U64 arr_sz = arr_type->arr.n;
+		if (i >= arr_sz) {
+			err_print(where, "Array out of bounds (%lu, array size = %lu)\n", (unsigned long)i, (unsigned long)arr_sz);
+			return false;
+		}
+		*ptr = (char *)arr->arr + compiler_sizeof(arr_type->arr.of) * i;
+		if (type) *type = arr_type->arr.of;
+	} break;
+	case TYPE_SLICE: {
+		U64 slice_sz = arr->slice.n;
+		if (i >= slice_sz) {
+			err_print(where, "Slice out of bounds (%lu, slice size = %lu)\n", (unsigned long)i, (unsigned long)slice_sz);
+			return false;
+		}
+		*ptr = (char *)arr->slice.data + compiler_sizeof(arr_type->slice) * i;
+		if (type) *type = arr_type->slice;
+	} break;
+	default: assert(0); break;
+	}
+	return true;
+}
+
+static bool eval_expr_ptr_at_index(Evaluator *ev, Expression *e, void **ptr, Type **type) {
 	Value arr;
 	if (!eval_expr(ev, e->binary.lhs, &arr)) return false;
 	Value index;
 	if (!eval_expr(ev, e->binary.rhs, &index)) return false;
-	U64 i;
 	Type *ltype = &e->binary.lhs->type;
 	Type *rtype = &e->binary.rhs->type;
+	U64 i;
 	assert(rtype->kind == TYPE_BUILTIN);
 	if (rtype->builtin == BUILTIN_U64) {
 		i = index.u64;
@@ -424,28 +449,7 @@ static bool eval_ptr_at_index(Evaluator *ev, Expression *e, void **ptr, Type **t
 		}
 		i = (U64)signed_index;
 	}
-	switch (ltype->kind) {
-	case TYPE_ARR: {
-		U64 arr_sz = ltype->arr.n;
-		if (i >= arr_sz) {
-			err_print(e->where, "Array out of bounds (%lu, array size = %lu)\n", (unsigned long)i, (unsigned long)arr_sz);
-			return false;
-		}
-		*ptr = (char *)arr.arr + compiler_sizeof(ltype->arr.of) * i;
-		*type = ltype->arr.of;
-	} break;
-	case TYPE_SLICE: {
-		U64 slice_sz = arr.slice.n;
-		if (i >= slice_sz) {
-			err_print(e->where, "Slice out of bounds (%lu, slice size = %lu)\n", (unsigned long)i, (unsigned long)slice_sz);
-			return false;
-		}
-		*ptr = (char *)arr.slice.data + compiler_sizeof(ltype->slice) * i;
-		*type = ltype->slice;
-	} break;
-	default: assert(0); break;
-	}
-	return true;
+	return eval_val_ptr_at_index(ev, e->where, &arr, i, ltype, rtype, ptr, type);
 }
 
 static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
@@ -473,7 +477,7 @@ static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 		case BINARY_AT_INDEX: {
 			void *ptr;
 			Type *type;
-			if (!eval_ptr_at_index(ev, set, &ptr, &type))
+			if (!eval_expr_ptr_at_index(ev, set, &ptr, &type))
 				return false;
 			eval_deref_set(ptr, to, type);
 		} break;
@@ -606,8 +610,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				switch (o->binary.op) {
 				case BINARY_AT_INDEX: {
 					void *ptr;
-					Type *type;
-					if (!eval_ptr_at_index(ev, o, &ptr, &type))
+					if (!eval_expr_ptr_at_index(ev, o, &ptr, NULL))
 						return false;
 					v->ptr = ptr;
 				} break;
@@ -674,7 +677,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		case BINARY_AT_INDEX: {
 			void *ptr;
 			Type *type;
-			eval_ptr_at_index(ev, e, &ptr, &type);
+			eval_expr_ptr_at_index(ev, e, &ptr, &type);
 			eval_deref(v, ptr, type);
 		} break;
 		}	
@@ -835,6 +838,50 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			ev->returning = NULL;
 		}
 		fn_exit(fn);
+	} break;
+	case EXPR_SLICE: {
+		SliceExpr *s = &e->slice;
+	    Value ofv;
+		Type *of_type = &s->of->type;
+		if (!eval_expr(ev, s->of, &ofv))
+			return false;
+		U64 n = of_type->kind == TYPE_ARR ? of_type->arr.n : ofv.slice.n;
+		U64 from, to;
+		if (s->from) {
+			Value fromv;
+			if (!eval_expr(ev, s->from, &fromv))
+				return false;
+			assert(s->from->type.kind == TYPE_BUILTIN);
+			from = val_to_u64(&fromv, s->from->type.builtin);
+		} else {
+			from = 0;
+		}
+		if (s->to) {
+			Value tov;
+			if (!eval_expr(ev, s->to, &tov))
+				return false;
+			assert(s->to->type.kind == TYPE_BUILTIN);
+			to = val_to_u64(&tov, s->to->type.builtin);
+		} else {
+			to = n - 1;
+		}
+		/* TODO: is this the best check? (Go also checks if from > to) */
+		if (to > n) {
+			err_print(e->where, "Slice index out of bounds (to = %lu, length = %lu).", (unsigned long)to, (unsigned long)n);
+			return false;
+		}
+		void *ptr1, *ptr2;
+		if (to < from) {
+			if (!eval_val_ptr_at_index(ev, e->where, &ofv, from, of_type, &s->from->type, &ptr1, NULL))
+				return false;
+			if (!eval_val_ptr_at_index(ev, e->where, &ofv, to, of_type, &s->to->type, &ptr2, NULL))
+				return false;
+			v->slice.data = ptr1;
+			v->slice.n = to - from;
+		} else {
+			v->slice.data = NULL;
+			v->slice.n = 0;
+		}
 	} break;
 	}
 	return true;

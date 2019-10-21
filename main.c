@@ -1,7 +1,8 @@
 /* 
 TODO:
 slice notation (x[a:b])
-bf interpreter
+fix constants
+bf interpreter (& other tests)
 error on failed calloc in output
 unicode variable names
 make sure initializers for global variables are compile-time constants

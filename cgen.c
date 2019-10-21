@@ -485,6 +485,7 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 			cgen_write(g, "; ");
 		}
 	    break;
+	case EXPR_SLICE:
     case EXPR_IDENT:
 	case EXPR_LITERAL_INT:
 	case EXPR_LITERAL_CHAR:
@@ -663,6 +664,57 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			cgen_write(g, ";");
 		}
 		break;
+	case EXPR_SLICE: {
+		SliceExpr *s = &e->slice;
+	    IdentID s_id = e->slice.c.id = g->ident_counter++;
+		IdentID from_id = g->ident_counter++;
+		if (!cgen_expr_pre(g, s->of))
+			return false;
+		if (s->from && !cgen_expr_pre(g, s->from))
+			return false;
+		if (s->to && !cgen_expr_pre(g, s->to))
+			return false;
+		cgen_write(g, "u64 ");
+		cgen_ident_id(g, from_id);
+		cgen_write(g, " = ");
+		if (s->from) {
+			if (!cgen_expr(g, s->from))
+				return false;
+		} else {
+			cgen_write(g, "0");
+		}
+		cgen_write(g, "; slice_ ");
+		cgen_ident_id(g, s_id);
+		cgen_write(g, "; ");
+		cgen_ident_id(g, s_id);
+		cgen_write(g, ".data = (");
+		if (!cgen_type_pre(g, e->type.slice, e->where))
+			return false;
+		cgen_write(g, "(*)");
+		if (!cgen_type_post(g, e->type.slice, e->where))
+			return false;
+		cgen_write(g, ")(");
+		if (!cgen_expr(g, s->of))
+			return false;
+		if (s->of->type.kind == TYPE_SLICE) {
+			cgen_write(g, ".data");
+		}
+		cgen_write(g, ") + ");
+		cgen_ident_id(g, from_id);
+		cgen_write(g, "; ");
+		cgen_ident_id(g, s_id);
+		cgen_write(g, ".n = ");
+		if (s->to) {
+			if (!cgen_expr(g, s->to))
+				return false;
+		} else {
+			/* TODO */
+		}
+		cgen_write(g, " - ");
+		cgen_ident_id(g, from_id);
+		cgen_write(g, ";");
+		cgen_nl(g);
+	} break;
 	case EXPR_LITERAL_INT:
 	case EXPR_LITERAL_FLOAT:
 	case EXPR_LITERAL_BOOL:
@@ -883,6 +935,9 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		}
 		cgen_fn_name(g, &e->fn);
 	} break;
+	case EXPR_SLICE:
+		cgen_ident_id(g, e->slice.c.id);
+		break;
 	}
 	return true;
 }

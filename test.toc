@@ -5,25 +5,13 @@ puti @= fn(x: int) {
 	 #C("printf(\"%ld\\n\", (long)x)");
 };
 
-
-factorial @= fn(x: int) int {
-		  numbers := new(int, x);
-		  i := 0;
-		  while i < x {
-		  numbers[i] = i+1;
-		  i = i + 1;
-		  }
-		  product := 1;
-		  i = 0;
-		  while i < x{
-		  product = product * numbers[i];
-		  i = i + 1;
-		  }
-		  del(numbers);
-		  product
-};
-
 main @= fn() {
-	 a342 : [factorial(5)]int;
-	 puti(factorial(10));
+	 N := 10;
+	 numbers := new(int, N);
+	 i := 0;
+	 while i < N {
+	 	   numbers[i] = i;
+		   i = i + 1;
+	 }
+	 puti(numbers[:8][0]);
 };

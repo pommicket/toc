@@ -49,6 +49,11 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 			if (!cgen_decls_expr(g, x))
 				return false;
 		break;
+	case EXPR_SLICE:
+		if (!cgen_decls_expr(g, e->slice.of)) return false;
+		if (e->slice.from && !cgen_decls_expr(g, e->slice.from)) return false;
+		if (e->slice.to && !cgen_decls_expr(g, e->slice.to)) return false;
+		break;
 	case EXPR_FN:
 		e->fn.c.name = NULL;
 	    e->fn.c.id = g->ident_counter++;
