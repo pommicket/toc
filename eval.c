@@ -405,7 +405,7 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 	}
 }
 
-static bool eval_pointer_at_index(Evaluator *ev, Expression *e, void **ptr, Type **type) {
+static bool eval_ptr_at_index(Evaluator *ev, Expression *e, void **ptr, Type **type) {
 	Value arr;
 	if (!eval_expr(ev, e->binary.lhs, &arr)) return false;
 	Value index;
@@ -473,7 +473,7 @@ static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 		case BINARY_AT_INDEX: {
 			void *ptr;
 			Type *type;
-			if (!eval_pointer_at_index(ev, set, &ptr, &type))
+			if (!eval_ptr_at_index(ev, set, &ptr, &type))
 				return false;
 			eval_deref_set(ptr, to, type);
 		} break;
@@ -607,7 +607,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				case BINARY_AT_INDEX: {
 					void *ptr;
 					Type *type;
-					if (!eval_pointer_at_index(ev, o, &ptr, &type))
+					if (!eval_ptr_at_index(ev, o, &ptr, &type))
 						return false;
 					v->ptr = ptr;
 				} break;
@@ -672,24 +672,10 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (!eval_set(ev, e->binary.lhs, &rhs)) return false;
 			break;
 		case BINARY_AT_INDEX: {
-			U64 index;
-			U64 arr_sz = e->binary.lhs->type.arr.n;
-			assert(e->binary.rhs->type.kind == TYPE_BUILTIN);
-			if (e->binary.rhs->type.builtin == BUILTIN_U64) {
-				index = rhs.u64;
-			} else {
-				I64 signed_index = val_to_i64(&rhs, e->binary.rhs->type.builtin);
-				if (signed_index < 0) {
-					err_print(e->where, "Array out of bounds (%ld, array size = %lu)\n", (long)signed_index, (unsigned long)arr_sz);
-					return false;
-				}
-				index = (U64)signed_index;
-			}
-			if (index >= arr_sz) {
-				err_print(e->where, "Array out of bounds (%lu, array size = %lu)\n", (unsigned long)index, (unsigned long)arr_sz);
-				return false;
-			}
-			eval_deref(v, (void *)((char *)(lhs.arr) + index * compiler_sizeof(&e->type)), &e->type);
+			void *ptr;
+			Type *type;
+			eval_ptr_at_index(ev, e, &ptr, &type);
+			eval_deref(v, ptr, type);
 		} break;
 		}	
 	} break;

@@ -1,5 +1,5 @@
-// #C("#include <stdio.h>
-// #define kasfdhkjasdfhjk ");
+#C("#include <stdio.h>
+#define kasfdhkjasdfhjk ");
 
 puti @= fn(x: int) {
 	 #C("printf(\"%ld\\n\", (long)x)");
@@ -15,18 +15,19 @@ puti @= fn(x: int) {
 // };
 
 foo @= fn(x: int) int {
-	 C := new(int, x);
-	 i := 0;
-	 while i < x {
-	 C[i] = i;
-	 i = i + 1;
-	 }
-	 total := 0;
-	 while i < x {
-	 total = total + C[i];
-	 i = i + 1;
-	 }
-	 total
+	C := new(int, x);
+	i := 0;
+	while i < x {
+		C[i] = i;
+		i = i + 1;
+	}
+	total := 0;
+	i = 0;
+	while i < x {
+		total = total + C[i];
+		i = i + 1;
+	}
+	total
 	
 };
 
