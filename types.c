@@ -871,9 +871,9 @@ static bool types_expr(Typer *tr, Expression *e) {
 			*t = *of_type->ptr;
 			break;
 		case UNARY_DEL:
-			if (of_type->kind != TYPE_PTR) {
+			if (of_type->kind != TYPE_PTR && of_type->kind != TYPE_SLICE) {
 				char *s = type_to_str(of_type);
-				err_print(e->where, "Cannot delete non-pointer type %s.", s);
+				err_print(e->where, "Cannot delete non-pointer, non-slice type %s.", s);
 				free(s);
 				return false;
 			}

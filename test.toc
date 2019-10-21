@@ -7,10 +7,23 @@ puti @= fn(x: int) {
 
 
 factorial @= fn(x: int) int {
-		  if x == 0 { 1 } else { x * factorial(x-1) }
+		  numbers := new(int, x);
+		  i := 0;
+		  while i < x {
+		  numbers[i] = i+1;
+		  i = i + 1;
+		  }
+		  product := 1;
+		  i = 0;
+		  while i < x{
+		  product = product * numbers[i];
+		  i = i + 1;
+		  }
+		  del(numbers);
+		  product
 };
 
 main @= fn() {
 	 a342 : [factorial(5)]int;
-	 puti(factorial(20));
+	 puti(factorial(10));
 };

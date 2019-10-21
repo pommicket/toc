@@ -777,6 +777,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 	} break;
 	case EXPR_UNARY_OP: {
 		const char *s = "";
+		bool handled = false;
 		switch (e->unary.op) {
 		case UNARY_MINUS:
 			s = "-"; break;
@@ -787,14 +788,20 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		case UNARY_NOT:
 			s = "!"; break;
 		case UNARY_DEL:
-			s = "free("; break;
+			cgen_write(g, "free(");
+			if (!cgen_expr(g, e->unary.of))
+				return false;
+			if (e->unary.of->type.kind == TYPE_SLICE)
+				cgen_write(g, ".data");
+			cgen_write(g, ")");
+			handled = true;
+			break;
 		}
+		if (handled) break;
 		cgen_write(g, "(");
 		cgen_write(g, "%s", s);
 		if (!cgen_expr(g, e->unary.of))
 			return false;
-		if (e->unary.op == UNARY_DEL)
-			cgen_write(g, ")");
 		cgen_write(g, ")");
 	} break;
 	case EXPR_NEW: {

@@ -1,6 +1,5 @@
 /* 
 TODO:
-del slices
 slice notation (x[a:b])
 bf interpreter
 error on failed calloc in output

@@ -36,19 +36,30 @@ void puti(i64 x) {
 
 i64 factorial(i64 x) {
 
-	i64 a0_;
-	if ((x==0)) {
-		a0_ = 1;
-	} else {
-		a0_ = (x*(factorial((x-1))));
-	}return a0_;
+	slice_ numbers; {
+	slice_ expr__; slice_ a0_; a0_.data = calloc(x, sizeof(i64)); a0_.n = x;expr__ = a0_;numbers = expr__;}
+	i64 i; {
+	i64 expr__; expr__ = 0;i = expr__;}
+	while ((i<x)) {
+		(((i64(*))(numbers.data))[i]) = (i+1);;
+		i = (i+1);;
+	};
+	i64 product; {
+	i64 expr__; expr__ = 1;product = expr__;}
+	i = 0;;
+	while ((i<x)) {
+		product = (product*(((i64(*))(numbers.data))[i]));;
+		i = (i+1);;
+	};
+	free(numbers.data);
+	return product;
 }
 
 
 void main__(void) {
 
 	i64( a342[120]) = {0}; 
-	(puti((factorial(20))));
+	(puti((factorial(10))));
 }
 
 

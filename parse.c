@@ -1205,7 +1205,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 						err_print(arg->where, "Directives cannot have named arguments.");
 						return false;
 					}
-					*(Expression *)arr_add(&e->direct.args) = arg->val;
+					*(Expression *)parser_arr_add(p, &e->direct.args) = arg->val;
 				}
 				return true;
 			} else {

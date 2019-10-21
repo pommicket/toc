@@ -634,8 +634,8 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (e->unary.of->type.kind == TYPE_PTR)
 				free(of.ptr);
 			else {
-				assert(e->unary.of->type.kind == TYPE_ARR);
-				free(of.arr);
+				assert(e->unary.of->type.kind == TYPE_SLICE);
+				free(of.slice.data);
 			}
 			break;
 		}
