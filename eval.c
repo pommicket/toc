@@ -1,6 +1,6 @@
 static bool eval_block(Evaluator *ev, Block *b, Value *v);
 static bool eval_expr(Evaluator *ev, Expression *e, Value *v);
-static bool block_enter(Block *b, Statement *stmts);
+static bool block_enter(Block *b, Statement *stmts, U32 flags);
 static void block_exit(Block *b, Statement *stmts);
 
 static void evalr_create(Evaluator *ev) {
@@ -764,6 +764,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			}
 		} else {
 			char *s = ident_to_str(e->ident);
+			
 			err_print(e->where, "Cannot evaluate non-constant '%s' at compile time.", s);
 			free(s);
 			return false;
@@ -805,19 +806,25 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			return false;
 		FnExpr *fn = fnv.fn;
 		/* set parameter declaration values */
-		long arg = 0;
 		Declaration *params = fn->params;
-		fn_enter(fn);
+		/* OPTIM (NOTE: currently needed for recursion) */
+		Value *args = NULL;
+		arr_resv(&args, arr_len(e->call.arg_exprs));
+		for (size_t i = 0; i < arr_len(e->call.arg_exprs); i++) {
+			if (!eval_expr(ev, &e->call.arg_exprs[i], &args[i]))
+				return false;
+		}
+		fn_enter(fn, 0);
+		long arg = 0;
 		arr_foreach(params, Declaration, p) {
 			arr_foreach(p->idents, Identifier, i) {
 				IdentDecl *id = ident_decl(*i);
-				Value *paramval = &id->val;
-				if (!eval_expr(ev, &e->call.arg_exprs[arg], paramval))
-					return false;
+				id->val = args[arg];
 				id->flags |= IDECL_FLAG_HAS_VAL;
 				arg++;
 			}
 		}
+		arr_clear(&args);
 		if (!eval_block(ev, &fn->body, v)) {
 			fn_exit(fn);
 			return false;
@@ -877,7 +884,7 @@ static bool eval_stmt(Evaluator *ev, Statement *stmt) {
 }
 
 static bool eval_block(Evaluator *ev, Block *b, Value *v) {
-	block_enter(b, b->stmts);
+	block_enter(b, b->stmts, 0);
 	arr_foreach(b->stmts, Statement, stmt) {
 		if (!eval_stmt(ev, stmt))
 			return false;

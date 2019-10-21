@@ -483,7 +483,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			tr->ret_type = t->fn.types[0];
 		}
 		tr->can_ret = true;
-		fn_enter(f);
+		fn_enter(f, SCOPE_FLAG_CHECK_REDECL);
 		bool block_success = true;
 		block_success = types_block(tr, &e->fn.body);
 		fn_exit(f);
@@ -1014,7 +1014,7 @@ static bool types_block(Typer *tr, Block *b) {
 	bool success = true;
 	Block *prev_block = tr->block;
 	tr->block = b;
-	if (!block_enter(b, b->stmts)) return false;
+	if (!block_enter(b, b->stmts, SCOPE_FLAG_CHECK_REDECL)) return false;
 	arr_foreach(b->stmts, Statement, s) {
 		if (!types_stmt(tr, s))
 			success = false;
@@ -1034,7 +1034,7 @@ static bool types_block(Typer *tr, Block *b) {
 
 static bool types_decl(Typer *tr, Declaration *d) {
 	bool success = true;
-	if (d->flags & DECL_FLAG_FOUND_TYPE) goto ret;
+	if (d->flags & DECL_FLAG_FOUND_TYPE) return true;
 	Declaration **dptr = typer_arr_add(tr, &tr->in_decls);
 	*dptr = d;
 	if (d->flags & DECL_FLAG_ANNOTATES_TYPE) {

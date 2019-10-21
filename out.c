@@ -18,7 +18,7 @@ typedef struct { void *data; u64 n; } slice_;
 
 /* declarations */
 void puti(i64 x);
-i64 foo(i64 x);
+i64 factorial(i64 x);
 void main__(void);
 /* code */
 int main() {
@@ -34,31 +34,21 @@ void puti(i64 x) {
 }
 
 
-i64 foo(i64 x) {
+i64 factorial(i64 x) {
 
-	slice_ C; {
-	slice_ expr__; slice_ a0_; a0_.data = calloc(x, sizeof(i64)); a0_.n = x;expr__ = a0_;C = expr__;}
-	i64 i; {
-	i64 expr__; expr__ = 0;i = expr__;}
-	while ((i<x)) {
-		(((i64(*))(C.data))[i]) = i;;
-		i = (i+1);;
-	};
-	i64 total; {
-	i64 expr__; expr__ = 0;total = expr__;}
-	i = 0;;
-	while ((i<x)) {
-		total = (total+(((i64(*))(C.data))[i]));;
-		i = (i+1);;
-	};
-	return total;
+	i64 a0_;
+	if ((x==0)) {
+		a0_ = 1;
+	} else {
+		a0_ = (x*(factorial((x-1))));
+	}return a0_;
 }
 
 
 void main__(void) {
 
-	i64( A[45]) = {0}; 
-	i64( B[4950]) = {0}; 
+	i64( a342[120]) = {0}; 
+	(puti((factorial(20))));
 }
 
 

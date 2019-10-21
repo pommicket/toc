@@ -62,7 +62,7 @@ static void *arr_add_(void **arr, size_t item_sz) {
 	} else {
 		hdr = arr_hdr(*arr);
 		if (hdr->len >= hdr->cap) {
-			arr_resv_(arr, hdr->len * 2, item_sz);
+			arr_resv_(arr, hdr->len * 2 + 1, item_sz);
 			hdr = arr_hdr(*arr);
 		}
 	}
@@ -76,7 +76,7 @@ static void *arr_adda_(void **arr, size_t item_sz, Allocator *a) {
 	} else {
 		hdr = arr_hdr(*arr);
 		if (hdr->len >= hdr->cap) {
-			arr_resva_(arr, hdr->len * 2, item_sz, a);
+			arr_resva_(arr, hdr->len * 2 + 1, item_sz, a);
 			hdr = arr_hdr(*arr);
 		}
 	}
@@ -101,6 +101,8 @@ static void *arr_last_(void *arr, size_t item_sz) {
 
 /* OPTIM: shrink array */
 static void arr_remove_last_(void **arr, size_t item_sz) {
+	
+	assert(arr_hdr(*arr)->len);
 	arr_hdr(*arr)->len--; (void)item_sz;
 }
 

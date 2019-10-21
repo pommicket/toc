@@ -85,7 +85,7 @@ static bool cgen_decls_block(CGenerator *g, Block *b) {
 static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 	if (cgen_fn_is_direct(g, d)) {
 		d->expr.fn.c.name = d->idents[0];
-		fn_enter(&d->expr.fn);
+		fn_enter(&d->expr.fn, 0);
 		if (!cgen_fn_header(g, &d->expr.fn, d->where))
 			return false;
 		cgen_write(g, ";");

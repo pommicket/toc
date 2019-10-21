@@ -29,7 +29,7 @@ static bool cgen_block_enter(CGenerator *g, Block *b) {
 		stmts = b->stmts;
 	}
 	if (b) g->indent_lvl++;
-	return block_enter(b, stmts);
+	return block_enter(b, stmts, 0);
 }
 
 static void cgen_block_exit(CGenerator *g, Block *into) {
@@ -896,7 +896,6 @@ static bool cgen_block(CGenerator *g, Block *b, const char *ret_name, uint16_t f
 	arr_foreach(b->stmts, Statement, s)
 		if (!cgen_stmt(g, s))
 			return false;
-
 	if (b->ret_expr && ret_name) {
 		if (b->ret_expr->type.kind == TYPE_TUPLE) {
 			if (!cgen_set_tuple(g, NULL, NULL, ret_name, b->ret_expr))
@@ -942,7 +941,7 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 static bool cgen_fn(CGenerator *g, FnExpr *f, Location where) {
 	FnExpr *prev_fn = g->fn;
 	Block *prev_block = g->block;
-	fn_enter(f);
+	fn_enter(f, 0);
 	if (!cgen_fn_header(g, f, where))
 		return false;
 	cgen_write(g, " ");
@@ -956,7 +955,6 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where) {
 	if (!cgen_block_enter(g, &f->body)) return false;
 	if (!cgen_block(g, &f->body, NULL, CGEN_BLOCK_FLAG_NOENTER | CGEN_BLOCK_FLAG_NOBRACES))
 		return false;
-
 	if (f->ret_decls) {
 		if (cgen_uses_ptr(&f->ret_type)) {
 		} else {
@@ -1048,6 +1046,7 @@ static bool cgen_ret(CGenerator *g, Expression *ret) {
 		}
 		cgen_write(g, "return");
 	} else {
+		if (!cgen_expr_pre(g, ret)) return false;
 		cgen_write(g, "return ");
 			
 		if (!cgen_expr(g, ret)) return false;

@@ -1,9 +1,7 @@
 /* 
 TODO:
-fix recursion with block_enter/exit
-arr => slice casting
 del slices
-run time return statements
+slice notation (x[a:b])
 bf interpreter
 error on failed calloc in output
 unicode variable names
@@ -81,7 +79,7 @@ int main(int argc, char **argv) {
 	evalr_create(&ev);
 	typer_create(&tr, &ev);
 
-	if (!block_enter(NULL, f.stmts)) /* enter global scope */
+	if (!block_enter(NULL, f.stmts, SCOPE_FLAG_CHECK_REDECL)) /* enter global scope */
 		return false;
 
 	if (!types_file(&tr, &f)) {

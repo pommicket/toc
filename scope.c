@@ -1,8 +1,10 @@
-static bool add_ident_decls(Block *b, Declaration *d) {
+#define SCOPE_FLAG_CHECK_REDECL 0x0001
+
+static bool add_ident_decls(Block *b, Declaration *d, U32 flags) {
 	bool ret = true;
 	arr_foreach(d->idents, Identifier, ident) {
 		IdentDecl **decls = &(*ident)->decls;
-		if (arr_len(*decls)) {
+		if ((flags & SCOPE_FLAG_CHECK_REDECL) && arr_len(*decls)) {
 			/* check that it hasn't been declared in this block */
 			IdentDecl *prev = arr_last(*decls);
 			if (prev->scope == b) {
@@ -34,12 +36,12 @@ static void remove_ident_decls(Block *b, Declaration *d) {
 }
 
 /* pass NULL for block for global scope */
-static bool block_enter(Block *b, Statement *stmts) {
+static bool block_enter(Block *b, Statement *stmts, uint32_t flags) {
 	bool ret = true;
 	arr_foreach(stmts, Statement, stmt) {
 		if (stmt->kind == STMT_DECL) {
 			Declaration *decl = &stmt->decl;
-			if (!add_ident_decls(b, decl))
+			if (!add_ident_decls(b, decl, flags))
 				ret = false;
 		}
 	}
@@ -56,11 +58,11 @@ static void block_exit(Block *b, Statement *stmts) {
 }
 
 /* does NOT enter function's block body */
-static void fn_enter(FnExpr *f) {
+static void fn_enter(FnExpr *f, U32 flags) {
 	arr_foreach(f->params, Declaration, decl)
-		add_ident_decls(&f->body, decl);
+		add_ident_decls(&f->body, decl, flags);
 	arr_foreach(f->ret_decls, Declaration, decl)
-		add_ident_decls(&f->body, decl);
+		add_ident_decls(&f->body, decl, flags);
 }
 
 static void fn_exit(FnExpr *f) {

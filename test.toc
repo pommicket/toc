@@ -5,40 +5,12 @@ puti @= fn(x: int) {
 	 #C("printf(\"%ld\\n\", (long)x)");
 };
 
-// foo @= fn(x:int) int {
-// 	if x < 4 {
-// 	return 7;
-// 	} else {
-// 	return 5;
-// 	}
-// 	4
-// };
 
-foo @= fn(x: int) int {
-	C := new(int, x);
-	i := 0;
-	while i < x {
-		C[i] = i;
-		i = i + 1;
-	}
-	total := 0;
-	i = 0;
-	while i < x {
-		total = total + C[i];
-		i = i + 1;
-	}
-	total
-	
+factorial @= fn(x: int) int {
+		  if x == 0 { 1 } else { x * factorial(x-1) }
 };
 
 main @= fn() {
-	 A : [foo(10)]int;
-	 B : [foo(100)]int;
-	 // C := new(int, 10);
-	 // i := 0;
-	 // while i < 10 {
-	 // C[i] = 7;
-	 // i = i + 1;
-	 // }
-	 // puti(C[9]);
+	 a342 : [factorial(5)]int;
+	 puti(factorial(20));
 };
