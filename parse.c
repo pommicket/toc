@@ -1660,7 +1660,7 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprintf(out, "[");
 		if (s->from) fprint_expr(out, s->from);
 		fprintf(out, ":");
-		if (s->from) fprint_expr(out, s->to);
+		if (s->to) fprint_expr(out, s->to);
 		fprintf(out, "]");
 	} break;
 	}

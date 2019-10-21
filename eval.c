@@ -871,7 +871,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			return false;
 		}
 		void *ptr1, *ptr2;
-		if (to < from) {
+		if (from < to) {
 			if (!eval_val_ptr_at_index(ev, e->where, &ofv, from, of_type, &s->from->type, &ptr1, NULL))
 				return false;
 			if (!eval_val_ptr_at_index(ev, e->where, &ofv, to, of_type, &s->to->type, &ptr2, NULL))

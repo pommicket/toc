@@ -18,6 +18,7 @@ typedef struct { void *data; u64 n; } slice_;
 
 /* declarations */
 void puti(i64 x);
+i64 foo(void);
 void main__(void);
 /* code */
 int main() {
@@ -33,7 +34,7 @@ void puti(i64 x) {
 }
 
 
-void main__(void) {
+i64 foo(void) {
 
 	i64 N; {
 	i64 expr__; expr__ = 10;N = expr__;}
@@ -45,8 +46,17 @@ void main__(void) {
 		(((i64(*))(numbers.data))[i]) = i;;
 		i = (i+1);;
 	};
-	u64 a3_ = 0; slice_ a2_; a2_.data = (i64(*))(numbers.data) + a3_; a2_.n = 8 - a3_;
-	(puti((((i64(*))(a2_.data))[0])));
+	slice_ a2_; { slice_ of__ = numbers; u64 a3_ = 5; a2_.data = (i64(*))(of__.data) + a3_; a2_.n = 7 - a3_; }
+	slice_ a4_; { slice_ of__ = numbers; u64 a5_ = 2; a4_.data = (i64(*))(of__.data) + a5_; a4_.n = of__.n - 1 - a5_; }
+	slice_ a6_; { slice_ of__ = numbers; u64 a7_ = 0; a6_.data = (i64(*))(of__.data) + a7_; a6_.n = 6 - a7_; }
+	return (((((i64(*))(a2_.data))[1])+(((i64(*))(a4_.data))[0]))+(((i64(*))(a6_.data))[3]));
+}
+
+
+void main__(void) {
+
+	i64( x[11]) = {0}; 
+	(puti((foo())));
 }
 
 

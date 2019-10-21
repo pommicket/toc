@@ -5,13 +5,18 @@ puti @= fn(x: int) {
 	 #C("printf(\"%ld\\n\", (long)x)");
 };
 
-main @= fn() {
+foo @= fn() int {
 	 N := 10;
 	 numbers := new(int, N);
 	 i := 0;
 	 while i < N {
 	 	   numbers[i] = i;
-		   i = i + 1;
+	 	   i = i + 1;
 	 }
-	 puti(numbers[:8][0]);
+	 numbers[5:7][1] + numbers[2:][0] + numbers[:6][3]
+};
+
+main @= fn() {
+	 x : [foo()]int;
+	 puti(foo());
 };

@@ -674,7 +674,12 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			return false;
 		if (s->to && !cgen_expr_pre(g, s->to))
 			return false;
-		cgen_write(g, "u64 ");
+		cgen_write(g, "slice_ ");
+		cgen_ident_id(g, s_id);
+		cgen_write(g, "; { slice_ of__ = ");
+		if (!cgen_expr(g, s->of))
+			return false;
+		cgen_write(g, "; u64 ");
 		cgen_ident_id(g, from_id);
 		cgen_write(g, " = ");
 		if (s->from) {
@@ -683,8 +688,6 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		} else {
 			cgen_write(g, "0");
 		}
-		cgen_write(g, "; slice_ ");
-		cgen_ident_id(g, s_id);
 		cgen_write(g, "; ");
 		cgen_ident_id(g, s_id);
 		cgen_write(g, ".data = (");
@@ -693,9 +696,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		cgen_write(g, "(*)");
 		if (!cgen_type_post(g, e->type.slice, e->where))
 			return false;
-		cgen_write(g, ")(");
-		if (!cgen_expr(g, s->of))
-			return false;
+		cgen_write(g, ")(of__");
 		if (s->of->type.kind == TYPE_SLICE) {
 			cgen_write(g, ".data");
 		}
@@ -708,11 +709,11 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			if (!cgen_expr(g, s->to))
 				return false;
 		} else {
-			/* TODO */
+			cgen_write(g, "of__.n - 1");
 		}
 		cgen_write(g, " - ");
 		cgen_ident_id(g, from_id);
-		cgen_write(g, ";");
+		cgen_write(g, "; }");
 		cgen_nl(g);
 	} break;
 	case EXPR_LITERAL_INT:

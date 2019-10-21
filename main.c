@@ -1,12 +1,12 @@
 /* 
 TODO:
-slice notation (x[a:b])
 fix constants
 bf interpreter (& other tests)
 error on failed calloc in output
 unicode variable names
 make sure initializers for global variables are compile-time constants
 structs
+length of slice/arr with .len
 don't allow while {3; 5} (once break is added)
 any odd number of "s for a string
 modifiable strings:
