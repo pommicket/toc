@@ -643,27 +643,6 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 	case EXPR_CAST:
 		if (!cgen_expr_pre(g, e->cast.expr)) return false;
 		break;
-	case EXPR_NEW:
-		if (e->new.n) {
-			if (!cgen_expr_pre(g, e->new.n))
-				return false;
-			IdentID n_id = e->new.c.id = g->ident_counter++;
-			cgen_write(g, "slice_ ");
-			cgen_ident_id(g, n_id);
-			cgen_write(g, "; ");
-			cgen_ident_id(g, n_id);
-			cgen_write(g, ".data = calloc(");
-			if (!cgen_expr(g, e->new.n)) return false;
-			cgen_write(g, ", sizeof(");
-			if (!cgen_type_pre(g, &e->new.type, e->where)) return false;
-			if (!cgen_type_post(g, &e->new.type, e->where)) return false;
-			cgen_write(g, ")); ");
-			cgen_ident_id(g, n_id);
-			cgen_write(g, ".n = ");
-			if (!cgen_expr(g, e->new.n)) return false;
-			cgen_write(g, ";");
-		}
-		break;
 	case EXPR_SLICE: {
 		SliceExpr *s = &e->slice;
 	    IdentID s_id = e->slice.c.id = g->ident_counter++;
@@ -716,6 +695,10 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		cgen_write(g, "; }");
 		cgen_nl(g);
 	} break;
+	case EXPR_NEW:
+		if (e->new.n && !cgen_expr_pre(g, e->new.n))
+			return false;
+		break;
 	case EXPR_LITERAL_INT:
 	case EXPR_LITERAL_FLOAT:
 	case EXPR_LITERAL_BOOL:
@@ -859,7 +842,14 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 	} break;
 	case EXPR_NEW: {
 		if (e->new.n) {
-			cgen_ident_id(g, e->new.c.id);
+			cgen_write(g, "mkslice_(calloc(");
+			if (!cgen_expr(g, e->new.n)) return false;
+			cgen_write(g, ", sizeof(");
+			if (!cgen_type_pre(g, &e->new.type, e->where)) return false;
+			if (!cgen_type_post(g, &e->new.type, e->where)) return false;
+			cgen_write(g, ")), ");
+			if (!cgen_expr(g, e->new.n)) return false;
+			cgen_write(g, ")");
 		} else {
 			Type *t = &e->new.type;
 			cgen_write(g, "((");
@@ -1162,6 +1152,7 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 			   "typedef double f64;\n"
 			   "typedef unsigned char bool;\n"
 			   "typedef struct { void *data; u64 n; } slice_;\n"
+			   "static slice_ mkslice_(void *data, u64 n) { slice_ ret; ret.data = data; ret.n = n; return ret; }\n"
 			   "#define false ((bool)0)\n"
 			   "#define true ((bool)1)\n\n\n");
 	if (!cgen_decls_file(g, f))

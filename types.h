@@ -386,9 +386,6 @@ typedef struct {
 typedef struct {
 	Type type;
 	struct Expression *n; /* e.g. for new(int, 5) */
-	struct {
-		IdentID id;
-	} c;
 } NewExpr;
 
 typedef struct {

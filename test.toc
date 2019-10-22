@@ -17,6 +17,8 @@ foo @= fn() int {
 };
 
 main @= fn() {
+	 // N @= 5;
+	 // puti(N);
 	 x : [foo()]int;
 	 puti(foo());
 };
