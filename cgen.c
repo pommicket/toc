@@ -519,7 +519,7 @@ static bool cgen_new_slice(CGenerator *g, Type *t, IdentID id, Location where) {
 	cgen_ident_id(g, id);
 	cgen_write(g, ";");
 	cgen_ident_id(g, id);
-	cgen_write(g, ".data = calloc(s");
+	cgen_write(g, ".data = e__calloc(s");
 	cgen_ident_id(g, id);
 	cgen_write(g, ", sizeof(");
 	if (t->arr.of->kind == TYPE_ARR) {
@@ -844,7 +844,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 	} break;
 	case EXPR_NEW: {
 		if (e->new.n) {
-			cgen_write(g, "mkslice_(calloc(");
+			cgen_write(g, "mkslice_(e__calloc(");
 			if (!cgen_expr(g, e->new.n)) return false;
 			cgen_write(g, ", sizeof(");
 			if (!cgen_type_pre(g, &e->new.type, e->where)) return false;
@@ -859,7 +859,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 				return false;
 			if (!cgen_type_post(g, &e->type, e->where))
 				return false;
-			cgen_write(g, ")calloc(1, sizeof(");
+			cgen_write(g, ")e__calloc(1, sizeof(");
 			if (!cgen_type_pre(g, t, e->where))
 				return false;
 			if (!cgen_type_post(g, t, e->where))
@@ -1207,6 +1207,7 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 	g->file = f;
 	cgen_write(g, "#include <stdint.h>\n"
 			   "#include <stdlib.h>\n"
+			   "#include <stdio.h>\n"
 			   "typedef int8_t i8;\n"
 			   "typedef int16_t i16;\n"
 			   "typedef int32_t i32;\n"
@@ -1220,6 +1221,7 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 			   "typedef unsigned char bool;\n"
 			   "typedef struct { void *data; u64 n; } slice_;\n"
 			   "static slice_ mkslice_(void *data, u64 n) { slice_ ret; ret.data = data; ret.n = n; return ret; }\n"
+			   "static void *e__calloc(size_t n, size_t sz) { void *ret = calloc(n, sz); if (!ret) { fprintf(stderr, \"Out of memory.\\n\"); abort(); } return ret; }\n"
 			   "#define false ((bool)0)\n"
 			   "#define true ((bool)1)\n\n\n");
 	if (!cgen_decls_file(g, f))

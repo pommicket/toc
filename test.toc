@@ -1,6 +1,3 @@
-#C("#include <stdio.h>
-#define kasfdhkjasdfhjk ");
-
 puti @= fn(x: int) {
 	 #C("printf(\"%ld\\n\", (long)x)");
 };
@@ -23,8 +20,6 @@ foo @= fn() int {
 main @= fn() {
 	 N @= 5;
 	 puti(N);
-	 M @= 1.432;
-	 putf(M);
 	 x : [foo()]int;
 	 puti(foo());
 	 

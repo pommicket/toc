@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
 typedef int8_t i8;
 typedef int16_t i16;
 typedef int32_t i32;
@@ -13,6 +14,7 @@ typedef double f64;
 typedef unsigned char bool;
 typedef struct { void *data; u64 n; } slice_;
 static slice_ mkslice_(void *data, u64 n) { slice_ ret; ret.data = data; ret.n = n; return ret; }
+static void *e__calloc(size_t n, size_t sz) { void *ret = calloc(n, sz); if (!ret) { fprintf(stderr, "Out of memory.\n"); abort(); } return ret; }
 #define false ((bool)0)
 #define true ((bool)1)
 
@@ -28,8 +30,6 @@ int main() {
 	return 0;
 }
 
-#include <stdio.h>
-#define kasfdhkjasdfhjk ;
 void puti(i64 x) {
 
 	printf("%ld\n", (long)x);
@@ -47,7 +47,7 @@ i64 foo(void) {
 	i64 N; {
 	i64 expr__; expr__ = 10;N = expr__;}
 	slice_ numbers; {
-	slice_ expr__; expr__ = mkslice_(calloc(N, sizeof(i64)), N);numbers = expr__;}
+	slice_ expr__; expr__ = mkslice_(e__calloc(N, sizeof(i64)), N);numbers = expr__;}
 	i64 i; {
 	i64 expr__; expr__ = 0;i = expr__;}
 	while ((i<N)) {
@@ -65,8 +65,6 @@ void main__(void) {
 
 	i64 N = 5;
 	(puti(N));
-	f32 M = 1.4320000410079956;
-	(putf(M));
 	i64( x[11]) = {0}; 
 	(puti((foo())));
 }
