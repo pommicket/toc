@@ -25,6 +25,9 @@ typedef int64_t I64;
 typedef float F32;
 typedef double F64;
 
+#define F32_FMT "%.16f"
+#define F64_FMT "%.16f"
+
 typedef U32 IdentID; /* identifier ID for cgen (anonymous variables) */
 
 typedef uint32_t LineNo;

@@ -19,6 +19,7 @@ static slice_ mkslice_(void *data, u64 n) { slice_ ret; ret.data = data; ret.n =
 
 /* declarations */
 void puti(i64 x);
+void putf(f32 x);
 i64 foo(void);
 void main__(void);
 /* code */
@@ -32,6 +33,12 @@ int main() {
 void puti(i64 x) {
 
 	printf("%ld\n", (long)x);
+}
+
+
+void putf(f32 x) {
+
+	printf("%f\n", (double)x);
 }
 
 
@@ -56,6 +63,10 @@ i64 foo(void) {
 
 void main__(void) {
 
+	i64 N = 5;
+	(puti(N));
+	f32 M = 1.4320000410079956;
+	(putf(M));
 	i64( x[11]) = {0}; 
 	(puti((foo())));
 }

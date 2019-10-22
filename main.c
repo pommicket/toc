@@ -1,8 +1,7 @@
 /* 
 TODO:
-fix constants
-bf interpreter (& other tests)
 error on failed calloc in output
+bf interpreter (& other tests)
 unicode variable names
 make sure initializers for global variables are compile-time constants
 structs

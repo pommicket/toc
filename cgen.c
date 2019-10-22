@@ -80,6 +80,10 @@ static inline void cgen_writeln(CGenerator *g, const char *fmt, ...) {
 	cgen_nl(g);
 }
 
+static void cgen_ident_id(CGenerator *g, IdentID id) {
+	cgen_write(g, "a%lu_", (unsigned long)id);
+}
+
 /* should declaration be a direct function declaration C (as opposed to using a function pointer or not being a function) */
 static bool cgen_fn_is_direct(CGenerator *g, Declaration *d) {
 	return g->block == NULL && (d->flags & DECL_FLAG_HAS_EXPR) && d->expr.kind == EXPR_FN && arr_len(d->idents) == 1;
@@ -109,6 +113,7 @@ static void cgen_ident(CGenerator *g, Identifier i) {
 	} else {
 		cgen_indent(g);
 		IdentDecl *idecl = ident_decl(i);
+		assert(idecl);
 		if (idecl->flags & IDECL_FLAG_CGEN_PTR)
 			cgen_write(g, "(*");
 		fprint_ident(cgen_writing_to(g), i);
@@ -121,9 +126,6 @@ static char *cgen_ident_to_str(Identifier i) {
 	return ident_to_str(i);
 }
 
-static void cgen_ident_id(CGenerator *g, IdentID id) {
-	cgen_write(g, "a%lu_", (unsigned long)id);
-}
 
 /* buffer should be at least 32 bytes */
 static inline void cgen_ident_id_to_str(char *buffer, IdentID id) {
@@ -1029,13 +1031,78 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where) {
 	return true;
 }
 
+static bool cgen_val(CGenerator *g, Value *v, Type *t, Location where) {
+	switch (t->kind) {
+	case TYPE_TUPLE:
+	case TYPE_VOID:
+		assert(0);
+		return false;
+	case TYPE_UNKNOWN:
+		err_print(where, "Cannot determine type.");
+		return false;
+	case TYPE_ARR:
+		err_print(where, "Not implemented yet."); /* TODO */
+	    return false;
+	case TYPE_SLICE:
+		err_print(where, "Not implemented yet."); /* TODO (similar to above) */
+		return false;
+	case TYPE_FN:
+		cgen_ident_id(g, v->fn->c.id);
+		break;
+	case TYPE_PTR:
+		/* TODO: maybe just gen the whole expression? */
+		err_print(where, "Cannot bring compile time pointer to runtime.");
+		return false;
+	case TYPE_BUILTIN:
+		switch (t->builtin) {
+		case BUILTIN_I8: cgen_write(g, "%"PRId8, v->i8); break;
+		case BUILTIN_U8: cgen_write(g, "%"PRIu8, v->u8); break;
+		case BUILTIN_I16: cgen_write(g, "%"PRId16, v->i16); break;
+		case BUILTIN_U16: cgen_write(g, "%"PRIu16, v->u16); break;
+		case BUILTIN_I32: cgen_write(g, "%"PRId32, v->i32); break;
+		case BUILTIN_U32: cgen_write(g, "%"PRIu32, v->u32); break;
+		case BUILTIN_I64: cgen_write(g, "%"PRId64, v->i64); break;
+		case BUILTIN_U64: cgen_write(g, "%"PRIu64, v->u64); break;
+		case BUILTIN_F32: cgen_write(g, F32_FMT, v->f32); break;
+		case BUILTIN_F64: cgen_write(g, F64_FMT, v->f64); break;
+		case BUILTIN_CHAR: cgen_write(g, "\\x%02x", v->charv); break;
+		case BUILTIN_BOOL: cgen_write(g, "%s", v->boolv ? true : false); break;
+		}
+		break;
+	}
+	return true;
+}
+
 static bool cgen_decl(CGenerator *g, Declaration *d) {
 	if (cgen_fn_is_direct(g, d)) {
 		cgen_fn(g, &d->expr.fn, d->where);
-	} else if (d->flags & DECL_FLAG_CONST) {
-		/* TODO? */
+	} else if ((d->flags & DECL_FLAG_CONST) || g->block == NULL) {
+		if (d->type.kind == TYPE_TUPLE) {
+			long idx = 0;
+			arr_foreach(d->idents, Identifier, i) {
+				if (!cgen_type_pre(g, &d->type.tuple[idx], d->where)) return false;
+				cgen_write(g, " ");
+				cgen_ident(g, *i);
+				if (!cgen_type_post(g, &d->type.tuple[idx], d->where)) return false;
+				cgen_write(g, " = ");
+				if (!cgen_val(g, &d->val.tuple[idx], &d->type.tuple[idx], d->where))
+					return false;
+				idx++;
+			}
+			cgen_write(g, ";");
+			cgen_nl(g);
+		} else {
+			if (!cgen_type_pre(g, &d->type, d->where)) return false;
+			cgen_write(g, " ");
+			cgen_ident(g, d->idents[0]);
+			if (!cgen_type_post(g, &d->type, d->where)) return false;
+			cgen_write(g, " = ");
+			if (!cgen_val(g, &d->val, &d->type, d->where))
+				return false;
+			cgen_write(g, ";");
+			cgen_nl(g);
+		}
 	} else {
-		/* TODO: Globals just cgen val */		
 		for (size_t idx = 0; idx < arr_len(d->idents); idx++) {
 			Identifier *i = &d->idents[idx];
 			Type *t = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx] : &d->type;

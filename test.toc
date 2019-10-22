@@ -5,6 +5,10 @@ puti @= fn(x: int) {
 	 #C("printf(\"%ld\\n\", (long)x)");
 };
 
+putf @= fn(x: float) {
+	 #C("printf(\"%f\\n\", (double)x)");
+};
+
 foo @= fn() int {
 	 N := 10;
 	 numbers := new(int, N);
@@ -17,8 +21,11 @@ foo @= fn() int {
 };
 
 main @= fn() {
-	 // N @= 5;
-	 // puti(N);
+	 N @= 5;
+	 puti(N);
+	 M @= 1.432;
+	 putf(M);
 	 x : [foo()]int;
 	 puti(foo());
+	 
 };
