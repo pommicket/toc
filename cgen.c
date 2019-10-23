@@ -174,7 +174,7 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
 		break;
 	case TYPE_VOID: cgen_write(g, "void"); break;
 	case TYPE_UNKNOWN:
-		err_print(t->where, "Can't determine type.");
+		err_print(where, "Can't determine type.");
 		return false;
 	case TYPE_TUPLE:
 		/* We should never try to generate a tuple */
@@ -727,11 +727,11 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		break;
 	case EXPR_LITERAL_STR: {
 		size_t c;
-		cgen_write(g, "\"");
+		cgen_write(g, "mkslice_(\"");
 		for (c = 0; c < e->strl.len; c++) {
 			cgen_write(g, "\\x%x", e->strl.str[c]);
 		}
-		cgen_write(g, "\"");
+		cgen_write(g, "\", %lu)", (unsigned long)e->strl.len);
 	} break;
 	case EXPR_LITERAL_BOOL:
 		cgen_write(g, e->booll ? "true" : "false");
@@ -897,7 +897,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			if (!eval_expr(g->evalr, &e->direct.args[0], &val))
 				return false;
 			cgen_indent(g);
-			fwrite(val.arr, 1, e->direct.args[0].type.arr.n, cgen_writing_to(g));
+			fwrite(val.slice.data, 1, val.slice.n, cgen_writing_to(g));
 		} break;
 		case DIRECT_COUNT: assert(0); break;
 		}
@@ -1066,7 +1066,7 @@ static bool cgen_val(CGenerator *g, Value *v, Type *t, Location where) {
 		case BUILTIN_F32: cgen_write(g, F32_FMT, v->f32); break;
 		case BUILTIN_F64: cgen_write(g, F64_FMT, v->f64); break;
 		case BUILTIN_CHAR: cgen_write(g, "\\x%02x", v->charv); break;
-		case BUILTIN_BOOL: cgen_write(g, "%s", v->boolv ? true : false); break;
+		case BUILTIN_BOOL: cgen_write(g, "%s", v->boolv ? "true" : "false"); break;
 		}
 		break;
 	}
@@ -1075,7 +1075,8 @@ static bool cgen_val(CGenerator *g, Value *v, Type *t, Location where) {
 
 static bool cgen_decl(CGenerator *g, Declaration *d) {
 	if (cgen_fn_is_direct(g, d)) {
-		cgen_fn(g, &d->expr.fn, d->where);
+		if (!cgen_fn(g, &d->expr.fn, d->where))
+			return false;
 	} else if ((d->flags & DECL_FLAG_CONST) || g->block == NULL) {
 		if (d->type.kind == TYPE_TUPLE) {
 			long idx = 0;
@@ -1130,9 +1131,9 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 				cgen_write(g, "{");
 		 
 				cgen_nl(g);
-				if (!cgen_type_pre(g, &d->expr.type, d->expr.where)) return false;
+				if (!cgen_type_pre(g, &d->type, d->expr.where)) return false;
 				cgen_write(g, " expr__");
-				if (!cgen_type_post(g, &d->expr.type, d->expr.where)) return false;
+				if (!cgen_type_post(g, &d->type, d->expr.where)) return false;
 				cgen_write(g, "; ");
 				if (!cgen_set(g, NULL, "expr__", &d->expr, NULL))
 					return false;

@@ -1,6 +1,7 @@
 /* 
 TODO:
 bf interpreter (& other tests)
+compile time arrays, slices
 unicode variable names
 make sure initializers for global variables are compile-time constants
 structs
@@ -94,7 +95,10 @@ int main(int argc, char **argv) {
 	}
 	CGenerator g;
 	cgen_create(&g, out, &file_idents, &ev);
-	cgen_file(&g, &f);
+	if (!cgen_file(&g, &f)) {
+		err_fprint(TEXT_IMPORTANT("Errors occured while generating C code.\n"));
+		return EXIT_FAILURE;
+	}
 	
 	block_exit(NULL, f.stmts); /* exit global scope */
 	

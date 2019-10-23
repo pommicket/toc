@@ -732,7 +732,8 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		v->charv = e->charl;
 		break;
 	case EXPR_LITERAL_STR:
-		v->arr = e->strl.str;
+		v->slice.data = e->strl.str;
+		v->slice.n = e->strl.len;
 		break;
 	case EXPR_CAST: {
 		Value casted;

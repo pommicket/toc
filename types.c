@@ -542,12 +542,11 @@ static bool types_expr(Typer *tr, Expression *e) {
 		t->flags |= TYPE_FLAG_FLEXIBLE;
 		break;
 	case EXPR_LITERAL_STR:
-		t->kind = TYPE_ARR;
-		t->arr.n = e->strl.len;
-		t->arr.of = typer_malloc(tr, sizeof *t->arr.of);
-		t->arr.of->flags = TYPE_FLAG_RESOLVED;
-		t->arr.of->kind = TYPE_BUILTIN;
-		t->arr.of->builtin = BUILTIN_CHAR;
+		t->kind = TYPE_SLICE;
+		t->slice = typer_malloc(tr, sizeof *t->slice);
+		t->slice->flags = TYPE_FLAG_RESOLVED;
+		t->slice->kind = TYPE_BUILTIN;
+		t->slice->builtin = BUILTIN_CHAR;
 		t->flags |= TYPE_FLAG_RESOLVED;
 		break;
 	case EXPR_LITERAL_FLOAT:
