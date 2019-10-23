@@ -868,14 +868,16 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		}
 	} break;
 	case EXPR_IF:
-		cgen_ident_id(g, e->if_.c.id);
+		if (e->type.kind != TYPE_VOID)
+			cgen_ident_id(g, e->if_.c.id);
 		break;
 	case EXPR_WHILE:
 		if (e->type.kind != TYPE_VOID)
 			cgen_ident_id(g, e->while_.c.id);
 		break;
 	case EXPR_BLOCK:
-		cgen_ident_id(g, e->block_ret_id);
+		if (e->type.kind != TYPE_VOID)
+			cgen_ident_id(g, e->block_ret_id);
 		break;
 	case EXPR_CALL:
 		cgen_write(g, "(");

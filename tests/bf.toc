@@ -1,0 +1,86 @@
+getstdin @= fn() []char {
+		 contents : []char;
+		 contents_sz : int;
+		 contents_len : int;
+		 buffer : [1024]char;
+		 while #C("fgets(buffer, 1024, stdin)") {
+		 	   buffer_len : int;
+			   while buffer[buffer_len] {
+			   		 buffer_len = buffer_len + 1;
+			   }
+			   if contents_sz < buffer_len {
+			   	  old_contents := contents;
+				  contents_sz = 2*contents_sz + 1024;
+			   	  contents = new(char, contents_sz);
+				  i := 0;
+				  while i < contents_len {
+				  		contents[i] = old_contents[i];
+				  		i = i + 1;
+				  }
+				  del(old_contents);
+			   }
+			   i := 0;
+			   while i < buffer_len {
+			   		 contents[contents_len] = buffer[i];
+					 contents_len = contents_len + 1;
+					 i = i + 1;
+			   }
+		 }
+		 contents[contents_len] = 0 as char;
+		 contents
+};
+
+main @= fn() {
+	 code := getstdin();
+	 tape_sz := 100;
+	 tape := new(int, tape_sz);
+	 ptr := tape_sz / 2;
+	 i := 0;
+	 while code[i] {
+	 	   if code[i] == '+' {
+		   	  tape[ptr] = tape[ptr]+1;
+		   } elif code[i] == '-' {
+		   	 tape[ptr] = tape[ptr]-1;
+		   } elif code[i] == '>' {
+		   	 ptr = ptr + 1;
+			 if ptr >= tape_sz {
+			 	// TODO
+			 }
+		   } elif code[i] == '<' {
+		   	 ptr = ptr - 1;
+			 if ptr < 0 {
+			 	// TODO
+			 }
+		   } elif code[i] == '[' {
+		   	 if !tape[ptr] {
+			 	// jump past matching ]
+				level := 0;
+				i = i + 1;
+				while level >= 0 {
+					  level = level + (if code[i] == '[' { 1 } elif code[i] == ']' { -1 } else {0});
+					  i = i + 1;
+				}
+				i = i + 1;
+			 }
+		   } elif code[i] == ']' {
+		   	 if tape[ptr] {
+			 	// jump to right after matching [
+				level := 0;
+				i = i - 1;
+				while level <= 0 {
+					  level = level + (if code[i] == '[' { 1 } elif code[i] == ']' { -1 } else {0});
+					  i = i - 1;
+				}
+				i = i + 1;
+			 }
+		   } elif code[i] == '.' {
+		   	 c := tape[ptr] as char;
+		   	 #C("putc(c, stdout)");
+		   } elif code[i] == ',' {
+		   	 c : char = #C("getc(stdin)");
+			 tape[ptr] = c as int;
+		   }
+		   i = i + 1;
+	 }
+
+};

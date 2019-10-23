@@ -1,6 +1,7 @@
 /* 
 TODO:
 bf interpreter (& other tests)
+pointer arithmetic
 compile time arrays, slices
 unicode variable names
 make sure initializers for global variables are compile-time constants

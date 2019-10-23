@@ -917,19 +917,23 @@ static bool types_expr(Typer *tr, Expression *e) {
 		case BINARY_GE:
 		case BINARY_EQ:
 		case BINARY_NE: {
-			bool match = true;
+			bool valid = true;
 			if (e->binary.op != BINARY_SET) {
 				/* numerical binary ops */
 				if (lhs_type->kind != rhs_type->kind) {
-					match = false;
+					valid = false;
 				} else if (lhs_type->kind != TYPE_BUILTIN) {
-					match = false;
-				} else if (!type_builtin_is_numerical(lhs_type->builtin) || !type_builtin_is_numerical(rhs_type->builtin)) {
-					match = false;
+				    valid = false;
+				} else {
+					if (e->binary.op == BINARY_EQ || e->binary.op == BINARY_NE) {
+					} else if (!type_builtin_is_numerical(lhs_type->builtin) || !type_builtin_is_numerical(rhs_type->builtin)) {
+						valid = false;
+					}
 				}
+				
 			}
-			if (!type_eq(lhs_type, rhs_type)) match = false;
-			if (match) {
+			if (!type_eq(lhs_type, rhs_type)) valid = false;
+			if (valid) {
 				switch (e->binary.op) {
 				case BINARY_SET:
 					/* type of x = y is always void */
@@ -965,12 +969,12 @@ static bool types_expr(Typer *tr, Expression *e) {
 				} break;
 				}
 			}
-			if (!match) {
+			if (!valid) {
 				char *s1, *s2;
 				s1 = type_to_str(lhs_type);
 				s2 = type_to_str(rhs_type);
 				const char *op = binary_op_to_str(e->binary.op);
-				err_print(e->where, "Mismatched types to operator %s: %s and %s", op, s1, s2);
+				err_print(e->where, "Invalid types to operator %s: %s and %s", op, s1, s2);
 				return false;
 			}
 			break;
