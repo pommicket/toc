@@ -24,6 +24,13 @@ int main(int argc, char **argv) {
 	}
 
 	const char *in_filename = argv[1];
+	const char *out_filename = "out.c";
+
+	for (int i = 2; i < argc-1; i++) {
+		if (strcmp(argv[i], "-o") == 0)
+			out_filename = argv[i+1];
+	}
+	
 	FILE *in = fopen(in_filename, "r");
 	if (!in) {
 		fprintf(stderr, "Could not open file: %s.\n", argv[1]);
@@ -89,7 +96,7 @@ int main(int argc, char **argv) {
 	parse_printing_after_types = true;
 	fprint_parsed_file(stdout, &f);
 
-	FILE *out = fopen("out.c", "w");
+	FILE *out = fopen(out_filename, "w");
 	if (!out) {
 		err_fprint(TEXT_IMPORTANT("Could not open output file (out.c).\n"));
 		return EXIT_FAILURE;

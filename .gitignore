@@ -1,3 +1,5 @@
 toc
 a.out
 out.c
+tests/**/*.c
+tests/**/*.bin

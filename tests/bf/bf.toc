@@ -8,7 +8,7 @@ getstdin @= fn() []char {
 			   while buffer[buffer_len] {
 			   		 buffer_len = buffer_len + 1;
 			   }
-			   if contents_sz < buffer_len {
+			   if contents_sz < contents_len + buffer_len {
 			   	  old_contents := contents;
 				  contents_sz = 2*contents_sz + 1024;
 			   	  contents = new(char, contents_sz);
@@ -30,13 +30,19 @@ getstdin @= fn() []char {
 		 contents
 };
 
+puti @= fn(x: int) {
+	 #C("printf(\"%ld\\n\", x)");
+};
+
 main @= fn() {
 	 code := getstdin();
-	 tape_sz := 100;
+	 tape_sz := 3;
 	 tape := new(int, tape_sz);
 	 ptr := tape_sz / 2;
 	 i := 0;
 	 while code[i] {
+	 	   // puti(ptr);
+		   // puti(tape_sz);
 	 	   if code[i] == '+' {
 		   	  tape[ptr] = tape[ptr]+1;
 		   } elif code[i] == '-' {
@@ -44,43 +50,59 @@ main @= fn() {
 		   } elif code[i] == '>' {
 		   	 ptr = ptr + 1;
 			 if ptr >= tape_sz {
-			 	// TODO
+			 	// extend to the right
+			 	newtape := new(int, 2*tape_sz);
+				j := 0;
+				while j < tape_sz {
+					  newtape[j] = tape[j];
+					  j = j + 1;
+				}
+				tape_sz = tape_sz * 2;
+				del(tape);
+				tape = newtape;
 			 }
 		   } elif code[i] == '<' {
 		   	 ptr = ptr - 1;
 			 if ptr < 0 {
-			 	// TODO
+			 	// extend to the left
+			 	newtape := new(int, 2*tape_sz);
+				j := 0;
+				while j < tape_sz {
+					  newtape[j+tape_sz] = tape[j];
+					  j = j + 1;
+				}
+				tape_sz = tape_sz * 2;
+				del(tape);
+				tape = newtape;
+				ptr = ptr + tape_sz;
 			 }
 		   } elif code[i] == '[' {
 		   	 if !tape[ptr] {
-			 	// jump past matching ]
+			 	// jump to matching ]
 				level := 0;
-				i = i + 1;
 				while level >= 0 {
-					  level = level + (if code[i] == '[' { 1 } elif code[i] == ']' { -1 } else {0});
 					  i = i + 1;
+					  level = level + (if code[i] == '[' { 1 } elif code[i] == ']' { -1 } else {0});
 				}
-				i = i + 1;
 			 }
 		   } elif code[i] == ']' {
 		   	 if tape[ptr] {
-			 	// jump to right after matching [
+			 	// jump to matching [
 				level := 0;
-				i = i - 1;
 				while level <= 0 {
-					  level = level + (if code[i] == '[' { 1 } elif code[i] == ']' { -1 } else {0});
 					  i = i - 1;
+					  level = level + (if code[i] == '[' { 1 } elif code[i] == ']' { -1 } else {0});
 				}
-				i = i + 1;
 			 }
 		   } elif code[i] == '.' {
 		   	 c := tape[ptr] as char;
 		   	 #C("putc(c, stdout)");
 		   } elif code[i] == ',' {
-		   	 c : char = #C("getc(stdin)");
-			 tape[ptr] = c as int;
+		   	 // Input doesn't really work, because you
+			 // need to send an EOF to end the program.
 		   }
 		   i = i + 1;
 	 }
-
+	 del(tape);
+	 del(code);
 };
