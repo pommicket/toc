@@ -557,7 +557,9 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	eval_binary_bool_op_one(u32, U32, op);				\
 	eval_binary_bool_op_one(u64, U64, op);				\
 	eval_binary_bool_op_one(f32, F32, op);				\
-	eval_binary_bool_op_one(f64, F64, op);
+	eval_binary_bool_op_one(f64, F64, op);				\
+	eval_binary_bool_op_one(boolv, BOOL, op);			\
+	eval_binary_bool_op_one(charv, CHAR, op);
 
 #define eval_binary_bool_op_nums_only(op)					\
 	{Type *ltype=&e->binary.lhs->type,						\
@@ -566,14 +568,17 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	 rtype : ltype;											\
 	 val_cast(&lhs, ltype, &lhs, cast_to);					\
 	 val_cast(&rhs, rtype, &rhs, cast_to);					\
-	 assert(e->type.kind == TYPE_BUILTIN);					\
+	 assert(e->binary.lhs->type.kind == TYPE_BUILTIN);	  	\
 	 switch (builtin) {										\
 		 eval_binary_bool_op_nums(builtin, op);				\
 	 default:printf("%d\n",(int)builtin);					\
 		 assert(!"Invalid builtin to "#op); break;			\
 	 }}
 	
-    
+#define eval_binary_bool_op(op)					\
+	if (e->binary.lhs->type.kind == TYPE_PTR)	\
+		v->boolv = lhs.ptr op rhs.ptr;			\
+	else { eval_binary_bool_op_nums_only(op); }
 	
 	switch (e->kind) {
 	case EXPR_UNARY_OP: {
@@ -652,25 +657,37 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		BuiltinType builtin = e->binary.lhs->type.builtin;
 		switch (e->binary.op) {
 		case BINARY_ADD:
-			eval_binary_op_nums_only(+); break;
+			if (e->binary.lhs->type.kind == TYPE_PTR) {
+				v->ptr = (char *)lhs.ptr + val_to_i64(&rhs, e->binary.rhs->type.builtin)
+					* (I64)compiler_sizeof(e->binary.lhs->type.ptr);
+			} else {
+				eval_binary_op_nums_only(+);
+			}
+			break;
 		case BINARY_SUB:
-			eval_binary_op_nums_only(-); break;
+			if (e->binary.lhs->type.kind == TYPE_PTR) {
+				v->ptr = (char *)lhs.ptr - val_to_i64(&rhs, e->binary.rhs->type.builtin)
+					* (I64)compiler_sizeof(e->binary.lhs->type.ptr);
+			} else {
+				eval_binary_op_nums_only(-);
+			}
+			break;
 		case BINARY_MUL:
 			eval_binary_op_nums_only(*); break;
 		case BINARY_DIV:
 			eval_binary_op_nums_only(/); break;
 		case BINARY_LT:
-			eval_binary_bool_op_nums_only(<); break;
+			eval_binary_bool_op(<); break;
 		case BINARY_LE:
-			eval_binary_bool_op_nums_only(<=); break;
+			eval_binary_bool_op(<=); break;
 		case BINARY_GT:
-			eval_binary_bool_op_nums_only(>); break;
+			eval_binary_bool_op(>); break;
 		case BINARY_GE:
-			eval_binary_bool_op_nums_only(>=); break;
+			eval_binary_bool_op(>=); break;
 		case BINARY_EQ:
-			eval_binary_bool_op_nums_only(==); break;
+			eval_binary_bool_op(==); break;
 		case BINARY_NE:
-			eval_binary_bool_op_nums_only(!=); break;
+			eval_binary_bool_op(!=); break;
 		case BINARY_SET:
 			if (!eval_set(ev, e->binary.lhs, &rhs)) return false;
 			break;

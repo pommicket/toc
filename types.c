@@ -33,7 +33,9 @@ static bool type_eq(Type *a, Type *b) {
 		return type_builtin_is_numerical(b->builtin);
 	}
 	if (b->flags & TYPE_FLAG_FLEXIBLE) {
-		return type_eq(b, a); /* OPTIM? */
+		Type *tmp = a;
+		a = b;
+		b = tmp;
 	}
 	switch (a->kind) {
 	case TYPE_VOID: return true;
@@ -152,12 +154,6 @@ static bool expr_must_lval(Expression *e) {
 			info_print(d->where, "%s was declared here.", istr);
 			return false;
 		}
-		if (d->flags & DECL_FLAG_PARAM) {
-			char *istr = ident_to_str(e->ident);
-			err_print(e->where, "You cannot modify or take the address of a parameter (%s).", istr);
-			return false;		
-		}
-		
 		return true;
 	}
 	case EXPR_UNARY_OP:
@@ -165,7 +161,7 @@ static bool expr_must_lval(Expression *e) {
 		break;
 	case EXPR_BINARY_OP:
 		switch (e->binary.op) {
-		case BINARY_AT_INDEX: return expr_arr_must_mut(e->binary.lhs);
+		case BINARY_AT_INDEX: return true;
 		default: break;
 		}
 		break;
@@ -917,24 +913,39 @@ static bool types_expr(Typer *tr, Expression *e) {
 		case BINARY_GE:
 		case BINARY_EQ:
 		case BINARY_NE: {
-			bool valid = true;
-			if (e->binary.op != BINARY_SET) {
+			BinaryOp o = e->binary.op;
+			bool valid = false;
+			if (o == BINARY_SET) {
+				valid = type_eq(lhs_type, rhs_type);
+			} else {
 				/* numerical binary ops */
-				if (lhs_type->kind != rhs_type->kind) {
-					valid = false;
-				} else if (lhs_type->kind != TYPE_BUILTIN) {
-				    valid = false;
-				} else {
-					if (e->binary.op == BINARY_EQ || e->binary.op == BINARY_NE) {
-					} else if (!type_builtin_is_numerical(lhs_type->builtin) || !type_builtin_is_numerical(rhs_type->builtin)) {
-						valid = false;
+				if (lhs_type->kind == rhs_type->kind && lhs_type->kind == TYPE_BUILTIN
+					&& type_builtin_is_numerical(lhs_type->builtin) && lhs_type->builtin == rhs_type->builtin) {
+					valid = true;
+				}
+				if (o == BINARY_ADD || o == BINARY_SUB) {
+					if (lhs_type->kind == TYPE_PTR &&
+						rhs_type->kind == TYPE_BUILTIN &&
+						type_builtin_is_numerical(rhs_type->builtin)) {
+						valid = true;
 					}
 				}
-				
+				if (o == BINARY_LT || o == BINARY_GT || o == BINARY_LE || o == BINARY_GE
+					|| o == BINARY_EQ || o == BINARY_NE) {
+					/* comparable types */
+					if (type_eq(lhs_type, rhs_type)) {
+						switch (lhs_type->kind) {
+						case TYPE_PTR:
+						case TYPE_BUILTIN: /* all builtins are comparable */
+							valid = true;
+						default:
+							break;
+						}
+					}
+				}
 			}
-			if (!type_eq(lhs_type, rhs_type)) valid = false;
 			if (valid) {
-				switch (e->binary.op) {
+				switch (o) {
 				case BINARY_SET:
 					/* type of x = y is always void */
 					t->kind = TYPE_VOID;
@@ -973,7 +984,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				char *s1, *s2;
 				s1 = type_to_str(lhs_type);
 				s2 = type_to_str(rhs_type);
-				const char *op = binary_op_to_str(e->binary.op);
+				const char *op = binary_op_to_str(o);
 				err_print(e->where, "Invalid types to operator %s: %s and %s", op, s1, s2);
 				return false;
 			}

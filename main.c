@@ -1,6 +1,5 @@
 /* 
 TODO:
-bf interpreter (& other tests)
 pointer arithmetic
 compile time arrays, slices
 unicode variable names
