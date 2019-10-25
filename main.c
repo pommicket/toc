@@ -1,6 +1,6 @@
 /* 
 TODO:
-compile time arrays, slices
+array/slice values
 make sure initializers for global variables are compile-time constants
 structs
 length of slice/arr with .len

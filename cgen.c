@@ -9,6 +9,7 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where);
 static bool cgen_type_post(CGenerator *g, Type *t, Location where);
 static bool cgen_decl(CGenerator *g, Declaration *d);
 static bool cgen_ret(CGenerator *g, Expression *ret);
+static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where);
 
 static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *ev) {
 	g->outc = out;
@@ -1033,7 +1034,43 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where) {
 	return true;
 }
 
-static bool cgen_val(CGenerator *g, Value *v, Type *t, Location where) {
+static bool cgen_val_ptr_pre(CGenerator *g, void *v, Type *t, Location where) {
+	switch (t->kind) {
+	case TYPE_SLICE: {
+		Slice *s = (Slice *)v;
+		for (U64 i = 0; i < s->n; i++) {
+			if (!cgen_val_ptr_pre(g, (char *)s->data + i * compiler_sizeof(t->slice), t->slice, where))
+				return false;
+		}
+		if (!cgen_type_pre(g, t->slice, where)) return false;
+		cgen_write(g, "(d%p_[])", where.code); /* TODO: improve this somehow? */
+		if (!cgen_type_post(g, t->slice, where)) return false;
+		cgen_write(g, " = {");
+		for (U64 i = 0; i < s->n; i++) {
+			if (i) cgen_write(g, ", ");
+			if (!cgen_val_ptr(g, (char *)s->data + i * compiler_sizeof(t->slice), t->slice, where))
+				return false;
+		}
+		cgen_write(g, "}");
+	} break;
+	case TYPE_ARR:
+		for (size_t i = 0; i < t->arr.n; i++) {
+			if (!cgen_val_ptr_pre(g, (char *)v + i * compiler_sizeof(t->arr.of), t->arr.of, where))
+				return false;
+		}
+		break;
+	case TYPE_FN:
+	case TYPE_UNKNOWN:
+	case TYPE_TUPLE:
+	case TYPE_VOID:
+	case TYPE_BUILTIN:
+	case TYPE_PTR:
+		break;
+	}
+	return true;
+}
+
+static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 	switch (t->kind) {
 	case TYPE_TUPLE:
 	case TYPE_VOID:
@@ -1043,36 +1080,50 @@ static bool cgen_val(CGenerator *g, Value *v, Type *t, Location where) {
 		err_print(where, "Cannot determine type.");
 		return false;
 	case TYPE_ARR:
-		err_print(where, "Not implemented yet."); /* TODO */
-	    return false;
+		cgen_write(g, "{");
+		for (size_t i = 0; i < t->arr.n; i++) {
+			if (i) cgen_write(g, ", ");
+			if (!cgen_val_ptr(g, (char *)v + i * compiler_sizeof(t->arr.of), t->arr.of, where))
+				return false;
+		}
+		cgen_write(g, "}");
+		break;
 	case TYPE_SLICE:
-		err_print(where, "Not implemented yet."); /* TODO (similar to above) */
-		return false;
+		cgen_write(g, "{d%p_, %lu}", where.code, ((Slice *)v)->n);
+		break;
 	case TYPE_FN:
-		cgen_ident_id(g, v->fn->c.id);
+		cgen_fn_name(g, *(FnExpr **)v);
 		break;
 	case TYPE_PTR:
-		/* TODO: maybe just gen the whole expression? */
 		err_print(where, "Cannot bring compile time pointer to runtime.");
 		return false;
 	case TYPE_BUILTIN:
 		switch (t->builtin) {
-		case BUILTIN_I8: cgen_write(g, "%"PRId8, v->i8); break;
-		case BUILTIN_U8: cgen_write(g, "%"PRIu8, v->u8); break;
-		case BUILTIN_I16: cgen_write(g, "%"PRId16, v->i16); break;
-		case BUILTIN_U16: cgen_write(g, "%"PRIu16, v->u16); break;
-		case BUILTIN_I32: cgen_write(g, "%"PRId32, v->i32); break;
-		case BUILTIN_U32: cgen_write(g, "%"PRIu32, v->u32); break;
-		case BUILTIN_I64: cgen_write(g, "%"PRId64, v->i64); break;
-		case BUILTIN_U64: cgen_write(g, "%"PRIu64, v->u64); break;
-		case BUILTIN_F32: cgen_write(g, F32_FMT, v->f32); break;
-		case BUILTIN_F64: cgen_write(g, F64_FMT, v->f64); break;
-		case BUILTIN_CHAR: cgen_write(g, "\\x%02x", v->charv); break;
-		case BUILTIN_BOOL: cgen_write(g, "%s", v->boolv ? "true" : "false"); break;
+		case BUILTIN_I8: cgen_write(g, "%"PRId8, *(I8 *)v); break;
+		case BUILTIN_U8: cgen_write(g, "%"PRIu8, *(U8 *)v); break;
+		case BUILTIN_I16: cgen_write(g, "%"PRId16, *(I16 *)v); break;
+		case BUILTIN_U16: cgen_write(g, "%"PRIu16, *(U16 *)v); break;
+		case BUILTIN_I32: cgen_write(g, "%"PRId32, *(I32 *)v); break;
+		case BUILTIN_U32: cgen_write(g, "%"PRIu32, *(U32 *)v); break;
+		case BUILTIN_I64: cgen_write(g, "%"PRId64, *(I64 *)v); break;
+		case BUILTIN_U64: cgen_write(g, "%"PRIu64, *(U64 *)v); break;
+		case BUILTIN_F32: cgen_write(g, F32_FMT, *(F32 *)v); break;
+		case BUILTIN_F64: cgen_write(g, F64_FMT, *(F64 *)v); break;
+		case BUILTIN_CHAR: cgen_write(g, "\\x%02x", *(char *)v); break;
+		case BUILTIN_BOOL: cgen_write(g, "%s", *(bool *)v ? "true" : "false"); break;
 		}
 		break;
 	}
 	return true;
+}
+
+/* generates a value fit for use as an initializer */
+static bool cgen_val(CGenerator *g, Value *v, Type *t, Location where) {
+	/* 
+	   Because Value is a union, a pointer to v works as a pointer to any member.
+	   As a result, this function is only needed for type checking.
+	 */
+	return cgen_val_ptr(g, v, t, where);
 }
 
 static bool cgen_decl(CGenerator *g, Declaration *d) {
@@ -1100,6 +1151,11 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 			cgen_ident(g, d->idents[0]);
 			if (!cgen_type_post(g, &d->type, d->where)) return false;
 			cgen_write(g, " = ");
+			if (d->type.kind == TYPE_ARR) {
+				I64 *nums = d->val.arr;
+				printf("%ld\n",nums[0]);
+			}
+			return true;
 			if (!cgen_val(g, &d->val, &d->type, d->where))
 				return false;
 			cgen_write(g, ";");
