@@ -36,8 +36,16 @@ pascal @= fn() [N][]int {
 	 x
 };
 
+foo @= fn() [3]int {
+	x : [3]int;
+	x[0] = 0;
+	x[1] = 1;
+	x[2] = 2;
+	x
+};
+
 main @= fn() {
-	 ptriangle @= pascal();
-	 puti(ptriangle[49][25]);
-	 
+	 // ptriangle @= pascal();
+	 // puti(ptriangle[49][25]);
+	 x @= foo();
 };	

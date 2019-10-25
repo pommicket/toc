@@ -705,7 +705,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		FnExpr *fn_decl = NULL;
 		Expression *new_args = NULL;
 		arr_set_lena(&new_args, nparams, &tr->allocr);
-		bool *params_set = typer_calloc(tr, nparams, sizeof *params_set);
+		bool *params_set = nparams ? typer_calloc(tr, nparams, sizeof *params_set) : NULL;
 		if (f->kind == EXPR_IDENT) {
 			IdentDecl *decl = ident_decl(f->ident);
 			assert(decl);

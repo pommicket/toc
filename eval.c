@@ -141,7 +141,11 @@ static void u64_to_val(Value *v, BuiltinType v_type, U64 x) {
 		i64_to_val(v, v_type, (I64)x);
 }
 
-static void val_copy(Value *dest, Value *src, Type *t) {
+/* 
+IMPORTANT: Only pass an evaluator if you want it to use its allocator.
+Otherwise, pass NULL.
+*/
+static void val_copy(Evaluator *ev, Value *dest, Value *src, Type *t) {
 	switch (t->kind) {
 	case TYPE_BUILTIN:
 	case TYPE_FN:
@@ -153,14 +157,38 @@ static void val_copy(Value *dest, Value *src, Type *t) {
 		break;
 	case TYPE_ARR: {
 		size_t bytes = t->arr.n * compiler_sizeof(t->arr.of);
-		dest->arr = err_malloc(bytes);
+		if (ev)
+			dest->arr = evalr_malloc(ev, bytes);
+		else
+			dest->arr = err_malloc(bytes);
 		memcpy(dest->arr, src->arr, bytes);
 	} break;
 	case TYPE_TUPLE: {
 		size_t bytes = arr_len(t->tuple) * sizeof(*dest->tuple);
-		dest->tuple = malloc(bytes);
+		if (ev)
+			dest->tuple = evalr_malloc(ev, bytes);
+		else
+			dest->tuple = err_malloc(bytes);
 		memcpy(dest->tuple, src->tuple, bytes);
 	} break;
+	}
+}
+
+static void val_free(Value *v, Type *t) {
+	switch (t->kind) {
+	case TYPE_BUILTIN:
+	case TYPE_FN:
+	case TYPE_PTR:
+	case TYPE_SLICE:
+	case TYPE_VOID:
+	case TYPE_UNKNOWN:
+		break;
+	case TYPE_ARR:
+		free(v->arr);
+		break;
+	case TYPE_TUPLE:
+		free(v->tuple);
+		break;
 	}
 }
 
@@ -946,13 +974,13 @@ static bool eval_decl(Evaluator *ev, Declaration *d) {
 	arr_foreach(d->idents, Identifier, i) {
 		IdentDecl *id = ident_decl(*i);
 		if (has_expr && d->expr.kind == EXPR_TUPLE) {
-			val_copy(&id->val, &val.tuple[index], &d->type.tuple[index]);
+			val_copy(ev, &id->val, &val.tuple[index], &d->type.tuple[index]);
 			index++;
 		} else if (!has_expr && d->type.kind == TYPE_ARR) {
 			/* "stack" array */
 			id->val.arr = err_calloc(d->type.arr.n, compiler_sizeof(d->type.arr.of));
 		} else {
-			val_copy(&id->val, &val, &d->type);
+			val_copy(ev, &id->val, &val, &d->type);
 		}
 		id->flags |= IDECL_FLAG_HAS_VAL;
 	}
@@ -993,7 +1021,7 @@ static bool eval_block(Evaluator *ev, Block *b, Type *t, Value *v) {
 		if (!eval_expr(ev, b->ret_expr, returning))
 			return false;
 	}
-	if (returning) val_copy(v, returning, t);
+	if (returning) val_copy(NULL, v, returning, t); /* LEAK */adfjfhskjdahfkj
 	block_exit(b, b->stmts);
 	
 	return true;
