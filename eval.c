@@ -483,8 +483,12 @@ static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 		} break;
 		default: break;
 		}
+		break;
 	case EXPR_TUPLE:
-		/* TODO */
+		for (size_t i = 0; i < arr_len(set->tuple); i++) {
+			if (!eval_set(ev, &set->tuple[i], &to->tuple[i]))
+				return false;
+		}
 		break;
 	default:
 		assert(0);

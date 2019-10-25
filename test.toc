@@ -13,30 +13,17 @@ putf @= fn(x: float) {
 ");
 };
 
-sum @= fn(x: []int, n: int) int {
-	p := &x[0];
-	end := &x[n-1];
-	total := 0;
-	while p <= end {
-		  total = total + *p;
-		  p = p + 1;
-	}
-	total
+ptriple @= fn(m: int, n: int) (int, int, int) {
+		m*m-n*n, 2*m*n, m*m+n*n
 };
 
 f @= fn() int {
-	 N @= 10;
-
-	 numbers := new(int, N);
-	 i := 0;
-	 while i < N {
-	 	   numbers[i] = i;
-	 	   i = i + 1;
-	 }
-	 sum(numbers, N)
+  a, b, c : int;
+  a, b, c = ptriple(3, 2);
+  a + b + c
 };
 
 main @= fn() {
-	 a: [f()]int;
 	 puti(f());
+	 A : [f()]int;
 };	

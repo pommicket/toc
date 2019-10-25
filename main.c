@@ -1,15 +1,15 @@
 /* 
 TODO:
-pointer arithmetic
 compile time arrays, slices
-unicode variable names
 make sure initializers for global variables are compile-time constants
 structs
 length of slice/arr with .len
 don't allow while {3; 5} (once break is added)
+allow omission of trailing ; in foo @= fn() {} 
 any odd number of "s for a string
 modifiable strings:
 s := ["sakjdfhkjh ksjdahfkjsd ahs ahdf hsdaf khsadkjfh"];
+unicode variable names
  */
 #include "toc.c"
 
