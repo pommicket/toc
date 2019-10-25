@@ -1043,7 +1043,7 @@ static bool cgen_val_ptr_pre(CGenerator *g, void *v, Type *t, Location where) {
 				return false;
 		}
 		if (!cgen_type_pre(g, t->slice, where)) return false;
-		cgen_write(g, "(d%p_[])", where.code); /* TODO: improve this somehow? */
+		cgen_write(g, "(d%p_[])", v); /* TODO: improve this somehow? */
 		if (!cgen_type_post(g, t->slice, where)) return false;
 		cgen_write(g, " = {");
 		for (U64 i = 0; i < s->n; i++) {
@@ -1051,11 +1051,12 @@ static bool cgen_val_ptr_pre(CGenerator *g, void *v, Type *t, Location where) {
 			if (!cgen_val_ptr(g, (char *)s->data + i * compiler_sizeof(t->slice), t->slice, where))
 				return false;
 		}
-		cgen_write(g, "}");
+		cgen_write(g, "};");
+		cgen_nl(g);
 	} break;
 	case TYPE_ARR:
 		for (size_t i = 0; i < t->arr.n; i++) {
-			if (!cgen_val_ptr_pre(g, (char *)v + i * compiler_sizeof(t->arr.of), t->arr.of, where))
+			if (!cgen_val_ptr_pre(g, (char *)*(void **)v + i * compiler_sizeof(t->arr.of), t->arr.of, where))
 				return false;
 		}
 		break;
@@ -1083,13 +1084,13 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 		cgen_write(g, "{");
 		for (size_t i = 0; i < t->arr.n; i++) {
 			if (i) cgen_write(g, ", ");
-			if (!cgen_val_ptr(g, (char *)v + i * compiler_sizeof(t->arr.of), t->arr.of, where))
+			if (!cgen_val_ptr(g, *(char **)v + i * compiler_sizeof(t->arr.of), t->arr.of, where))
 				return false;
 		}
 		cgen_write(g, "}");
 		break;
 	case TYPE_SLICE:
-		cgen_write(g, "{d%p_, %lu}", where.code, ((Slice *)v)->n);
+		cgen_write(g, "{d%p_, %lu}", v, ((Slice *)v)->n);
 		break;
 	case TYPE_FN:
 		cgen_fn_name(g, *(FnExpr **)v);
@@ -1117,6 +1118,10 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 	return true;
 }
 
+static bool cgen_val_pre(CGenerator *g, Value *v, Type *t, Location where) {
+	return cgen_val_ptr_pre(g, v, t, where);
+}
+
 /* generates a value fit for use as an initializer */
 static bool cgen_val(CGenerator *g, Value *v, Type *t, Location where) {
 	/* 
@@ -1126,6 +1131,7 @@ static bool cgen_val(CGenerator *g, Value *v, Type *t, Location where) {
 	return cgen_val_ptr(g, v, t, where);
 }
 
+
 static bool cgen_decl(CGenerator *g, Declaration *d) {
 	if (cgen_fn_is_direct(g, d)) {
 		if (!cgen_fn(g, &d->expr.fn, d->where))
@@ -1134,6 +1140,8 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 		if (d->type.kind == TYPE_TUPLE) {
 			long idx = 0;
 			arr_foreach(d->idents, Identifier, i) {
+				if (!cgen_val_pre(g, &d->val.tuple[idx], &d->type.tuple[idx], d->where))
+					return false;
 				if (!cgen_type_pre(g, &d->type.tuple[idx], d->where)) return false;
 				cgen_write(g, " ");
 				cgen_ident(g, *i);
@@ -1142,20 +1150,17 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 				if (!cgen_val(g, &d->val.tuple[idx], &d->type.tuple[idx], d->where))
 					return false;
 				idx++;
+				cgen_write(g, ";");
+				cgen_nl(g);
 			}
-			cgen_write(g, ";");
-			cgen_nl(g);
 		} else {
+			if (!cgen_val_pre(g, &d->val, &d->type, d->where))
+				return false;
 			if (!cgen_type_pre(g, &d->type, d->where)) return false;
 			cgen_write(g, " ");
 			cgen_ident(g, d->idents[0]);
 			if (!cgen_type_post(g, &d->type, d->where)) return false;
 			cgen_write(g, " = ");
-			if (d->type.kind == TYPE_ARR) {
-				I64 *nums = d->val.arr;
-				printf("%ld\n",nums[0]);
-			}
-			return true;
 			if (!cgen_val(g, &d->val, &d->type, d->where))
 				return false;
 			cgen_write(g, ";");

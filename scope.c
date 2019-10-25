@@ -26,6 +26,8 @@ static void remove_ident_decls(Block *b, Declaration *d) {
 		IdentDecl *last_decl = arr_last(*decls);
 		if (last_decl && last_decl->scope == b) {
 			if ((last_decl->flags & IDECL_FLAG_HAS_VAL)
+				/* don't free const arrays (there's only one per decl) */
+				&& !(last_decl->decl->flags & DECL_FLAG_CONST)  
 				&& last_decl->decl->type.kind == TYPE_ARR) {
 				/* free array on stack */
 				free(last_decl->val.arr);

@@ -13,32 +13,31 @@ putf @= fn(x: float) {
 ");
 };
 
-ptriple @= fn(m: int, n: int) (int, int, int) {
-		m*m-n*n, 2*m*n, m*m+n*n
-};
 
-f @= fn() int {
-  a, b, c : int;
-  a, b, c = ptriple(3, 2);
-  a + b + c
-};
-
-aSDF @= fn() [3]int {
-	 x: [3]int;
-	 x[0] = 1;
-	 x[1] = 2;
-	 x[2] = 3;
+N @= 50;
+pascal @= fn() [N][]int {
+	 x: [N][]int;
+	 i := 0;
+	 while i < N {
+	 	   x[i] = new(int, i+1);
+		   i = i + 1;
+	 }
+	 i = 0;
+	 while i < N {
+	 	   x[i][0] = 1;
+		   x[i][i] = 1;
+		   j := 1;
+		   while j < i {
+		   		 x[i][j] = x[i-1][j-1] + x[i-1][j];
+				 j = j + 1;
+		   }
+		   i = i + 1;
+	 }
 	 x
 };
 
 main @= fn() {
-	 puti(f());
-	 A : [f()]int;
-	 x @= f();
-	 dsafsad @= ptriple;
-	 foo @= aSDF();
-	 puti(foo[0]);
-	 puti(foo[1]);
-	 puti(foo[2]);
-	 // B : [aSDF()[0]]int;
+	 ptriangle @= pascal();
+	 puti(ptriangle[49][25]);
+	 
 };	

@@ -1,4 +1,4 @@
-static bool eval_block(Evaluator *ev, Block *b, Value *v);
+static bool eval_block(Evaluator *ev, Block *b, Type *t, Value *v);
 static bool eval_expr(Evaluator *ev, Expression *e, Value *v);
 static bool block_enter(Block *b, Statement *stmts, U32 flags);
 static void block_exit(Block *b, Statement *stmts);
@@ -41,15 +41,15 @@ static size_t compiler_sizeof(Type *t) {
 	case TYPE_BUILTIN:
 		return compiler_sizeof_builtin(t->builtin);
 	case TYPE_FN:
-		return sizeof t->fn;
+		return sizeof(FnExpr *);
 	case TYPE_PTR:
-		return sizeof t->ptr;
+		return sizeof(void *);
 	case TYPE_ARR:
 		return t->arr.n * compiler_sizeof(t->arr.of);
 	case TYPE_TUPLE:
-		return sizeof t->tuple;
+		return sizeof(Value *);
 	case TYPE_SLICE:
-		return sizeof t->slice;
+		return sizeof(Slice);
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 		return 0;
@@ -139,6 +139,29 @@ static void u64_to_val(Value *v, BuiltinType v_type, U64 x) {
 		v->u64 = x;
 	else
 		i64_to_val(v, v_type, (I64)x);
+}
+
+static void val_copy(Value *dest, Value *src, Type *t) {
+	switch (t->kind) {
+	case TYPE_BUILTIN:
+	case TYPE_FN:
+	case TYPE_PTR:
+	case TYPE_SLICE:
+	case TYPE_VOID:
+	case TYPE_UNKNOWN:
+		*dest = *src;
+		break;
+	case TYPE_ARR: {
+		size_t bytes = t->arr.n * compiler_sizeof(t->arr.of);
+		dest->arr = err_malloc(bytes);
+		memcpy(dest->arr, src->arr, bytes);
+	} break;
+	case TYPE_TUPLE: {
+		size_t bytes = arr_len(t->tuple) * sizeof(*dest->tuple);
+		dest->tuple = malloc(bytes);
+		memcpy(dest->tuple, src->tuple, bytes);
+	} break;
+	}
 }
 
 #define builtin_casts_to_int(x)					\
@@ -477,8 +500,10 @@ static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 		case BINARY_AT_INDEX: {
 			void *ptr;
 			Type *type;
+			/* get pointer to x[i] */
 			if (!eval_expr_ptr_at_index(ev, set, &ptr, &type))
 				return false;
+			/* set it to to */
 			eval_deref_set(ptr, to, type);
 		} break;
 		default: break;
@@ -723,12 +748,12 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			Value cond;
 			if (!eval_expr(ev, i->cond, &cond)) return false;
 			if (val_truthiness(&cond, &i->cond->type)) {
-				if (!eval_block(ev, &i->body, v)) return false;
+				if (!eval_block(ev, &i->body, &e->type, v)) return false;
 			} else if (i->next_elif) {
 				if (!eval_expr(ev, i->next_elif, v)) return false;
 			}
 		} else {
-			if (!eval_block(ev, &i->body, v)) return false;
+			if (!eval_block(ev, &i->body, &e->type, v)) return false;
 		}
 	} break;
 	case EXPR_WHILE: {
@@ -740,11 +765,11 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				if (!val_truthiness(&cond, &w->cond->type))
 					break;
 			}
-			if (!eval_block(ev, &w->body, v)) return false;
+			if (!eval_block(ev, &w->body, &e->type, v)) return false;
 		}
 	} break;
 	case EXPR_BLOCK:
-		if (!eval_block(ev, &e->block, v)) return false;
+		if (!eval_block(ev, &e->block, &e->type, v)) return false;
 		break;
 	case EXPR_LITERAL_BOOL:
 		v->boolv = e->booll;
@@ -850,7 +875,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			}
 		}
 		arr_clear(&args);
-		if (!eval_block(ev, &fn->body, v)) {
+		if (!eval_block(ev, &fn->body, &e->type, v)) {
 			fn_exit(fn);
 			return false;
 		}
@@ -921,12 +946,13 @@ static bool eval_decl(Evaluator *ev, Declaration *d) {
 	arr_foreach(d->idents, Identifier, i) {
 		IdentDecl *id = ident_decl(*i);
 		if (has_expr && d->expr.kind == EXPR_TUPLE) {
-			id->val = val.tuple[index++];
+			val_copy(&id->val, &val.tuple[index], &d->type.tuple[index]);
+			index++;
 		} else if (!has_expr && d->type.kind == TYPE_ARR) {
 			/* "stack" array */
 			id->val.arr = err_calloc(d->type.arr.n, compiler_sizeof(d->type.arr.of));
 		} else {
-			id->val = val;
+			val_copy(&id->val, &val, &d->type);
 		}
 		id->flags |= IDECL_FLAG_HAS_VAL;
 	}
@@ -952,17 +978,22 @@ static bool eval_stmt(Evaluator *ev, Statement *stmt) {
 	return true;
 }
 
-static bool eval_block(Evaluator *ev, Block *b, Value *v) {
+/* t is the type of the block. */
+static bool eval_block(Evaluator *ev, Block *b, Type *t, Value *v) {
 	block_enter(b, b->stmts, 0);
 	arr_foreach(b->stmts, Statement, stmt) {
 		if (!eval_stmt(ev, stmt))
 			return false;
 		if (ev->returning) break;
 	}
+	Value *returning = ev->returning;
+	Value r;
 	if (!ev->returning && b->ret_expr) {
-		if (!eval_expr(ev, b->ret_expr, v))
+	    returning = &r;
+		if (!eval_expr(ev, b->ret_expr, returning))
 			return false;
 	}
+	if (returning) val_copy(v, returning, t);
 	block_exit(b, b->stmts);
 	
 	return true;
