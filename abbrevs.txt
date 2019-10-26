@@ -20,5 +20,6 @@ ptr - pointer
 ret - return
 stmt - statement
 str - string
+tdecl - type declaration
 tokr - tokenizer
 val - value

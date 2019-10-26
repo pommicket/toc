@@ -1,5 +1,5 @@
 static bool parse_expr(Parser *p, Expression *e, Token *end);
-
+static bool parse_stmt(Parser *p, Statement *s);
 #define PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR 0x01
 static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_t flags);
 
@@ -237,7 +237,7 @@ static inline Expression *parser_new_expr(Parser *p) {
 #define EXPR_CAN_END_WITH_LBRACE 0x02
 #define EXPR_CAN_END_WITH_COLON 0x04
 /* is_vbs can be NULL */
-static Token *expr_find_end(Parser *p, uint16_t flags, bool *is_vbs)  {
+static Token *expr_find_end(Parser *p, U16 flags, bool *is_vbs)  {
 	Tokenizer *t = p->tokr;
 	int paren_level = 0;
 	int brace_level = 0;
@@ -459,7 +459,6 @@ static bool parse_type(Parser *p, Type *type) {
 	
 }
 
-static bool parse_stmt(Parser *p, Statement *s);
 
 static bool parse_block(Parser *p, Block *b) {
 	b->flags = 0;
@@ -1304,7 +1303,6 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_
 	Tokenizer *t = p->tokr;
 	d->flags = 0;
 	
-	/* OPTIM: Maybe don't use a dynamic array or use parser allocator. */
 	while (1) {
 		Identifier *ident = parser_arr_add(p, &d->idents);
 		if (t->token->kind != TOKEN_IDENT) {
@@ -1391,12 +1389,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_
 	
  ret_false:
 	/* move past end of decl */
-	while (t->token->kind != TOKEN_EOF && !token_is_kw(t->token, KW_SEMICOLON)) {
-		t->token++;
-	}
-	if (token_is_kw(t->token, KW_SEMICOLON)) {
-		t->token++;	/* move past ; */
-	}
+	tokr_skip_semicolon(t);
 	return false;
 }
 
@@ -1419,30 +1412,46 @@ static bool parse_stmt(Parser *p, Statement *s) {
 	if (t->token->kind == TOKEN_EOF)
 		tokr_err(t, "Expected statement.");
 	s->where = t->token->where;
-	
-	if (token_is_kw(t->token, KW_RETURN)) {
-		s->kind = STMT_RET;
-		t->token++;
-		s->ret.flags = 0;
-		if (token_is_kw(t->token, KW_SEMICOLON)) {
-			/* return with no expr */
+	if (t->token->kind == TOKEN_KW) {
+		switch (t->token->kw) {
+		case KW_RETURN: {
+			s->kind = STMT_RET;
 			t->token++;
-			return true;
+			s->ret.flags = 0;
+			if (token_is_kw(t->token, KW_SEMICOLON)) {
+				/* return with no expr */
+				t->token++;
+				return true;
+			}
+			s->ret.flags |= RET_FLAG_EXPR;
+			Token *end = expr_find_end(p, 0, NULL);
+			if (!end) {
+				while (t->token->kind != TOKEN_EOF) t->token++; /* move to end of file */
+				return false;
+			}
+			if (!token_is_kw(end, KW_SEMICOLON)) {
+				err_print(end->where, "Expected ';' at end of return statement.");
+				t->token = end->kind == TOKEN_EOF ? end : end + 1;
+				return false;
+			}
+			bool success = parse_expr(p, &s->ret.expr, end);
+			t->token = end + 1;
+			return success;
 		}
-		s->ret.flags |= RET_FLAG_EXPR;
-		Token *end = expr_find_end(p, 0, NULL);
-		if (!end) {
-			while (t->token->kind != TOKEN_EOF) t->token++; /* move to end of file */
-			return false;
+		case KW_NEWTYPE:
+			s->kind = STMT_TDECL;
+			t->token++;
+			if (t->token->kind != TOKEN_IDENT) {
+				tokr_err(t, "Expected identifier after \"newtype\".");
+				tokr_skip_semicolon(t);
+			}
+			s->tdecl.name = t->token->ident;
+			t->token++;
+			if (!parse_type(p, &s->tdecl.type))
+				return false;
+		    return true;
+		default: break;
 		}
-		if (!token_is_kw(end, KW_SEMICOLON)) {
-			err_print(end->where, "Expected ';' at end of return statement.");
-			t->token = end->kind == TOKEN_EOF ? end : end + 1;
-			return false;
-		}
-	    bool success = parse_expr(p, &s->ret.expr, end);
-		t->token = end + 1;
-		return success;
 	}
 	if (is_decl(t)) {
 		s->kind = STMT_DECL;
@@ -1695,9 +1704,7 @@ static void fprint_stmt(FILE *out, Statement *s) {
 	PARSE_PRINT_LOCATION(s->where);
 	if (s->flags & STMT_FLAG_VOIDED_EXPR)
 		fprintf(out, "(void)");
-	
 	switch (s->kind) {
-
 	case STMT_DECL:
 		fprint_decl(out, &s->decl);
 		fprintf(out, ";\n");
@@ -1711,6 +1718,12 @@ static void fprint_stmt(FILE *out, Statement *s) {
 		if (s->ret.flags & RET_FLAG_EXPR)
 			fprint_expr(out, &s->ret.expr);
 		fprintf(out, ";\n");
+		break;
+	case STMT_TDECL:
+		fprintf(out, "newtype ");
+		fprint_ident(out, s->tdecl.name);
+		fprintf(out, " ");
+		fprint_type(out, &s->tdecl.type);
 		break;
 	}
 }

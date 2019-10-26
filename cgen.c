@@ -1260,6 +1260,15 @@ static bool cgen_stmt(CGenerator *g, Statement *s) {
 		cgen_write(g, ";");
 		cgen_nl(g);
 		break;
+	case STMT_TDECL:
+		cgen_write(g, "typedef ");
+		if (!cgen_type_pre(g, &s->tdecl.type, s->where)) return false;
+		cgen_write(g, " ");
+		cgen_ident(g, s->tdecl.name);
+		if (!cgen_type_post(g, &s->tdecl.type, s->where)) return false;
+		cgen_write(g, ";");
+		cgen_nl(g);
+		break;
 	case STMT_RET:
 		if (!cgen_ret(g, s->ret.flags & RET_FLAG_EXPR ? &s->ret.expr : NULL))
 			return false;

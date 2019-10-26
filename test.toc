@@ -13,24 +13,8 @@ putf @= fn(x: float) {
 ");
 };
 
-foo @= fn() [3]int {
-	x : [3]int;
-	x[0] =  1;
-	x[1] = 2;
-	x[2] = 3;
-	x
-};
-
-getASDF @= fn(i: int) int {
-		ASDF @= foo();
-		ASDF[i]
-};
+newtype Foo int
 
 main @= fn() {
-	 // ptriangle @= pascal();
-	 // puti(ptriangle[49][25]);
-	 puti(getASDF(2));
-	 puti(getASDF(1));
-	 puti(getASDF(0));
-
+	 // x : Foo;
 };	

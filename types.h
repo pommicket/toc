@@ -169,6 +169,7 @@ typedef enum {
 			  KW_AS,
 			  KW_NEW,
 			  KW_DEL,
+			  KW_NEWTYPE,
 			  KW_INT,
 			  KW_I8,
 			  KW_I16,
@@ -470,7 +471,8 @@ typedef struct Declaration {
 typedef enum {
 			  STMT_DECL,
 			  STMT_EXPR,
-			  STMT_RET
+			  STMT_RET,
+			  STMT_TDECL
 } StatementKind;
 
 #define RET_FLAG_EXPR 0x01
@@ -479,12 +481,18 @@ typedef struct {
 	Expression expr;
 } Return;
 
+typedef struct {
+	Identifier name;
+	Type type;
+} TypeDecl;
+
 #define STMT_FLAG_VOIDED_EXPR 0x01 /* the "4;" in fn () { 4; } is a voided expression, but the "4" in fn () int { 4 } is not */
 typedef struct Statement {
 	Location where;
 	StatementKind kind;
-	unsigned short flags;
+	U16 flags;
 	union {
+		TypeDecl tdecl;
 		Declaration decl;
 		Expression expr;
 		Return ret;

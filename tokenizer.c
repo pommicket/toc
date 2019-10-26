@@ -3,7 +3,7 @@ static const char *keywords[KW_COUNT] =
 	 "+", "-", "*", "!", "&", "/",
 	 "=",
 	 "if", "elif", "else", "while", "return", "fn", "as",
-	 "new", "del",
+	 "new", "del", "newtype",
 	 "int", "i8", "i16", "i32", "i64",
 	 "u8", "u16", "u32", "u64", "float", "f32", "f64",
 	 "char", "bool", "true", "false"};
@@ -488,6 +488,27 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 	
 	t->token = t->tokens;
 	return !has_err;
+}
+
+/* 
+   skip to one token past the next semicolon not in braces (or the end of the file).
+*/
+static void tokr_skip_semicolon(Tokenizer *t) {
+	int brace_level = 0;
+	while (t->token->kind != TOKEN_EOF) {
+		if (t->token->kind == TOKEN_KW) switch (t->token->kw) {
+			case KW_LBRACE: brace_level++; break;
+			case KW_RBRACE: brace_level--; break;
+			case KW_SEMICOLON:
+				if (brace_level == 0) {
+					t->token++;
+					return;
+				}
+				break;
+			default: break;
+			}
+		t->token++;
+	}
 }
 
 /* ONLY frees tokens, not string literals. You can call this followed by tokr_free. */
