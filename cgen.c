@@ -1142,6 +1142,8 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 			arr_foreach(d->idents, Identifier, i) {
 				if (!cgen_val_pre(g, &d->val.tuple[idx], &d->type.tuple[idx], d->where))
 					return false;
+				if (g->block != NULL)
+					cgen_write(g, "static ");
 				if (!cgen_type_pre(g, &d->type.tuple[idx], d->where)) return false;
 				cgen_write(g, " ");
 				cgen_ident(g, *i);
@@ -1156,6 +1158,8 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 		} else {
 			if (!cgen_val_pre(g, &d->val, &d->type, d->where))
 				return false;
+			if (g->block != NULL)
+				cgen_write(g, "static ");
 			if (!cgen_type_pre(g, &d->type, d->where)) return false;
 			cgen_write(g, " ");
 			cgen_ident(g, d->idents[0]);

@@ -1,6 +1,5 @@
 /* 
 TODO:
-make sure initializers for global variables are compile-time constants
 structs
 length of slice/arr with .len
 don't allow while {3; 5} (once break is added)

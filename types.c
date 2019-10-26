@@ -1111,7 +1111,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 			d->type = d->expr.type;
 			d->type.flags &= (uint16_t)~(uint16_t)TYPE_FLAG_FLEXIBLE; /* x := 5; => x is not flexible */
 		}
-		if (d->flags & DECL_FLAG_CONST) {
+		if ((d->flags & DECL_FLAG_CONST) || tr->block == NULL) {
 			if (!(d->flags & DECL_FLAG_FOUND_VAL)) {
 				if (!eval_expr(tr->evalr, &d->expr, &d->val))
 					return false;

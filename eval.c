@@ -973,10 +973,18 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 static bool eval_decl(Evaluator *ev, Declaration *d) {
 	Value val = {0};
 	int has_expr = d->flags & DECL_FLAG_HAS_EXPR;
-	if (has_expr && (!(d->flags & DECL_FLAG_CONST) || !(d->flags & DECL_FLAG_FOUND_VAL))) {
-		if (!eval_expr(ev, &d->expr, &val))
-			return false;
-		d->flags |= DECL_FLAG_FOUND_VAL;
+	if (has_expr) {
+		if (d->flags & DECL_FLAG_CONST) {
+			if (!(d->flags & DECL_FLAG_FOUND_VAL)) {
+				if (!eval_expr(ev, &d->expr, &d->val))
+					return false;
+				d->flags |= DECL_FLAG_FOUND_VAL;
+			}
+			val = d->val;
+		} else {
+			if (!eval_expr(ev, &d->expr, &val))
+				return false;
+		}
 	}
 	long index = 0;
 	arr_foreach(d->idents, Identifier, i) {
@@ -992,7 +1000,7 @@ static bool eval_decl(Evaluator *ev, Declaration *d) {
 		}
 		id->flags |= IDECL_FLAG_HAS_VAL;
 	}
-	if (d->expr.kind == EXPR_TUPLE) {
+	if (has_expr && d->expr.kind == EXPR_TUPLE) {
 		val_free(&val, &d->type); /* free the tuple */
 	}
 	return true;
@@ -1035,14 +1043,12 @@ static bool eval_block(Evaluator *ev, Block *b, Type *t, Value *v) {
 		/* make a copy so that r's data isn't freed when we exit the block */
 		val_copy(NULL, v, &r, &b->ret_expr->type);
 		void *free_ptr = val_ptr_to_free(v, t);
-		if (t->kind == TYPE_TUPLE) printf("WIll Free %p!!!\n",free_ptr);
 		if (free_ptr)
 			*(void **)arr_add(&prev_to_free) = free_ptr;
 	}
 	block_exit(b, b->stmts);
 	typedef void *VoidPtr;
 	arr_foreach(ev->to_free, VoidPtr, f) {
-		printf("Free %p\n", *f);
 		free(*f);
 	}
 	arr_clear(&ev->to_free);

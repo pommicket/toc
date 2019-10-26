@@ -13,14 +13,6 @@ putf @= fn(x: float) {
 ");
 };
 
-asdf @= fn() (int, int) {
-2,3};
-
-fdsa @= fn() int {
-	 x, y := asdf();
-	 x + y
-};
-
 foo @= fn() [3]int {
 	x : [3]int;
 	x[0] =  1;
@@ -29,11 +21,16 @@ foo @= fn() [3]int {
 	x
 };
 
+getASDF @= fn(i: int) int {
+		ASDF @= foo();
+		ASDF[i]
+};
+
 main @= fn() {
 	 // ptriangle @= pascal();
 	 // puti(ptriangle[49][25]);
-	 x : [fdsa()]int;
+	 puti(getASDF(2));
+	 puti(getASDF(1));
+	 puti(getASDF(0));
 
-	 A, B @= 3, 5;
-	 ASDF @= foo();
 };	
