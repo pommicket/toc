@@ -1,3 +1,4 @@
+/* OPTIM: use a hash table */
 #if CHAR_MAX - CHAR_MIN > 255
 #error "Currently only systems with 8-bit characters can compile toc."
 /* TODO: maybe do a run-time error for large characters? */
