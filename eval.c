@@ -6,10 +6,15 @@ static void block_exit(Block *b, Statement *stmts);
 static void evalr_create(Evaluator *ev) {
 	allocr_create(&ev->allocr);
 	ev->returning = NULL;
+	ev->to_free = NULL;
 }
 
 static void evalr_free(Evaluator *ev) {
 	allocr_free_all(&ev->allocr);
+	typedef void *VoidPtr;
+	arr_foreach(ev->to_free, VoidPtr, f)
+		free(*f);
+	arr_clear(&ev->to_free);
 }
 
 static inline void *evalr_malloc(Evaluator *ev, size_t bytes) {
@@ -174,7 +179,7 @@ static void val_copy(Evaluator *ev, Value *dest, Value *src, Type *t) {
 	}
 }
 
-static void val_free(Value *v, Type *t) {
+static void *val_ptr_to_free(Value *v, Type *t) {
 	switch (t->kind) {
 	case TYPE_BUILTIN:
 	case TYPE_FN:
@@ -182,14 +187,17 @@ static void val_free(Value *v, Type *t) {
 	case TYPE_SLICE:
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
-		break;
+		return NULL;
 	case TYPE_ARR:
-		free(v->arr);
-		break;
+		return v->arr;
 	case TYPE_TUPLE:
-		free(v->tuple);
-		break;
+		return v->tuple;
 	}
+	assert(0); return NULL;
+}
+
+static void val_free(Value *v, Type *t) {
+	free(val_ptr_to_free(v, t));
 }
 
 #define builtin_casts_to_int(x)					\
@@ -850,7 +858,8 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	} break;
 	case EXPR_TUPLE: {
 		size_t i, n = arr_len(e->tuple);
-		v->tuple = evalr_malloc(ev, n * sizeof *v->tuple);
+		v->tuple = err_malloc(n * sizeof *v->tuple);
+		*(void **)arr_add(&ev->to_free) = v->tuple;
 		for (i = 0; i < n; i++) {
 			if (!eval_expr(ev, &e->tuple[i], &v->tuple[i]))
 				return false;
@@ -908,9 +917,8 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			return false;
 		}
 		if (ev->returning) {
-			*v = *ev->returning;
-			free(ev->returning);
-			ev->returning = NULL;
+			*v = ev->ret_val;
+			ev->returning = false;
 		}
 		fn_exit(fn);
 	} break;
@@ -965,24 +973,27 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 static bool eval_decl(Evaluator *ev, Declaration *d) {
 	Value val = {0};
 	int has_expr = d->flags & DECL_FLAG_HAS_EXPR;
-	if (has_expr) {
+	if (has_expr && (!(d->flags & DECL_FLAG_CONST) || !(d->flags & DECL_FLAG_FOUND_VAL))) {
 		if (!eval_expr(ev, &d->expr, &val))
 			return false;
-		d->flags |= DECL_FLAG_HAS_EXPR;
+		d->flags |= DECL_FLAG_FOUND_VAL;
 	}
 	long index = 0;
 	arr_foreach(d->idents, Identifier, i) {
 		IdentDecl *id = ident_decl(*i);
-		if (has_expr && d->expr.kind == EXPR_TUPLE) {
-			val_copy(ev, &id->val, &val.tuple[index], &d->type.tuple[index]);
+		if (has_expr && d->type.kind == TYPE_TUPLE) {
+			val_copy(d->flags & DECL_FLAG_CONST ? ev : NULL, &id->val, &val.tuple[index], &d->type.tuple[index]);
 			index++;
 		} else if (!has_expr && d->type.kind == TYPE_ARR) {
 			/* "stack" array */
 			id->val.arr = err_calloc(d->type.arr.n, compiler_sizeof(d->type.arr.of));
 		} else {
-			val_copy(ev, &id->val, &val, &d->type);
+			val_copy(d->flags & DECL_FLAG_CONST ? ev : NULL, &id->val, &val, &d->type);
 		}
 		id->flags |= IDECL_FLAG_HAS_VAL;
+	}
+	if (d->expr.kind == EXPR_TUPLE) {
+		val_free(&val, &d->type); /* free the tuple */
 	}
 	return true;
 }
@@ -997,32 +1008,44 @@ static bool eval_stmt(Evaluator *ev, Statement *stmt) {
 		if (!eval_expr(ev, &stmt->expr, &unused))
 			return false;
 	} break;
-	case STMT_RET:
-		ev->returning = err_malloc(sizeof *ev->returning);
-		if (!eval_expr(ev, &stmt->ret.expr, ev->returning))
+	case STMT_RET: {
+		Value r;
+		if (!eval_expr(ev, &stmt->ret.expr, &r))
 			return false;
-		break;
+		val_copy(NULL, &ev->ret_val, &r, &stmt->ret.expr.type);
+	} break;
 	}
 	return true;
 }
 
 /* t is the type of the block. */
 static bool eval_block(Evaluator *ev, Block *b, Type *t, Value *v) {
+	void **prev_to_free = ev->to_free;
+	ev->to_free = NULL;
 	block_enter(b, b->stmts, 0);
 	arr_foreach(b->stmts, Statement, stmt) {
 		if (!eval_stmt(ev, stmt))
 			return false;
 		if (ev->returning) break;
 	}
-	Value *returning = ev->returning;
-	Value r;
 	if (!ev->returning && b->ret_expr) {
-	    returning = &r;
-		if (!eval_expr(ev, b->ret_expr, returning))
+		Value r;
+		if (!eval_expr(ev, b->ret_expr, &r))
 			return false;
+		/* make a copy so that r's data isn't freed when we exit the block */
+		val_copy(NULL, v, &r, &b->ret_expr->type);
+		void *free_ptr = val_ptr_to_free(v, t);
+		if (t->kind == TYPE_TUPLE) printf("WIll Free %p!!!\n",free_ptr);
+		if (free_ptr)
+			*(void **)arr_add(&prev_to_free) = free_ptr;
 	}
-	if (returning) val_copy(NULL, v, returning, t); /* LEAK */adfjfhskjdahfkj
 	block_exit(b, b->stmts);
-	
+	typedef void *VoidPtr;
+	arr_foreach(ev->to_free, VoidPtr, f) {
+		printf("Free %p\n", *f);
+		free(*f);
+	}
+	arr_clear(&ev->to_free);
+	ev->to_free = prev_to_free;
 	return true;
 }

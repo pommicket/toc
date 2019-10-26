@@ -1,7 +1,5 @@
 /* 
 TODO:
-array/slice values
-fix leaking of constant stack arrays
 make sure initializers for global variables are compile-time constants
 structs
 length of slice/arr with .len

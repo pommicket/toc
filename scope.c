@@ -24,15 +24,16 @@ static bool add_ident_decls(Block *b, Declaration *d, U32 flags) {
 
 static void remove_ident_decls(Block *b, Declaration *d) {
 	U64 i = 0;
+	bool is_tuple = d->type.kind == TYPE_TUPLE;
 	arr_foreach(d->idents, Identifier, ident) {
 		IdentTree *id_info = *ident;
-	    IdentDecl **decls = &id_info->decls;
+		IdentDecl **decls = &id_info->decls;
 		IdentDecl *last_decl = arr_last(*decls);
 		if (last_decl && last_decl->scope == b) {
 			if ((last_decl->flags & IDECL_FLAG_HAS_VAL)
 				/* don't free const vals (there's only one per decl) */
 				&& !(last_decl->decl->flags & DECL_FLAG_CONST)) {
-				val_free(&last_decl->decl->val, d->type.kind == TYPE_TUPLE ? &d->type.tuple[i++] : &d->type);
+				val_free(&last_decl->val, is_tuple ? &d->type.tuple[i++] : &d->type);
 			}
 			arr_remove_last(decls); /* remove that declaration */
 		}

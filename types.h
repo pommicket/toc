@@ -509,7 +509,9 @@ typedef enum {
 
 typedef struct {
 	Allocator allocr;
-	Value *returning; /* NULL = not returning anything */
+	bool returning;
+	Value ret_val;
+	void **to_free; /* an array of data to free for this scope. */
 } Evaluator;
 
 typedef struct Typer {
