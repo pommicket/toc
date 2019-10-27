@@ -679,6 +679,17 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		tokr_err(t, "Empty expression.");
 		return false;
 	}
+	bool prev = t->err_ctx->enabled;
+	t->err_ctx->enabled = false; /* temporarily disable error context */
+	Token *before = t->token;
+	if (parse_type(p, &e->typeval) && t->token == end) {
+		/* it's a type! */
+		e->kind = EXPR_TYPE;
+	    return true;
+	}
+	t->token = before;
+	t->err_ctx->enabled = prev;
+	
 	if (end - t->token == 1) {
 		/* 1-token expression */
 		switch (t->token->kind) {

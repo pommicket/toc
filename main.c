@@ -54,7 +54,8 @@ int main(int argc, char **argv) {
 	Identifiers file_idents;
 	idents_create(&file_idents);
 	Tokenizer t;
-	tokr_create(&t, &file_idents, in_filename);
+	ErrCtx err_ctx = {in_filename, true};
+	tokr_create(&t, &file_idents, &err_ctx);
 	if (!tokenize_string(&t, contents)) {
 		err_fprint(TEXT_IMPORTANT("Errors occured while preprocessing.\n"));
 		return EXIT_FAILURE;

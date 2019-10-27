@@ -1141,65 +1141,50 @@ static bool cgen_val(CGenerator *g, Value *v, Type *t, Location where) {
 
 
 static bool cgen_decl(CGenerator *g, Declaration *d) {
+	int has_expr = d->flags & DECL_FLAG_HAS_EXPR;
+	bool is_tuple = d->type.kind == TYPE_TUPLE;
 	if (cgen_fn_is_direct(g, d)) {
 		if (!cgen_fn(g, &d->expr.fn, d->where))
 			return false;
 	} else if ((d->flags & DECL_FLAG_CONST) || g->block == NULL) {
-		if (d->type.kind == TYPE_TUPLE) {
-			long idx = 0;
-			arr_foreach(d->idents, Identifier, i) {
-				if (!cgen_val_pre(g, &d->val.tuple[idx], &d->type.tuple[idx], d->where))
-					return false;
-				if (g->block != NULL)
-					cgen_write(g, "static ");
-				if (!cgen_type_pre(g, &d->type.tuple[idx], d->where)) return false;
-				cgen_write(g, " ");
-				cgen_ident(g, *i);
-				if (!cgen_type_post(g, &d->type.tuple[idx], d->where)) return false;
-				cgen_write(g, " = ");
-				if (!cgen_val(g, &d->val.tuple[idx], &d->type.tuple[idx], d->where))
-					return false;
-				idx++;
-				cgen_write(g, ";");
-				cgen_nl(g);
-			}
-		} else {
-			if (!cgen_val_pre(g, &d->val, &d->type, d->where))
+		/* declarations where we use a value */
+		for (size_t idx = 0; idx < arr_len(d->idents); idx++) {
+		    Identifier *i = &d->idents[idx];
+			Type *type = is_tuple ? &d->type.tuple[idx] : &d->type;
+			Value *val = is_tuple ? &d->val.tuple[idx] : &d->val;
+			if (!cgen_val_pre(g, val, type, d->where))
 				return false;
 			if (g->block != NULL)
 				cgen_write(g, "static ");
-			if (!cgen_type_pre(g, &d->type, d->where)) return false;
+			if (!cgen_type_pre(g, type, d->where)) return false;
 			cgen_write(g, " ");
-			cgen_ident(g, d->idents[0]);
-			if (!cgen_type_post(g, &d->type, d->where)) return false;
-			cgen_write(g, " = ");
-			if (!cgen_val(g, &d->val, &d->type, d->where))
-				return false;
+			cgen_ident(g, *i);
+			if (!cgen_type_post(g, type, d->where)) return false;
+			if (has_expr) {
+				cgen_write(g, " = ");
+				if (!cgen_val(g, val, type, d->where))
+					return false;
+			}
 			cgen_write(g, ";");
 			cgen_nl(g);
 		}
 	} else {
+		/* declarations where we use an expression */
 		for (size_t idx = 0; idx < arr_len(d->idents); idx++) {
 			Identifier *i = &d->idents[idx];
-			Type *t = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx] : &d->type;
-			if (!cgen_type_pre(g, t, d->where)) return false;
+			Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx] : &d->type;
+			if (!cgen_type_pre(g, type, d->where)) return false;
 			cgen_write(g, " ");
 			cgen_ident(g, *i);
-			if (!cgen_type_post(g, t, d->where)) return false;
-			if (g->block == NULL && (d->flags & DECL_FLAG_HAS_EXPR)) {
+			if (!cgen_type_post(g, type, d->where)) return false;
+			if (!has_expr) {
 				cgen_write(g, " = ");
-				/* directly initialize iff we are in global scope */
-				if (!cgen_expr(g, &d->expr))
-					return false;
-			} else if (!(d->flags & DECL_FLAG_HAS_EXPR)) {
-				cgen_write(g, " = ");
-		    	cgen_zero_value(g, t);
+		    	cgen_zero_value(g, type);
 			}
 				
 			cgen_write(g, "; ");
 		}
-		/* TODO: global tuples */
-		if (g->block != NULL && (d->flags & DECL_FLAG_HAS_EXPR)) {
+		if (has_expr) {
 			if (d->expr.type.kind == TYPE_TUPLE) {
 				if (!cgen_set_tuple(g, NULL, d->idents, NULL, &d->expr)) return false;
 			} else {

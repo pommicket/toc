@@ -1,22 +1,34 @@
-puti @= fn(x: int) {
-	 #C("printf(\"%ld\\n\", (long)x);
-");
-};
+// puti @= fn(x: int) {
+// 	 #C("printf(\"%ld\\n\", (long)x);
+// ");
+// };
 
-putch @= fn(x: char) {
-	 #C("printf(\"%c\\n\", x);
-");
-};
+// putch @= fn(x: char) {
+// 	 #C("printf(\"%c\\n\", x);
+// ");
+// };
 
-putf @= fn(x: float) {
-	 #C("printf(\"%f\\n\", (double)x);
-");
-};
+// putf @= fn(x: float) {
+// 	 #C("printf(\"%f\\n\", (double)x);
+// ");
+// };
 
 Foo @= int;
+x, y : int;
+a, b := 3, 5;
+c: int;
+d := 8;
 
 main @= fn() {
-	 f := fn(x: int) { p := &x; *p = 5; };
-	 // f(3);
-	 // x : Foo;
-};	
+	 x, y : int;
+	 a, b := 3, 5;
+	 c: int;
+	 d := 8;
+};
+
+// main @= fn() {
+// 	 f := fn(x: int) { p := &x; *p = 5; };
+// 	 x, y := 3;
+// 	 // f(3);
+// 	 // x : Foo;
+// };	

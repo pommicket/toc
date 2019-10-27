@@ -1139,6 +1139,19 @@ static bool types_decl(Typer *tr, Declaration *d) {
 				d->flags |= DECL_FLAG_FOUND_VAL;
 			}
 		}
+		if (d->type.kind == TYPE_TUPLE) {
+			arr_foreach(d->type.tuple, Type, t) {
+				if (t->kind == TYPE_TYPE && !(d->flags & DECL_FLAG_CONST)) {
+					err_print(d->where, "Cannot declare non-constant type.");
+					return false;
+				}
+			}
+		} else {
+			if (d->type.kind == TYPE_TYPE && !(d->flags & DECL_FLAG_CONST)) {
+				err_print(d->where, "Cannot declare non-constant type.");
+				return false;
+			}
+		}
 	}
 	size_t n_idents = arr_len(d->idents);
 	if (d->type.kind == TYPE_TUPLE) {

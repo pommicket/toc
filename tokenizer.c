@@ -137,7 +137,7 @@ static char tokr_esc_seq(Tokenizer *t) {
 /* to be used during tokenization */
 static void tokenization_err(Tokenizer *t, const char *fmt, ...) {
 	va_list args;
-	Location where = {t->line, t->s, t->filename};
+	Location where = {t->line, t->s, t->err_ctx};
 	va_start(args, fmt);
 	err_vprint(where, fmt, args);
 	va_end(args);
@@ -153,6 +153,7 @@ static void tokenization_err(Tokenizer *t, const char *fmt, ...) {
 
 /* to be used after tokenization */
 static void tokr_err_(const char *src_file, int src_line, Tokenizer *t, const char *fmt, ...) {
+	if (!t->token->where.ctx->enabled) return;
 	err_fprint("At line %d of %s:\n", src_line, src_file); /* RELEASE: Remove this */
 	va_list args;
 	va_start(args, fmt);
@@ -164,7 +165,7 @@ static void tokr_err_(const char *src_file, int src_line, Tokenizer *t, const ch
 static void tokr_put_location(Tokenizer *tokr, Token *t) {
 	t->where.line = tokr->line;
 	t->where.code = tokr->s;
-	t->where.filename = tokr->filename;
+	t->where.ctx = tokr->err_ctx;
 }
 
 static void tokr_get_location(Tokenizer *tokr, Token *t) {
@@ -172,12 +173,12 @@ static void tokr_get_location(Tokenizer *tokr, Token *t) {
 	tokr->s = t->where.code;
 }
 
-static void tokr_create(Tokenizer *t, Identifiers *idents, const char *filename) {
+static void tokr_create(Tokenizer *t, Identifiers *idents, ErrCtx *err_ctx) {
 	t->tokens = NULL;
 	arr_resv(&t->tokens, 256);
 	allocr_create(&t->allocr);
 	t->idents = idents;
-	t->filename = filename;
+	t->err_ctx = err_ctx;
 }
 
 static inline void *tokr_malloc(Tokenizer *t, size_t bytes) {

@@ -31,10 +31,16 @@ typedef double F64;
 typedef U32 IdentID; /* identifier ID for cgen (anonymous variables) */
 
 typedef uint32_t LineNo;
+
+typedef struct {
+	const char *filename;
+	bool enabled;
+} ErrCtx;
+
 typedef struct {
 	LineNo line;
 	char *code;
-	const char *filename;
+	ErrCtx *ctx;
 } Location;
 
 typedef struct Page {
@@ -227,7 +233,7 @@ typedef struct {
 	Allocator allocr;
 	Token *tokens;
 	char *s; /* string being parsed */
-	const char *filename;
+	ErrCtx *err_ctx;
 	LineNo line;
 	Token *token; /* token currently being processed */
 	Identifiers *idents;
