@@ -564,7 +564,7 @@ static bool cgen_new_slice(CGenerator *g, Type *t, IdentID id, Location where) {
 }
 
 static bool cgen_expr_pre(CGenerator *g, Expression *e) {
-	IdentID id;
+	IdentID id = 0;
 	char ret_name[64];
 	switch (e->kind) {
 	case EXPR_IF:

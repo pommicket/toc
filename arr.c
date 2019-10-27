@@ -140,6 +140,7 @@ You shouldn't rely on this, though, e.g. by doing
 #define arr_foreach(arr, type, var) for (type *var = arr_len(arr) ? arr : NULL, *var##_foreach_end = arr_last(arr); var; var == var##_foreach_end ? var = NULL : var++)
 #define arr_remove_last(arr) arr_remove_last_((void **)(arr), sizeof **(arr))
 
+#ifdef TOC_DEBUG
 static void arr_test(void) {
 	int *foos = NULL;
 	for (int i = 0; i < 1000; i++) {
@@ -155,3 +156,4 @@ static void arr_test(void) {
 	}
 	arr_clear(&foos);
 }
+#endif

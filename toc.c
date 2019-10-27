@@ -27,4 +27,6 @@
 #include "cgen.c"
 #include "decls_cgen.c"
 
+#ifdef TOC_DEBUG
 #include "tests.c"
+#endif

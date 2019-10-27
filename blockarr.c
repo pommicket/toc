@@ -47,6 +47,7 @@ static void block_arr_free(BlockArr *arr) {
 	arr_clear(&arr->blocks);
 }
 
+#ifdef TOC_DEBUG
 static void block_arr_test(void) {
 	BlockArr a;
 	int *ps[100];
@@ -61,3 +62,4 @@ static void block_arr_test(void) {
 	}
 	block_arr_free(&a);
 }
+#endif

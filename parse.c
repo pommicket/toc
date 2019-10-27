@@ -838,7 +838,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	int lowest_precedence = NOT_AN_OP;
 	/* e.g. (5+3) */
 	bool entirely_within_parentheses = token_is_kw(t->token, KW_LPAREN);
-	Token *lowest_precedence_op;
+	Token *lowest_precedence_op = NULL;
 	for (Token *token = t->token; token < end; token++) {
 		if (token->kind == TOKEN_KW) {
 			switch (token->kw) {
@@ -1346,7 +1346,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_
 		}
 		d->type = type;
 	}
-	const char *end_str;
+	const char *end_str = NULL;
 	switch (ends_with) {
 	case DECL_END_SEMICOLON: end_str = "';'"; break;
 	case DECL_END_RPAREN_COMMA: end_str = "')' or ','"; break;
