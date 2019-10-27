@@ -57,12 +57,14 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 	case EXPR_FN:
 		e->fn.c.name = NULL;
 	    e->fn.c.id = g->ident_counter++;
+		fn_enter(&e->fn, 0);
 		if (!cgen_fn_header(g, &e->fn, e->where))
 			return false;
 		cgen_write(g, ";");
 		cgen_nl(g);
 		if (!cgen_decls_block(g, &e->fn.body))
 			return false;
+		fn_exit(&e->fn);
 		break;
 	case EXPR_TYPE:
 	case EXPR_DIRECT:

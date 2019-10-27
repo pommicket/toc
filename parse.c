@@ -723,6 +723,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		default:
 		unrecognized:
 			tokr_err(t, "Unrecognized expression.");
+			t->token = end + 1;
 			return false;
 		}
 		t->token = end;
@@ -1282,7 +1283,6 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			return true;
 		}
 		tokr_err(t, "Unrecognized expression.");
-		t->token = end + 1;
 		return false;
 	}
 }

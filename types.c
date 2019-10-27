@@ -99,6 +99,10 @@ static bool expr_arr_must_mut(Expression *e) {
 			err_print(e->where, "Cannot modify a constant array.");
 			return false;
 		}
+		if (d->flags & DECL_FLAG_PARAM) {
+			err_print(e->where, "Parameters are immutable.");
+			return false;
+		}
 	} return true;
 	case EXPR_CAST:
 	case EXPR_CALL:
@@ -887,10 +891,12 @@ static bool types_expr(Typer *tr, Expression *e) {
 		}
 	} break;
 	case EXPR_BINARY_OP: {
-		Type *lhs_type = &e->binary.lhs->type;
-		Type *rhs_type = &e->binary.rhs->type;
-		if (!types_expr(tr, e->binary.lhs)
-			|| !types_expr(tr, e->binary.rhs))
+		Expression *lhs = e->binary.lhs;
+		Expression *rhs = e->binary.rhs;
+		Type *lhs_type = &lhs->type;
+		Type *rhs_type = &rhs->type;
+		if (!types_expr(tr, lhs)
+			|| !types_expr(tr, rhs))
 			return false;
 		if (lhs_type->kind == TYPE_UNKNOWN || rhs_type->kind == TYPE_UNKNOWN) {
 			return true;
@@ -900,6 +906,16 @@ static bool types_expr(Typer *tr, Expression *e) {
 			if (!expr_must_lval(e->binary.lhs)) {
 				return false;
 			}
+			{
+				if (lhs->kind == EXPR_IDENT) {
+					Declaration *d = ident_decl(lhs->ident)->decl;
+					if (d->flags & DECL_FLAG_PARAM) {
+						err_print(e->where, "Parameters are immutable.");
+						return false;
+					}
+				}
+			}
+		
 			/* fallthrough */
 		case BINARY_ADD:
 		case BINARY_SUB:

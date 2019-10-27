@@ -16,5 +16,7 @@ putf @= fn(x: float) {
 Foo @= int;
 
 main @= fn() {
+	 f := fn(x: int) { p := &x; *p = 5; };
+	 // f(3);
 	 // x : Foo;
 };	

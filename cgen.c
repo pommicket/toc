@@ -292,8 +292,6 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where) {
 			cgen_write(g, " ");
 			bool ptr = cgen_uses_ptr(&d->type);
 			if (ptr) {
-				fprint_type(stdout, &d->type);
-				puts("");
 				IdentDecl *idecl = ident_decl(*i);
 				assert(idecl);
 				idecl->flags |= IDECL_FLAG_CGEN_PTR;
