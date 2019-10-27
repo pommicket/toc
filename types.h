@@ -84,6 +84,7 @@ typedef union Value {
 	void *ptr;
 	union Value *tuple;
 	Slice slice;
+	struct Type *type;
 } Value;
 
 #define IDECL_FLAG_HAS_VAL 0x01
@@ -241,7 +242,8 @@ typedef enum {
 			  TYPE_TUPLE,
 			  TYPE_ARR,
 			  TYPE_PTR,
-			  TYPE_SLICE
+			  TYPE_SLICE,
+			  TYPE_TYPE
 } TypeKind;
 
 typedef enum {
@@ -313,7 +315,8 @@ typedef enum {
 			  EXPR_BLOCK,
 			  EXPR_TUPLE,
 			  EXPR_DIRECT,
-			  EXPR_SLICE
+			  EXPR_SLICE,
+			  EXPR_TYPE
 } ExprKind;
 
 typedef enum {
@@ -441,6 +444,7 @@ typedef struct Expression {
 			IdentID block_ret_id;
 		};
 		struct Expression *tuple;
+		Type typeval;
 	};
 } Expression;
 
@@ -471,8 +475,7 @@ typedef struct Declaration {
 typedef enum {
 			  STMT_DECL,
 			  STMT_EXPR,
-			  STMT_RET,
-			  STMT_TDECL
+			  STMT_RET
 } StatementKind;
 
 #define RET_FLAG_EXPR 0x01
@@ -481,18 +484,12 @@ typedef struct {
 	Expression expr;
 } Return;
 
-typedef struct {
-	Identifier name;
-	Type type;
-} TypeDecl;
-
 #define STMT_FLAG_VOIDED_EXPR 0x01 /* the "4;" in fn () { 4; } is a voided expression, but the "4" in fn () int { 4 } is not */
 typedef struct Statement {
 	Location where;
 	StatementKind kind;
 	U16 flags;
 	union {
-		TypeDecl tdecl;
 		Declaration decl;
 		Expression expr;
 		Return ret;

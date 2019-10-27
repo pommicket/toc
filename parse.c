@@ -23,6 +23,7 @@ static const char *expr_kind_to_str(ExprKind k) {
 	case EXPR_BLOCK: return "block";
 	case EXPR_IDENT: return "identifier";
 	case EXPR_SLICE: return "slice";
+	case EXPR_TYPE: return "type";
 	}
 	assert(0);
 	return "";
@@ -202,6 +203,8 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 		written += type_to_str_(t->ptr, buffer + written, bufsize - written);
 		return written;
 	}
+	case TYPE_TYPE:
+		return str_copy(buffer, bufsize, "<type>");
 	}
 
 	assert(0);
@@ -1412,46 +1415,30 @@ static bool parse_stmt(Parser *p, Statement *s) {
 	if (t->token->kind == TOKEN_EOF)
 		tokr_err(t, "Expected statement.");
 	s->where = t->token->where;
-	if (t->token->kind == TOKEN_KW) {
-		switch (t->token->kw) {
-		case KW_RETURN: {
-			s->kind = STMT_RET;
+	if (token_is_kw(t->token, KW_RETURN)) {
+		s->kind = STMT_RET;
+		t->token++;
+		s->ret.flags = 0;
+		if (token_is_kw(t->token, KW_SEMICOLON)) {
+			/* return with no expr */
 			t->token++;
-			s->ret.flags = 0;
-			if (token_is_kw(t->token, KW_SEMICOLON)) {
-				/* return with no expr */
-				t->token++;
-				return true;
-			}
-			s->ret.flags |= RET_FLAG_EXPR;
-			Token *end = expr_find_end(p, 0, NULL);
-			if (!end) {
-				while (t->token->kind != TOKEN_EOF) t->token++; /* move to end of file */
-				return false;
-			}
-			if (!token_is_kw(end, KW_SEMICOLON)) {
-				err_print(end->where, "Expected ';' at end of return statement.");
-				t->token = end->kind == TOKEN_EOF ? end : end + 1;
-				return false;
-			}
-			bool success = parse_expr(p, &s->ret.expr, end);
-			t->token = end + 1;
-			return success;
+			return true;
 		}
-		case KW_NEWTYPE:
-			s->kind = STMT_TDECL;
-			t->token++;
-			if (t->token->kind != TOKEN_IDENT) {
-				tokr_err(t, "Expected identifier after \"newtype\".");
-				tokr_skip_semicolon(t);
-			}
-			s->tdecl.name = t->token->ident;
-			t->token++;
-			if (!parse_type(p, &s->tdecl.type))
-				return false;
-		    return true;
-		default: break;
+		s->ret.flags |= RET_FLAG_EXPR;
+		Token *end = expr_find_end(p, 0, NULL);
+		if (!end) {
+			while (t->token->kind != TOKEN_EOF) t->token++; /* move to end of file */
+			return false;
 		}
+		if (!token_is_kw(end, KW_SEMICOLON)) {
+			err_print(end->where, "Expected ';' at end of return statement.");
+			t->token = end->kind == TOKEN_EOF ? end : end + 1;
+			return false;
+		}
+		bool success = parse_expr(p, &s->ret.expr, end);
+		t->token = end + 1;
+		return success;
+		
 	}
 	if (is_decl(t)) {
 		s->kind = STMT_DECL;
@@ -1672,6 +1659,9 @@ static void fprint_expr(FILE *out, Expression *e) {
 		if (s->to) fprint_expr(out, s->to);
 		fprintf(out, "]");
 	} break;
+	case EXPR_TYPE:
+		fprint_type(out, &e->typeval);
+		break;
 	}
 	if (parse_printing_after_types) {
 		fprintf(out, ":");
@@ -1718,12 +1708,6 @@ static void fprint_stmt(FILE *out, Statement *s) {
 		if (s->ret.flags & RET_FLAG_EXPR)
 			fprint_expr(out, &s->ret.expr);
 		fprintf(out, ";\n");
-		break;
-	case STMT_TDECL:
-		fprintf(out, "newtype ");
-		fprint_ident(out, s->tdecl.name);
-		fprintf(out, " ");
-		fprint_type(out, &s->tdecl.type);
 		break;
 	}
 }

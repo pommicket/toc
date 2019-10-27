@@ -101,6 +101,7 @@ static bool cgen_uses_ptr(Type *t) {
 	case TYPE_SLICE:
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
+	case TYPE_TYPE:
 		return false;
 	}
 	assert(0);
@@ -178,7 +179,8 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
 		err_print(where, "Can't determine type.");
 		return false;
 	case TYPE_TUPLE:
-		/* We should never try to generate a tuple */
+	case TYPE_TYPE:
+		/* We should never try to generate this type */
 		assert(0);
 		return false;
 	}
@@ -251,6 +253,7 @@ static bool cgen_type_post(CGenerator *g, Type *t, Location where) {
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 	case TYPE_TUPLE:
+	case TYPE_TYPE:
 	case TYPE_SLICE:
 		break;
 	}
@@ -403,6 +406,7 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 			return false;
 		break;
 	case TYPE_VOID:
+	case TYPE_TYPE:
 		assert(0);
 		return false;
 	}
@@ -501,6 +505,7 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 	case EXPR_CAST:
 	case EXPR_NEW:
 	case EXPR_DIRECT:
+	case EXPR_TYPE:
 		assert(0);
 		return false;
 	}
@@ -710,6 +715,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 	case EXPR_IDENT:
 	case EXPR_FN:
 	case EXPR_DIRECT:
+	case EXPR_TYPE:
 		break;
 	case EXPR_TUPLE:
 		arr_foreach(e->tuple, Expression, x)
@@ -922,6 +928,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		/* the only time this should happen is if you're stating
 		   a tuple, e.g. 3, 5;, but we've errored about that before
 		   (the comma operator does not exist in toc!) */
+	case EXPR_TYPE:
 		assert(0);
 		break;
 	case EXPR_FN: {
@@ -988,6 +995,7 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 		cgen_zero_value(g, t->arr.of);
 		cgen_write(g, "}");
 		break;
+	case TYPE_TYPE:
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 	case TYPE_TUPLE:
@@ -1061,6 +1069,7 @@ static bool cgen_val_ptr_pre(CGenerator *g, void *v, Type *t, Location where) {
 		}
 		break;
 	case TYPE_FN:
+	case TYPE_TYPE:
 	case TYPE_UNKNOWN:
 	case TYPE_TUPLE:
 	case TYPE_VOID:
@@ -1075,6 +1084,7 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 	switch (t->kind) {
 	case TYPE_TUPLE:
 	case TYPE_VOID:
+	case TYPE_TYPE:
 		assert(0);
 		return false;
 	case TYPE_UNKNOWN:
@@ -1257,15 +1267,6 @@ static bool cgen_stmt(CGenerator *g, Statement *s) {
 	case STMT_EXPR:
 		if (!cgen_expr_pre(g, &s->expr)) return false;
 		if (!cgen_expr(g, &s->expr)) return false;
-		cgen_write(g, ";");
-		cgen_nl(g);
-		break;
-	case STMT_TDECL:
-		cgen_write(g, "typedef ");
-		if (!cgen_type_pre(g, &s->tdecl.type, s->where)) return false;
-		cgen_write(g, " ");
-		cgen_ident(g, s->tdecl.name);
-		if (!cgen_type_post(g, &s->tdecl.type, s->where)) return false;
 		cgen_write(g, ";");
 		cgen_nl(g);
 		break;

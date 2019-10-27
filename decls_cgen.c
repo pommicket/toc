@@ -64,6 +64,7 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 		if (!cgen_decls_block(g, &e->fn.body))
 			return false;
 		break;
+	case EXPR_TYPE:
 	case EXPR_DIRECT:
 	case EXPR_NEW:
 	case EXPR_IDENT:

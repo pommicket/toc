@@ -13,7 +13,7 @@ putf @= fn(x: float) {
 ");
 };
 
-newtype Foo int
+Foo @= int;
 
 main @= fn() {
 	 // x : Foo;

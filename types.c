@@ -40,6 +40,7 @@ static bool type_eq(Type *a, Type *b) {
 	switch (a->kind) {
 	case TYPE_VOID: return true;
 	case TYPE_UNKNOWN: assert(0); return false;
+	case TYPE_TYPE: return true;
 	case TYPE_BUILTIN:
 		return a->builtin == b->builtin;
 	case TYPE_FN: {
@@ -98,10 +99,6 @@ static bool expr_arr_must_mut(Expression *e) {
 			err_print(e->where, "Cannot modify a constant array.");
 			return false;
 		}
-		if (d->flags & DECL_FLAG_PARAM) {
-			err_print(e->where, "Parameters are immutable.");
-			return false;
-		}
 	} return true;
 	case EXPR_CAST:
 	case EXPR_CALL:
@@ -134,6 +131,7 @@ static bool expr_arr_must_mut(Expression *e) {
 	case EXPR_LITERAL_INT:
 	case EXPR_BINARY_OP:
 	case EXPR_DIRECT:
+	case EXPR_TYPE:
 		break;
 	}
 	assert(0);
@@ -186,7 +184,8 @@ static bool expr_must_lval(Expression *e) {
 	case EXPR_CALL:
 	case EXPR_DIRECT:
 	case EXPR_BLOCK:
-	case EXPR_SLICE: {
+	case EXPR_SLICE:
+	case EXPR_TYPE: {
 		err_print(e->where, "Cannot use %s as l-value.", expr_kind_to_str(e->kind));
 		return false;
 	}
@@ -353,6 +352,7 @@ static bool type_resolve(Typer *tr, Type *t) {
 		break;
 	case TYPE_UNKNOWN:
 	case TYPE_VOID:
+	case TYPE_TYPE:
 	case TYPE_BUILTIN:
 		break;
 	}
@@ -363,19 +363,14 @@ static bool type_resolve(Typer *tr, Type *t) {
 static bool type_can_be_truthy(Type *t) {
 	switch (t->kind) {
 	case TYPE_VOID:
-		return false;
-	case TYPE_UNKNOWN:
-		return true;
-	case TYPE_BUILTIN:
-		return true;
-	case TYPE_FN:
-		return true;
 	case TYPE_TUPLE:
-		return false;
 	case TYPE_ARR:
+	case TYPE_TYPE:
 		return false;
+	case TYPE_FN:
+	case TYPE_UNKNOWN:
+	case TYPE_BUILTIN:
 	case TYPE_PTR:
-		return true;
 	case TYPE_SLICE:
 		return true;
 	}
@@ -394,7 +389,9 @@ static Status type_cast_status(Type *from, Type *to) {
 		return STATUS_NONE;
 	switch (from->kind) {
 	case TYPE_UNKNOWN: return STATUS_NONE;
-	case TYPE_VOID: return STATUS_ERR;
+	case TYPE_TYPE:
+	case TYPE_VOID:
+		return STATUS_ERR;
 	case TYPE_BUILTIN:
 		switch (from->builtin) {
 		case BUILTIN_I8:
@@ -412,6 +409,7 @@ static Status type_cast_status(Type *from, Type *to) {
 			case TYPE_PTR:
 				return STATUS_WARN;
 			case TYPE_FN:
+			case TYPE_TYPE:
 			case TYPE_TUPLE:
 			case TYPE_SLICE:
 			case TYPE_ARR:
@@ -917,6 +915,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 			bool valid = false;
 			if (o == BINARY_SET) {
 				valid = type_eq(lhs_type, rhs_type);
+				if (lhs_type->kind == TYPE_TYPE) {
+					err_print(e->where, "Cannot set type.");
+					return false;
+				}
 			} else {
 				/* numerical binary ops */
 				if (lhs_type->kind == rhs_type->kind && lhs_type->kind == TYPE_BUILTIN
@@ -1047,6 +1049,9 @@ static bool types_expr(Typer *tr, Expression *e) {
 		}
 		break;
 	}
+	case EXPR_TYPE:
+		t->kind = TYPE_TYPE;
+		break;
 	}
     e->type.flags |= TYPE_FLAG_RESOLVED;
 	return true;

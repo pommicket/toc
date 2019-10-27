@@ -55,6 +55,8 @@ static size_t compiler_sizeof(Type *t) {
 		return sizeof(Value *);
 	case TYPE_SLICE:
 		return sizeof(Slice);
+	case TYPE_TYPE:
+		return sizeof(Type *);
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 		return 0;
@@ -90,7 +92,9 @@ static bool val_truthiness(Value *v, Type *t) {
 	case TYPE_FN: return v->fn != NULL;
 	case TYPE_ARR: return t->arr.n > 0;
 	case TYPE_SLICE: return v->slice.n > 0;
-	case TYPE_TUPLE: break;
+	case TYPE_TYPE:
+	case TYPE_TUPLE:
+		break;
 	}
 	assert(0);
 	return false;
@@ -158,6 +162,7 @@ static void val_copy(Evaluator *ev, Value *dest, Value *src, Type *t) {
 	case TYPE_SLICE:
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
+	case TYPE_TYPE:
 		*dest = *src;
 		break;
 	case TYPE_ARR: {
@@ -187,6 +192,7 @@ static void *val_ptr_to_free(Value *v, Type *t) {
 	case TYPE_SLICE:
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
+	case TYPE_TYPE:
 		return NULL;
 	case TYPE_ARR:
 		return v->arr;
@@ -282,7 +288,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 	case TYPE_VOID: assert(0); break;
 	case TYPE_UNKNOWN: assert(0); break;
 	case TYPE_TUPLE: assert(0); break;
-
+	case TYPE_TYPE: assert(0); break;
 	case TYPE_BUILTIN:
 		switch (to->kind) {
 		case TYPE_BUILTIN:
@@ -307,6 +313,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_TUPLE:
 		case TYPE_FN:
 		case TYPE_ARR:
+		case TYPE_TYPE:
 			assert(0);
 			break;
 		}
@@ -326,6 +333,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_VOID:
 		case TYPE_ARR:
 		case TYPE_BUILTIN:
+		case TYPE_TYPE:
 			assert(0); break;
 		}
 		break;
@@ -355,6 +363,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_UNKNOWN:
 		case TYPE_TUPLE:
 		case TYPE_VOID:
+		case TYPE_TYPE:
 			assert(0);
 			break;
 		}
@@ -374,6 +383,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_TUPLE:
 		case TYPE_VOID:
 		case TYPE_BUILTIN:
+		case TYPE_TYPE:
 			assert(0); break;
 		}
 		break;
@@ -393,6 +403,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_TUPLE:
 		case TYPE_VOID:
 		case TYPE_BUILTIN:
+		case TYPE_TYPE:
 			assert(0); break;
 		}
 		break;
@@ -425,6 +436,9 @@ static void eval_deref(Value *v, void *ptr, Type *type) {
 	case TYPE_SLICE:
 		v->slice = *(Slice *)ptr;
 		break;
+	case TYPE_TYPE:
+		v->type = *(Type **)ptr;
+		break;
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 		assert(0);
@@ -456,6 +470,9 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 		break;
 	case TYPE_SLICE:
 		*(Slice *)set = to->slice;
+		break;
+	case TYPE_TYPE:
+		*(Type **)set = to->type;
 		break;
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
@@ -636,8 +653,8 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	 assert(e->binary.lhs->type.kind == TYPE_BUILTIN);	  	\
 	 switch (builtin) {										\
 		 eval_binary_bool_op_nums(builtin, op);				\
-	 default:printf("%d\n",(int)builtin);					\
-		 assert(!"Invalid builtin to "#op); break;			\
+	 default:												\
+		 assert(!("Invalid builtin to "#op)[0]); break;		\
 	 }}
 	
 #define eval_binary_bool_op(op)					\
@@ -966,6 +983,8 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			v->slice.n = 0;
 		}
 	} break;
+	case EXPR_TYPE:
+		v->type = &e->typeval;
 	}
 	return true;
 }
