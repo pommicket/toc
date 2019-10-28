@@ -57,6 +57,8 @@ static size_t compiler_sizeof(Type *t) {
 		return sizeof(Slice);
 	case TYPE_TYPE:
 		return sizeof(Type *);
+	case TYPE_USER:
+		return compiler_sizeof(ident_typeval(t->user.name));
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 		return 0;
@@ -92,6 +94,7 @@ static bool val_truthiness(Value *v, Type *t) {
 	case TYPE_FN: return v->fn != NULL;
 	case TYPE_ARR: return t->arr.n > 0;
 	case TYPE_SLICE: return v->slice.n > 0;
+	case TYPE_USER:
 	case TYPE_TYPE:
 	case TYPE_TUPLE:
 		break;
@@ -181,6 +184,9 @@ static void val_copy(Evaluator *ev, Value *dest, Value *src, Type *t) {
 			dest->tuple = err_malloc(bytes);
 		memcpy(dest->tuple, src->tuple, bytes);
 	} break;
+	case TYPE_USER:
+		val_copy(ev, dest, src, ident_typeval(t->user.name));
+		break;
 	}
 }
 
@@ -198,6 +204,8 @@ static void *val_ptr_to_free(Value *v, Type *t) {
 		return v->arr;
 	case TYPE_TUPLE:
 		return v->tuple;
+	case TYPE_USER:
+		return val_ptr_to_free(v, ident_typeval(t->user.name));
 	}
 	assert(0); return NULL;
 }
@@ -285,10 +293,14 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		return;
 	}
 	switch (from->kind) {
-	case TYPE_VOID: assert(0); break;
-	case TYPE_UNKNOWN: assert(0); break;
-	case TYPE_TUPLE: assert(0); break;
-	case TYPE_TYPE: assert(0); break;
+	case TYPE_VOID:
+	case TYPE_UNKNOWN:
+	case TYPE_TUPLE:
+	case TYPE_TYPE:
+		 assert(0); break;
+	case TYPE_USER:
+		*vout = *vin;
+		break;
 	case TYPE_BUILTIN:
 		switch (to->kind) {
 		case TYPE_BUILTIN:
@@ -306,6 +318,9 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 			case BUILTIN_U64: vout->ptr = (void *)(U64)vin->u64; break;
 			default: assert(0); break;
 			}
+			break;
+		case TYPE_USER:
+			*vout = *vin;
 			break;
 		case TYPE_SLICE:
 		case TYPE_VOID:
@@ -326,6 +341,9 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 			break;
 		case TYPE_FN:
 			vout->fn = vin->fn;
+			break;
+		case TYPE_USER:
+			*vout = *vin;
 			break;
 		case TYPE_SLICE:
 		case TYPE_UNKNOWN:
@@ -359,6 +377,9 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_FN:
 			vout->fn = vin->ptr;
 			break;
+		case TYPE_USER:
+			*vout = *vin;
+			break;
 		case TYPE_SLICE:
 		case TYPE_UNKNOWN:
 		case TYPE_TUPLE:
@@ -376,6 +397,9 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 			break;
 		case TYPE_ARR:
 			vout->arr = vin->arr;
+			break;
+		case TYPE_USER:
+			*vout = *vin;
 			break;
 		case TYPE_SLICE:
 		case TYPE_FN:
@@ -397,6 +421,9 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 			break;
 		case TYPE_SLICE:
 			vout->slice = vin->slice;
+			break;
+		case TYPE_USER:
+			*vout = *vin;
 			break;
 		case TYPE_FN:
 		case TYPE_UNKNOWN:
@@ -439,6 +466,9 @@ static void eval_deref(Value *v, void *ptr, Type *type) {
 	case TYPE_TYPE:
 		v->type = *(Type **)ptr;
 		break;
+	case TYPE_USER:
+		eval_deref(v, ptr, ident_typeval(type->user.name));
+		break;
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 		assert(0);
@@ -473,6 +503,9 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 		break;
 	case TYPE_TYPE:
 		*(Type **)set = to->type;
+		break;
+	case TYPE_USER:
+		eval_deref_set(set, to, ident_typeval(type->user.name));
 		break;
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:

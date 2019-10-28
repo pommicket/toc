@@ -1,5 +1,6 @@
 /* 
 TODO:
+make sure user defined types work
 structs
 length of slice/arr with .len
 don't allow while {3; 5} (once break is added)
@@ -54,7 +55,9 @@ int main(int argc, char **argv) {
 	Identifiers file_idents;
 	idents_create(&file_idents);
 	Tokenizer t;
-	ErrCtx err_ctx = {in_filename, true};
+	ErrCtx err_ctx;
+	err_ctx.filename = in_filename;
+	err_ctx.enabled = true;
 	tokr_create(&t, &file_idents, &err_ctx);
 	if (!tokenize_string(&t, contents)) {
 		err_fprint(TEXT_IMPORTANT("Errors occured while preprocessing.\n"));

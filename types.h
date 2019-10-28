@@ -249,7 +249,8 @@ typedef enum {
 			  TYPE_ARR,
 			  TYPE_PTR,
 			  TYPE_SLICE,
-			  TYPE_TYPE
+			  TYPE_TYPE,
+			  TYPE_USER /* user-defined type */
 } TypeKind;
 
 typedef enum {
@@ -289,6 +290,9 @@ typedef struct Type {
 		} arr;
 	    struct Type *ptr;
 		struct Type *slice;
+		struct {
+			Identifier name;
+		} user;
 	};
 } Type;
 

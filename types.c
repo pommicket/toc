@@ -41,6 +41,8 @@ static bool type_eq(Type *a, Type *b) {
 	case TYPE_VOID: return true;
 	case TYPE_UNKNOWN: assert(0); return false;
 	case TYPE_TYPE: return true;
+	case TYPE_USER:
+		return a->user.name == b->user.name;
 	case TYPE_BUILTIN:
 		return a->builtin == b->builtin;
 	case TYPE_FN: {
@@ -354,6 +356,7 @@ static bool type_resolve(Typer *tr, Type *t) {
 		if (!type_resolve(tr, t->slice))
 			return false;
 		break;
+	case TYPE_USER:
 	case TYPE_UNKNOWN:
 	case TYPE_VOID:
 	case TYPE_TYPE:
@@ -370,6 +373,7 @@ static bool type_can_be_truthy(Type *t) {
 	case TYPE_TUPLE:
 	case TYPE_ARR:
 	case TYPE_TYPE:
+	case TYPE_USER:
 		return false;
 	case TYPE_FN:
 	case TYPE_UNKNOWN:
@@ -391,6 +395,13 @@ typedef enum {
 static Status type_cast_status(Type *from, Type *to) {
 	if (to->kind == TYPE_UNKNOWN)
 		return STATUS_NONE;
+	fprint_type(stdout, from); puts("");
+	if (from->kind == TYPE_USER) {
+		return type_eq(to, ident_typeval(from->user.name)) ? STATUS_NONE : STATUS_ERR;
+	}
+	if (to->kind == TYPE_USER) {
+		return type_eq(from, ident_typeval(to->user.name)) ? STATUS_NONE : STATUS_ERR;
+	}
 	switch (from->kind) {
 	case TYPE_UNKNOWN: return STATUS_NONE;
 	case TYPE_TYPE:
@@ -418,6 +429,7 @@ static Status type_cast_status(Type *from, Type *to) {
 			case TYPE_SLICE:
 			case TYPE_ARR:
 			case TYPE_VOID:
+			case TYPE_USER: /* handled above */
 				return STATUS_ERR;
 			}
 			break;
@@ -431,7 +443,7 @@ static Status type_cast_status(Type *from, Type *to) {
 				return STATUS_NONE;
 			return STATUS_ERR;
 		case BUILTIN_BOOL:
-			return type_can_be_truthy(to);
+			return type_can_be_truthy(to) ? STATUS_NONE : STATUS_ERR;
 		}
 		break;
 	case TYPE_TUPLE: return STATUS_ERR;
@@ -454,6 +466,8 @@ static Status type_cast_status(Type *from, Type *to) {
 		if (to->kind == TYPE_PTR && type_eq(from->slice, to->ptr))
 			return STATUS_NONE;
 	    return STATUS_ERR;
+	case TYPE_USER:
+		break;
 	}
 	assert(0);
     return STATUS_ERR;

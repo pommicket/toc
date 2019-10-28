@@ -103,6 +103,8 @@ static bool cgen_uses_ptr(Type *t) {
 	case TYPE_UNKNOWN:
 	case TYPE_TYPE:
 		return false;
+	case TYPE_USER:
+		return cgen_uses_ptr(ident_typeval(t->user.name));
 	}
 	assert(0);
 	return false;
@@ -183,6 +185,9 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
 		/* We should never try to generate this type */
 		assert(0);
 		return false;
+	case TYPE_USER:
+		cgen_ident(g, t->user.name);
+		break;
 	}
 	return true;
 }
@@ -255,6 +260,7 @@ static bool cgen_type_post(CGenerator *g, Type *t, Location where) {
 	case TYPE_TUPLE:
 	case TYPE_TYPE:
 	case TYPE_SLICE:
+	case TYPE_USER:
 		break;
 	}
 	return true;
@@ -348,6 +354,9 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 		where = to_expr->where;
 		if (!cgen_expr_pre(g, to_expr)) return false;
 	}
+	while (type->kind == TYPE_USER) {
+		type = ident_typeval(type->user.name);
+	}
 	switch (type->kind) {
 	case TYPE_BUILTIN:
 	case TYPE_FN:
@@ -403,6 +412,7 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 		if (!cgen_set_tuple(g, set_expr->tuple, NULL, NULL, to_expr))
 			return false;
 		break;
+	case TYPE_USER:
 	case TYPE_VOID:
 	case TYPE_TYPE:
 		assert(0);
@@ -993,6 +1003,9 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 		cgen_zero_value(g, t->arr.of);
 		cgen_write(g, "}");
 		break;
+	case TYPE_USER:
+		cgen_zero_value(g, ident_typeval(t->user.name));
+		break;
 	case TYPE_TYPE:
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
@@ -1066,6 +1079,10 @@ static bool cgen_val_ptr_pre(CGenerator *g, void *v, Type *t, Location where) {
 				return false;
 		}
 		break;
+	case TYPE_USER:
+		if (!cgen_val_ptr_pre(g, v, ident_typeval(t->user.name), where))
+			return false;
+		break;
 	case TYPE_FN:
 	case TYPE_TYPE:
 	case TYPE_UNKNOWN:
@@ -1122,6 +1139,10 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 		case BUILTIN_BOOL: cgen_write(g, "%s", *(bool *)v ? "true" : "false"); break;
 		}
 		break;
+	case TYPE_USER:
+		if (!cgen_val_ptr(g, v, ident_typeval(t->user.name), where))
+			return false;
+		break;
 	}
 	return true;
 }
@@ -1149,16 +1170,26 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 	} else if ((d->flags & DECL_FLAG_CONST) || g->block == NULL) {
 		/* declarations where we use a value */
 		for (size_t idx = 0; idx < arr_len(d->idents); idx++) {
-		    Identifier *i = &d->idents[idx];
+		    Identifier i = d->idents[idx];
 			Type *type = is_tuple ? &d->type.tuple[idx] : &d->type;
 			Value *val = is_tuple ? &d->val.tuple[idx] : &d->val;
+			if (type->kind == TYPE_TYPE) {
+				cgen_write(g, "typedef ");
+				if (!cgen_type_pre(g, val->type, d->where)) return false;
+				cgen_write(g, " ");
+				cgen_ident(g, i);
+				if (!cgen_type_post(g, val->type, d->where)) return false;
+				cgen_write(g, ";");
+				cgen_nl(g);
+				continue;
+			}
 			if (!cgen_val_pre(g, val, type, d->where))
 				return false;
 			if (g->block != NULL)
 				cgen_write(g, "static ");
 			if (!cgen_type_pre(g, type, d->where)) return false;
 			cgen_write(g, " ");
-			cgen_ident(g, *i);
+			cgen_ident(g, i);
 			if (!cgen_type_post(g, type, d->where)) return false;
 			if (has_expr) {
 				cgen_write(g, " = ");
@@ -1171,11 +1202,11 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 	} else {
 		/* declarations where we use an expression */
 		for (size_t idx = 0; idx < arr_len(d->idents); idx++) {
-			Identifier *i = &d->idents[idx];
+			Identifier i = d->idents[idx];
 			Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx] : &d->type;
 			if (!cgen_type_pre(g, type, d->where)) return false;
 			cgen_write(g, " ");
-			cgen_ident(g, *i);
+			cgen_ident(g, i);
 			if (!cgen_type_post(g, type, d->where)) return false;
 			if (!has_expr) {
 				cgen_write(g, " = ");

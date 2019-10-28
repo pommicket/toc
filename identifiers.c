@@ -1,4 +1,3 @@
-/* OPTIM: use a hash table */
 #if CHAR_MAX - CHAR_MIN > 255
 #error "Currently only systems with 8-bit characters can compile toc."
 /* TODO: maybe do a run-time error for large characters? */
@@ -176,4 +175,26 @@ static void idents_test(void) {
 	ident_insert(&ids, &s);
 	assert(strcmp(s, " bar") == 0);
 	idents_free(&ids);
+}
+
+/* if i has a non-constant declaration, returns NULL. */
+static Value *ident_decl_val(Identifier i) {
+	IdentDecl *idecl = ident_decl(i);
+	if (!idecl) return NULL;
+	Declaration *d = idecl->decl;
+	if (!(d->flags & DECL_FLAG_CONST))
+		return NULL;
+	if (d->type.kind == TYPE_TUPLE) {
+		size_t idx;
+		for (idx = 0; idx < arr_len(d->idents); idx++) {
+			if (d->idents[idx] == i)
+				break;
+		}
+		assert(idx < arr_len(d->idents));
+		return &d->val.tuple[idx];
+	} else return &d->val;
+}
+
+static inline Type *ident_typeval(Identifier i) {
+	return ident_decl_val(i)->type;
 }

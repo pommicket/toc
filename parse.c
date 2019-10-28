@@ -205,6 +205,11 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 	}
 	case TYPE_TYPE:
 		return str_copy(buffer, bufsize, "<type>");
+	case TYPE_USER: {
+		char *ident_str = ident_to_str(t->user.name);
+		size_t ret = str_copy(buffer, bufsize, ident_str);
+		return ret;
+	}
 	}
 
 	assert(0);
@@ -323,7 +328,8 @@ static Token *expr_find_end(Parser *p, U16 flags, bool *is_vbs)  {
 	}
 }
 
-static bool parse_type(Parser *p, Type *type) {
+#define PARSE_TYPE_EXPR 0x01 /* this might actually be an expression */
+static bool parse_type(Parser *p, Type *type, U16 flags) {
 	Tokenizer *t = p->tokr;
 	type->where = t->token->where;
 	type->flags = 0;
@@ -354,7 +360,7 @@ static bool parse_type(Parser *p, Type *type) {
 			if (!token_is_kw(t->token, KW_RPAREN)) {
 				while (1) {
 					Type *param_type = parser_arr_add(p, &type->fn.types);
-					if (!parse_type(p, param_type)) return false;
+					if (!parse_type(p, param_type, flags)) return false;
 					if (param_type->kind == TYPE_TUPLE) {
 						err_print(param_type->where, "Functions cannot have tuples as parameters.");
 						return false;
@@ -380,7 +386,7 @@ static bool parse_type(Parser *p, Type *type) {
 				ret_type->kind = TYPE_VOID;
 				ret_type->flags = 0;
 			} else {
-				if (!parse_type(p, ret_type))
+				if (!parse_type(p, ret_type, flags))
 					return false;
 			}
 			break;
@@ -395,7 +401,7 @@ static bool parse_type(Parser *p, Type *type) {
 				type->kind = TYPE_SLICE;
 				type->slice = parser_malloc(p, sizeof *type->slice);
 				t->token++; /* move past ] */
-				if (!parse_type(p, type->slice)) return false;
+				if (!parse_type(p, type->slice, flags)) return false;
 				if (type->slice->kind == TYPE_TUPLE) {
 					err_print(type->where, "You cannot have a slice of tuples.");
 					return false;
@@ -407,7 +413,7 @@ static bool parse_type(Parser *p, Type *type) {
 			if (!parse_expr(p, type->arr.n_expr, end)) return false;
 			t->token = end + 1;	/* go past ] */
 			type->arr.of = parser_malloc(p, sizeof *type->arr.of);
-			if (!parse_type(p, type->arr.of)) return false;
+			if (!parse_type(p, type->arr.of, flags)) return false;
 			if (type->arr.of->kind == TYPE_TUPLE) {
 				err_print(type->where, "You cannot have an array of tuples.");
 				return false;
@@ -420,7 +426,7 @@ static bool parse_type(Parser *p, Type *type) {
 			t->token++;	/* move past ( */
 			while (1) {
 				Type *child = parser_arr_add(p, &type->tuple);
-				if (!parse_type(p, child)) return false;
+				if (!parse_type(p, child, flags)) return false;
 				if (child->kind == TYPE_TUPLE) {
 					err_print(child->where, "Tuples cannot contain tuples.");
 					return false;
@@ -443,13 +449,25 @@ static bool parse_type(Parser *p, Type *type) {
 			type->kind = TYPE_PTR;
 			type->ptr = parser_malloc(p, sizeof *type->ptr);
 			t->token++;	/* move past & */
-			if (!parse_type(p, type->ptr)) return false;
+			if (!parse_type(p, type->ptr, flags)) return false;
 			if (type->ptr->kind == TYPE_TUPLE) {
 				err_print(type->ptr->where, "You cannot have a pointer to a tuple.");
 				return false;
 			}
 			break;
 		default:
+			tokr_err(t, "Unrecognized type.");
+			return false;
+		}
+		break;
+	case TOKEN_IDENT:
+		if (!(flags & PARSE_TYPE_EXPR)) {
+			/* user-defined type */
+			puts("user-defined type");
+			type->kind = TYPE_USER;
+			type->user.name = t->token->ident;
+			t->token++;
+		} else {
 			tokr_err(t, "Unrecognized type.");
 			return false;
 		}
@@ -595,7 +613,7 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 			f->ret_type = f->ret_decls[0].type;
 		}
 	} else {
-		if (!parse_type(p, &f->ret_type)) {
+		if (!parse_type(p, &f->ret_type, 0)) {
 			ret = false;
 		}
 	}
@@ -682,9 +700,10 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	bool prev = t->err_ctx->enabled;
 	t->err_ctx->enabled = false; /* temporarily disable error context */
 	Token *before = t->token;
-	if (parse_type(p, &e->typeval) && t->token == end) {
+	if (parse_type(p, &e->typeval, PARSE_TYPE_EXPR) && t->token == end) {
 		/* it's a type! */
 		e->kind = EXPR_TYPE;
+		t->err_ctx->enabled = prev;
 	    return true;
 	}
 	t->token = before;
@@ -977,7 +996,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					err_print(t->token->where, "Expected ( to follow new.");
 				}
 				t->token++;
-				if (!parse_type(p, &e->new.type)) return false;
+				if (!parse_type(p, &e->new.type, 0)) return false;
 				if (token_is_kw(t->token, KW_COMMA)) {
 					/* new(int, 5) */
 					t->token++;
@@ -1028,7 +1047,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			if (!parse_expr(p, casted, lowest_precedence_op))
 				return false;
 			t->token = lowest_precedence_op + 1;
-			if (!parse_type(p, &e->cast.type))
+			if (!parse_type(p, &e->cast.type, 0))
 				return false;
 			if (t->token != end) {
 				tokr_err(t, "Cast expression continues after type");
@@ -1352,7 +1371,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_
 	if (annotates_type) {
 		d->flags |= DECL_FLAG_ANNOTATES_TYPE;
 		Type type;
-		if (!parse_type(p, &type)) {
+		if (!parse_type(p, &type, 0)) {
 		    goto ret_false;
 		}
 		d->type = type;
