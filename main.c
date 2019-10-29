@@ -1,5 +1,6 @@
 /* 
 TODO:
+resolve user-defined types
 make sure user defined types work
 structs
 length of slice/arr with .len

@@ -395,7 +395,6 @@ typedef enum {
 static Status type_cast_status(Type *from, Type *to) {
 	if (to->kind == TYPE_UNKNOWN)
 		return STATUS_NONE;
-	fprint_type(stdout, from); puts("");
 	if (from->kind == TYPE_USER) {
 		return type_eq(to, ident_typeval(from->user.name)) ? STATUS_NONE : STATUS_ERR;
 	}

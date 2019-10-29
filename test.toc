@@ -13,9 +13,20 @@ putf @= fn(x: float) {
 ");
 };
 
-Foo @= int;
+Foo @= [3]int;
+
+f @= fn() Foo {
+	 a : Foo;
+	 p := &(a as [3]int)[0];
+	 *p = 1;
+	 *(p + 1) = 2;
+	 *(p + 2) = 3;
+	 a
+};
 
 main @= fn() {
-	 a := 35238 as Foo;
-	 puti(a as int);
+	 foo := f();
+	 puti((foo as [3]int)[0]);
+	 puti((foo as [3]int)[1]);
+	 puti((foo as [3]int)[2]);
 };
