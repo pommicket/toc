@@ -3,30 +3,17 @@ puti @= fn(x: int) {
 ");
 };
 
-putch @= fn(x: char) {
-	 #C("printf(\"%c\\n\", x);
-");
-};
-
-putf @= fn(x: float) {
-	 #C("printf(\"%f\\n\", (double)x);
-");
-};
-
 Foo @= [3]int;
 
 f @= fn() Foo {
 	 a : Foo;
-	 p := &(a as [3]int)[0];
-	 *p = 1;
-	 *(p + 1) = 2;
-	 *(p + 2) = 3;
 	 a
 };
 
 main @= fn() {
-	 foo := f();
-	 puti((foo as [3]int)[0]);
-	 puti((foo as [3]int)[1]);
-	 puti((foo as [3]int)[2]);
+	 foo : Foo;
+	 foo = f();
+	 // Bar @= int;
+	 // x: Bar = 18 as Bar;
+	 // puti(x as int);
 };

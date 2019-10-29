@@ -1,6 +1,7 @@
 /* 
 TODO:
-resolve user-defined types
+don't cast in C for user types
+fix [4]User
 make sure user defined types work
 structs
 length of slice/arr with .len
@@ -65,12 +66,12 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 	
-	arr_foreach(t.tokens, Token, token) {
-		if (token != t.tokens)
-			printf("    ");
-		fprint_token(stdout, token);
-	}
-	printf("\n");
+	/* arr_foreach(t.tokens, Token, token) { */
+	/* 	if (token != t.tokens) */
+	/* 		printf("    "); */
+	/* 	fprint_token(stdout, token); */
+	/* } */
+	/* printf("\n"); */
 	Parser p;
 	parser_from_tokenizer(&p, &t);
    	ParsedFile f;
@@ -79,9 +80,9 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 	tokr_free_tokens(&t);
-	fprint_parsed_file(stdout, &f);
+	/* fprint_parsed_file(stdout, &f); */
     
-	printf("\n\n-----\n\n");
+	/* printf("\n\n-----\n\n"); */
 	
 	Typer tr;
 	Evaluator ev;

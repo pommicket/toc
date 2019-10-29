@@ -463,7 +463,6 @@ static bool parse_type(Parser *p, Type *type, U16 flags) {
 	case TOKEN_IDENT:
 		if (!(flags & PARSE_TYPE_EXPR)) {
 			/* user-defined type */
-			puts("user-defined type");
 			type->kind = TYPE_USER;
 			type->user.name = t->token->ident;
 			t->token++;
@@ -1454,7 +1453,7 @@ static bool parse_stmt(Parser *p, Statement *s) {
 			t->token++;
 			return true;
 		}
-		s->ret.flags |= RET_FLAG_EXPR;
+		s->ret.flags |= RET_HAS_EXPR;
 		Token *end = expr_find_end(p, 0, NULL);
 		if (!end) {
 			while (t->token->kind != TOKEN_EOF) t->token++; /* move to end of file */
@@ -1735,7 +1734,7 @@ static void fprint_stmt(FILE *out, Statement *s) {
 		break;
 	case STMT_RET:
 		fprintf(out, "return ");
-		if (s->ret.flags & RET_FLAG_EXPR)
+		if (s->ret.flags & RET_HAS_EXPR)
 			fprint_expr(out, &s->ret.expr);
 		fprintf(out, ";\n");
 		break;
@@ -1746,4 +1745,14 @@ static void fprint_parsed_file(FILE *out, ParsedFile *f) {
 	arr_foreach(f->stmts, Statement, stmt) {
 		fprint_stmt(out, stmt);
 	}
+}
+
+static long decl_ident_index(Declaration *d, Identifier i) {
+	long idx = 0;
+	arr_foreach(d->idents, Identifier, j) {
+		if (i == *j)
+			return idx;
+		idx++;
+	}
+	return -1;
 }

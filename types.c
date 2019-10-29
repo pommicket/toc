@@ -1147,24 +1147,30 @@ static bool types_decl(Typer *tr, Declaration *d) {
 		}
 		if ((d->flags & DECL_FLAG_CONST) || tr->block == NULL) {
 			if (!(d->flags & DECL_FLAG_FOUND_VAL)) {
-				if (!eval_expr(tr->evalr, &d->expr, &d->val))
-					return false;
+				if (!eval_expr(tr->evalr, &d->expr, &d->val)) {
+					success = false;
+					goto ret;
+				}
 				d->flags |= DECL_FLAG_FOUND_VAL;
 			}
 		}
-		if (d->type.kind == TYPE_TUPLE) {
-			arr_foreach(d->type.tuple, Type, t) {
-				if (t->kind == TYPE_TYPE && !(d->flags & DECL_FLAG_CONST)) {
+		for (size_t i = 0; i < arr_len(d->idents); i++) {
+			Type *t = d->type.kind == TYPE_TUPLE ? &d->type.tuple[i] : &d->type;
+			Value *val = d->type.kind == TYPE_TUPLE ? &d->val.tuple[i] : &d->val;
+			if (t->kind == TYPE_TYPE) {
+				if (!(d->flags & DECL_FLAG_CONST)) {
 					err_print(d->where, "Cannot declare non-constant type.");
-					return false;
+					success = false;
+					goto ret;
+				}
+				if (!type_resolve(tr, val->type)) {
+					success = false;
+					goto ret;
 				}
 			}
-		} else {
-			if (d->type.kind == TYPE_TYPE && !(d->flags & DECL_FLAG_CONST)) {
-				err_print(d->where, "Cannot declare non-constant type.");
-				return false;
-			}
 		}
+
+				
 	}
 	size_t n_idents = arr_len(d->idents);
 	if (d->type.kind == TYPE_TUPLE) {
@@ -1206,7 +1212,7 @@ static bool types_stmt(Typer *tr, Statement *s) {
 			err_print(s->where, "return outside of a function.");
 			return false;
 		}
-		if (s->ret.flags & RET_FLAG_EXPR) {
+		if (s->ret.flags & RET_HAS_EXPR) {
 			if (tr->ret_type.kind == TYPE_VOID) {
 				err_print(s->where, "Return value in function which should not return a value.");
 				return false;

@@ -20,6 +20,9 @@ static void evalr_free(Evaluator *ev) {
 static inline void *evalr_malloc(Evaluator *ev, size_t bytes) {
 	return allocr_malloc(&ev->allocr, bytes);
 }
+static inline void *evalr_calloc(Evaluator *ev, size_t n, size_t bytes) {
+	return allocr_calloc(&ev->allocr, n, bytes);
+}
 
 static size_t compiler_sizeof_builtin(BuiltinType b) {
 	switch (b) {

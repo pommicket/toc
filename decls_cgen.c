@@ -115,8 +115,13 @@ static bool cgen_decls_stmt(CGenerator *g, Statement *s) {
 			return false;
 		break;
 	case STMT_EXPR:
+		if (!cgen_decls_expr(g, &s->expr))
+			return false;
 		break;
 	case STMT_RET:
+		if (s->ret.flags & RET_HAS_EXPR)
+			if (!cgen_decls_expr(g, &s->ret.expr))
+				return false;
 		break;
 	}
 	return true;
@@ -124,6 +129,12 @@ static bool cgen_decls_stmt(CGenerator *g, Statement *s) {
 
 static bool cgen_decls_file(CGenerator *g, ParsedFile *f) {
 	cgen_write(g, "/* declarations */\n");
+	arr_foreach(f->stmts, Statement, s) {
+		/* if only (you need to recurse!) */
+		/* OPTIM?? */
+		if (s->kind == STMT_DECL) {
+		}
+	}
 	arr_foreach(f->stmts, Statement, s) {
 		if (!cgen_decls_stmt(g, s))
 			return false;

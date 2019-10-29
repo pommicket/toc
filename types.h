@@ -113,7 +113,6 @@ root.children[low part of 1st char].children[high part of 1st char]
 typedef struct IdentTree {
 	/* zero value is an empty trie */
 	uint16_t depth;
-	uint16_t flags;
 	unsigned char index_in_parent; /* index of this in .parent.children */
 	struct IdentTree *parent;
 	struct IdentTree *children[TREE_NCHILDREN];
@@ -364,6 +363,9 @@ typedef struct {
 	    struct Argument *args;
 		struct Expression *arg_exprs;
 	};
+	struct {
+		IdentID id;
+	} c;
 } CallExpr;
 
 typedef struct {
@@ -480,6 +482,10 @@ typedef struct Declaration {
 	uint16_t flags;
 	Expression expr;
 	Value val; /* only for constant decls. */
+	
+	struct {
+		IdentID *ids; /* array of IDs used in place of ident names. unfortunately needed for user defined types. this is NOT a dynamic array, but is of length arr_len(idents). */
+	} c;
 } Declaration;
 
 typedef enum {
@@ -488,7 +494,7 @@ typedef enum {
 			  STMT_RET
 } StatementKind;
 
-#define RET_FLAG_EXPR 0x01
+#define RET_HAS_EXPR 0x01
 typedef struct {
 	uint16_t flags;
 	Expression expr;
