@@ -1,6 +1,5 @@
 /* 
 TODO:
-don't cast in C for user types
 fix [4]User
 make sure user defined types work
 structs

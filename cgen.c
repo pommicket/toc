@@ -760,7 +760,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 static bool cgen_expr(CGenerator *g, Expression *e) {
 	switch (e->kind) {
 	case EXPR_LITERAL_FLOAT:
-		cgen_write(g, "%f", e->floatl); /* TODO(eventually): better precision? */
+		cgen_write(g, "%.16Lf", (long double)e->floatl); /* TODO(eventually): better precision? */
 		break;
 	case EXPR_LITERAL_INT:
 		cgen_write(g, UINTEGER_FMT, e->intl);
@@ -948,19 +948,27 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		case DIRECT_COUNT: assert(0); break;
 		}
 		break;
-	case EXPR_CAST:
-		cgen_write(g, "((");
-		cgen_type_pre(g, &e->cast.type, e->where);
-		cgen_type_post(g, &e->cast.type, e->where);
-		cgen_write(g, ")(");
-		if (!cgen_expr(g, e->cast.expr))
-			return false;
-		cgen_write(g, ")");
-		if (e->cast.expr->type.kind == TYPE_SLICE
-			&& e->cast.type.kind != TYPE_SLICE) /* casting from a slice to a non-slice */
-			cgen_write(g, ".data");
-		cgen_write(g, ")");
-		break;
+	case EXPR_CAST: {
+		Type *from = &e->cast.expr->type;
+		Type *to = &e->cast.type;
+		if (from->kind == TYPE_USER || to->kind == TYPE_USER) {
+			/* don't need to cast; they're the same type in C */
+			if (!cgen_expr(g, e->cast.expr))
+				return false;
+		} else {
+			cgen_write(g, "((");
+			cgen_type_pre(g, to, e->where);
+			cgen_type_post(g, to, e->where);
+			cgen_write(g, ")(");
+			if (!cgen_expr(g, e->cast.expr))
+				return false;
+			cgen_write(g, ")");
+			if (from->kind == TYPE_SLICE /* casting from a slice to a non-slice */
+				&& to->kind != TYPE_SLICE) 
+				cgen_write(g, ".data");
+			cgen_write(g, ")");
+		}
+	} break;
 	case EXPR_TUPLE:
 		/* the only time this should happen is if you're stating
 		   a tuple, e.g. 3, 5;, but we've errored about that before
