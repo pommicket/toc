@@ -501,6 +501,141 @@ static bool parse_type(Parser *p, Type *type) {
 	
 }
 
+/* 
+is the thing we're looking at definitely a type, as opposed to an expression? 
+if end is not NULL, it is set to the token one past the last one in the type,
+assuming it's successful
+*/
+static bool parser_is_definitely_type(Parser *p, Token **end) {
+	Tokenizer *t = p->tokr;
+	Token *start = t->token;
+	bool ret = false;
+    do {
+	continu:
+		switch (t->token->kind) {
+		case TOKEN_KW:
+			switch (t->token->kw) {
+			case KW_STRUCT:
+				ret = true;
+				if (end) {
+					int level = 1;
+					t->token += 2; /* skip struct { */
+					while (t->token->kind != TOKEN_EOF) {
+						if (t->token->kind == TOKEN_KW) switch (t->token->kw) {
+							case KW_LBRACE:
+								level++;
+								break;
+							case KW_RBRACE:
+								level--;
+								if (level == 0) goto end;
+								break;
+							default: break;
+							}
+						t->token++;
+					}
+				}
+			    break;
+			case KW_LSQUARE:
+				ret = true;
+				if (end) {
+					int level = 1;
+					t->token++;
+					while (t->token->kind != TOKEN_EOF) {
+						if (t->token->kind == TOKEN_KW) switch (t->token->kw) {
+							case KW_LSQUARE:
+								level++;
+								break;
+							case KW_RSQUARE:
+								level--;
+								if (level == 0) {
+									if (end) {
+										t->token++;
+										parser_is_definitely_type(p, &t->token); /* move to end of type */
+									}
+									goto end;
+								}
+								break;
+							default: break;
+							}
+						t->token++;
+					}
+				}
+				break;
+			case KW_LPAREN: {
+				Token *child_end;
+				t->token++;
+				ret = false;
+				while (parser_is_definitely_type(p, &child_end)) {
+					t->token = child_end;
+					if (t->token->kind == TOKEN_KW) {
+						if (t->token->kw == KW_COMMA) {
+							t->token++;
+							continue;
+						} else if (t->token->kw == KW_RPAREN) {
+							/* it *is* a tuple! */
+							ret = true;
+							t->token++;
+							goto end;
+						}
+					} else break;
+				}
+			} break;
+			case KW_FN:
+				t->token++;
+				if (!token_is_kw(t->token, KW_LPAREN)) {
+					ret = false;
+					break;
+				}
+				t->token++;
+				int paren_level = 1;
+				while (t->token->kind != TOKEN_EOF) {
+					if (t->token->kind == TOKEN_KW) switch (t->token->kw) {
+						case KW_LPAREN:
+							paren_level++;
+							break;
+						case KW_RPAREN:
+							paren_level--;
+							if (paren_level == 0) {
+								t->token++;
+								if (!token_is_kw(t->token, KW_LBRACE)) {
+									/* it's a function type! */
+									ret = true;
+									goto end;
+								}
+							}
+							break;
+						default: break;
+						}
+					t->token++;
+				}
+				ret = false;
+				break;
+			case KW_AMPERSAND:
+				t->token++; /* continue; see if next thing is definitely a type */
+				goto continu;
+			default: {
+				int x = kw_to_builtin_type(t->token->kw);
+			    if ((ret = x != -1)) {
+					t->token++;
+				}
+				break;
+			}
+			} break;
+		case TOKEN_DIRECT:
+		case TOKEN_NUM_LITERAL:
+		case TOKEN_CHAR_LITERAL:
+		case TOKEN_STR_LITERAL:
+		case TOKEN_EOF:
+		case TOKEN_IDENT:
+			ret = false;
+			break;
+		}
+	} while (0);
+ end:
+	if (ret && end) *end = t->token;
+	t->token = start;
+	return ret;
+}
 
 static bool parse_block(Parser *p, Block *b) {
 	b->flags = 0;
@@ -719,7 +854,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		return false;
 	}
 	Token *before = t->token;
-	if (parser_is_type(p)) {
+	if (parser_is_definitely_type(p, NULL)) {
 		/* it's a type! */
 		e->kind = EXPR_TYPE;
 		return parse_type(p, &e->typeval);

@@ -1183,6 +1183,11 @@ static bool types_decl(Typer *tr, Declaration *d) {
 					success = false;
 					goto ret;
 				}
+				if (val->type->kind == TYPE_TUPLE) {
+					err_print(d->where, "You can't declare a new type to be a tuple.");
+					success = false;
+					goto ret;
+				}
 			}
 		}
 

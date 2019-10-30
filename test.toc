@@ -1,13 +1,12 @@
-puti @= fn(x: int) {
-	 #C("printf(\"%ld\\n\", (long)x);
-");
-};
-
-Point @= struct {
-	  x, y: int;
-	  something: float;
-};
+// puti @= fn(x: int) {
+	 // #C("printf(\"%ld\\n\", (long)x);
+// ");
+// };
 
 
-main @= fn() {
-};
+F @= fn(int,int);
+
+foo @ F = fn(x,y:int) {} as F;
+
+// main @= fn() {
+// };
