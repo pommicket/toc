@@ -3,12 +3,11 @@ puti @= fn(x: int) {
 ");
 };
 
+Point @= struct {
+	  x, y: int;
+	  something: float;
+};
+
+
 main @= fn() {
-	 {
-	 Int @= int;
-	 Ptr @= &Int;
-	 asdf : Int = 1343 as Int;
-	 p : Ptr = &asdf as Ptr;
-	 // puti(*(p as &Int) as int);
-	 }
 };

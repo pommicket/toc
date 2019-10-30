@@ -175,7 +175,7 @@ typedef enum {
 			  KW_AS,
 			  KW_NEW,
 			  KW_DEL,
-			  KW_NEWTYPE,
+			  KW_STRUCT,
 			  KW_INT,
 			  KW_I8,
 			  KW_I16,
@@ -249,7 +249,8 @@ typedef enum {
 			  TYPE_PTR,
 			  TYPE_SLICE,
 			  TYPE_TYPE,
-			  TYPE_USER /* user-defined type */
+			  TYPE_USER, /* user-defined type */
+			  TYPE_STRUCT
 } TypeKind;
 
 typedef enum {
@@ -266,6 +267,12 @@ typedef enum {
 			  BUILTIN_CHAR,
 			  BUILTIN_BOOL
 } BuiltinType;
+
+/* field of a struct */
+typedef struct {
+	Identifier name;
+	struct Type *type;
+} Field;
 
 #define TYPE_FLAG_FLEXIBLE 0x01
 #define TYPE_FLAG_RESOLVED 0x02
@@ -292,6 +299,9 @@ typedef struct Type {
 		struct {
 			Identifier name;
 		} user;
+		struct {
+		    Field *fields;
+		} struc;
 	};
 } Type;
 

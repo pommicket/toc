@@ -3,7 +3,7 @@ static const char *keywords[KW_COUNT] =
 	 "+", "-", "*", "!", "&", "/",
 	 "=",
 	 "if", "elif", "else", "while", "return", "fn", "as",
-	 "new", "del", "newtype",
+	 "new", "del", "struct",
 	 "int", "i8", "i16", "i32", "i64",
 	 "u8", "u16", "u32", "u64", "float", "f32", "f64",
 	 "char", "bool", "true", "false"};

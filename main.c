@@ -1,7 +1,5 @@
 /* 
 TODO:
-fix [4]User
-make sure user defined types work
 structs
 length of slice/arr with .len
 don't allow while {3; 5} (once break is added)
