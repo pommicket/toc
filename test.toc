@@ -3,25 +3,12 @@ puti @= fn(x: int) {
 ");
 };
 
-Foo @= [3]int;
-
-f @= fn() Foo {
-	 a : Foo;
-	 (a as [3]int)[0] = 8;
-	 (a as [3]int)[1] = 9;
-	 (a as [3]int)[2] = 10;
-	 a
-};
-
 main @= fn() {
-	 foo : Foo;
-	 foo = f();
-	 puti((foo as [3]int)[0]);
-	 puti((foo as [3]int)[1]);
-	 puti((foo as [3]int)[2]);
 	 {
-	 Foo, Bar @= int, float;
-	 // Bar @= [3]Foo;
-	 y: Bar = 0.342 as Bar;
+	 Int @= int;
+	 Ptr @= &Int;
+	 asdf : Int = 1343 as Int;
+	 p : Ptr = &asdf as Ptr;
+	 // puti(*(p as &Int) as int);
 	 }
 };

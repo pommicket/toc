@@ -196,5 +196,7 @@ static Value *ident_decl_val(Identifier i) {
 }
 
 static inline Type *ident_typeval(Identifier i) {
-	return ident_decl_val(i)->type;
+	Value *val = ident_decl_val(i);
+	if (!val) return NULL;
+	return val->type;
 }

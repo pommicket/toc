@@ -2,7 +2,7 @@ static bool types_stmt(Typer *tr, Statement *s);
 static bool types_decl(Typer *tr, Declaration *d);
 static bool types_expr(Typer *tr, Expression *e);
 static bool types_block(Typer *tr, Block *b);
-static bool type_resolve(Typer *tr, Type *t);
+static bool type_resolve(Typer *tr, Type *t, Location where);
 
 static inline void *typer_malloc(Typer *tr, size_t bytes) {
 	return allocr_malloc(&tr->allocr, bytes);
@@ -200,16 +200,18 @@ static bool expr_must_lval(Expression *e) {
 	return false;
 }
 
-static bool type_of_fn(Typer *tr, FnExpr *f, Type *t) {
+static bool type_of_fn(Typer *tr, Expression *e, Type *t) {
+	assert(e->kind == EXPR_FN);
+	FnExpr *f = &e->fn;
 	t->kind = TYPE_FN;
 	t->fn.types = NULL;
 	Type *ret_type = typer_arr_add(tr, &t->fn.types);
-	if (!type_resolve(tr, &f->ret_type))
+	if (!type_resolve(tr, &f->ret_type, e->where))
 		return false;
 	*ret_type = f->ret_type;
 	arr_foreach(f->params, Declaration, decl) {
 		if (!types_decl(tr, decl)) return false;
-		if (!type_resolve(tr, &decl->type))
+		if (!type_resolve(tr, &decl->type, e->where))
 			return false;
 		for (size_t i = 0; i < arr_len(decl->idents); i++) {
 			Type *param_type = typer_arr_add(tr, &t->fn.types);
@@ -281,7 +283,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 	} else {
 		if ((d->flags & DECL_FLAG_HAS_EXPR) && (d->expr.kind == EXPR_FN)) {
 			/* allow using a function before declaring it */
-			if (!type_of_fn(tr, &d->expr.fn, t)) return false;
+			if (!type_of_fn(tr, &d->expr, t)) return false;
 			return true;
 		} else {
 			if (location_after(d->where, where)) {
@@ -298,7 +300,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 }
 
 /* fixes the type (replaces [5+3]int with [8]int, etc.) */
-static bool type_resolve(Typer *tr, Type *t) {
+static bool type_resolve(Typer *tr, Type *t, Location where) {
 	Evaluator *ev = tr->evalr;
 	if (t->flags & TYPE_FLAG_RESOLVED) return true;
 	switch (t->kind) {
@@ -333,30 +335,38 @@ static bool type_resolve(Typer *tr, Type *t) {
 			size = val_to_u64(&val, n_expr->type.builtin);
 		}
 		t->arr.n = (UInteger)size;
-		if (!type_resolve(tr, t->arr.of))
+		if (!type_resolve(tr, t->arr.of, where))
 			return false;
 	} break;
 	case TYPE_FN:
 		arr_foreach(t->fn.types, Type, child_type) {
-			if (!type_resolve(tr, child_type))
+			if (!type_resolve(tr, child_type, where))
 				return false;
 		}
 		break;
 	case TYPE_TUPLE:
 		arr_foreach(t->tuple, Type, child_type) {
-			if (!type_resolve(tr, child_type))
+			if (!type_resolve(tr, child_type, where))
 				return false;
 		}
 		break;
 	case TYPE_PTR:
-		if (!type_resolve(tr, t->ptr))
+		if (!type_resolve(tr, t->ptr, where))
 			return false;
 		break;
 	case TYPE_SLICE:
-		if (!type_resolve(tr, t->slice))
+		if (!type_resolve(tr, t->slice, where))
 			return false;
 		break;
 	case TYPE_USER:
+		/* just check if it's actually defined */
+		if (!ident_typeval(t->user.name)) {
+			char *s = ident_to_str(t->user.name);
+			err_print(where, "Use of undeclared type %s.", s);
+			free(s);
+			return false;
+		}
+		break;
 	case TYPE_UNKNOWN:
 	case TYPE_VOID:
 	case TYPE_TYPE:
@@ -484,11 +494,11 @@ static bool types_expr(Typer *tr, Expression *e) {
 		Type prev_ret_type = tr->ret_type;
 		bool prev_can_ret = tr->can_ret;
 		FnExpr *f = &e->fn;
-		if (!type_of_fn(tr, f, t)) {
+		if (!type_of_fn(tr, e, t)) {
 			success = false;
 			goto fn_ret;
 		}
-		bool has_named_ret_vals = e->fn.ret_decls != NULL;
+		bool has_named_ret_vals = f->ret_decls != NULL;
 		if (has_named_ret_vals) {
 			/* set return type to void to not allow return values */
 			tr->ret_type.kind = TYPE_VOID;
@@ -580,13 +590,14 @@ static bool types_expr(Typer *tr, Expression *e) {
 		CastExpr *c = &e->cast;
 		if (!types_expr(tr, c->expr))
 			return false;
-		if (!type_resolve(tr, &c->type))
+		if (!type_resolve(tr, &c->type, e->where))
 			return false;
 		Status status = type_cast_status(&c->expr->type, &c->type);
 		if (status != STATUS_NONE) {
 			char *from = type_to_str(&c->expr->type);
 			char *to = type_to_str(&c->type);
 			if (status == STATUS_ERR)
+
 				err_print(e->where, "Cannot cast from type %s to %s.", from, to);
 			else
 				warn_print(e->where, "Casting from type %s to %s.", from, to);
@@ -598,7 +609,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		*t = c->type;
 	} break;
 	case EXPR_NEW:
-		if (!type_resolve(tr, &e->new.type))
+		if (!type_resolve(tr, &e->new.type, e->where))
 			return false;
 		if (e->new.n) {
 			if (!types_expr(tr, e->new.n)) return false;
@@ -861,6 +872,11 @@ static bool types_expr(Typer *tr, Expression *e) {
 			*t = *of_type;
 			break;
 		case UNARY_ADDRESS:
+			if (of_type->kind == TYPE_TYPE) {
+				/* oh it's a type! */
+				t->kind = TYPE_TYPE;
+				break;
+			}
 			if (!expr_must_lval(of)) {
 				err_print(e->where, "Cannot take address of non-lvalue."); /* FEATURE: better err */
 				return false;
@@ -1116,7 +1132,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 	if (d->flags & DECL_FLAG_ANNOTATES_TYPE) {
 		/* type supplied */
 		assert(d->type.kind != TYPE_VOID); /* there's no way to annotate void */
-		if (!type_resolve(tr, &d->type)) {
+		if (!type_resolve(tr, &d->type, d->where)) {
 			success = false;
 			goto ret;
 		}
@@ -1163,7 +1179,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 					success = false;
 					goto ret;
 				}
-				if (!type_resolve(tr, val->type)) {
+				if (!type_resolve(tr, val->type, d->where)) {
 					success = false;
 					goto ret;
 				}

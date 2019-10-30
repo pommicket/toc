@@ -333,6 +333,8 @@ static bool parse_type(Parser *p, Type *type, U16 flags) {
 	Tokenizer *t = p->tokr;
 	type->where = t->token->where;
 	type->flags = 0;
+	U16 could_be_expr = flags & PARSE_TYPE_EXPR;
+	flags &= (U16)~PARSE_TYPE_EXPR; /* don't include this most of the time in children */
 	switch (t->token->kind) {
 	case TOKEN_KW:
 		type->kind = TYPE_BUILTIN;
@@ -426,7 +428,7 @@ static bool parse_type(Parser *p, Type *type, U16 flags) {
 			t->token++;	/* move past ( */
 			while (1) {
 				Type *child = parser_arr_add(p, &type->tuple);
-				if (!parse_type(p, child, flags)) return false;
+				if (!parse_type(p, child, flags | could_be_expr)) return false; /* if this could be an expression, it could just be (2, 3)  */
 				if (child->kind == TYPE_TUPLE) {
 					err_print(child->where, "Tuples cannot contain tuples.");
 					return false;
@@ -449,7 +451,7 @@ static bool parse_type(Parser *p, Type *type, U16 flags) {
 			type->kind = TYPE_PTR;
 			type->ptr = parser_malloc(p, sizeof *type->ptr);
 			t->token++;	/* move past & */
-			if (!parse_type(p, type->ptr, flags)) return false;
+			if (!parse_type(p, type->ptr, flags | could_be_expr)) return false; /* if this could be an expression, it could just be &foo (where foo is a variable) */
 			if (type->ptr->kind == TYPE_TUPLE) {
 				err_print(type->ptr->where, "You cannot have a pointer to a tuple.");
 				return false;
@@ -461,7 +463,7 @@ static bool parse_type(Parser *p, Type *type, U16 flags) {
 		}
 		break;
 	case TOKEN_IDENT:
-		if (!(flags & PARSE_TYPE_EXPR)) {
+		if (!could_be_expr) {
 			/* user-defined type */
 			type->kind = TYPE_USER;
 			type->user.name = t->token->ident;

@@ -707,6 +707,15 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		switch (e->unary.op) {
 		case UNARY_ADDRESS: {
 			Expression *o = e->unary.of;
+			if (o->type.kind == TYPE_TYPE) {
+				if (!eval_expr(ev, e->unary.of, &of)) return false;
+				/* "address" of type (pointer to type) */
+				v->type = evalr_calloc(ev, 1, sizeof *v->type); /* TODO: this might be bad in the future; should free this at some point */
+				/* v->type->flags = 0; */
+				v->type->kind = TYPE_PTR;
+				v->type->ptr = of.type;
+				break;
+			}
 			switch (o->kind) {
 			case EXPR_IDENT: {
 				IdentDecl *id = ident_decl(o->ident);
@@ -888,18 +897,23 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				if (!eval_expr(ev, &d->expr, &d->val)) return false;
 				d->flags |= DECL_FLAG_FOUND_VAL;
 			}
-			if (d->type.kind == TYPE_TUPLE) {
-				long index = 0;
-				arr_foreach(d->idents, Identifier, decl_i) {
-					if (*decl_i == e->ident) {
-						break;
-					}
-					index++;
-					assert(index < (long)arr_len(d->idents)); /* identifier got its declaration set to here, but it's not here */
+			
+			long index = 0;
+			arr_foreach(d->idents, Identifier, decl_i) {
+				if (*decl_i == e->ident) {
+					break;
 				}
-				*v = d->val.tuple[index];
+				index++;
+				assert(index < (long)arr_len(d->idents)); /* identifier got its declaration set to here, but it's not here */
+			}
+			if (e->type.kind == TYPE_TYPE) {
+				/* set v to a user type, not the underlying type */
+				v->type = evalr_malloc(ev, sizeof *v->type); /* TODO: fix this (free eventually) */
+				v->type->flags = 0;
+				v->type->kind = TYPE_USER;
+				v->type->user.name = d->idents[index];
 			} else {
-				*v = d->val;
+				*v = d->type.kind == TYPE_TUPLE ? d->val.tuple[index] : d->val;
 			}
 		} else {
 			char *s = ident_to_str(e->ident);
