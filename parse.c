@@ -479,6 +479,15 @@ static bool parse_type(Parser *p, Type *type) {
 					if (!parse_decl(p, &field_decl, DECL_END_SEMICOLON, 0)) {
 						return false;
 					}
+					if (field_decl.flags & DECL_FLAG_CONST) {
+						/* TODO */
+						err_print(field_decl.where, "Constant struct members are not supported (yet).");
+						return false;
+					}
+					if (field_decl.flags & DECL_FLAG_HAS_EXPR) {
+						err_print(field_decl.where, "struct members cannot have initializers.");
+						return false;
+					}
 					long idx = 0;
 					arr_foreach(field_decl.idents, Identifier, fident) {
 						Type *ftype = field_decl.type.kind == TYPE_TUPLE ? &field_decl.type.tuple[idx] : &field_decl.type;
@@ -1544,6 +1553,10 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_
 		    goto ret_false;
 		}
 		d->type = type;
+		if (type.kind == TYPE_TUPLE && arr_len(d->type.tuple) != arr_len(d->idents)) {
+			err_print(d->where, "Expected to have %lu things declared in declaration, but got %lu.", (unsigned long)arr_len(d->type.tuple), (unsigned long)arr_len(d->idents));
+			goto ret_false;
+		}
 	}
 	const char *end_str = NULL;
 	switch (ends_with) {

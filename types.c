@@ -1206,7 +1206,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 	size_t n_idents = arr_len(d->idents);
 	if (d->type.kind == TYPE_TUPLE) {
 		if (n_idents != arr_len(d->type.tuple)) {
-			err_print(d->where, "Expected to have %lu things declared in declaration, but got %lu.", (unsigned long)n_idents);
+			err_print(d->where, "Expected to have %lu things declared in declaration, but got %lu.", (unsigned long)arr_len(d->type.tuple), (unsigned long)n_idents);
 			success = false;
 			goto ret;
 		}

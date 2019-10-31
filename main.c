@@ -1,7 +1,5 @@
 /* 
 TODO:
-structs
-structs can't have tuple members
 dot
 length of slice/arr with .len
 verify size of struct, align of fields

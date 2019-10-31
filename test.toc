@@ -6,8 +6,11 @@ puti @= fn(x: int) {
 Point @= struct {
 	x, y : int;
 	something:fn(f32);
+	z,asdfasdfasdf:(int,int);
+	safdasdjfhsj@int=3;
 };
 
 main @= fn() {
 	 p:Point;
+	 // asasdfdsfa:(int,int);
 };
