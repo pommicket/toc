@@ -1,13 +1,15 @@
+static bool types_block(Typer *tr, Block *b);
 static size_t compiler_sizeof(Type *t);
 static bool eval_block(Evaluator *ev, Block *b, Type *t, Value *v);
 static bool eval_expr(Evaluator *ev, Expression *e, Value *v);
 static bool block_enter(Block *b, Statement *stmts, U32 flags);
 static void block_exit(Block *b, Statement *stmts);
 
-static void evalr_create(Evaluator *ev) {
+static void evalr_create(Evaluator *ev, Typer *tr) {
 	allocr_create(&ev->allocr);
 	ev->returning = NULL;
 	ev->to_free = NULL;
+	ev->typer = tr;
 }
 
 static void evalr_free(Evaluator *ev) {
@@ -706,7 +708,11 @@ static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 	return true;
 }
 
-static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
+static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {		
+	if (e->type.kind == TYPE_UNKNOWN) {
+		err_print(e->where, "Cannot determine type of expression.");
+		return false;
+	}
 	/* WARNING: macros ahead */
 #define eval_unary_op_one(low, up, op)			\
 	case BUILTIN_##up:							\
@@ -1073,6 +1079,9 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		if (!eval_expr(ev, e->call.fn, &fnv))
 			return false;
 		FnExpr *fn = fnv.fn;
+		/* make sure function body is typed before calling it */
+		if (!types_block(ev->typer, &fn->body))
+			return false;
 		/* set parameter declaration values */
 		Declaration *params = fn->params;
 		/* OPTIM (NOTE: currently needed for recursion) */
@@ -1085,9 +1094,11 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		fn_enter(fn, 0);
 		long arg = 0;
 		arr_foreach(params, Declaration, p) {
+			long idx = 0;
 			arr_foreach(p->idents, Identifier, i) {
+				Type *type = p->type.kind == TYPE_TUPLE ? &p->type.tuple[idx++] : &p->type;
 				IdentDecl *id = ident_decl(*i);
-				id->val = args[arg];
+				val_copy(NULL, &id->val, &args[arg], type);
 				id->flags |= IDECL_FLAG_HAS_VAL;
 				arg++;
 			}

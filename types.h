@@ -95,7 +95,6 @@ typedef union Value {
 } Value;
 
 #define IDECL_FLAG_HAS_VAL 0x01
-#define IDECL_FLAG_CGEN_PTR 0x02 /* is a pointer being used for this identifier? */
 typedef struct {
 	struct Declaration *decl;
 	struct Block *scope; /* NULL for file scope */
@@ -547,6 +546,7 @@ typedef enum {
 
 typedef struct {
 	Allocator allocr;
+	struct Typer *typer;
 	bool returning;
 	Value ret_val;
 	void **to_free; /* an array of data to free for this scope. */

@@ -106,10 +106,6 @@ static bool expr_arr_must_mut(Expression *e) {
 			err_print(e->where, "Cannot modify a constant array.");
 			return false;
 		}
-		if (d->flags & DECL_FLAG_PARAM) {
-			err_print(e->where, "Parameters are immutable.");
-			return false;
-		}
 	} return true;
 	case EXPR_CAST:
 	case EXPR_CALL:
@@ -742,7 +738,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 			err_print(e->where, "Calling non-function (type %s).", type);
 			return false;
 		}
-		
 		Type *ret_type = f->type.fn.types;
 		Type *param_types = ret_type + 1;
 		Argument *args = c->args;
@@ -837,8 +832,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 				}
 			}
 		}
-		c->arg_exprs = new_args;
 		*t = *ret_type;
+		c->arg_exprs = new_args;
 		break;
 	}
 	case EXPR_BLOCK: {
@@ -958,15 +953,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 		case BINARY_SET:
 			if (!expr_must_lval(e->binary.lhs)) {
 				return false;
-			}
-			{
-				if (lhs->kind == EXPR_IDENT) {
-					Declaration *d = ident_decl(lhs->ident)->decl;
-					if (d->flags & DECL_FLAG_PARAM) {
-						err_print(e->where, "Parameters are immutable.");
-						return false;
-					}
-				}
 			}
 		
 			/* fallthrough */

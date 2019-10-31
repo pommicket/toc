@@ -7,15 +7,22 @@ Point @= struct {
 	x, y : int;
 };
 
-sum34 @= fn() int {
-	 p: Point;
-	 x := &p.x;
-	 *x = 3;
-	 p.y = 4;
-	 p.x + p.y
+sum @= fn(p: &Point) int {
+	p.x + p.y
+};
+
+
+somesum @= fn() int {
+
+	 p : Point;
+	 p.x = 12389;
+	 p.y = 29404;
+	 total := sum(&p);
+	 total
 };
 
 main @= fn() {
-X @= sum34();
-puti(sum34());
+// puti(somesum());
+foo @= somesum();
+// puti(foo);
 };

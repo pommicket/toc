@@ -117,12 +117,7 @@ static void cgen_ident(CGenerator *g, Identifier i) {
 		cgen_write(g, "main__");
 	} else {
 		cgen_indent(g);
-		IdentDecl *idecl = ident_decl(i);
-		if (idecl && (idecl->flags & IDECL_FLAG_CGEN_PTR))
-			cgen_write(g, "(*");
 		fprint_ident(cgen_writing_to(g), i);
-		if (idecl && (idecl->flags & IDECL_FLAG_CGEN_PTR))
-			cgen_write(g, ")");
 	}
 }
 
@@ -307,21 +302,17 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where) {
 	}
 	cgen_write(g, "(");
 	arr_foreach(f->params, Declaration, d) {
+		long idx = 0;
 		arr_foreach(d->idents, Identifier, i) {
 			if (d != f->params || i != d->idents)
 				cgen_write(g, ", ");
+			Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx++] : &d->type;
 			any_params = true;
-			if (!cgen_type_pre(g, &d->type, where))
+			if (!cgen_type_pre(g, type, where))
 				return false;
 			cgen_write(g, " ");
-			bool ptr = cgen_uses_ptr(&d->type);
-			if (ptr) {
-				IdentDecl *idecl = ident_decl(*i);
-				assert(idecl);
-				idecl->flags |= IDECL_FLAG_CGEN_PTR;
-			}
 			cgen_ident(g, *i);
-			if (!cgen_type_post(g, &d->type, where))
+			if (!cgen_type_post(g, type, where))
 				return false;
 		}
 	}
@@ -469,8 +460,6 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 		arr_foreach(to->call.arg_exprs, Expression, arg) {
 			if (arg != to->call.arg_exprs)
 				cgen_write(g, ", ");
-			if (cgen_uses_ptr(&arg->type))
-				cgen_write(g, "&");
 			if (!cgen_expr(g, arg))
 				return false;
 		}

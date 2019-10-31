@@ -85,7 +85,7 @@ int main(int argc, char **argv) {
 	
 	Typer tr;
 	Evaluator ev;
-	evalr_create(&ev);
+	evalr_create(&ev, &tr);
 	typer_create(&tr, &ev);
 
 	if (!block_enter(NULL, f.stmts, SCOPE_FLAG_CHECK_REDECL)) /* enter global scope */
