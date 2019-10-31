@@ -1155,15 +1155,23 @@ static bool eval_decl(Evaluator *ev, Declaration *d) {
 	long index = 0;
 	arr_foreach(d->idents, Identifier, i) {
 		IdentDecl *id = ident_decl(*i);
-		if (has_expr && d->type.kind == TYPE_TUPLE) {
-			val_copy(d->flags & DECL_FLAG_CONST ? ev : NULL, &id->val, &val.tuple[index], &d->type.tuple[index]);
-			index++;
-		} else if (!has_expr && d->type.kind == TYPE_ARR) {
-			/* "stack" array */
-			id->val.arr = err_calloc(d->type.arr.n, compiler_sizeof(d->type.arr.of));
-		} else {
-			val_copy(d->flags & DECL_FLAG_CONST ? ev : NULL, &id->val, &val, &d->type);
+		Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[index] : &d->type;
+		Value *thisval = NULL;
+		if (has_expr)
+			thisval = d->type.kind == TYPE_TUPLE ? &val.tuple[index] : &val;
+		Type *inner_type = type;
+		while (inner_type->kind == TYPE_USER)
+			inner_type = ident_typeval(type->user.name);
+		if (inner_type->kind == TYPE_STRUCT) {
+			puts("Allocating space for struct");
+			id->val.struc = err_calloc(1, compiler_sizeof(inner_type));
+		} else if (inner_type->kind == TYPE_ARR) {
+			id->val.arr = err_calloc(inner_type->arr.n, compiler_sizeof(inner_type->arr.of));
 		}
+
+		if (has_expr)
+			val_copy(d->flags & DECL_FLAG_CONST ? ev : NULL, &id->val, thisval, type);
+		index++;
 		id->flags |= IDECL_FLAG_HAS_VAL;
 	}
 	if (has_expr && d->expr.kind == EXPR_TUPLE) {

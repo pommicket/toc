@@ -1,8 +1,5 @@
 /* 
 TODO:
-dot at run time
-dot at compile time
-dot + string
 . lvalue
 using dot with pointers
 length of slice/arr with .len

@@ -619,13 +619,14 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 								t->token++;
 								if (token_is_kw(t->token, KW_LBRACE)) goto end; /* void fn expr */
 								Type return_type;
+								bool prev = t->token->where.ctx->enabled;
 								t->token->where.ctx->enabled = false;
 								if (!parse_type(p, &return_type)) {
 									/* couldn't parse a return type. void fn type */
 									ret = true;
 									goto end;
 								}
-							    
+							    t->token->where.ctx->enabled = prev;
 								if (token_is_kw(t->token, KW_LBRACE)) {
 									/* non-void fn expr */
 									goto end;

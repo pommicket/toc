@@ -7,7 +7,7 @@ Point @= struct {
 	x_coordinate, y_coordinate : int;
 };
 
-main @= fn() {
+somefn @= fn() int {
 	 p:Point;
 	 x := p.({
 	   t @= int;
@@ -18,5 +18,11 @@ main @= fn() {
 	   	 "y_coordinate"
 	   }
 	 });
-	 puti(x);
+	 x
+};
+
+main @= fn() {	
+	 X @= somefn();
+	 puti(X);
+	 puti(somefn());
 };
