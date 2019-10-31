@@ -1,6 +1,5 @@
 /* 
 TODO:
-. lvalue
 using dot with pointers
 length of slice/arr with .len
 verify size of struct, align of fields

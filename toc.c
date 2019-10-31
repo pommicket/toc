@@ -22,6 +22,14 @@
 #include "tokenizer.c"
 #include "parse.c"
 #include "scope.c"
+
+
+static Type *type_inner(Type *t) {
+	while (t->kind == TYPE_USER)
+		t = ident_typeval(t->user.name);
+	return t;
+}
+
 #include "eval.c"
 #include "types.c"
 static bool cgen_decls_file(CGenerator *g, ParsedFile *f);

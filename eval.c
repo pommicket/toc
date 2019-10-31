@@ -682,7 +682,15 @@ static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 			/* set it to to */
 			eval_deref_set(ptr, to, type);
 		} break;
-		default: break;
+		case BINARY_DOT: {
+			Value struc;
+			if (!eval_expr(ev, set->binary.lhs, &struc))
+				return false;
+			eval_struct_find_offsets(type_inner(&set->binary.lhs->type));
+			void *ptr = (char *)struc.struc + set->binary.field->offset;
+			eval_deref_set(ptr, to, set->binary.field->type);
+		} break;
+		default: assert(0); break;
 		}
 		break;
 	case EXPR_TUPLE:
@@ -812,6 +820,8 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				}
 				if (o->type.kind == TYPE_ARR)
 					v->ptr = id->val.arr; /* point directly to data */
+				else if (o->type.kind == TYPE_STRUCT)
+					v->ptr = id->val.struc;
 				else
 					v->ptr = &id->val;
 			} break;
@@ -833,7 +843,14 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 						return false;
 					v->ptr = ptr;
 				} break;
-				default: break;
+				case BINARY_DOT: {
+					Value struc;
+					if (!eval_expr(ev, o->binary.lhs, &struc))
+						return false;
+					eval_struct_find_offsets(type_inner(&o->binary.lhs->type));
+					v->ptr = (char *)struc.struc + o->binary.field->offset;
+				} break;
+				default: assert(0); break;
 				}
 				break;
 			default:
@@ -1163,7 +1180,6 @@ static bool eval_decl(Evaluator *ev, Declaration *d) {
 		while (inner_type->kind == TYPE_USER)
 			inner_type = ident_typeval(type->user.name);
 		if (inner_type->kind == TYPE_STRUCT) {
-			puts("Allocating space for struct");
 			id->val.struc = err_calloc(1, compiler_sizeof(inner_type));
 		} else if (inner_type->kind == TYPE_ARR) {
 			id->val.arr = err_calloc(inner_type->arr.n, compiler_sizeof(inner_type->arr.of));

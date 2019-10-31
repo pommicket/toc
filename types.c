@@ -171,17 +171,18 @@ static bool expr_must_lval(Expression *e) {
 	case EXPR_BINARY_OP:
 		switch (e->binary.op) {
 		case BINARY_AT_INDEX: return true;
+		case BINARY_DOT: return true;
 		default: break;
 		}
-		break;
-	case EXPR_TUPLE: {
+		err_print(e->where, "Cannot use operator %s as l-value", binary_op_to_str(e->binary.op));
+	    return false;
+	case EXPR_TUPLE:
 		/* x, y is an lval, but 3, "hello" is not. */
 		arr_foreach(e->tuple, Expression, x) {
 			if (!expr_must_lval(x)) 
 				return false;
 		}
 		return true;
-	} break;
 	case EXPR_CAST:
 	case EXPR_NEW:
 	case EXPR_FN:
@@ -1352,4 +1353,3 @@ static bool types_file(Typer *tr, ParsedFile *f) {
 static void typer_free(Typer *tr) {
 	allocr_free_all(&tr->allocr);
 }
-
