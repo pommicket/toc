@@ -1,12 +1,17 @@
-// puti @= fn(x: int) {
-	 // #C("printf(\"%ld\\n\", (long)x);
-// ");
-// };
+puti @= fn(x: int) {
+	 #C("printf(\"%ld\\n\", (long)x);
+");
+};
 
 
 F @= fn(int,int);
 
-foo @ F = fn(x,y:int) {} as F;
+main @= fn() {
 
-// main @= fn() {
-// };
+	 foo := (fn(x,y:int) {}) as F;
+
+	 bar := foo as fn(int, int);
+	 baz := bar as &char;
+	 quux := baz as int;
+	 puti(quux);
+};

@@ -277,6 +277,8 @@ static inline void cgen_fn_name(CGenerator *g, FnExpr *f) {
 static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where) {
 	bool out_param = cgen_uses_ptr(&f->ret_type);
 	bool any_params = false;
+	if (!f->c.name) /* anonymous fn */
+		cgen_write(g, "static ");
 	if (out_param) {
 		cgen_write(g, "void ");
 	} else {

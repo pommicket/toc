@@ -581,9 +581,9 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 				}
 			} break;
 			case KW_FN:
+				ret = false;
 				t->token++;
 				if (!token_is_kw(t->token, KW_LPAREN)) {
-					ret = false;
 					break;
 				}
 				t->token++;
@@ -597,18 +597,25 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 							paren_level--;
 							if (paren_level == 0) {
 								t->token++;
-								if (!token_is_kw(t->token, KW_LBRACE)) {
-									/* it's a function type! */
-									ret = true;
-									goto end;
+								if (token_is_kw(t->token, KW_LBRACE)) goto end; /* void fn expr */
+								Token *child_end;
+								if (parser_is_definitely_type(p, &child_end)) { /* try return type */
+									if (token_is_kw(t->token, KW_LBRACE)) {
+										/* non-void fn expr */
+										goto end;
+									}
 								}
+								/* it's a function type! */
+								ret = true;
+								goto end;
+								
+								
 							}
 							break;
 						default: break;
 						}
 					t->token++;
 				}
-				ret = false;
 				break;
 			case KW_AMPERSAND:
 				t->token++; /* continue; see if next thing is definitely a type */
@@ -914,7 +921,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 
 
 	Token *start = t->token;
-
+	/* TODO: consider moving this after ops, so that "if true { 5 } else { 3 } as f32" is possible */
 	if (t->token->kind == TOKEN_KW) switch (t->token->kw) {
 		case KW_FN: {
 			/* this is a function */
