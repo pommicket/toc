@@ -200,3 +200,21 @@ static inline Type *ident_typeval(Identifier i) {
 	if (!val) return NULL;
 	return val->type;
 }
+
+static bool ident_eq_str(Identifier i, const char *s) {
+	const char *t = s + (strlen(s) - 1);
+	while (1) {
+		if (!i->parent) {
+			return false;
+		}
+		int c_low = i->parent->index_in_parent;
+		int c_high = i->index_in_parent;
+		int c = ident_uchar_to_char(c_low + (c_high << 4));
+		if (c != *t) return false;
+		i = i->parent->parent;
+		if (t > s) t--;
+		else break;
+	}
+	if (i->parent) return false; /* not at root */
+	return true;
+}

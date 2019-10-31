@@ -698,7 +698,8 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		break;
 	case EXPR_BINARY_OP:
 		if (!cgen_expr_pre(g, e->binary.lhs)) return false;
-		if (!cgen_expr_pre(g, e->binary.rhs)) return false;
+		if (e->binary.op != BINARY_DOT)
+			if (!cgen_expr_pre(g, e->binary.rhs)) return false;
 		break;
 	case EXPR_CAST:
 		if (!cgen_expr_pre(g, e->cast.expr)) return false;
@@ -859,6 +860,14 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 				assert(0);
 				break;
 			}
+			cgen_write(g, ")");
+			handled = true;
+			break;
+		case BINARY_DOT:
+			cgen_write(g, "(");
+			cgen_expr(g, e->binary.lhs);
+			cgen_write(g, ".");
+			cgen_ident(g, e->binary.field->name);
 			cgen_write(g, ")");
 			handled = true;
 			break;

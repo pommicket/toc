@@ -8,8 +8,11 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 			return false;
 		break;
 	case EXPR_BINARY_OP:
-		if (!cgen_decls_expr(g, e->binary.lhs)
-			|| !cgen_decls_expr(g, e->binary.rhs))
+		if (!cgen_decls_expr(g, e->binary.lhs))
+			return false;
+		
+		if (e->binary.op != BINARY_DOT)
+			if (!cgen_decls_expr(g, e->binary.rhs))
 			return false;
 		break;
 	case EXPR_CAST:

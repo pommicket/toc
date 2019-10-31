@@ -4,14 +4,19 @@ puti @= fn(x: int) {
 };
 
 Point @= struct {
-	x, y : int;
-	something:fn(f32);
-	z,asdfasdfasdf:(int,int);
-	
+	x_coordinate, y_coordinate : int;
 };
 
 main @= fn() {
 	 p:Point;
-a:p;
-	 // asasdfdsfa:(int,int);
+	 x := p.({
+	   t @= int;
+	   f @= fn() t { 7 as t };
+	   if f() as int > 3 {
+	   	  "x_coordinate"
+	   } else {
+	   	 "y_coordinate"
+	   }
+	 });
+	 puti(x);
 };

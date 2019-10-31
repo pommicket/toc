@@ -864,12 +864,22 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	} break;
 	case EXPR_BINARY_OP: {
 		Value lhs, rhs;
-		/* TODO(eventually): short-circuiting */
+		Expression *lhs_expr = e->binary.lhs, *rhs_expr = e->binary.rhs;
 		if (e->binary.op != BINARY_SET)
-			if (!eval_expr(ev, e->binary.lhs, &lhs)) return false;
-		if (!eval_expr(ev, e->binary.rhs, &rhs)) return false;
+			if (!eval_expr(ev, lhs_expr, &lhs)) return false;
+		if (e->binary.op != BINARY_DOT)
+			if (!eval_expr(ev, rhs_expr, &rhs)) return false;
+		
 		BuiltinType builtin = e->binary.lhs->type.builtin;
 		switch (e->binary.op) {
+		case BINARY_DOT: {
+			Type *inner_type = &e->binary.lhs->type;
+			while (inner_type->kind == TYPE_USER)
+				inner_type = ident_typeval(inner_type->user.name);
+			eval_struct_find_offsets(inner_type);
+			
+			eval_deref(v, (char *)lhs.struc + e->binary.field->offset, &e->type);
+		} break;
 		case BINARY_ADD:
 			if (e->binary.lhs->type.kind == TYPE_PTR) {
 				v->ptr = (char *)lhs.ptr + val_to_i64(&rhs, e->binary.rhs->type.builtin)

@@ -16,6 +16,10 @@ static inline void *typer_arr_add_(Typer *tr, void **arr, size_t sz) {
 	return arr_adda_(arr, sz, &tr->allocr);
 }
 
+static inline bool type_is_builtin(Type *t, BuiltinType b) {
+	return t->kind == TYPE_BUILTIN && t->builtin == b;
+}
+
 #define typer_arr_add(tr, a) typer_arr_add_(tr, (void **)(a), sizeof **(a))
 
 static bool type_eq(Type *a, Type *b) {
@@ -940,13 +944,16 @@ static bool types_expr(Typer *tr, Expression *e) {
 		Expression *rhs = e->binary.rhs;
 		Type *lhs_type = &lhs->type;
 		Type *rhs_type = &rhs->type;
-		if (!types_expr(tr, lhs)
-			|| !types_expr(tr, rhs))
-			return false;
-		if (lhs_type->kind == TYPE_UNKNOWN || rhs_type->kind == TYPE_UNKNOWN) {
-			return true;
+		BinaryOp o = e->binary.op;
+		if (o != BINARY_DOT) {
+			if (!types_expr(tr, lhs)
+				|| !types_expr(tr, rhs))
+				return false;
+			if (lhs_type->kind == TYPE_UNKNOWN || rhs_type->kind == TYPE_UNKNOWN) {
+				return true;
+			}
 		}
-		switch (e->binary.op) {
+		switch (o) {
 		case BINARY_SET:
 			if (!expr_must_lval(e->binary.lhs)) {
 				return false;
@@ -972,7 +979,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 		case BINARY_GE:
 		case BINARY_EQ:
 		case BINARY_NE: {
-			BinaryOp o = e->binary.op;
 			bool valid = false;
 			if (o == BINARY_SET) {
 				valid = type_eq(lhs_type, rhs_type);
@@ -1074,6 +1080,58 @@ static bool types_expr(Typer *tr, Expression *e) {
 			}
 			}
 			break;
+		case BINARY_DOT: {
+			if (!types_expr(tr, lhs)) return false;
+			Type *inner_type = lhs_type;
+			while (inner_type->kind == TYPE_USER)
+				inner_type = ident_typeval(inner_type->user.name);
+			if (inner_type->kind == TYPE_STRUCT) {
+				bool is_field = false;
+				if (rhs->kind == EXPR_IDENT) {
+					/* maybe accessing a field? */
+					arr_foreach(inner_type->struc.fields, Field, f) {
+						if (f->name == rhs->ident) {
+							is_field = true;
+							*t = *f->type;
+							e->binary.field = f;
+						}
+					}
+				}
+
+				if (!is_field) {
+					/* allow some_struct."foo" */
+					Value field_name;
+					if (!types_expr(tr, rhs)) return false;
+					if (rhs_type->kind != TYPE_SLICE || !type_is_builtin(rhs_type->slice, BUILTIN_CHAR)) {
+						err_print(e->where, "Invalid field of type %s.");
+						return false;
+						
+					}
+					if (!eval_expr(tr->evalr, rhs, &field_name)) return false;
+					arr_foreach(inner_type->struc.fields, Field, f) {
+						if (ident_eq_str(f->name, field_name.slice.data)) {
+							is_field = true;
+							*t = *f->type;
+							e->binary.field = f;
+						}
+					}
+					if (!is_field) {
+						char *fstr = err_malloc(field_name.slice.n + 1);
+						memcpy(fstr, field_name.slice.data, field_name.slice.n);
+						fstr[field_name.slice.n] = 0; /* null-terminate */
+						char *typestr = type_to_str(lhs_type);
+						err_print(e->where, "%s is not a field of structure %s.", fstr, typestr);
+						free(fstr); free(typestr);
+						return false;
+					}
+				}
+			} else {
+				char *s = type_to_str(lhs_type);
+				err_print(e->where, "Operator . applied to type %s, which is not a structure.", s);
+				free(s);
+				return false;
+			}
+		} break;
 		} break;
 	} break;
 	case EXPR_TUPLE:

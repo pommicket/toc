@@ -165,6 +165,7 @@ typedef enum {
 			  KW_EXCLAMATION,
 			  KW_AMPERSAND,
 			  KW_SLASH,
+			  KW_DOT,
 			  KW_EQ,
 			  KW_LAST_SYMBOL = KW_EQ, /* last one entirely consisting of symbols */
 			  KW_IF,
@@ -362,7 +363,8 @@ typedef enum {
 			  BINARY_LE,
 			  BINARY_EQ,
 			  BINARY_NE,
-			  BINARY_AT_INDEX /* e.g. x[i] */
+			  BINARY_AT_INDEX, /* e.g. x[i] */
+			  BINARY_DOT
 } BinaryOp;
 
 typedef struct {
@@ -436,7 +438,7 @@ typedef struct Expression {
 	Type type;
 	Location where;
 	ExprKind kind;
-	uint16_t flags;
+	U16 flags;
 	union {
 		Floating floatl;
 		/* Floating floatl; */
@@ -452,6 +454,7 @@ typedef struct Expression {
 			BinaryOp op;
 			struct Expression *lhs;
 			struct Expression *rhs;
+			Field *field; /* for . only */
 		} binary;
 		CallExpr call;
 	    DirectExpr direct;

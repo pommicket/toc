@@ -55,6 +55,7 @@ static const char *binary_op_to_str(BinaryOp b) {
 	case BINARY_GE: return ">=";
 	case BINARY_EQ: return "==";
 	case BINARY_NE: return "!=";
+	case BINARY_DOT: return ".";
 	}
 	assert(0);
 	return "";
@@ -617,18 +618,21 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 							if (paren_level == 0) {
 								t->token++;
 								if (token_is_kw(t->token, KW_LBRACE)) goto end; /* void fn expr */
-								Token *child_end;
-								if (parser_is_definitely_type(p, &child_end)) { /* try return type */
-									if (token_is_kw(t->token, KW_LBRACE)) {
-										/* non-void fn expr */
-										goto end;
-									}
+								Type return_type;
+								t->token->where.ctx->enabled = false;
+								if (!parse_type(p, &return_type)) {
+									/* couldn't parse a return type. void fn type */
+									ret = true;
+									goto end;
 								}
-								/* it's a function type! */
+							    
+								if (token_is_kw(t->token, KW_LBRACE)) {
+									/* non-void fn expr */
+									goto end;
+								}
+								/* it's a non-void function type */
 								ret = true;
 								goto end;
-								
-								
 							}
 							break;
 						default: break;
@@ -847,7 +851,7 @@ static void fprint_expr(FILE *out, Expression *e);
 
 #define NOT_AN_OP -1
 /* cast/new aren't really operators since they operate on types, not exprs. */
-#define CAST_PRECEDENCE 2
+#define CAST_PRECEDENCE 45
 #define NEW_PRECEDENCE 22
 static int op_precedence(Keyword op) {
 	switch (op) {
@@ -865,6 +869,7 @@ static int op_precedence(Keyword op) {
 	case KW_ASTERISK: return 30;
 	case KW_SLASH: return 40;
 	case KW_EXCLAMATION: return 50;
+	case KW_DOT: return 60;
 	case KW_DEL: return 1000;
 	default: return NOT_AN_OP;
 	}
@@ -1290,6 +1295,9 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			break;
 		case KW_SLASH:
 			op = BINARY_DIV;
+			break;
+		case KW_DOT:
+			op = BINARY_DOT;
 			break;
 		case KW_AMPERSAND:
 		case KW_EXCLAMATION:
@@ -1794,14 +1802,20 @@ static void fprint_expr(FILE *out, Expression *e) {
 	case EXPR_IDENT:
 		fprint_ident(out, e->ident);
 		break;
-	case EXPR_BINARY_OP:
-		fprintf(out, "%s", binary_op_to_str(e->binary.op));
+	case EXPR_BINARY_OP: {
+		bool prev = parse_printing_after_types;
 		fprintf(out, "(");
 		fprint_expr(out, e->binary.lhs);
-		fprintf(out, ",");
+		fprintf(out, ")%s(", binary_op_to_str(e->binary.op));
+		if (e->binary.op == BINARY_DOT) {
+			parse_printing_after_types = false; /* don't show types for rhs of . */
+		}
 		fprint_expr(out, e->binary.rhs);
+		if (e->binary.op == BINARY_DOT) {
+			parse_printing_after_types = prev;
+		}
 		fprintf(out, ")");
-		break;
+	} break;
 	case EXPR_UNARY_OP:
 		fprintf(out, "%s", unary_op_to_str(e->unary.op));
 		fprintf(out, "(");

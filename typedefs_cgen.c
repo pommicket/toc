@@ -17,9 +17,12 @@ static bool typedefs_expr(CGenerator *g, Expression *e) {
 			return false;
 		break;
 	case EXPR_BINARY_OP:
-		if (!typedefs_expr(g, e->binary.lhs)
-			|| !typedefs_expr(g, e->binary.rhs))
+		if (!typedefs_expr(g, e->binary.lhs))
 			return false;
+		
+		if (e->binary.op != BINARY_DOT)
+			if (!typedefs_expr(g, e->binary.rhs))
+				return false;
 		break;
 	case EXPR_CAST:
 		if (!typedefs_expr(g, e->cast.expr))
