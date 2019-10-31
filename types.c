@@ -363,7 +363,13 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 		/* just check if it's actually defined */
 		if (!ident_typeval(t->user.name)) {
 			char *s = ident_to_str(t->user.name);
-			err_print(where, "Use of undeclared type %s.", s);
+			IdentDecl *idecl = ident_decl(t->user.name);
+			if (idecl) {
+				err_print(where, "Use of non-type identifier %s as type.", s);
+				info_print(idecl->decl->where, "%s is declared here.", s);
+			} else {
+				err_print(where, "Use of undeclared type %s.", s);
+			}
 			free(s);
 			return false;
 		}
