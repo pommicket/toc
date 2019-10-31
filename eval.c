@@ -1,4 +1,5 @@
 static bool types_block(Typer *tr, Block *b);
+static bool types_decl(Typer *tr, Declaration *d);
 static size_t compiler_sizeof(Type *t);
 static bool eval_block(Evaluator *ev, Block *b, Type *t, Value *v);
 static bool eval_expr(Evaluator *ev, Expression *e, Value *v);
@@ -1010,6 +1011,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	case EXPR_IDENT: {
 		IdentDecl *idecl = ident_decl(e->ident);
 		Declaration *d = idecl->decl;
+		if (!types_decl(ev->typer, d)) return false;
 		if (idecl->flags & IDECL_FLAG_HAS_VAL) {
 			*v = idecl->val;
 		} else if (d->flags & DECL_FLAG_CONST) {

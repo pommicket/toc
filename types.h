@@ -310,9 +310,9 @@ typedef struct Type {
 } Type;
 
 #define BLOCK_FLAG_FN 0x01
-
+#define BLOCK_FLAG_FOUND_TYPES 0x02
 typedef struct Block {
-	uint16_t flags;
+	U16 flags;
 	Location start;
 	Location end;
 	struct Statement *stmts;

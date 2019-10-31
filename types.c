@@ -1164,6 +1164,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 }
 
 static bool types_block(Typer *tr, Block *b) {
+	if (b->flags & BLOCK_FLAG_FOUND_TYPES)
+		return true;
 	bool success = true;
 	Block *prev_block = tr->block;
 	tr->block = b;
@@ -1182,6 +1184,7 @@ static bool types_block(Typer *tr, Block *b) {
 	}
 	block_exit(b, b->stmts);
 	tr->block = prev_block;
+	b->flags |= BLOCK_FLAG_FOUND_TYPES;
 	return success;
 }
 
