@@ -870,7 +870,6 @@ static int op_precedence(Keyword op) {
 	case KW_ASTERISK: return 30;
 	case KW_SLASH: return 40;
 	case KW_EXCLAMATION: return 50;
-	case KW_DOT: return 60;
 	case KW_DEL: return 1000;
 	default: return NOT_AN_OP;
 	}
@@ -1045,6 +1044,10 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		}
 		default: break;
 		}
+
+
+	/* NOTE: the . operator is not handled here, but further down, in order to allow some_struct.fn_member() */
+	Token *dot = NULL; /* this keeps track of it for later */
 	
 	/* Find the lowest-precedence operator not in parentheses/braces/square brackets */
 	int paren_level = 0;
@@ -1091,6 +1094,10 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					tokr_err(t, "Excessive closing ].");
 					return false;
 				}
+				break;
+			case KW_DOT:
+				if (paren_level == 0 && brace_level == 0 && square_level == 0)
+					dot = token;
 				break;
 			default: { /* OPTIM: use individual cases for each op */
 				if (paren_level == 0 && brace_level == 0 && square_level == 0) {
@@ -1297,9 +1304,6 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		case KW_SLASH:
 			op = BINARY_DIV;
 			break;
-		case KW_DOT:
-			op = BINARY_DOT;
-			break;
 		case KW_AMPERSAND:
 		case KW_EXCLAMATION:
 		case KW_DEL:
@@ -1345,7 +1349,8 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				case KW_LPAREN:
 					if (square_level == 0 && paren_level == 0 && brace_level == 0
 						&& token != t->tokens
-						&& token[-1].kind != TOKEN_DIRECT /* don't include directives */)
+						&& token[-1].kind != TOKEN_DIRECT /* don't include directives */
+						&& !token_is_kw(&token[-1], KW_DOT)) /* or some_struct.("property") */
 						opening_bracket = token; /* maybe this left parenthesis opens the function call */
 					paren_level++;
 					break;
@@ -1499,6 +1504,20 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			}
 			return true;
 		}
+
+		if (dot) {
+			e->kind = EXPR_BINARY_OP;
+			e->binary.lhs = parser_new_expr(p);
+			e->binary.rhs = parser_new_expr(p);
+			e->binary.op = BINARY_DOT;
+			if (!parse_expr(p, e->binary.lhs, dot))
+				return false;
+			t->token = dot + 1;
+			if (!parse_expr(p, e->binary.rhs, end))
+				return false;
+			return true;
+		}
+		
 		tokr_err(t, "Unrecognized expression.");
 		return false;
 	}

@@ -5,6 +5,7 @@ puti @= fn(x: int) {
 
 Point @= struct {
 	x_coordinate, y_coordinate : int;
+	f : fn();
 };
 
 somefn @= fn() int {
@@ -21,8 +22,10 @@ somefn @= fn() int {
 	 x
 };
 
-main @= fn() {	
+main @= fn() {
+	 p: Point;
 	 X @= somefn();
 	 puti(X);
 	 puti(somefn());
+	 puti(p.x_coordinate);
 };
