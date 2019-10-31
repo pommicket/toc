@@ -153,7 +153,6 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 		return str_copy(buffer, bufsize, s);
 	}
 	case TYPE_FN: {
-		/* number of chars written */
 		size_t written = str_copy(buffer, bufsize, "fn (");
 		Type *ret_type = t->fn.types;
 		Type *param_types = ret_type + 1;
@@ -169,7 +168,16 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 			written += type_to_str_(ret_type, buffer + written, bufsize - written);
 		}
 		return written;
-	} break;
+	}
+	case TYPE_STRUCT: {
+		size_t written = str_copy(buffer, bufsize, "struct { ");
+		arr_foreach(t->struc.fields, Field, f) {
+			written += type_to_str_(f->type, buffer + written, bufsize - written);
+			written += str_copy(buffer + written, bufsize - written, "; ");
+		}
+		written += str_copy(buffer + written, bufsize - written, " }");
+		return written;
+	}
 	case TYPE_ARR: {
 		size_t written = str_copy(buffer, bufsize, "[");
 		if (t->flags & TYPE_FLAG_RESOLVED) {
@@ -181,13 +189,13 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 		written += str_copy(buffer + written, bufsize - written, "]");
 		written += type_to_str_(t->arr.of, buffer + written, bufsize - written);
 		return written;
-	} break;
+	}
 	case TYPE_SLICE: {
 		size_t written = str_copy(buffer, bufsize, "[");
 		written += str_copy(buffer + written, bufsize - written, "]");
 		written += type_to_str_(t->slice, buffer + written, bufsize - written);
 		return written;
-	} break;
+	}
 	case TYPE_TUPLE: {
 		size_t written = str_copy(buffer, bufsize, "(");
 		arr_foreach(t->tuple, Type, child) {
@@ -464,6 +472,7 @@ static bool parse_type(Parser *p, Type *type) {
 				err_print(t->token->where, "Expected { to follow struct.");
 				return false;
 			}
+			t->token++;
 			{
 				while (!token_is_kw(t->token, KW_RBRACE)) {
 					Declaration field_decl;
@@ -480,6 +489,7 @@ static bool parse_type(Parser *p, Type *type) {
 						idx++;
 					}
 				}
+				t->token++;
 			}
 			break;
 		default:

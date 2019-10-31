@@ -45,6 +45,7 @@ static bool type_eq(Type *a, Type *b) {
 		return a->user.name == b->user.name;
 	case TYPE_BUILTIN:
 		return a->builtin == b->builtin;
+	case TYPE_STRUCT: return false;
 	case TYPE_FN: {
 		
 		if (arr_len(a->fn.types) != arr_len(b->fn.types)) return false;
@@ -367,6 +368,12 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 			return false;
 		}
 		break;
+	case TYPE_STRUCT:
+		arr_foreach(t->struc.fields, Field, f) {
+			if (!type_resolve(tr, f->type, where))
+				return false;
+		}
+		break;
 	case TYPE_UNKNOWN:
 	case TYPE_VOID:
 	case TYPE_TYPE:
@@ -384,6 +391,7 @@ static bool type_can_be_truthy(Type *t) {
 	case TYPE_ARR:
 	case TYPE_TYPE:
 	case TYPE_USER:
+	case TYPE_STRUCT:
 		return false;
 	case TYPE_FN:
 	case TYPE_UNKNOWN:
@@ -413,6 +421,7 @@ static Status type_cast_status(Type *from, Type *to) {
 	}
 	switch (from->kind) {
 	case TYPE_UNKNOWN: return STATUS_NONE;
+	case TYPE_STRUCT:
 	case TYPE_TYPE:
 	case TYPE_VOID:
 		return STATUS_ERR;
@@ -436,6 +445,7 @@ static Status type_cast_status(Type *from, Type *to) {
 			case TYPE_TYPE:
 			case TYPE_TUPLE:
 			case TYPE_SLICE:
+			case TYPE_STRUCT:
 			case TYPE_ARR:
 			case TYPE_VOID:
 			case TYPE_USER: /* handled above */

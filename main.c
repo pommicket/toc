@@ -1,7 +1,11 @@
 /* 
 TODO:
 structs
+structs can't have tuple members
+dot
 length of slice/arr with .len
+verify size of struct, align of fields
+pointers to futurely-declared types
 don't allow while {3; 5} (once break is added)
 allow omission of trailing ; in foo @= fn() {} 
 any odd number of "s for a string

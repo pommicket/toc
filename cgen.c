@@ -93,8 +93,9 @@ static bool cgen_fn_is_direct(CGenerator *g, Declaration *d) {
 static bool cgen_uses_ptr(Type *t) {
 	switch (t->kind) {
 	case TYPE_TUPLE:
-	case TYPE_ARR:
+	case TYPE_STRUCT:
 		return true;
+	case TYPE_ARR: /* TODO: test me */
 	case TYPE_BUILTIN:
 	case TYPE_PTR:
 	case TYPE_FN:
@@ -117,11 +118,10 @@ static void cgen_ident(CGenerator *g, Identifier i) {
 	} else {
 		cgen_indent(g);
 		IdentDecl *idecl = ident_decl(i);
-		assert(idecl);
-		if (idecl->flags & IDECL_FLAG_CGEN_PTR)
+		if (idecl && (idecl->flags & IDECL_FLAG_CGEN_PTR))
 			cgen_write(g, "(*");
 		fprint_ident(cgen_writing_to(g), i);
-		if (idecl->flags & IDECL_FLAG_CGEN_PTR)
+		if (idecl && (idecl->flags & IDECL_FLAG_CGEN_PTR))
 			cgen_write(g, ")");
 	}
 }
@@ -180,6 +180,21 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
 	case TYPE_UNKNOWN:
 		err_print(where, "Can't determine type.");
 		return false;
+	case TYPE_STRUCT:
+		cgen_write(g, "struct {");
+		g->indent_lvl++;
+		cgen_nl(g);
+		arr_foreach(t->struc.fields, Field, f) {
+			if (!cgen_type_pre(g, f->type, where)) return false;
+			cgen_write(g, " ");
+			cgen_ident(g, f->name);
+			if (!cgen_type_post(g, f->type, where)) return false;
+			cgen_write(g, ";");
+			cgen_nl(g);
+		}
+		g->indent_lvl--;
+		cgen_write(g, "}");
+		break;
 	case TYPE_TUPLE:
 	case TYPE_TYPE:
 		/* We should never try to generate this type */
@@ -261,6 +276,7 @@ static bool cgen_type_post(CGenerator *g, Type *t, Location where) {
 	case TYPE_TYPE:
 	case TYPE_SLICE:
 	case TYPE_USER:
+	case TYPE_STRUCT:
 		break;
 	}
 	return true;
@@ -364,6 +380,7 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 	case TYPE_FN:
 	case TYPE_PTR:
 	case TYPE_SLICE:
+	case TYPE_STRUCT:
 	case TYPE_UNKNOWN:
 		if (set_expr) {
 			if (!cgen_expr(g, set_expr)) return false;
@@ -1038,9 +1055,8 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 		cgen_write(g, "{NULL, 0}");
 		break;
 	case TYPE_ARR:
-		cgen_write(g, "{");
-		cgen_zero_value(g, t->arr.of);
-		cgen_write(g, "}");
+	case TYPE_STRUCT:
+		cgen_write(g, "{0}");
 		break;
 	case TYPE_USER:
 		cgen_zero_value(g, ident_typeval(t->user.name));
@@ -1129,11 +1145,13 @@ static bool cgen_val_ptr_pre(CGenerator *g, void *v, Type *t, Location where) {
 	case TYPE_VOID:
 	case TYPE_BUILTIN:
 	case TYPE_PTR:
+	case TYPE_STRUCT:
 		break;
 	}
 	return true;
 }
 
+/* generate a value from a pointer */
 static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 	switch (t->kind) {
 	case TYPE_TUPLE:
@@ -1155,6 +1173,10 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 		break;
 	case TYPE_SLICE:
 		cgen_write(g, "{d%p_, %lu}", v, ((Slice *)v)->n);
+		break;
+	case TYPE_STRUCT:
+		err_print(where, "TODO");
+		/* TODO */
 		break;
 	case TYPE_FN:
 		cgen_fn_name(g, *(FnExpr **)v);

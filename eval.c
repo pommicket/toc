@@ -1,3 +1,4 @@
+static size_t compiler_sizeof(Type *t);
 static bool eval_block(Evaluator *ev, Block *b, Type *t, Value *v);
 static bool eval_expr(Evaluator *ev, Expression *e, Value *v);
 static bool block_enter(Block *b, Statement *stmts, U32 flags);
@@ -43,6 +44,68 @@ static size_t compiler_sizeof_builtin(BuiltinType b) {
 	return 0;
 }
 
+static size_t compiler_alignof(Type *t) {
+	switch (t->kind) {
+	case TYPE_BUILTIN:
+		return compiler_sizeof_builtin(t->builtin);
+	case TYPE_VOID:
+		return 1;
+	case TYPE_FN:
+		return sizeof(FnExpr *);
+	case TYPE_PTR:
+		return sizeof(void *);
+	case TYPE_TUPLE:
+		return sizeof(Value *);
+	case TYPE_ARR:
+		return compiler_alignof(t->arr.of);
+	case TYPE_SLICE:
+		if (sizeof(void *) > sizeof(size_t))
+			return sizeof(void *);
+		else
+			return sizeof(size_t);
+	case TYPE_TYPE:
+		return sizeof(Type *);
+	case TYPE_USER:
+		return compiler_alignof(ident_typeval(t->user.name));
+	case TYPE_STRUCT: {
+		/* assume the align of a struct is (at most) the greatest align out of its children's */
+		size_t align = 1;
+		arr_foreach(t->struc.fields, Field, f) {
+			size_t falign = compiler_alignof(f->type);
+			if (falign > align) align = falign;
+		}
+		return align;
+	}
+	case TYPE_UNKNOWN:
+		break;
+	}
+	assert(0);
+	return 0;
+}
+
+/* finds offsets and size */
+/* OPTIM: don't do this once per Type, but once per struct */
+static void eval_struct_find_offsets(Type *t) {
+	assert(t->kind == TYPE_STRUCT);
+	if (!(t->flags & TYPE_FLAG_STRUCT_FOUND_OFFSETS)) {
+		size_t bytes = 0;
+		arr_foreach(t->struc.fields, Field, f) {
+			size_t falign = compiler_alignof(f->type);
+			/* align */
+			bytes += ((falign - bytes) % falign + falign) % falign; /* = -bytes mod falign */
+			assert(bytes % falign == 0);
+			f->offset = bytes;
+			/* add size */
+			bytes += compiler_sizeof(f->type);
+		}
+		/* final align */
+		size_t align = compiler_alignof(t);
+		bytes += ((align - bytes) % align + align) % align; /* = -bytes mod align */
+		t->struc.size = bytes;
+		t->flags |= TYPE_FLAG_STRUCT_FOUND_OFFSETS;
+	}
+}
+
 /* size of a type at compile time */
 static size_t compiler_sizeof(Type *t) {
 	switch (t->kind) {
@@ -62,6 +125,10 @@ static size_t compiler_sizeof(Type *t) {
 		return sizeof(Type *);
 	case TYPE_USER:
 		return compiler_sizeof(ident_typeval(t->user.name));
+	case TYPE_STRUCT: {
+		eval_struct_find_offsets(t);
+		return t->struc.size;
+	} break;
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 		return 0;
@@ -100,6 +167,7 @@ static bool val_truthiness(Value *v, Type *t) {
 	case TYPE_USER:
 	case TYPE_TYPE:
 	case TYPE_TUPLE:
+	case TYPE_STRUCT:
 		break;
 	}
 	assert(0);
@@ -187,6 +255,14 @@ static void val_copy(Evaluator *ev, Value *dest, Value *src, Type *t) {
 			dest->tuple = err_malloc(bytes);
 		memcpy(dest->tuple, src->tuple, bytes);
 	} break;
+	case TYPE_STRUCT: {
+		size_t bytes = compiler_sizeof(t);
+		if (ev)
+			dest->struc = evalr_malloc(ev, bytes);
+		else
+			dest->struc = err_malloc(bytes);
+		memcpy(dest->struc, src->struc, bytes);
+	} break;
 	case TYPE_USER:
 		val_copy(ev, dest, src, ident_typeval(t->user.name));
 		break;
@@ -207,6 +283,8 @@ static void *val_ptr_to_free(Value *v, Type *t) {
 		return v->arr;
 	case TYPE_TUPLE:
 		return v->tuple;
+	case TYPE_STRUCT:
+		return v->struc;
 	case TYPE_USER:
 		return val_ptr_to_free(v, ident_typeval(t->user.name));
 	}
@@ -295,15 +373,19 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		vout->boolv = val_truthiness(vin, from);
 		return;
 	}
+	if (from->kind == TYPE_USER || to->kind == TYPE_USER) {
+		*vout = *vin;
+		return;
+	}
+	
 	switch (from->kind) {
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 	case TYPE_TUPLE:
-	case TYPE_TYPE:
-		 assert(0); break;
 	case TYPE_USER:
-		*vout = *vin;
-		break;
+	case TYPE_TYPE:
+	case TYPE_STRUCT:
+		assert(0); break;
 	case TYPE_BUILTIN:
 		switch (to->kind) {
 		case TYPE_BUILTIN:
@@ -323,8 +405,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 			}
 			break;
 		case TYPE_USER:
-			*vout = *vin;
-			break;
+		case TYPE_STRUCT:
 		case TYPE_SLICE:
 		case TYPE_VOID:
 		case TYPE_UNKNOWN:
@@ -355,6 +436,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_ARR:
 		case TYPE_BUILTIN:
 		case TYPE_TYPE:
+		case TYPE_STRUCT:
 			assert(0); break;
 		}
 		break;
@@ -388,6 +470,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_TUPLE:
 		case TYPE_VOID:
 		case TYPE_TYPE:
+		case TYPE_STRUCT:
 			assert(0);
 			break;
 		}
@@ -411,6 +494,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_VOID:
 		case TYPE_BUILTIN:
 		case TYPE_TYPE:
+		case TYPE_STRUCT:
 			assert(0); break;
 		}
 		break;
@@ -434,6 +518,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_VOID:
 		case TYPE_BUILTIN:
 		case TYPE_TYPE:
+		case TYPE_STRUCT:
 			assert(0); break;
 		}
 		break;
@@ -445,6 +530,7 @@ static void eval_deref(Value *v, void *ptr, Type *type) {
 	switch (type->kind) {
 	case TYPE_PTR: v->ptr = *(void **)ptr; break;
 	case TYPE_ARR: v->arr = ptr; break; /* when we have a pointer to an array, it points directly to the data in that array. */
+	case TYPE_STRUCT: v->struc = ptr; break; /* same for structs */
 	case TYPE_FN: v->fn = *(FnExpr **)ptr; break;
 	case TYPE_TUPLE: v->tuple = *(Value **)ptr; break;
 	case TYPE_BUILTIN:
@@ -482,7 +568,8 @@ static void eval_deref(Value *v, void *ptr, Type *type) {
 static void eval_deref_set(void *set, Value *to, Type *type) {
 	switch (type->kind) {
 	case TYPE_PTR: *(void **)set = to->ptr; break;
-	case TYPE_ARR: *(void **)set = to->arr; break;
+	case TYPE_ARR: memcpy(set, to->arr, compiler_sizeof(type)); break; /* TODO: test this */
+	case TYPE_STRUCT: memcpy(set, to->struc, compiler_sizeof(type)); break;
 	case TYPE_FN: *(FnExpr **)set = to->fn; break;
 	case TYPE_TUPLE: *(Value **)set = to->tuple; break;
 	case TYPE_BUILTIN:

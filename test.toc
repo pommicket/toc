@@ -3,15 +3,11 @@ puti @= fn(x: int) {
 ");
 };
 
-
-F @= fn(int,int);
+Point @= struct {
+	x, y : int;
+	something:fn(f32);
+};
 
 main @= fn() {
-
-	 foo := (fn(x,y:int) {}) as F;
-
-	 bar := foo as fn(int, int);
-	 baz := bar as &char;
-	 quux := baz as int;
-	 puti(quux);
+	 p:Point;
 };

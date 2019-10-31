@@ -88,6 +88,7 @@ typedef union Value {
 	struct FnExpr *fn;
 	void *arr;
 	void *ptr;
+	void *struc;
 	union Value *tuple;
 	Slice slice;
 	struct Type *type;
@@ -272,10 +273,12 @@ typedef enum {
 typedef struct {
 	Identifier name;
 	struct Type *type;
+	size_t offset; /* offset during compile time */
 } Field;
 
 #define TYPE_FLAG_FLEXIBLE 0x01
 #define TYPE_FLAG_RESOLVED 0x02
+#define TYPE_FLAG_STRUCT_FOUND_OFFSETS 0x04
 
 typedef struct Type {
 	Location where;
@@ -301,6 +304,7 @@ typedef struct Type {
 		} user;
 		struct {
 		    Field *fields;
+			size_t size; /* size of this struct during compile time */
 		} struc;
 	};
 } Type;
