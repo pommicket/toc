@@ -177,13 +177,15 @@ static void idents_test(void) {
 	idents_free(&ids);
 }
 
-/* if i has a non-constant declaration, returns NULL. */
-static Value *ident_decl_val(Identifier i) {
+
+static inline Type *ident_typeval(Identifier i) {
+	Value *val;
 	IdentDecl *idecl = ident_decl(i);
 	if (!idecl) return NULL;
 	Declaration *d = idecl->decl;
 	if (!(d->flags & DECL_FLAG_CONST))
 		return NULL;
+	assert(d->flags & DECL_FLAG_FOUND_TYPE);
 	if (d->type.kind == TYPE_TUPLE) {
 		size_t idx;
 		for (idx = 0; idx < arr_len(d->idents); idx++) {
@@ -191,13 +193,9 @@ static Value *ident_decl_val(Identifier i) {
 				break;
 		}
 		assert(idx < arr_len(d->idents));
-		return &d->val.tuple[idx];
-	} else return &d->val;
-}
+		val = &d->val.tuple[idx];
+	} else val = &d->val;
 
-static inline Type *ident_typeval(Identifier i) {
-	Value *val = ident_decl_val(i);
-	if (!val) return NULL;
 	return val->type;
 }
 

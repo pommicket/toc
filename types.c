@@ -294,7 +294,9 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 				info_print(d->where, "%s will be declared here.", s);
 				free(s);
 			} else {
-				err_print(d->where, "Declaration type not found yet, even though it has passed.\nThis should not happen.");
+			    /* let's type the declaration, and redo this (for evaling future functions) */
+				if (!types_decl(tr, d)) return false;
+				return type_of_ident(tr, where, i, t);
 			}
 			return false;
 		}

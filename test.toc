@@ -1,8 +1,16 @@
+
+
+
 puti @= fn(x: int) {
 	 #C("printf(\"%ld\\n\", (long)x);
 ");
 };
 
+main @= fn() {
+// puti(somesum());
+foo @= somesum();
+// puti(foo);
+};
 Point @= struct {
 	x, y : int;
 };
@@ -16,8 +24,4 @@ somesum @= fn() int {
 	 total := sum(&p);
 	 total
 };
-main @= fn() {
-// puti(somesum());
-foo @= somesum();
-// puti(foo);
-};
+

@@ -25,7 +25,7 @@
 
 
 static Type *type_inner(Type *t) {
-	while (t->kind == TYPE_USER)
+	while (t && t->kind == TYPE_USER)
 		t = ident_typeval(t->user.name);
 	return t;
 }
