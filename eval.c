@@ -675,6 +675,62 @@ static void *eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr) {
     return (char *)struc_data + dot_expr->binary.field->offset;
 }
 
+static bool eval_address_of(Evaluator *ev, Expression *e, void **ptr) {
+	switch (e->kind) {
+	case EXPR_IDENT: {
+		IdentDecl *id = ident_decl(e->ident);
+		if (!(id->flags & IDECL_FLAG_HAS_VAL)) {
+			err_print(e->where, "Cannot take address of run time variable at compile time.");
+			return false;
+		}
+		if (e->type.kind == TYPE_ARR)
+			*ptr = id->val.arr; /* point directly to data */
+		else if (e->type.kind == TYPE_STRUCT)
+			*ptr = id->val.struc;
+		else
+			*ptr = &id->val;
+	} break;
+	case EXPR_UNARY_OP:
+		switch (e->unary.op) {
+		case UNARY_DEREF: {
+			Value v;
+			if (!eval_expr(ev, e, &v)) return false;
+			*ptr = v.ptr;
+		} break;
+		case UNARY_LEN: {
+			Value slice;
+			if (!eval_expr(ev, e, &slice)) return false;
+			*ptr = &slice.slice.n;
+		} break;
+		default: assert(0); return false;
+		}
+		break;
+	case EXPR_BINARY_OP:
+		switch (e->binary.op) {
+		case BINARY_AT_INDEX: {
+			if (!eval_expr_ptr_at_index(ev, e, ptr, NULL))
+				return false;
+		} break;
+		case BINARY_DOT: {
+			Value struc;
+			if (!eval_expr(ev, e->binary.lhs, &struc))
+				return false;
+			*ptr = eval_ptr_to_struct_field(ev, e);
+			if (!*ptr)
+				return false;
+			return true;
+		} break;
+		default: assert(0); return false;
+		}
+		break;
+	default:
+		assert(0);
+		return false;
+	}
+	return true;
+}
+
+
 static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 	switch (set->kind) {
 	case EXPR_IDENT: {
@@ -691,6 +747,21 @@ static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 			Value ptr;
 			if (!eval_expr(ev, set->unary.of, &ptr)) return false;
 			eval_deref_set(ptr.ptr, to, &set->type);
+		} break;
+		case UNARY_LEN: {
+			Type *of_type = &set->unary.of->type;
+			if (of_type->kind == TYPE_PTR) {
+				/* if it's a pointer, we can just eval it and set its length */
+				Value of;
+				if (!eval_expr(ev, set->unary.of, &of)) return false;
+				((Slice *)of.ptr)->n = to->i64;
+			} else {
+				/* otherwise, we need a pointer to the slice */
+				void *p;
+				if (!eval_address_of(ev, set->unary.of, &p))
+					return false;
+				((Slice *)p)->n = to->i64;
+			}
 		} break;
 		default: assert(0); break;
 		}
@@ -828,59 +899,14 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (o->type.kind == TYPE_TYPE) {
 				if (!eval_expr(ev, e->unary.of, &of)) return false;
 				/* "address" of type (pointer to type) */
-				v->type = evalr_calloc(ev, 1, sizeof *v->type); /* TODO: this might be bad in the future; should free this at some point */
-				/* v->type->flags = 0; */
+				v->type = evalr_malloc(ev, sizeof *v->type); /* TODO: this might be bad in the future; should free this at some point */
+				v->type->flags = 0;
 				v->type->kind = TYPE_PTR;
 				v->type->ptr = of.type;
 				break;
 			}
-			switch (o->kind) {
-			case EXPR_IDENT: {
-				IdentDecl *id = ident_decl(o->ident);
-				if (!(id->flags & IDECL_FLAG_HAS_VAL)) {
-					err_print(e->where, "Cannot take address of run time variable at compile time.");
-					return false;
-				}
-				if (o->type.kind == TYPE_ARR)
-					v->ptr = id->val.arr; /* point directly to data */
-				else if (o->type.kind == TYPE_STRUCT)
-					v->ptr = id->val.struc;
-				else
-					v->ptr = &id->val;
-			} break;
-			case EXPR_UNARY_OP:
-				switch (o->unary.op) {
-				case UNARY_DEREF: {
-					Value ptr;
-					if (!eval_expr(ev, o, &ptr)) return false;
-					v->ptr = ptr.ptr;
-				} break;
-				default: assert(0); break;
-				}
-				break;
-			case EXPR_BINARY_OP:
-				switch (o->binary.op) {
-				case BINARY_AT_INDEX: {
-					void *ptr;
-					if (!eval_expr_ptr_at_index(ev, o, &ptr, NULL))
-						return false;
-					v->ptr = ptr;
-				} break;
-				case BINARY_DOT: {
-					Value struc;
-					if (!eval_expr(ev, o->binary.lhs, &struc))
-						return false;
-					v->ptr = eval_ptr_to_struct_field(ev, o);
-					if (!v->ptr)
-						return false;
-				} break;
-				default: assert(0); break;
-				}
-				break;
-			default:
-				assert(0);
-				break;
-			}
+			if (!eval_address_of(ev, o, &v->ptr))
+				return false;
 		} break;
 		case UNARY_DEREF:
 			eval_deref(v, of.ptr, &e->type);

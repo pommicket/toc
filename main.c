@@ -1,9 +1,10 @@
 /* 
 TODO:
-length of slice/arr with .len
-.len lvalue for slices
 verify size of struct, align of fields
 pointers to futurely-declared types
+for
++=, -=, *=, /=
+compile-time arguments
 don't allow while {3; 5} (once break is added)
 any odd number of "s for a string
 modifiable strings:

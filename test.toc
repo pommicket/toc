@@ -3,37 +3,27 @@ puti @= fn(x: int) {
 ");
 };
 
-foo @= fn() int {
-	x:= new(int, 10).len;
-	x
+total @= fn() int {
+	  t := 0;
+	 x := new(int,10);
+	 i := 0;
+	 while i < x.len {
+		   x[i] = i;
+		   i = i + 1;
+	 }
+	 
+	 x.len = 5;
+	 i = 0;
+	 while i < x.len {
+	 	   t = t + x[i];
+		   i = i + 1;
+	 }
+	 t
 };
 
-bar @= fn() int {
-	x := new(int,10);
-	(&x).len
-};
-
-baz @= fn() int {
-	x: [10]int;
-	x.len
-};
-
-quux @= fn() int {
-	 x: [10]int;
-	 (&x).len
-};
 
 main @= fn() {
-	 puti(foo());
-	 X @= foo();
+	 puti(total());
+	 X @= total();
 	 puti(X);
-	 puti(bar());
-	 Y @= bar();
-	 puti(Y);
-	 puti(baz());
-	 Z @= baz();
-	 puti(Z);
-	 puti(quux());
-	 W @= quux();
-	 puti(W);
 };

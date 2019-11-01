@@ -163,14 +163,25 @@ static bool expr_must_lval(Expression *e) {
 	}
 	case EXPR_UNARY_OP:
 		if (e->unary.op == UNARY_DEREF) return true;
-		break;
+		if (e->unary.op == UNARY_LEN) {
+			Type *of_type = &e->unary.of->type;
+			if (of_type->kind != TYPE_PTR && !expr_must_lval(e->unary.of)) { /* can't set length of a non-lvalue slice */
+				return false;
+			}
+			
+			return of_type->kind == TYPE_SLICE
+				|| (of_type->kind == TYPE_PTR
+					&& of_type->kind == TYPE_SLICE);
+		}
+		err_print(e->where, "Cannot use operator %s as l-value.", unary_op_to_str(e->unary.op));
+		return false;
 	case EXPR_BINARY_OP:
 		switch (e->binary.op) {
 		case BINARY_AT_INDEX: return true;
 		case BINARY_DOT: return true;
 		default: break;
 		}
-		err_print(e->where, "Cannot use operator %s as l-value", binary_op_to_str(e->binary.op));
+		err_print(e->where, "Cannot use operator %s as l-value.", binary_op_to_str(e->binary.op));
 	    return false;
 	case EXPR_TUPLE:
 		/* x, y is an lval, but 3, "hello" is not. */
