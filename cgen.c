@@ -856,7 +856,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			cgen_write(g, "(");
 			cgen_expr(g, e->binary.lhs);
 			bool is_ptr = type_inner(&e->binary.lhs->type)->kind == TYPE_PTR;
-			cgen_write(g, is_ptr ? "->" : ".");
+			cgen_write(g, is_ptr ? "->" :".");
 			cgen_ident(g, e->binary.field->name);
 			cgen_write(g, ")");
 			handled = true;
@@ -874,6 +874,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 	case EXPR_UNARY_OP: {
 		const char *s = "";
 		bool handled = false;
+		Type *of_type = &e->unary.of->type;
 		switch (e->unary.op) {
 		case UNARY_MINUS:
 			s = "-"; break;
@@ -887,11 +888,29 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			cgen_write(g, "free(");
 			if (!cgen_expr(g, e->unary.of))
 				return false;
-			if (e->unary.of->type.kind == TYPE_SLICE)
+			if (of_type->kind == TYPE_SLICE)
 				cgen_write(g, ".data");
 			cgen_write(g, ")");
 			handled = true;
 			break;
+		case UNARY_LEN: {
+			bool is_ptr = of_type->kind == TYPE_PTR;
+			if (is_ptr) {
+				of_type = of_type->ptr;
+			}
+			switch (of_type->kind) {
+			case TYPE_SLICE:
+				if (!cgen_expr(g, e->unary.of))
+					return false;
+				cgen_write(g, "%sn", is_ptr ? "->" : ".");
+				break;
+			case TYPE_ARR:
+				cgen_write(g, "%lu", (unsigned long)of_type->arr.n);
+				break;
+			default: assert(0); break;
+			}
+			handled = true;
+		} break;
 		}
 		if (handled) break;
 		cgen_write(g, "(");
@@ -961,7 +980,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			if (!eval_expr(g->evalr, &e->direct.args[0], &val))
 				return false;
 			cgen_indent(g);
-			fwrite(val.slice.data, 1, val.slice.n, cgen_writing_to(g));
+			fwrite(val.slice.data, 1, (size_t)val.slice.n, cgen_writing_to(g));
 		} break;
 		case DIRECT_COUNT: assert(0); break;
 		}
@@ -1111,17 +1130,17 @@ static bool cgen_val_ptr_pre(CGenerator *g, void *v, Type *t, Location where) {
 	switch (t->kind) {
 	case TYPE_SLICE: {
 		Slice *s = (Slice *)v;
-		for (U64 i = 0; i < s->n; i++) {
-			if (!cgen_val_ptr_pre(g, (char *)s->data + i * compiler_sizeof(t->slice), t->slice, where))
+		for (I64 i = 0; i < s->n; i++) {
+			if (!cgen_val_ptr_pre(g, (char *)s->data + (U64)i * compiler_sizeof(t->slice), t->slice, where))
 				return false;
 		}
 		if (!cgen_type_pre(g, t->slice, where)) return false;
 		cgen_write(g, "(d%p_[])", v); /* TODO: improve this somehow? */
 		if (!cgen_type_post(g, t->slice, where)) return false;
 		cgen_write(g, " = {");
-		for (U64 i = 0; i < s->n; i++) {
+		for (I64 i = 0; i < s->n; i++) {
 			if (i) cgen_write(g, ", ");
-			if (!cgen_val_ptr(g, (char *)s->data + i * compiler_sizeof(t->slice), t->slice, where))
+			if (!cgen_val_ptr(g, (char *)s->data + (U64)i * compiler_sizeof(t->slice), t->slice, where))
 				return false;
 		}
 		cgen_write(g, "};");

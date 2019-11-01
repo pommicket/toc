@@ -620,7 +620,7 @@ static bool eval_val_ptr_at_index(Evaluator *ev, Location where, Value *arr, U64
 		if (type) *type = arr_type->arr.of;
 	} break;
 	case TYPE_SLICE: {
-		U64 slice_sz = arr->slice.n;
+		U64 slice_sz = (U64)arr->slice.n;
 		if (i >= slice_sz) {
 			err_print(where, "Slice out of bounds (%lu, slice size = %lu)\n", (unsigned long)i, (unsigned long)slice_sz);
 			return false;
@@ -821,6 +821,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		if (e->unary.op != UNARY_ADDRESS) {
 			if (!eval_expr(ev, e->unary.of, &of)) return false;
 		}
+		Type *of_type = &e->unary.of->type;
 		switch (e->unary.op) {
 		case UNARY_ADDRESS: {
 			Expression *o = e->unary.of;
@@ -893,11 +894,27 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			v->boolv = !val_truthiness(v, &e->unary.of->type);
 			break;
 		case UNARY_DEL:
-			if (e->unary.of->type.kind == TYPE_PTR)
+			if (of_type->kind == TYPE_PTR)
 				free(of.ptr);
 			else {
-				assert(e->unary.of->type.kind == TYPE_SLICE);
+				assert(of_type->kind == TYPE_SLICE);
 				free(of.slice.data);
+			}
+			break;
+		case UNARY_LEN:
+			if (of_type->kind == TYPE_PTR) {
+				/* dereference of */
+				eval_deref(&of, of.ptr, of_type->ptr);
+				of_type = of_type->ptr;
+			}
+			switch (of_type->kind) {
+			case TYPE_SLICE:
+				v->i64 = of.slice.n;
+				break;
+			case TYPE_ARR:
+				v->i64 = (I64)of_type->arr.n;
+				break;
+			default: assert(0); break;
 			}
 			break;
 		}
@@ -1011,7 +1028,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		break;
 	case EXPR_LITERAL_STR:
 		v->slice.data = e->strl.str;
-		v->slice.n = e->strl.len;
+		v->slice.n = (I64)e->strl.len;
 		break;
 	case EXPR_CAST: {
 		Value casted;
@@ -1084,7 +1101,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				return false;
 			U64 n64 = val_to_u64(&n, e->new.n->type.builtin);
 			v->slice.data = err_calloc(n64, compiler_sizeof(&e->new.type));
-			v->slice.n = n64;
+			v->slice.n = (I64)n64;
 		} else {
 			v->ptr = err_calloc(1, compiler_sizeof(&e->new.type));
 		}
@@ -1135,7 +1152,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		Type *of_type = &s->of->type;
 		if (!eval_expr(ev, s->of, &ofv))
 			return false;
-		U64 n = of_type->kind == TYPE_ARR ? of_type->arr.n : ofv.slice.n;
+		U64 n = of_type->kind == TYPE_ARR ? of_type->arr.n : (U64)ofv.slice.n;
 		U64 from, to;
 		if (s->from) {
 			Value fromv;
@@ -1167,7 +1184,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (!eval_val_ptr_at_index(ev, e->where, &ofv, to, of_type, &s->to->type, &ptr2, NULL))
 				return false;
 			v->slice.data = ptr1;
-			v->slice.n = to - from;
+			v->slice.n = (I64)(to - from);
 		} else {
 			v->slice.data = NULL;
 			v->slice.n = 0;

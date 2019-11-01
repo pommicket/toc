@@ -68,7 +68,7 @@ typedef struct {
 } BlockArr;
 
 typedef struct {
-    U64 n;
+    I64 n;
 	void *data;
 } Slice;
 
@@ -347,7 +347,8 @@ typedef enum {
 			  UNARY_ADDRESS, /* &x */
 			  UNARY_DEREF, /* *x */
 			  UNARY_NOT, /* !x */
-			  UNARY_DEL
+			  UNARY_DEL, /* del x */
+			  UNARY_LEN	 /* x.len ; replaces BINARY_DOT len when typing  */
 } UnaryOp;
 
 typedef enum {

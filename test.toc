@@ -1,27 +1,39 @@
-
-
-
 puti @= fn(x: int) {
 	 #C("printf(\"%ld\\n\", (long)x);
 ");
 };
 
-main @= fn() {
-puti(somesum());
-foo @= somesum();
-puti(foo);
-};
-Point @= struct {
-	x, y : int;
-};
-sum @= fn(p: &Point) int {
-	p.x + p.y
-};
-somesum @= fn() int {
-	 p : Point;
-	 p.x = 12389;
-	 p.y = 29404;
-	 total := sum(&p);
-	 total
+foo @= fn() int {
+	x:= new(int, 10).len;
+	x
 };
 
+bar @= fn() int {
+	x := new(int,10);
+	(&x).len
+};
+
+baz @= fn() int {
+	x: [10]int;
+	x.len
+};
+
+quux @= fn() int {
+	 x: [10]int;
+	 (&x).len
+};
+
+main @= fn() {
+	 puti(foo());
+	 X @= foo();
+	 puti(X);
+	 puti(bar());
+	 Y @= bar();
+	 puti(Y);
+	 puti(baz());
+	 Z @= baz();
+	 puti(Z);
+	 puti(quux());
+	 W @= quux();
+	 puti(W);
+};

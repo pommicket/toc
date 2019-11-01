@@ -36,6 +36,7 @@ static const char *unary_op_to_str(UnaryOp u) {
 	case UNARY_DEREF: return "*";
 	case UNARY_NOT: return "!";
 	case UNARY_DEL: return "del";
+	case UNARY_LEN: return "len";
 	}
 	assert(0);
 	return "";
@@ -1205,7 +1206,11 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					err_print(e->where, "You cannot new a tuple.");
 					return false;
 				}
-				return true;
+				if (t->token == end)
+					return true;
+				/* otherwise, there's more stuff after the new (e.g. new(int, 5).len)*/
+				t->token = start;
+				goto not_an_op;
 			case KW_DEL:
 				if (!token_is_kw(t->token + 1, KW_LPAREN)) {
 					/* for the future, when del could be a function */
@@ -1327,6 +1332,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		}		
 		return true;
 	} else {
+	not_an_op:;
 		/* function calls, array accesses, etc. */
 		
 		/* try a function call or array access */
@@ -1343,6 +1349,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		}
 		/* which opening bracket starts the call/array access */
 		Token *opening_bracket = NULL;
+		Token *closing_bracket = NULL;
 		for (; token < end; token++) {
 			if (token->kind == TOKEN_KW) {
 				switch (token->kw) {
@@ -1361,9 +1368,13 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					break;
 				case KW_RPAREN:
 					paren_level--;
+					if (opening_bracket && token_is_kw(opening_bracket, KW_LPAREN) && square_level == 0 && paren_level == 0 && brace_level == 0)
+						closing_bracket = token;
 					break;
 				case KW_RSQUARE:
 					square_level--;
+					if (opening_bracket && token_is_kw(opening_bracket, KW_LSQUARE) && square_level == 0 && paren_level == 0 && brace_level == 0)
+						closing_bracket = token;
 					break;
 				case KW_LBRACE:
 					brace_level++;
@@ -1386,7 +1397,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				break;
 			}
 		}
-		if (opening_bracket) {
+		if (opening_bracket && closing_bracket && closing_bracket + 1 == end /* make sure there's nothing after the closing bracket */) {
 			switch (opening_bracket->kw) {
 			case KW_LPAREN: {
 				/* it's a function call! */

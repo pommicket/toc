@@ -1,7 +1,7 @@
 /* 
 TODO:
-using dot with pointers
 length of slice/arr with .len
+.len lvalue for slices
 verify size of struct, align of fields
 pointers to futurely-declared types
 don't allow while {3; 5} (once break is added)

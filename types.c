@@ -945,6 +945,18 @@ static bool types_expr(Typer *tr, Expression *e) {
 			}
 			t->kind = TYPE_BUILTIN;
 			t->builtin = BUILTIN_BOOL;
+			break;
+		case UNARY_LEN:
+			/* in theory, this shouldn't happen right now, because typing generates len operators */
+			t->kind = TYPE_BUILTIN;
+			t->builtin = BUILTIN_I64;
+			if (of_type->kind != TYPE_SLICE || of_type->kind != TYPE_ARR) {
+				char *s = type_to_str(of_type);
+				err_print(e->where, "Cannot get length of non-array, non-slice type %s.", s);
+				free(s);
+				return false;
+			}
+			break;
 		}
 	} break;
 	case EXPR_BINARY_OP: {
@@ -1104,7 +1116,17 @@ static bool types_expr(Typer *tr, Expression *e) {
 					Value field_name;
 					if (!types_expr(tr, rhs)) return false;
 					if (rhs_type->kind != TYPE_SLICE || !type_is_builtin(rhs_type->slice, BUILTIN_CHAR)) {
-						err_print(e->where, "Invalid field of type %s.");
+						char *struct_typestr = type_to_str(lhs_type);
+						if (rhs->kind == EXPR_IDENT) {
+							char *fstr = ident_to_str(rhs->ident);
+							err_print(e->where, "%s is not a field of structure %s.", fstr, struct_typestr);
+							free(fstr);
+						} else {
+							char *field_typestr = type_to_str(rhs_type);
+							err_print(e->where, "Invalid type %s for field of structure %s .", rhs_type, struct_typestr);
+							free(field_typestr);
+						}
+						free(struct_typestr);
 						return false;
 						
 					}
@@ -1117,8 +1139,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 						}
 					}
 					if (!is_field) {
-						char *fstr = err_malloc(field_name.slice.n + 1);
-						memcpy(fstr, field_name.slice.data, field_name.slice.n);
+						char *fstr = err_malloc((size_t)(field_name.slice.n + 1));
+						memcpy(fstr, field_name.slice.data, (size_t)field_name.slice.n);
 						fstr[field_name.slice.n] = 0; /* null-terminate */
 						char *typestr = type_to_str(lhs_type);
 						err_print(e->where, "%s is not a field of structure %s.", fstr, typestr);
@@ -1126,6 +1148,37 @@ static bool types_expr(Typer *tr, Expression *e) {
 						return false;
 					}
 				}
+			} else if (struct_type->kind == TYPE_SLICE || struct_type->kind == TYPE_ARR) {
+				if (!(rhs->kind == EXPR_IDENT && ident_eq_str(rhs->ident, "len"))) {
+						
+					Value field_name;
+					if (!types_expr(tr, rhs)) return false;
+					if (rhs_type->kind != TYPE_SLICE || !type_is_builtin(rhs_type->slice, BUILTIN_CHAR)) {
+						err_print(e->where, "Invalid field of type %s.");
+						return false;
+						
+					}
+					if (!eval_expr(tr->evalr, rhs, &field_name)) return false;
+					char *str = field_name.slice.data;
+					if (field_name.slice.n != 3	|| strcmp(str, "len") != 0) {					
+						char *fstr = err_malloc((size_t)(field_name.slice.n + 1));
+						memcpy(fstr, field_name.slice.data, (size_t)field_name.slice.n);
+						fstr[field_name.slice.n] = 0; /* null-terminate */
+						char *typestr = type_to_str(lhs_type);
+						err_print(e->where, "%s is not a field of type %s.", fstr, typestr);
+						free(fstr); free(typestr);
+						return false;
+					}
+				}
+			
+				/* length of slice/arr */
+				t->kind = TYPE_BUILTIN;
+				t->builtin = BUILTIN_I64;
+				/* change expr to UNARY_LEN */
+				e->kind = EXPR_UNARY_OP;
+				Expression *of = lhs;
+				e->unary.op = UNARY_LEN;
+				e->unary.of = of;
 			} else {
 				char *s = type_to_str(lhs_type);
 				err_print(e->where, "Operator . applied to type %s, which is not a structure or pointer to structure.", s);
