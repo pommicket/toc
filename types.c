@@ -362,21 +362,31 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 		if (!type_resolve(tr, t->slice, where))
 			return false;
 		break;
-	case TYPE_USER:
-		/* just check if it's actually defined */
-		if (!ident_typeval(t->user.name)) {
+	case TYPE_USER: {
+		/* check if it's actually defined */
+		IdentDecl *idecl = ident_decl(t->user.name);
+		if (!idecl) {
 			char *s = ident_to_str(t->user.name);
-			IdentDecl *idecl = ident_decl(t->user.name);
-			if (idecl) {
-				err_print(where, "Use of non-type identifier %s as type.", s);
-				info_print(idecl->decl->where, "%s is declared here.", s);
-			} else {
-				err_print(where, "Use of undeclared type %s.", s);
-			}
+			err_print(where, "Use of undeclared type %s.", s);
 			free(s);
 			return false;
 		}
-		break;
+		Declaration *decl = idecl->decl;
+		/* now, type the declaration (in case we are using it before its declaration) */
+		if (!types_decl(tr, decl))
+			return false;
+		/* make sure it's actually a type */
+		if (idecl->decl->type.kind != TYPE_TYPE) {
+			char *s = ident_to_str(t->user.name);
+			err_print(where, "Use of non-type identifier %s as type.", s);
+			info_print(decl->where, "%s is declared here.", s);
+			free(s);
+			return s;
+		}
+		/* resolve inner type */
+		Value *val = decl_ident_val(decl, t->user.name);
+		if (!type_resolve(tr, val->type, decl->where)) return false;
+	} break;
 	case TYPE_STRUCT:
 		arr_foreach(t->struc.fields, Field, f) {
 			if (!type_resolve(tr, f->type, where))

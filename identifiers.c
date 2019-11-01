@@ -177,8 +177,7 @@ static void idents_test(void) {
 	idents_free(&ids);
 }
 
-
-static inline Type *ident_typeval(Identifier i) {
+static Type *ident_typeval(Identifier i) {
 	Value *val;
 	IdentDecl *idecl = ident_decl(i);
 	if (!idecl) return NULL;

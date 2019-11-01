@@ -1973,3 +1973,10 @@ static long decl_ident_index(Declaration *d, Identifier i) {
 	}
 	return -1;
 }
+
+static Value *decl_ident_val(Declaration *d, Identifier i) {
+	if (d->type.kind == TYPE_TUPLE)
+		return &d->val.tuple[decl_ident_index(d, i)];
+	else
+		return &d->val;
+}
