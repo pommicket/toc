@@ -11,6 +11,7 @@ static void evalr_create(Evaluator *ev, Typer *tr) {
 	ev->returning = NULL;
 	ev->to_free = NULL;
 	ev->typer = tr;
+	ev->enabled = true;
 }
 
 static void evalr_free(Evaluator *ev) {
@@ -709,11 +710,8 @@ static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 	return true;
 }
 
-static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {		
-	if (e->type.kind == TYPE_UNKNOWN) {
-		err_print(e->where, "Cannot determine type of expression.");
-		return false;
-	}
+static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
+	if (!ev->enabled) return false; /* silently fail */
 	/* WARNING: macros ahead */
 #define eval_unary_op_one(low, up, op)			\
 	case BUILTIN_##up:							\

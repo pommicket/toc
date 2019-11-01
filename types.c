@@ -1200,10 +1200,6 @@ static bool types_decl(Typer *tr, Declaration *d) {
 			success = false;
 			goto ret;
 		}
-	} else {
-		/* if we can't find the type, default to unknown */
-		d->type.flags = 0;
-		d->type.kind = TYPE_UNKNOWN;
 	}
 	if (d->flags & DECL_FLAG_HAS_EXPR) {
 		if (!types_expr(tr, &d->expr)) {
@@ -1272,6 +1268,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 		/* use unknown type if we didn't get the type */
 		d->type.flags = 0;
 	    d->type.kind = TYPE_UNKNOWN;
+		tr->evalr->enabled = false; /* disable evaluator completely so that it doesn't accidentally try to access this declaration */
 	}
 	arr_remove_last(&tr->in_decls);
 	return success;

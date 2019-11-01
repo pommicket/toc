@@ -6,23 +6,16 @@ puti @= fn(x: int) {
 Point @= struct {
 	x, y : int;
 };
-
-
-
 sum @= fn(p: &Point) int {
 	p.x + p.y
 };
-
-
 somesum @= fn() int {
-
 	 p : Point;
 	 p.x = 12389;
 	 p.y = 29404;
 	 total := sum(&p);
 	 total
 };
-
 main @= fn() {
 // puti(somesum());
 foo @= somesum();

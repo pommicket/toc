@@ -61,9 +61,9 @@ static const char *token_kind_to_str(TokenKind t) {
 	case TOKEN_KW: return "keyword";
 	case TOKEN_IDENT: return "identifier";
 	case TOKEN_DIRECT: return "directive";
-	case TOKEN_NUM_LITERAL: return "numerical literal";
-	case TOKEN_CHAR_LITERAL: return "character literal";
-	case TOKEN_STR_LITERAL: return "string literal";
+	case TOKEN_LITERAL_NUM: return "numerical literal";
+	case TOKEN_LITERAL_CHAR: return "character literal";
+	case TOKEN_LITERAL_STR: return "string literal";
 	case TOKEN_EOF: return "end of file";
 	}
 	assert(0);
@@ -80,7 +80,7 @@ static void fprint_token(FILE *out, Token *t) {
 		fprintf(out, "identifier: %p: ", (void*)t->ident);
 		fprint_ident(out, t->ident);
 		break;
-	case TOKEN_NUM_LITERAL:
+	case TOKEN_LITERAL_NUM:
 		fprintf(out, "number: ");
 		switch (t->num.kind) {
 		case NUM_LITERAL_INT:
@@ -91,10 +91,10 @@ static void fprint_token(FILE *out, Token *t) {
 			break;
 		}
 		break;
-	case TOKEN_CHAR_LITERAL:
+	case TOKEN_LITERAL_CHAR:
 		fprintf(out, "char: '%c' (%d)", t->chr, t->chr);
 		break;
-	case TOKEN_STR_LITERAL:
+	case TOKEN_LITERAL_STR:
 		fprintf(out, "str: \"%s\"", t->str.str);
 		break;
 	case TOKEN_DIRECT:
@@ -208,8 +208,8 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 			switch (t->s[1]) {
 			case '/': /* single line comment */
 				tokr_nextchar(t);
-				for (t->s++; *t->s != '\n' && *t->s; t->s++);
-				t->line++;
+				for (t->s++; *t->s && *t->s != '\n'; t->s++);
+				if (t->s) tokr_nextchar(t); /* skip newline */
 				break;
 			case '*': { /* multi line comment */
 				tokr_nextchar(t);
@@ -390,7 +390,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 				}
 				tokr_nextchar(t);
 			}
-			token->kind = TOKEN_NUM_LITERAL;
+			token->kind = TOKEN_LITERAL_NUM;
 			token->num = n;
 			continue;
 		}
@@ -418,7 +418,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 				goto err;
 			}
 			tokr_nextchar(t);
-			token->kind = TOKEN_CHAR_LITERAL;
+			token->kind = TOKEN_LITERAL_CHAR;
 			token->chr = c;
 			continue;
 		}
@@ -464,7 +464,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 				}
 			}
 			*strptr = 0;
-			token->kind = TOKEN_STR_LITERAL;
+			token->kind = TOKEN_LITERAL_STR;
 			token->str.len = (size_t)(strptr - strlit);
 			token->str.str = strlit;
 			tokr_nextchar(t); /* move past closing " */

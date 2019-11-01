@@ -130,9 +130,9 @@ typedef enum {
 			  TOKEN_KW,
 			  TOKEN_IDENT,
 			  TOKEN_DIRECT,
-			  TOKEN_NUM_LITERAL,
-			  TOKEN_CHAR_LITERAL,
-			  TOKEN_STR_LITERAL,
+			  TOKEN_LITERAL_NUM,
+			  TOKEN_LITERAL_CHAR,
+			  TOKEN_LITERAL_STR,
 			  TOKEN_EOF
 } TokenKind;
 
@@ -495,7 +495,7 @@ typedef struct Declaration {
 	Location where;
 	Identifier *idents;
 	Type type;
-	uint16_t flags;
+    U16 flags;
 	Expression expr;
 	Value val; /* only for constant decls. */
 	
@@ -550,6 +550,7 @@ typedef struct {
 	bool returning;
 	Value ret_val;
 	void **to_free; /* an array of data to free for this scope. */
+	bool enabled;
 } Evaluator;
 
 typedef struct Typer {

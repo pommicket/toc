@@ -653,9 +653,9 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 			}
 			} break;
 		case TOKEN_DIRECT:
-		case TOKEN_NUM_LITERAL:
-		case TOKEN_CHAR_LITERAL:
-		case TOKEN_STR_LITERAL:
+		case TOKEN_LITERAL_NUM:
+		case TOKEN_LITERAL_CHAR:
+		case TOKEN_LITERAL_STR:
 		case TOKEN_EOF:
 		case TOKEN_IDENT:
 			ret = false;
@@ -895,7 +895,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	if (end - t->token == 1) {
 		/* 1-token expression */
 		switch (t->token->kind) {
-		case TOKEN_NUM_LITERAL: {
+		case TOKEN_LITERAL_NUM: {
 			NumLiteral *num = &t->token->num;
 			switch (num->kind) {
 			case NUM_LITERAL_FLOAT:
@@ -912,11 +912,11 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			e->kind = EXPR_IDENT;
 			e->ident = t->token->ident;
 			break;
-		case TOKEN_STR_LITERAL:
+		case TOKEN_LITERAL_STR:
 			e->kind = EXPR_LITERAL_STR;
 			e->strl = t->token->str;
 	    	break;
-		case TOKEN_CHAR_LITERAL:
+		case TOKEN_LITERAL_CHAR:
 			e->kind = EXPR_LITERAL_CHAR;
 			e->charl = t->token->chr;
 			break;
