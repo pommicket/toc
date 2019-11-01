@@ -1081,14 +1081,16 @@ static bool types_expr(Typer *tr, Expression *e) {
 			break;
 		case BINARY_DOT: {
 			if (!types_expr(tr, lhs)) return false;
-			Type *inner_type = lhs_type;
-			while (inner_type->kind == TYPE_USER)
-				inner_type = ident_typeval(inner_type->user.name);
-			if (inner_type->kind == TYPE_STRUCT) {
+			Type *struct_type = type_inner(lhs_type);
+			if (struct_type->kind == TYPE_PTR)
+				struct_type = struct_type->ptr;
+			struct_type = type_inner(struct_type);
+			
+			if (struct_type->kind == TYPE_STRUCT) {
 				bool is_field = false;
 				if (rhs->kind == EXPR_IDENT) {
 					/* maybe accessing a field? */
-					arr_foreach(inner_type->struc.fields, Field, f) {
+					arr_foreach(struct_type->struc.fields, Field, f) {
 						if (f->name == rhs->ident) {
 							is_field = true;
 							*t = *f->type;
@@ -1107,7 +1109,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 						
 					}
 					if (!eval_expr(tr->evalr, rhs, &field_name)) return false;
-					arr_foreach(inner_type->struc.fields, Field, f) {
+					arr_foreach(struct_type->struc.fields, Field, f) {
 						if (ident_eq_str(f->name, field_name.slice.data)) {
 							is_field = true;
 							*t = *f->type;
@@ -1126,7 +1128,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				}
 			} else {
 				char *s = type_to_str(lhs_type);
-				err_print(e->where, "Operator . applied to type %s, which is not a structure.", s);
+				err_print(e->where, "Operator . applied to type %s, which is not a structure or pointer to structure.", s);
 				free(s);
 				return false;
 			}

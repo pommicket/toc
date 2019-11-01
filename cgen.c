@@ -852,14 +852,15 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			cgen_write(g, ")");
 			handled = true;
 			break;
-		case BINARY_DOT:
+		case BINARY_DOT: {
 			cgen_write(g, "(");
 			cgen_expr(g, e->binary.lhs);
-			cgen_write(g, ".");
+			bool is_ptr = type_inner(&e->binary.lhs->type)->kind == TYPE_PTR;
+			cgen_write(g, is_ptr ? "->" : ".");
 			cgen_ident(g, e->binary.field->name);
 			cgen_write(g, ")");
 			handled = true;
-			break;
+		} break;
 		}
 		if (handled) break;
 		cgen_write(g, "(");

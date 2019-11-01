@@ -655,6 +655,26 @@ static bool eval_expr_ptr_at_index(Evaluator *ev, Expression *e, void **ptr, Typ
 	return eval_val_ptr_at_index(ev, e->where, &arr, i, ltype, rtype, ptr, type);
 }
 
+static void *eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr) {
+	Type *struct_type = type_inner(&dot_expr->binary.lhs->type);
+	bool is_ptr = struct_type->kind == TYPE_PTR;
+	if (is_ptr) {
+		struct_type = type_inner(struct_type->ptr);
+	}
+	eval_struct_find_offsets(struct_type);
+			
+	Value struc;
+	if (!eval_expr(ev, dot_expr->binary.lhs, &struc))
+		return false;
+	void *struc_data;
+	if (is_ptr) {
+		struc_data = *(void **)struc.ptr;
+	} else {
+		struc_data = struc.struc;
+	}
+    return (char *)struc_data + dot_expr->binary.field->offset;
+}
+
 static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 	switch (set->kind) {
 	case EXPR_IDENT: {
@@ -687,11 +707,8 @@ static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 			eval_deref_set(ptr, to, type);
 		} break;
 		case BINARY_DOT: {
-			Value struc;
-			if (!eval_expr(ev, set->binary.lhs, &struc))
-				return false;
-			eval_struct_find_offsets(type_inner(&set->binary.lhs->type));
-			void *ptr = (char *)struc.struc + set->binary.field->offset;
+			void *ptr = eval_ptr_to_struct_field(ev, set);
+			if (!ptr) return false;
 			eval_deref_set(ptr, to, set->binary.field->type);
 		} break;
 		default: assert(0); break;
@@ -852,8 +869,9 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 					Value struc;
 					if (!eval_expr(ev, o->binary.lhs, &struc))
 						return false;
-					eval_struct_find_offsets(type_inner(&o->binary.lhs->type));
-					v->ptr = (char *)struc.struc + o->binary.field->offset;
+					v->ptr = eval_ptr_to_struct_field(ev, o);
+					if (!v->ptr)
+						return false;
 				} break;
 				default: assert(0); break;
 				}
@@ -895,12 +913,9 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		BuiltinType builtin = e->binary.lhs->type.builtin;
 		switch (e->binary.op) {
 		case BINARY_DOT: {
-			Type *inner_type = &e->binary.lhs->type;
-			while (inner_type->kind == TYPE_USER)
-				inner_type = ident_typeval(inner_type->user.name);
-			eval_struct_find_offsets(inner_type);
-			
-			eval_deref(v, (char *)lhs.struc + e->binary.field->offset, &e->type);
+			void *ptr = eval_ptr_to_struct_field(ev, e);
+			if (!ptr) return false;
+			eval_deref(v, ptr, &e->type);
 		} break;
 		case BINARY_ADD:
 			if (e->binary.lhs->type.kind == TYPE_PTR) {

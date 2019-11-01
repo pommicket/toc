@@ -7,9 +7,9 @@ puti @= fn(x: int) {
 };
 
 main @= fn() {
-// puti(somesum());
+puti(somesum());
 foo @= somesum();
-// puti(foo);
+puti(foo);
 };
 Point @= struct {
 	x, y : int;
