@@ -1,5 +1,6 @@
 static bool types_block(Typer *tr, Block *b);
 static bool types_decl(Typer *tr, Declaration *d);
+static bool type_resolve(Typer *tr, Type *t, Location where);
 static size_t compiler_sizeof(Type *t);
 static bool eval_block(Evaluator *ev, Block *b, Type *t, Value *v);
 static bool eval_expr(Evaluator *ev, Expression *e, Value *v);
@@ -1110,14 +1111,27 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				return false;
 		}
 	} break;
-	case EXPR_DIRECT: {
-		DirectExpr *d = &e->direct;
-		switch (d->which) {
-		case DIRECT_C:
-			err_print(e->where, "Cannot run C code at compile time.");
-			return false;
-		case DIRECT_COUNT: assert(0); return false;
+	case EXPR_C:
+		err_print(e->where, "Cannot run C code at compile time.");
+		return false;
+	case EXPR_DSIZEOF:
+	case EXPR_DALIGNOF: {
+		Expression *of = e->kind == EXPR_DSIZEOF ? e->dsizeof.of : e->dalignof.of;
+		Type *type;
+		if (of->type.kind == TYPE_TYPE) {
+			/* it's a type, return the size/align of it */
+			Value typeval;
+			if (!eval_expr(ev, of, &typeval)) return false;
+			type = typeval.type;
+			if (!type_resolve(ev->typer, type, e->where)) return false;
+		} else {
+			/* it's an expression, return the size/align of its type */
+			type = &of->type;
 		}
+		if (e->kind == EXPR_DSIZEOF)
+			v->i64 = (I64)compiler_sizeof(type);
+		else
+			v->i64 = (I64)compiler_alignof(type);
 	} break;
 	case EXPR_NEW:
 		/* it's not strictly necessary to do the if here */

@@ -111,6 +111,7 @@ static bool expr_arr_must_mut(Expression *e) {
 	case EXPR_CALL:
 	case EXPR_NEW:
 	case EXPR_UNARY_OP:
+	case EXPR_C:
 		return true;
 	case EXPR_SLICE:
 		return expr_arr_must_mut(e->slice.of);
@@ -137,8 +138,9 @@ static bool expr_arr_must_mut(Expression *e) {
 	case EXPR_LITERAL_CHAR:
 	case EXPR_LITERAL_INT:
 	case EXPR_BINARY_OP:
-	case EXPR_DIRECT:
 	case EXPR_TYPE:
+	case EXPR_DALIGNOF:
+	case EXPR_DSIZEOF:
 		break;
 	}
 	assert(0);
@@ -201,7 +203,9 @@ static bool expr_must_lval(Expression *e) {
 	case EXPR_IF:
 	case EXPR_WHILE:
 	case EXPR_CALL:
-	case EXPR_DIRECT:
+	case EXPR_C:
+	case EXPR_DALIGNOF:
+	case EXPR_DSIZEOF:
 	case EXPR_BLOCK:
 	case EXPR_SLICE:
 	case EXPR_TYPE: {
@@ -869,25 +873,31 @@ static bool types_expr(Typer *tr, Expression *e) {
 			t->kind = TYPE_VOID;
 		}
 	} break;
-	case EXPR_DIRECT:
-	    arr_foreach(e->direct.args, Expression, arg) {
-			if (!types_expr(tr, arg))
-				return false;
+	case EXPR_C: {
+		Expression *code = e->c.code;
+		if (!types_expr(tr, code))
+			return false;
+		if (code->type.kind != TYPE_SLICE
+			|| !type_is_builtin(code->type.slice, BUILTIN_CHAR)) {
+			char *s = type_to_str(&code->type);
+			err_print(e->where, "Argument to #C directive must be a string, but got type %s.");
+			free(s);
+			return false;
 		}
-		switch (e->direct.which) {
-		case DIRECT_C: {
-			size_t n_args = arr_len(e->direct.args);
-			if (n_args != 1) {
-				err_print(e->where, "#C call should have one string argument (got %lu arguments).", (unsigned long)n_args);
-				return false;
-			}
-			/* type automatically set to unknown */
-			
-			/* TODO: when string types are added, check */
-		} break;
-		case DIRECT_COUNT: assert(0); return false;
-		}
-		break;
+		t->kind = TYPE_UNKNOWN;
+	} break;
+	case EXPR_DSIZEOF: {
+		if (!types_expr(tr, e->dsizeof.of))
+			return false;
+		t->kind = TYPE_BUILTIN;
+		t->builtin = BUILTIN_I64;
+	} break;
+	case EXPR_DALIGNOF: {
+		if (!types_expr(tr, e->dalignof.of))
+			return false;
+		t->kind = TYPE_BUILTIN;
+		t->builtin = BUILTIN_I64;
+	} break;
 	case EXPR_UNARY_OP: {
 		Expression *of = e->unary.of;
 		Type *of_type = &of->type;

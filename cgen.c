@@ -520,7 +520,9 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 	case EXPR_FN:
 	case EXPR_CAST:
 	case EXPR_NEW:
-	case EXPR_DIRECT:
+	case EXPR_C:
+	case EXPR_DSIZEOF:
+	case EXPR_DALIGNOF:
 	case EXPR_TYPE:
 		assert(0);
 		return false;
@@ -756,7 +758,9 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 	case EXPR_LITERAL_STR:
 	case EXPR_IDENT:
 	case EXPR_FN:
-	case EXPR_DIRECT:
+	case EXPR_C:
+	case EXPR_DSIZEOF:
+	case EXPR_DALIGNOF:
 	case EXPR_TYPE:
 		break;
 	case EXPR_TUPLE:
@@ -973,18 +977,20 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			cgen_write(g, "))");
 		}
 		break;
-	case EXPR_DIRECT:
-		switch (e->direct.which) {
-		case DIRECT_C: {
-			Value val;
-			if (!eval_expr(g->evalr, &e->direct.args[0], &val))
-				return false;
-			cgen_indent(g);
-			fwrite(val.slice.data, 1, (size_t)val.slice.n, cgen_writing_to(g));
-		} break;
-		case DIRECT_COUNT: assert(0); break;
-		}
-		break;
+	case EXPR_C: {
+		Value val;
+		if (!eval_expr(g->evalr, e->c.code, &val))
+			return false;
+		cgen_indent(g);
+		fwrite(val.slice.data, 1, (size_t)val.slice.n, cgen_writing_to(g));
+	} break;
+	case EXPR_DSIZEOF:
+	case EXPR_DALIGNOF: {
+		Value val;
+		if (!eval_expr(g->evalr, e, &val))
+			return false;
+		cgen_write(g, "%"PRId64, val.i64);
+	} break;
 	case EXPR_CAST: {
 		Type *from = &e->cast.expr->type;
 		Type *to = &e->cast.type;

@@ -70,7 +70,9 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 		fn_exit(&e->fn);
 		break;
 	case EXPR_TYPE:
-	case EXPR_DIRECT:
+	case EXPR_C:
+	case EXPR_DSIZEOF:
+	case EXPR_DALIGNOF:
 	case EXPR_NEW:
 	case EXPR_IDENT:
 	case EXPR_LITERAL_BOOL:

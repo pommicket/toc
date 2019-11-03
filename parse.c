@@ -13,7 +13,9 @@ static const char *expr_kind_to_str(ExprKind k) {
 	case EXPR_IF: return "if expression";
 	case EXPR_WHILE: return "while expression";
 	case EXPR_CALL: return "function call";
-	case EXPR_DIRECT: return "directive";
+	case EXPR_C: return "c code";
+	case EXPR_DSIZEOF: return "#sizeof";
+	case EXPR_DALIGNOF: return "#alignof";
 	case EXPR_NEW: return "new expression";
 	case EXPR_CAST: return "cast expression";
 	case EXPR_UNARY_OP: return "unary operator";
@@ -1481,25 +1483,37 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 
 		if (t->token->kind == TOKEN_DIRECT) {
 			/* it's a directive */
-			e->kind = EXPR_DIRECT;
-			e->direct.which = t->token->direct;
-			e->direct.args = NULL;
-			if (token_is_kw(&t->token[1], KW_LPAREN)) {
-				Argument *args = NULL;
-				/* has args (but maybe it's just "#foo()") */
-				t->token++;	/* move to ( */
-				if (!parse_args(p, &args)) return false;
-				arr_foreach(args, Argument, arg) {
-					if (arg->name != NULL) {
-						err_print(arg->where, "Directives cannot have named arguments.");
-						return false;
-					}
-					*(Expression *)parser_arr_add(p, &e->direct.args) = arg->val;
+			Expression *single_arg = NULL; /* points to an expr if this is a directive with one expression argument */
+			
+			switch (t->token->direct) {
+			case DIRECT_C:
+				e->kind = EXPR_C;
+				single_arg = e->c.code = parser_new_expr(p);
+				break;
+			case DIRECT_SIZEOF:
+				e->kind = EXPR_DSIZEOF;
+				single_arg = e->dsizeof.of = parser_new_expr(p);
+				break;
+			case DIRECT_ALIGNOF:
+				e->kind = EXPR_DALIGNOF;
+				single_arg = e->dalignof.of = parser_new_expr(p);
+				break;
+			case DIRECT_COUNT: assert(0); break;
+			}
+			if (single_arg) {
+				t->token++;
+				if (!token_is_kw(t->token, KW_LPAREN)) {
+					err_print(t->token->where, "Expected ( to follow #%s.", directives[t->token->direct]);
+					return false;
 				}
-				return true;
-			} else {
-				/* no args */
-				e->direct.args = NULL;
+				t->token++;
+				Token *arg_end = expr_find_end(p, 0, NULL);
+				if (!token_is_kw(arg_end, KW_RPAREN)) {
+					err_print(end->where, "Expected ) at end of #%s directive.", directives[t->token->direct]);
+					return false;
+				}
+				if (!parse_expr(p, single_arg, arg_end))
+					return false;
 				t->token++;
 				return true;
 			}
@@ -1902,10 +1916,20 @@ static void fprint_expr(FILE *out, Expression *e) {
 		}
 		fprintf(out, ")");
 		break;
-	case EXPR_DIRECT:
-		fprintf(out, "#");
-		fprintf(out, "%s", directives[e->direct.which]);
-		fprint_arg_exprs(out, e->direct.args);
+	case EXPR_C:
+		fprintf(out, "#C(");
+		fprint_expr(out, e->c.code);
+		fprintf(out, ")");
+		break;
+	case EXPR_DSIZEOF:
+		fprintf(out, "#sizeof(");
+		fprint_expr(out, e->dsizeof.of);
+		fprintf(out, ")");
+		break;
+	case EXPR_DALIGNOF:
+		fprintf(out, "#alignof(");
+		fprint_expr(out, e->dalignof.of);
+		fprintf(out, ")");
 		break;
 	case EXPR_SLICE: {
 		SliceExpr *s = &e->slice;

@@ -1,6 +1,5 @@
 /* 
 TODO:
-verify size of struct, align of fields
 pointers to futurely-declared types
 for
 +=, -=, *=, /=

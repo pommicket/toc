@@ -138,6 +138,8 @@ typedef enum {
 
 typedef enum {
 			  DIRECT_C,
+			  DIRECT_SIZEOF,
+			  DIRECT_ALIGNOF,
 			  DIRECT_COUNT
 } Directive;
 
@@ -337,7 +339,9 @@ typedef enum {
 			  EXPR_CALL,
 			  EXPR_BLOCK,
 			  EXPR_TUPLE,
-			  EXPR_DIRECT,
+			  EXPR_C,
+			  EXPR_DSIZEOF,
+			  EXPR_DALIGNOF,
 			  EXPR_SLICE,
 			  EXPR_TYPE
 } ExprKind;
@@ -366,12 +370,6 @@ typedef enum {
 			  BINARY_AT_INDEX, /* e.g. x[i] */
 			  BINARY_DOT
 } BinaryOp;
-
-typedef struct {
-	Directive which;
-	struct Expression *args;
-} DirectExpr;
-
 
 typedef struct {
 	struct Expression *fn;
@@ -457,7 +455,15 @@ typedef struct Expression {
 			Field *field; /* for . only */
 		} binary;
 		CallExpr call;
-	    DirectExpr direct;
+		struct {
+			struct Expression *code;
+		} c;
+		struct {
+			struct Expression *of;
+		} dsizeof; /* #sizeof directive */
+		struct {
+			struct Expression *of;
+		} dalignof; /* #alignof directive */
 		Identifier ident;
 		NewExpr new;
 		struct {
