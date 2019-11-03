@@ -25,6 +25,8 @@ static inline bool type_is_builtin(Type *t, BuiltinType b) {
 static bool type_eq(Type *a, Type *b) {
 	if (a->kind == TYPE_UNKNOWN || b->kind == TYPE_UNKNOWN)
 		return true; /* allow things such as 3 + #C("5") */
+	assert(a->flags & TYPE_FLAG_RESOLVED);
+	assert(b->flags & TYPE_FLAG_RESOLVED);
 	if (a->kind != b->kind) return false;
 	if (a->flags & TYPE_FLAG_FLEXIBLE) {
 		if (b->flags & TYPE_FLAG_FLEXIBLE) return true;
@@ -46,12 +48,11 @@ static bool type_eq(Type *a, Type *b) {
 	case TYPE_UNKNOWN: assert(0); return false;
 	case TYPE_TYPE: return true;
 	case TYPE_USER:
-		return a->user.name == b->user.name;
+		return a->user.decl == b->user.decl && a->user.index == b->user.index;
 	case TYPE_BUILTIN:
 		return a->builtin == b->builtin;
 	case TYPE_STRUCT: return false;
 	case TYPE_FN: {
-		
 		if (arr_len(a->fn.types) != arr_len(b->fn.types)) return false;
 		Type *a_types = a->fn.types, *b_types = b->fn.types;
 		for (size_t i = 0; i < arr_len(a->fn.types); i++) {
@@ -378,10 +379,11 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 			return false;
 		break;
 	case TYPE_USER: {
-		/* check if it's actually defined */
-		IdentDecl *idecl = ident_decl(t->user.name);
+		/* find declaration */
+		Identifier ident = t->user.ident;
+		IdentDecl *idecl = ident_decl(ident);
 		if (!idecl) {
-			char *s = ident_to_str(t->user.name);
+			char *s = ident_to_str(ident);
 			err_print(where, "Use of undeclared type %s.", s);
 			free(s);
 			return false;
@@ -390,17 +392,21 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 		/* now, type the declaration (in case we are using it before its declaration) */
 		if (!types_decl(tr, decl))
 			return false;
+		int index = ident_index_in_decl(ident, idecl->decl);
 		/* make sure it's actually a type */
-		if (idecl->decl->type.kind != TYPE_TYPE) {
-			char *s = ident_to_str(t->user.name);
+		if (decl_type_at_index(decl, index)->kind != TYPE_TYPE) {
+			char *s = ident_to_str(ident);
 			err_print(where, "Use of non-type identifier %s as type.", s);
 			info_print(decl->where, "%s is declared here.", s);
 			free(s);
 			return s;
 		}
 		/* resolve inner type */
-		Value *val = decl_ident_val(decl, t->user.name);
+		Value *val = decl_val_at_index(decl, index);
 		if (!type_resolve(tr, val->type, decl->where)) return false;
+		/* finally, set decl and index */
+		t->user.decl = decl;
+		t->user.index = index;
 	} break;
 	case TYPE_STRUCT:
 		arr_foreach(t->struc.fields, Field, f) {
@@ -448,10 +454,10 @@ static Status type_cast_status(Type *from, Type *to) {
 	if (to->kind == TYPE_UNKNOWN)
 		return STATUS_NONE;
 	if (from->kind == TYPE_USER) {
-		return type_eq(to, ident_typeval(from->user.name)) ? STATUS_NONE : STATUS_ERR;
+		return type_eq(to, type_user_underlying(from)) ? STATUS_NONE : STATUS_ERR;
 	}
 	if (to->kind == TYPE_USER) {
-		return type_eq(from, ident_typeval(to->user.name)) ? STATUS_NONE : STATUS_ERR;
+		return type_eq(from, type_user_underlying(to)) ? STATUS_NONE : STATUS_ERR;
 	}
 	switch (from->kind) {
 	case TYPE_UNKNOWN: return STATUS_NONE;

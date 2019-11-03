@@ -71,7 +71,7 @@ static size_t compiler_alignof(Type *t) {
 	case TYPE_TYPE:
 		return sizeof(Type *);
 	case TYPE_USER:
-		return compiler_alignof(ident_typeval(t->user.name));
+		return compiler_alignof(type_user_underlying(t));
 	case TYPE_STRUCT: {
 		/* assume the align of a struct is (at most) the greatest align out of its children's */
 		size_t align = 1;
@@ -129,7 +129,7 @@ static size_t compiler_sizeof(Type *t) {
 	case TYPE_TYPE:
 		return sizeof(Type *);
 	case TYPE_USER:
-		return compiler_sizeof(ident_typeval(t->user.name));
+		return compiler_sizeof(type_user_underlying(t));
 	case TYPE_STRUCT: {
 		eval_struct_find_offsets(t);
 		return t->struc.size;
@@ -269,7 +269,7 @@ static void val_copy(Evaluator *ev, Value *dest, Value *src, Type *t) {
 		memcpy(dest->struc, src->struc, bytes);
 	} break;
 	case TYPE_USER:
-		val_copy(ev, dest, src, ident_typeval(t->user.name));
+		val_copy(ev, dest, src, type_user_underlying(t));
 		break;
 	}
 }
@@ -291,7 +291,7 @@ static void *val_ptr_to_free(Value *v, Type *t) {
 	case TYPE_STRUCT:
 		return v->struc;
 	case TYPE_USER:
-		return val_ptr_to_free(v, ident_typeval(t->user.name));
+		return val_ptr_to_free(v, type_user_underlying(t));
 	}
 	assert(0); return NULL;
 }
@@ -561,7 +561,7 @@ static void eval_deref(Value *v, void *ptr, Type *type) {
 		v->type = *(Type **)ptr;
 		break;
 	case TYPE_USER:
-		eval_deref(v, ptr, ident_typeval(type->user.name));
+		eval_deref(v, ptr, type_user_underlying(type));
 		break;
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
@@ -600,7 +600,7 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 		*(Type **)set = to->type;
 		break;
 	case TYPE_USER:
-		eval_deref_set(set, to, ident_typeval(type->user.name));
+		eval_deref_set(set, to, type_user_underlying(type));
 		break;
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
@@ -1077,20 +1077,15 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				d->flags |= DECL_FLAG_FOUND_VAL;
 			}
 			
-			long index = 0;
-			arr_foreach(d->idents, Identifier, decl_i) {
-				if (*decl_i == e->ident) {
-					break;
-				}
-				index++;
-				assert(index < (long)arr_len(d->idents)); /* identifier got its declaration set to here, but it's not here */
-			}
+			int index = ident_index_in_decl(e->ident, d);
+			assert(index != -1);
 			if (e->type.kind == TYPE_TYPE) {
 				/* set v to a user type, not the underlying type */
 				v->type = evalr_malloc(ev, sizeof *v->type); /* TODO: fix this (free eventually) */
-				v->type->flags = 0;
+				v->type->flags = TYPE_FLAG_RESOLVED;
 				v->type->kind = TYPE_USER;
-				v->type->user.name = d->idents[index];
+				v->type->user.decl = d;
+				v->type->user.index = index;
 			} else {
 				*v = d->type.kind == TYPE_TUPLE ? d->val.tuple[index] : d->val;
 			}
@@ -1259,13 +1254,11 @@ static bool eval_decl(Evaluator *ev, Declaration *d) {
 		Value *thisval = NULL;
 		if (has_expr)
 			thisval = d->type.kind == TYPE_TUPLE ? &val.tuple[index] : &val;
-		Type *inner_type = type;
-		while (inner_type->kind == TYPE_USER)
-			inner_type = ident_typeval(type->user.name);
-		if (inner_type->kind == TYPE_STRUCT) {
-			id->val.struc = err_calloc(1, compiler_sizeof(inner_type));
-		} else if (inner_type->kind == TYPE_ARR) {
-			id->val.arr = err_calloc(inner_type->arr.n, compiler_sizeof(inner_type->arr.of));
+		Type *inner = type_inner(type);
+		if (inner->kind == TYPE_STRUCT) {
+			id->val.struc = err_calloc(1, compiler_sizeof(inner));
+		} else if (inner->kind == TYPE_ARR) {
+			id->val.arr = err_calloc(inner->arr.n, compiler_sizeof(inner->arr.of));
 		}
 
 		if (has_expr)

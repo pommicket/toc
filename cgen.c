@@ -105,7 +105,7 @@ static bool cgen_uses_ptr(Type *t) {
 	case TYPE_TYPE:
 		return false;
 	case TYPE_USER:
-		return cgen_uses_ptr(ident_typeval(t->user.name));
+		return cgen_uses_ptr(type_user_underlying(t));
 	}
 	assert(0);
 	return false;
@@ -196,13 +196,8 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
 		assert(0);
 		return false;
 	case TYPE_USER: {
-		Declaration *d = ident_decl(t->user.name)->decl;
-		assert(d->c.ids);
-		long i = decl_ident_index(d, t->user.name);
-		if (d->c.ids[i])
-			cgen_ident_id(g, d->c.ids[i]);
-		else
-			cgen_ident(g, t->user.name);
+		Identifier i = t->user.decl->idents[t->user.index];
+		cgen_ident(g, i);
 	} break;
 	}
 	return true;
@@ -363,9 +358,7 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 		where = to_expr->where;
 		if (!cgen_expr_pre(g, to_expr)) return false;
 	}
-	while (type->kind == TYPE_USER) {
-		type = ident_typeval(type->user.name);
-	}
+	type = type_inner(type);
 	switch (type->kind) {
 	case TYPE_BUILTIN:
 	case TYPE_FN:
@@ -1083,7 +1076,7 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 		cgen_write(g, "{0}");
 		break;
 	case TYPE_USER:
-		cgen_zero_value(g, ident_typeval(t->user.name));
+		cgen_zero_value(g, type_inner(t));
 		break;
 	case TYPE_TYPE:
 	case TYPE_VOID:
@@ -1159,7 +1152,7 @@ static bool cgen_val_ptr_pre(CGenerator *g, void *v, Type *t, Location where) {
 		}
 		break;
 	case TYPE_USER:
-		if (!cgen_val_ptr_pre(g, v, ident_typeval(t->user.name), where))
+		if (!cgen_val_ptr_pre(g, v, type_inner(t), where))
 			return false;
 		break;
 	case TYPE_FN:
@@ -1225,7 +1218,7 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 		}
 		break;
 	case TYPE_USER:
-		if (!cgen_val_ptr(g, v, ident_typeval(t->user.name), where))
+		if (!cgen_val_ptr(g, v, type_inner(t), where))
 			return false;
 		break;
 	}

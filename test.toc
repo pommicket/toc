@@ -28,5 +28,5 @@ main @= fn() {
 	 puti(X);
 	 puti(#sizeof(int));
 	 puti(#alignof(int));
-	 puti(#sizeof({ Foo @= struct { x: i64; y: char; } ; f: Foo; f }));
+	 puti(#sizeof({ Foo, Bar @= int, struct { x: i64; y: char; } ; f: Foo; f }));
 };

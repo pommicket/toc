@@ -177,6 +177,16 @@ static void idents_test(void) {
 	idents_free(&ids);
 }
 
+static int ident_index_in_decl(Identifier i, Declaration *d) {
+	int index = 0;
+	arr_foreach(d->idents, Identifier, j) {
+		if (i == *j)
+			return index;
+		index++;
+	}
+	return -1;
+}
+
 static Type *ident_typeval(Identifier i) {
 	Value *val;
 	IdentDecl *idecl = ident_decl(i);

@@ -23,10 +23,18 @@
 #include "parse.c"
 #include "scope.c"
 
+static Type *type_user_underlying(Type *t) {
+	assert(t->kind == TYPE_USER);
+	Declaration *d = t->user.decl;
+	assert(d->flags & DECL_FLAG_FOUND_VAL);
+	return (d->type.kind == TYPE_TUPLE ? d->val.tuple[t->user.index] : d->val).type;
+}
 
 static Type *type_inner(Type *t) {
-	while (t && t->kind == TYPE_USER)
-		t = ident_typeval(t->user.name);
+	assert(t->flags & TYPE_FLAG_RESOLVED);
+	while (t->kind == TYPE_USER) {
+		t = type_user_underlying(t);
+	}
 	return t;
 }
 

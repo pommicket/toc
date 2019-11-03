@@ -90,7 +90,6 @@ static bool typedefs_expr(CGenerator *g, Expression *e) {
 }
 
 static bool typedefs_decl(CGenerator *g, Declaration *d) {
-	d->c.ids = NULL;
 	for (size_t idx = 0; idx < arr_len(d->idents); idx++) {
 		Identifier i = d->idents[idx];
 		Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx] : &d->type;
@@ -100,15 +99,7 @@ static bool typedefs_decl(CGenerator *g, Declaration *d) {
 			cgen_write(g, "typedef ");
 			if (!cgen_type_pre(g, val->type, d->where)) return false;
 			cgen_write(g, " ");
-			/* can we use the name directly? */
-			if (!d->c.ids)
-				d->c.ids = evalr_calloc(g->evalr, arr_len(d->idents), sizeof *d->c.ids);
-			if (g->block == NULL) {
-				d->c.ids[idx] = 0; /* yes! */
-				cgen_ident(g, i);
-			} else {
-				cgen_ident_id(g, d->c.ids[idx] = g->ident_counter++); /* no ): */
-			}
+			cgen_ident(g, i);
 			if (!cgen_type_post(g, val->type, d->where)) return false;
 			cgen_write(g, ";");
 			cgen_nl(g);

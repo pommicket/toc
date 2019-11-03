@@ -218,7 +218,9 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 	case TYPE_TYPE:
 		return str_copy(buffer, bufsize, "<type>");
 	case TYPE_USER: {
-		char *ident_str = ident_to_str(t->user.name);
+		char *ident_str = ident_to_str((t->flags & TYPE_FLAG_RESOLVED)
+									   ? t->user.decl->idents[t->user.index]
+									   : t->user.ident);
 		size_t ret = str_copy(buffer, bufsize, ident_str);
 		return ret;
 	}
@@ -513,7 +515,7 @@ static bool parse_type(Parser *p, Type *type) {
 	case TOKEN_IDENT:
 		/* user-defined type */
 		type->kind = TYPE_USER;
-		type->user.name = t->token->ident;
+		type->user.ident = t->token->ident;
 		t->token++;
 		break;
 	default:
@@ -2009,9 +2011,11 @@ static long decl_ident_index(Declaration *d, Identifier i) {
 	return -1;
 }
 
-static Value *decl_ident_val(Declaration *d, Identifier i) {
-	if (d->type.kind == TYPE_TUPLE)
-		return &d->val.tuple[decl_ident_index(d, i)];
-	else
-		return &d->val;
+static inline Value *decl_val_at_index(Declaration *d, int i) {
+	return d->type.kind == TYPE_TUPLE ? &d->val.tuple[i] : &d->val;
 }
+
+static inline Type *decl_type_at_index(Declaration *d, int i) {
+	return d->type.kind == TYPE_TUPLE ? &d->type.tuple[i] : &d->type;
+}
+
