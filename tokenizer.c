@@ -1,8 +1,8 @@
 static const char *keywords[KW_COUNT] =
 	{";", ":", "@", ",", "(", ")", "{", "}", "[", "]", "==", "!=", "<=", "<", ">=", ">",
-	 "+", "-", "*", "!", "&", "/", ".",
+	 "+", "-", "*", "!", "&", "/", "..", ".",
 	 "=",
-	 "if", "elif", "else", "while", "return", "fn", "as",
+	 "if", "elif", "else", "while", "each", "return", "fn", "as",
 	 "new", "del", "struct",
 	 "int", "i8", "i16", "i32", "i64",
 	 "u8", "u16", "u32", "u64", "float", "f32", "f64",
@@ -273,7 +273,6 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 		}
 		
 		/* check if it's a number */
-
 		if (isdigit(*t->s)) {
 			/* it's a numeric literal */
 			int base = 10;
@@ -308,6 +307,10 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 
 			while (1) {
 				if (*t->s == '.') {
+					if (t->s[1] == '.') {
+						/* .. (not a decimal point; end the number here) */
+						break;
+					}
 					if (n.kind == NUM_LITERAL_FLOAT) {
 						tokenization_err(t, "Double . in number.");
 						goto err;
@@ -389,6 +392,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 				}
 				tokr_nextchar(t);
 			}
+		    
 			token->kind = TOKEN_LITERAL_NUM;
 			token->num = n;
 			continue;

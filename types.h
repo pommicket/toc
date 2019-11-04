@@ -94,12 +94,22 @@ typedef union Value {
 	struct Type *type;
 } Value;
 
-#define IDECL_FLAG_HAS_VAL 0x01
+#define IDECL_HAS_VAL 0x01
+
+typedef enum {
+			  IDECL_DECL,
+			  IDECL_EXPR
+} IdentDeclKind;
+
 typedef struct {
-	struct Declaration *decl;
+	union {
+		struct Declaration *decl;
+		struct Expression *expr; /* for example, this identifier is declared in an each expression */
+	};
 	struct Block *scope; /* NULL for file scope */
 	Value val;
-	uint16_t flags;
+	IdentDeclKind kind;
+    U16 flags;
 } IdentDecl;
 
 /* 
@@ -166,6 +176,7 @@ typedef enum {
 			  KW_EXCLAMATION,
 			  KW_AMPERSAND,
 			  KW_SLASH,
+			  KW_DOTDOT,
 			  KW_DOT,
 			  KW_EQ,
 			  KW_LAST_SYMBOL = KW_EQ, /* last one entirely consisting of symbols */
@@ -173,6 +184,7 @@ typedef enum {
 			  KW_ELIF,
 			  KW_ELSE,
 			  KW_WHILE,
+			  KW_EACH,
 			  KW_RETURN,
 			  KW_FN,
 			  KW_AS,
@@ -340,6 +352,7 @@ typedef enum {
 			  EXPR_UNARY_OP,
 			  EXPR_IF,
 			  EXPR_WHILE,
+			  EXPR_EACH,
 			  EXPR_FN,
 			  EXPR_CAST,
 			  EXPR_NEW,
@@ -405,6 +418,33 @@ typedef struct {
 	} c;
 	Block body;
 } WhileExpr;
+
+
+#define EACH_IS_RANGE 0x01
+#define EACH_ANNOTATED_TYPE 0x02
+
+typedef struct EachExpr {
+	U16 flags;
+	struct {
+		IdentID id;
+		IdentID index_id; /* only set if index is NULL */
+	} c;
+	Type type;
+	Identifier index; /* NULL = no index */
+	Identifier value; /* NULL = no value */
+	Block body;
+	union {
+		struct {
+			struct Expression *from;
+			struct Expression *to;
+			union {
+				struct Expression *step;
+				Value *stepval;
+			};
+		} range;
+		struct Expression *of;
+	};
+} EachExpr;
 
 typedef struct FnExpr {
     struct Declaration *params; /* declarations of the parameters to this function */
@@ -478,6 +518,7 @@ typedef struct Expression {
 		} del;
 		IfExpr if_;
 		WhileExpr while_;
+	    EachExpr each;
 		FnExpr fn;
 		CastExpr cast;
 		SliceExpr slice;
@@ -587,4 +628,5 @@ typedef struct {
 	Expression **anon_fns; /* array of pointers to expressions of anonymous functions */
 	Evaluator *evalr;
 	Identifier main_ident;
+	Identifiers *idents;
 } CGenerator;

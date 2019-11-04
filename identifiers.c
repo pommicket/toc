@@ -149,6 +149,7 @@ static void ident_add_decl(Identifier i, struct Declaration *d, struct Block *b)
 	id_decl->decl = d;
 	id_decl->scope = b;
 	id_decl->flags = 0;
+	id_decl->kind = IDECL_DECL;
 }
 
 static IdentDecl *ident_decl(Identifier i) {
@@ -224,4 +225,17 @@ static bool ident_eq_str(Identifier i, const char *s) {
 	}
 	if (i->parent) return false; /* not at root */
 	return true;
+}
+
+static Location idecl_where(IdentDecl *id) {
+	
+	switch (id->kind) {
+	case IDECL_DECL:
+		return id->decl->where;
+	case IDECL_EXPR:
+		return id->expr->where;
+	}
+	assert(0);
+	Location def = {0};
+	return def;
 }

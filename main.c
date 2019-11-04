@@ -1,7 +1,10 @@
 /* 
 TODO:
-make sure futurely/currently-declared types are *only* used by pointer
-for
+each
+compile-time each
+each pointer
+compile-time each pointer
+prevent each x := x
 +=, -=, *=, /=
 compile-time arguments
 don't allow while {3; 5} (once break is added)
@@ -9,6 +12,7 @@ any odd number of "s for a string
 modifiable strings:
 s := ["sakjdfhkjh ksjdahfkjsd ahs ahdf hsdaf khsadkjfh"];
 unicode variable names (cgen support)
+make sure futurely/currently-declared types are only used by pointer/slice
 allow omission of trailing ; in foo @= fn() {}?
  */
 #include "toc.c"

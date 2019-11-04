@@ -47,6 +47,19 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 		if (!cgen_decls_block(g, &e->while_.body))
 			return false;
 		break;
+	case EXPR_EACH: {
+		EachExpr *ea = &e->each;
+		if (ea->flags & EACH_IS_RANGE) {
+			if (!cgen_decls_expr(g, ea->range.from))
+				return false;
+			if (ea->range.to && !cgen_decls_expr(g, ea->range.to))
+				return false;
+			/* step is a value, not an expression */
+		} else {
+			if (!cgen_decls_expr(g, ea->of))
+				return false;
+		}
+	} break;
 	case EXPR_TUPLE:
 		arr_foreach(e->tuple, Expression, x)
 			if (!cgen_decls_expr(g, x))

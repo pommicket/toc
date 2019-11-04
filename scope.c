@@ -6,10 +6,10 @@ static void val_free(Value *v, Type *t);
 static bool add_ident_decls(Block *b, Declaration *d, U32 flags) {
 	bool ret = true;
 	arr_foreach(d->idents, Identifier, ident) {
-		IdentDecl **decls = &(*ident)->decls;
-		if ((flags & SCOPE_FLAG_CHECK_REDECL) && arr_len(*decls)) {
+		IdentDecl *decls = (*ident)->decls;
+		if ((flags & SCOPE_FLAG_CHECK_REDECL) && arr_len(decls)) {
 			/* check that it hasn't been declared in this block */
-			IdentDecl *prev = arr_last(*decls);
+			IdentDecl *prev = arr_last(decls);
 			if (prev->scope == b) {
 				err_print(d->where, "Re-declaration of identifier in the same block.");
 				info_print(prev->decl->where, "Previous declaration was here.");
@@ -30,7 +30,7 @@ static void remove_ident_decls(Block *b, Declaration *d) {
 		IdentDecl **decls = &id_info->decls;
 		IdentDecl *last_decl = arr_last(*decls);
 		if (last_decl && last_decl->scope == b) {
-			if ((last_decl->flags & IDECL_FLAG_HAS_VAL)
+			if ((last_decl->flags & IDECL_HAS_VAL)
 				/* don't free const vals (there's only one per decl) */
 				&& !(last_decl->decl->flags & DECL_FLAG_CONST)) {
 				val_free(&last_decl->val, is_tuple ? &d->type.tuple[i++] : &d->type);
@@ -63,11 +63,14 @@ static void block_exit(Block *b, Statement *stmts) {
 }
 
 /* does NOT enter function's block body */
-static void fn_enter(FnExpr *f, U32 flags) {
+static bool fn_enter(FnExpr *f, U32 flags) {
 	arr_foreach(f->params, Declaration, decl)
-		add_ident_decls(&f->body, decl, flags);
+		if (!add_ident_decls(&f->body, decl, flags))
+			return false;
 	arr_foreach(f->ret_decls, Declaration, decl)
-		add_ident_decls(&f->body, decl, flags);
+		if (!add_ident_decls(&f->body, decl, flags))
+			return false;
+	return true;
 }
 
 static void fn_exit(FnExpr *f) {
@@ -75,4 +78,32 @@ static void fn_exit(FnExpr *f) {
 		remove_ident_decls(&f->body, decl);
 	arr_foreach(f->ret_decls, Declaration, decl)
 		remove_ident_decls(&f->body, decl);
+}
+
+static bool each_enter(Expression *e, U32 flags) {
+	assert(e->kind == EXPR_EACH);
+	EachExpr *ea = &e->each;
+    if (ea->index && ea->index == ea->value) {
+		err_print(e->where, "The identifier for the index of an each loop must be different from the identifier for the value.");
+		return false;
+	}
+	if (ea->index) {
+		IdentDecl *id = arr_add(&ea->index->decls);
+		id->flags = 0;
+		id->kind = IDECL_EXPR;
+		id->scope = &ea->body;
+		id->expr = e;
+	}
+	if (ea->value) {
+		IdentDecl *id = arr_add(&ea->value->decls);
+		id->flags = 0;
+		id->kind = IDECL_EXPR;
+		id->scope = &ea->body;
+		id->expr = e;
+	}
+	return true;
+}
+
+static void each_exit(Expression *e) {
+	assert(e->kind == EXPR_EACH);
 }

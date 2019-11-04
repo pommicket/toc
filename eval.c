@@ -179,6 +179,8 @@ static bool val_truthiness(Value *v, Type *t) {
 	return false;
 }
 
+
+
 static I64 val_to_i64(Value *v, BuiltinType v_type) {
 	switch (v_type) {
 	case BUILTIN_I8: return (I64)v->i8;
@@ -194,6 +196,8 @@ static I64 val_to_i64(Value *v, BuiltinType v_type) {
 	assert(0);
 	return 0;
 }
+
+
 
 static U64 val_to_u64(Value *v, BuiltinType v_type) {
 	if (v_type == BUILTIN_U64) return v->u64;
@@ -227,6 +231,106 @@ static void u64_to_val(Value *v, BuiltinType v_type, U64 x) {
 		v->u64 = x;
 	else
 		i64_to_val(v, v_type, (I64)x);
+}
+
+
+static bool val_is_nonnegative(Value *v, Type *t) {
+	assert(t->kind == TYPE_BUILTIN);
+	if (!type_builtin_is_signed(t->builtin))
+		return true;
+	return val_to_i64(v, t->builtin) >= 0;
+}
+
+static void fprint_val_ptr(FILE *f, void *p, Type *t) {
+	switch (t->kind) {
+	case TYPE_VOID:
+		fprintf(f, "(void)");
+		break;
+	case TYPE_UNKNOWN:
+		fprintf(f, "???");
+		break;
+	case TYPE_BUILTIN:
+		switch (t->builtin) {
+		case BUILTIN_I8: fprintf(f, "%"PRId8, *(I8 *)p); break;
+		case BUILTIN_U8: fprintf(f, "%"PRIu8, *(U8 *)p); break;
+		case BUILTIN_I16: fprintf(f, "%"PRId16, *(I16 *)p); break;
+		case BUILTIN_U16: fprintf(f, "%"PRIu16, *(U16 *)p); break;
+		case BUILTIN_I32: fprintf(f, "%"PRId32, *(I32 *)p); break;
+		case BUILTIN_U32: fprintf(f, "%"PRIu32, *(U32 *)p); break;
+		case BUILTIN_I64: fprintf(f, "%"PRId64, *(I64 *)p); break;
+		case BUILTIN_U64: fprintf(f, "%"PRIu64, *(U64 *)p); break;
+		case BUILTIN_F32: fprintf(f, F32_FMT, *(F32 *)p); break;
+		case BUILTIN_F64: fprintf(f, F64_FMT, *(F64 *)p); break;
+		case BUILTIN_CHAR: fprintf(f, "'%c'", *(char *)p); break;
+		case BUILTIN_BOOL: fprintf(f, "%s", *(bool *)p ? "true" : "false"); break;
+		}
+		break;
+	case TYPE_FN:
+		fprintf(f, "<function @ %p>", (void *)*(FnExpr **)p);
+		break;
+	case TYPE_TUPLE:
+		fprintf(f, "<tuple>");
+		break;
+	case TYPE_ARR: {
+		fprintf(f, "["); /* TODO: change? when array initializers are added */
+		size_t n = t->arr.n;
+		if (n > 5) n = 5;
+		for (size_t i = 0; i < n; i++) {
+			if (i) fprintf(f, ", ");
+			fprint_val_ptr(f, *(char **)p + i * compiler_sizeof(t->arr.of), t->arr.of);
+		}
+		if (t->arr.n > n) {
+			fprintf(f, ", ...");
+		}
+		fprintf(f, "]");
+	} break;
+	case TYPE_PTR:
+		fprintf(f, "<pointer: %p>", *(void **)p);
+		break;
+	case TYPE_SLICE: {
+		fprintf(f, "["); /* TODO: change? when slice initializers are added */
+		Slice slice = *(Slice *)p;
+		I64 n = slice.n;
+		if (n > 5) n = 5;
+		for (I64 i = 0; i < n; i++) {
+			if (i) fprintf(f, ", ");
+			fprint_val_ptr(f, (char *)slice.data + i * (I64)compiler_sizeof(t->arr.of), t->arr.of);
+		}
+		if (slice.n > n) {
+			fprintf(f, ", ...");
+		}
+		fprintf(f, "]");
+	} break;
+	case TYPE_TYPE:
+		fprint_type(f, *(Type **)p);
+		break;
+	case TYPE_USER:
+		fprint_val_ptr(f, p, type_user_underlying(t));
+		break;
+	case TYPE_STRUCT:
+		fprintf(f, "["); /* TODO: change? when struct initializers are added */
+		arr_foreach(t->struc.fields, Field, fi) {
+			if (fi != t->struc.fields)
+				fprintf(f, ", ");
+			fprint_ident(f, fi->name);
+			fprintf(f, ": ");
+			fprint_val_ptr(f, *(char **)p + fi->offset, fi->type);
+		}
+		fprintf(f, "]");
+		break;
+	}
+}
+
+static void fprint_val(FILE *f, Value *v, Type *t) {
+	if (t->kind == TYPE_TUPLE) {
+		fprintf(f, "(");
+		for (size_t i = 0; i < arr_len(t->tuple); i++) {
+			fprint_val(f, &v->tuple[i], &t->tuple[i]);
+		}
+		fprintf(f, ")");
+	} else {
+		fprint_val_ptr(f, v, t);
+	}
 }
 
 /* 
@@ -680,7 +784,7 @@ static bool eval_address_of(Evaluator *ev, Expression *e, void **ptr) {
 	switch (e->kind) {
 	case EXPR_IDENT: {
 		IdentDecl *id = ident_decl(e->ident);
-		if (!(id->flags & IDECL_FLAG_HAS_VAL)) {
+		if (!(id->flags & IDECL_HAS_VAL)) {
 			err_print(e->where, "Cannot take address of run time variable at compile time.");
 			return false;
 		}
@@ -735,7 +839,7 @@ static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 	switch (set->kind) {
 	case EXPR_IDENT: {
 		IdentDecl *id = ident_decl(set->ident);
-		if (!(id->flags & IDECL_FLAG_HAS_VAL)) {
+		if (!(id->flags & IDECL_HAS_VAL)) {
 			err_print(set->where, "Cannot set value of run time variable at compile time.");
 			return false;
 		}
@@ -1043,6 +1147,14 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (!eval_block(ev, &w->body, &e->type, v)) return false;
 		}
 	} break;
+	case EXPR_EACH: {
+		EachExpr *ea = &e->each;
+		/* TODO: ASDF */
+		if (ea->flags & EACH_IS_RANGE) {
+			
+		} else {
+		}
+	} break;
 	case EXPR_BLOCK:
 		if (!eval_block(ev, &e->block, &e->type, v)) return false;
 		break;
@@ -1069,7 +1181,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		Declaration *d = idecl->decl;
 		if (!types_decl(ev->typer, d)) return false;
 		assert(d->type.flags & TYPE_FLAG_RESOLVED);
-		if (idecl->flags & IDECL_FLAG_HAS_VAL) {
+		if (idecl->flags & IDECL_HAS_VAL) {
 			*v = idecl->val;
 		} else if (d->flags & DECL_FLAG_CONST) {
 			if (!(d->flags & DECL_FLAG_FOUND_VAL)) {
@@ -1166,7 +1278,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				Type *type = p->type.kind == TYPE_TUPLE ? &p->type.tuple[idx++] : &p->type;
 				IdentDecl *id = ident_decl(*i);
 				val_copy(NULL, &id->val, &args[arg], type);
-				id->flags |= IDECL_FLAG_HAS_VAL;
+				id->flags |= IDECL_HAS_VAL;
 				arg++;
 			}
 		}
@@ -1270,7 +1382,7 @@ static bool eval_decl(Evaluator *ev, Declaration *d) {
 				}
 			}
 			index++;
-			id->flags |= IDECL_FLAG_HAS_VAL;
+			id->flags |= IDECL_HAS_VAL;
 		}
 	}
 	return true;

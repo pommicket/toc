@@ -12,6 +12,7 @@ static const char *expr_kind_to_str(ExprKind k) {
 	case EXPR_LITERAL_CHAR: return "character literal";
 	case EXPR_IF: return "if expression";
 	case EXPR_WHILE: return "while expression";
+	case EXPR_EACH: return "each expression";
 	case EXPR_CALL: return "function call";
 	case EXPR_C: return "c code";
 	case EXPR_DSIZEOF: return "#sizeof";
@@ -255,11 +256,14 @@ static inline Expression *parser_new_expr(Parser *p) {
 	return parser_malloc(p, sizeof(Expression));
 }
 
-#define EXPR_CAN_END_WITH_COMMA 0x01 /* a comma could end the expression */
-#define EXPR_CAN_END_WITH_LBRACE 0x02
-#define EXPR_CAN_END_WITH_COLON 0x04
+typedef enum {
+	  EXPR_CAN_END_WITH_COMMA = 0x01, /* a comma could end the expression */
+	  EXPR_CAN_END_WITH_LBRACE = 0x02,
+	  EXPR_CAN_END_WITH_COLON = 0x04,
+	  EXPR_CAN_END_WITH_DOTDOT = 0x08
+} ExprEndFlags;
 /* is_vbs can be NULL */
-static Token *expr_find_end(Parser *p, U16 flags, bool *is_vbs)  {
+static Token *expr_find_end(Parser *p, ExprEndFlags flags, bool *is_vbs)  {
 	Tokenizer *t = p->tokr;
 	int paren_level = 0;
 	int brace_level = 0;
@@ -312,6 +316,10 @@ static Token *expr_find_end(Parser *p, U16 flags, bool *is_vbs)  {
 				if (brace_level == 0)
 					return token;
 				could_be_vbs = true;
+				break;
+			case KW_DOTDOT:
+				if (brace_level == 0 && square_level == 0 && paren_level == 0 && (flags & EXPR_CAN_END_WITH_DOTDOT))
+					return token;
 				break;
 			case KW_COLON:
 				if ((flags & EXPR_CAN_END_WITH_COLON)
@@ -1049,6 +1057,94 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			}
 			if (!parse_block(p, &w->body)) return false;
 		    return true;
+		}
+		case KW_EACH: {
+			e->kind = EXPR_EACH;
+			EachExpr *ea = &e->each;
+			ea->flags = 0;
+			ea->value = NULL;
+			ea->index = NULL;
+			t->token++;
+			if (t->token->kind == TOKEN_IDENT) {
+				ea->value = t->token->ident;
+				if (ident_eq_str(ea->value, "_")) /* ignore value */
+					ea->value = NULL;
+				t->token++;
+				if (token_is_kw(t->token, KW_COMMA)) {
+					t->token++;
+					if (t->token->kind == TOKEN_IDENT) {
+						ea->index = t->token->ident;
+						if (ident_eq_str(ea->index, "_")) /* ignore index */
+							ea->index = NULL;
+					} else {
+						tokr_err(t, "Expected identifier after , in each statement.");
+						return false;
+					}
+				}
+			}
+			if (token_is_kw(t->token, KW_AT)) {
+				tokr_err(t, "The variable(s) in a for loop cannot be constant.");
+				return false;
+			}
+			if (!token_is_kw(t->token, KW_COLON)) {
+				tokr_err(t, "Expected : following identifiers in for statement.");
+				return false;
+			}
+			t->token++;
+			if (!token_is_kw(t->token, KW_EQ)) {
+				ea->flags |= EACH_ANNOTATED_TYPE;
+				if (!parse_type(p, &ea->type))
+					return false;
+				if (!token_is_kw(t->token, KW_EQ)) {
+					tokr_err(t, "Expected = in for statement.");
+					return false;
+				}
+			}
+			t->token++;
+			Token *first_end = expr_find_end(p, EXPR_CAN_END_WITH_COMMA|EXPR_CAN_END_WITH_DOTDOT|EXPR_CAN_END_WITH_LBRACE, NULL);
+			Expression *first = parser_new_expr(p);
+			if (!parse_expr(p, first, first_end))
+				return false;
+			if (token_is_kw(first_end, KW_LBRACE)) {
+				ea->of = first;
+			} else if (token_is_kw(first_end, KW_DOTDOT) || token_is_kw(first_end, KW_COMMA)) {
+				ea->flags |= EACH_IS_RANGE;
+				ea->range.from = first;
+				if (token_is_kw(first_end, KW_COMMA)) {
+					/* step */
+					t->token++;
+				    ea->range.step = parser_new_expr(p);
+					Token *step_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE|EXPR_CAN_END_WITH_DOTDOT, NULL);
+					if (!parse_expr(p, ea->range.step, step_end))
+						return false;
+					if (!token_is_kw(step_end, KW_DOTDOT)) {
+						err_print(step_end->where, "Expected .. to follow step in for statement.");
+						return false;
+					}
+				} else {
+					ea->range.step = NULL;
+				}
+				t->token++; /* move past .. */
+				if (token_is_kw(t->token, KW_LBRACE)) {
+					ea->range.to = NULL; /* infinite loop! */
+				} else {
+					ea->range.to = parser_new_expr(p);
+					Token *to_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE, NULL);
+					if (!parse_expr(p, ea->range.to, to_end))
+						return false;
+					if (!token_is_kw(t->token, KW_LBRACE)) {
+						tokr_err(t, "Expected { to open body of for statement.");
+						return false;
+					}
+				}
+			} else {
+				err_print(first_end->where, "Expected { or .. to follow expression in for statement.");
+				return false;
+			}
+			
+			if (!parse_block(p, &ea->body))
+				return false;
+			return true;
 		}
 		default: break;
 		}
@@ -1831,6 +1927,8 @@ static void fprint_arg_exprs(FILE *out, Expression *args) {
 	fprintf(out, ")");
 }
 
+static void fprint_val(FILE *f, Value *v, Type *t);
+
 static void fprint_expr(FILE *out, Expression *e) {
 	PARSE_PRINT_LOCATION(e->where);
 	switch (e->kind) {
@@ -1902,6 +2000,43 @@ static void fprint_expr(FILE *out, Expression *e) {
 		if (e->while_.cond) fprint_expr(out, e->while_.cond);
 		fprint_block(out, &e->while_.body);
 		break;
+	case EXPR_EACH: {
+		EachExpr *ea = &e->each;
+		fprintf(out, "each ");
+		if (ea->index) {
+			fprint_ident(out, ea->index);
+		} else fprintf(out, "_");
+		fprintf(out, ", ");
+		if (ea->value) {
+			fprint_ident(out, ea->value);
+		} else fprintf(out, "_");
+		fprintf(out, " :");
+		if (ea->flags & EACH_ANNOTATED_TYPE)
+			fprint_type(out, &ea->type);
+		fprintf(out, "= ");
+		if (ea->flags & EACH_IS_RANGE) {
+			fprint_expr(out, ea->range.from);
+			if (parse_printing_after_types) {
+				if (ea->range.stepval) {
+					fprintf(out, ",");
+					fprint_val(out, ea->range.stepval, &ea->type);
+				}
+			} else {
+				if (ea->range.step) {
+					fprintf(out, ",");
+					fprint_expr(out, ea->range.step);
+				}
+			}
+			fprintf(out, "..");
+			if (ea->range.to) {
+				fprint_expr(out, ea->range.to);
+			}
+			fprintf(out, " ");
+		} else {
+			fprint_expr(out, ea->of);
+		}
+		fprint_block(out, &ea->body);
+	} break;
 	case EXPR_CALL:
 		fprint_expr(out, e->call.fn);
 		if (parse_printing_after_types) {

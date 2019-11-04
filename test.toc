@@ -1,55 +1,16 @@
+
 puti @= fn(x: int) {
 	 #C("printf(\"%ld\\n\", (long)x);
 ");
 };
 
-total @= fn() int {
-	  t := 0;
-	 x := new(int,10);
-	 i := 0;
-	 while i < x.len {
-		   x[i] = i;
-		   i = i + 1;
-	 }
-	 
-	 x.len = 5;
-	 i = 0;
-	 while i < x.len {
-	 	   t = t + x[i];
-		   i = i + 1;
-	 }
-	 t
-};
-
-Foo @= struct {
-	x: &Bar;
-};
-
-Bar @= struct {
-	y : &Foo;
-};
 
 
 main @= fn() {
-	 f: Foo;
-	 b: Bar;
-	 f.x = &b;
-	 b.y = &f;
-
-	 Baz @= struct { a : &Quux; };
-	 Quux @= struct { b: &Baz; };
-	 B : Baz;
-	 q : Quux;
-	 B.a = &q;
-	 q.b = &B;
-
-	 Wow @= struct { w: &Wow; };
-	 w: Wow;
-	 w.w = &w;
-
-	 puti(total());
-	 X @= total();
-	 puti(X);
-	 puti(#sizeof(int));
-	 puti(#alignof(int));
+	each i := 1..10 {
+		 puti(i);
+	}
+	each i := 10,-1..1 {
+		 puti(i);
+	}
 };

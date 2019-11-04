@@ -102,12 +102,15 @@ static bool expr_arr_must_mut(Expression *e) {
 	switch (e->kind) {
 	case EXPR_IDENT: {
 		IdentDecl *idecl = ident_decl(e->ident);
-		Declaration *d = idecl->decl;
-		if (d->flags & DECL_FLAG_CONST) {
-			err_print(e->where, "Cannot modify a constant array.");
-			return false;
+		if (idecl->kind == IDECL_DECL) {
+			Declaration *d = idecl->decl;
+			if (d->flags & DECL_FLAG_CONST) {
+				err_print(e->where, "Cannot modify a constant array.");
+				return false;
+			}
 		}
-	} return true;
+		return true;
+	}
 	case EXPR_CAST:
 	case EXPR_CALL:
 	case EXPR_NEW:
@@ -119,6 +122,8 @@ static bool expr_arr_must_mut(Expression *e) {
 	case EXPR_WHILE:
 		assert(e->while_.body.ret_expr);
 		return expr_arr_must_mut(e->while_.body.ret_expr);
+	case EXPR_EACH:
+		return expr_arr_must_mut(e->each.body.ret_expr);
 	case EXPR_IF:
 		for (IfExpr *i = &e->if_; i; i->next_elif ? i = &i->next_elif->if_ : (i = NULL)) {
 			assert(i->body.ret_expr);
@@ -155,12 +160,15 @@ static bool expr_must_lval(Expression *e) {
 	case EXPR_IDENT: {
 		IdentDecl *id_decl = ident_decl(e->ident);
 		assert(id_decl);
-		Declaration *d = id_decl->decl;
-		if (d->flags & DECL_FLAG_CONST) {
-			char *istr = ident_to_str(e->ident);
-			err_print(e->where, "Use of constant %s as a non-constant expression.", istr);
-			info_print(d->where, "%s was declared here.", istr);
-			return false;
+		if (id_decl->kind == IDECL_DECL) {
+			Declaration *d = id_decl->decl;
+			if (d->flags & DECL_FLAG_CONST) {
+				char *istr = ident_to_str(e->ident);
+				err_print(e->where, "Use of constant %s as a non-constant expression.", istr);
+				info_print(d->where, "%s was declared here.", istr);
+				return false;
+			}
+
 		}
 		return true;
 	}
@@ -203,6 +211,7 @@ static bool expr_must_lval(Expression *e) {
 	case EXPR_LITERAL_BOOL:
 	case EXPR_IF:
 	case EXPR_WHILE:
+	case EXPR_EACH:
 	case EXPR_CALL:
 	case EXPR_C:
 	case EXPR_DALIGNOF:
@@ -243,6 +252,7 @@ static bool type_of_fn(Typer *tr, Expression *e, Type *t) {
 }
 
 static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
+	t->flags = 0;
 	IdentDecl *decl = ident_decl(i);
 	if (!decl) {
 		char *s = ident_to_str(i);
@@ -250,73 +260,93 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 		free(s);
 		return false;
 	}
-	Declaration *d = decl->decl;
-	bool captured = false;
-	if (decl->scope != NULL)
-		for (Block *block = tr->block; block != decl->scope; block = block->parent) {
-			if (block->flags & BLOCK_FLAG_FN) {
-				captured = true;
-				break;
+	switch (decl->kind) {
+	case IDECL_DECL: {
+		Declaration *d = decl->decl;
+		bool captured = false;
+		if (decl->scope != NULL)
+			for (Block *block = tr->block; block != decl->scope; block = block->parent) {
+				if (block->flags & BLOCK_FLAG_FN) {
+					captured = true;
+					break;
+				}
+			}
+		if (captured && !(d->flags & DECL_FLAG_CONST)) {
+			err_print(where, "Variables cannot be captured into inner functions (but constants can).");
+			return false;
+		}
+		/* are we inside this declaration? */
+		typedef Declaration *DeclarationPtr;
+		arr_foreach(tr->in_decls, DeclarationPtr, in_decl) {
+			if (d == *in_decl) {
+				assert(d->flags & DECL_FLAG_HAS_EXPR); /* we can only be in decls with an expr */
+				if (d->expr.kind != EXPR_FN) { /* it's okay if a function references itself */
+					/* if we've complained about it before when we were figuring out the type, don't complain again */
+					if (!(d->flags & DECL_FLAG_ERRORED_ABOUT_SELF_REFERENCE)) {
+						char *s = ident_to_str(i);
+						err_print(where, "Use of identifier %s within its own declaration.", s);
+						free(s);
+						info_print(d->where, "Declaration was here.");
+						d->flags |= DECL_FLAG_ERRORED_ABOUT_SELF_REFERENCE;
+					}
+					return false;
+				}
 			}
 		}
-	if (captured && !(d->flags & DECL_FLAG_CONST)) {
-		err_print(where, "Variables cannot be captured into inner functions (but constants can).");
-		return false;
-	}
-	/* are we inside this declaration? */
-	typedef Declaration *DeclarationPtr;
-	arr_foreach(tr->in_decls, DeclarationPtr, in_decl) {
-		if (d == *in_decl) {
-			assert(d->flags & DECL_FLAG_HAS_EXPR); /* we can only be in decls with an expr */
-			if (d->expr.kind != EXPR_FN) { /* it's okay if a function references itself */
-				/* if we've complained about it before when we were figuring out the type, don't complain again */
-				if (!(d->flags & DECL_FLAG_ERRORED_ABOUT_SELF_REFERENCE)) {
+	
+		if (d->flags & DECL_FLAG_FOUND_TYPE) {
+			if (d->type.kind == TYPE_TUPLE) {
+				/* get correct item in tuple */
+				long index = 0;
+				arr_foreach(d->idents, Identifier, decl_i) {
+					if (*decl_i == i) {
+						break;
+					}
+					index++;
+					assert(index < (long)arr_len(d->idents)); /* identifier got its declaration set to here, but it's not here */
+				}
+				*t = d->type.tuple[index];
+			} else {
+				*t = d->type;
+			}
+			return true;
+		} else {
+			if ((d->flags & DECL_FLAG_HAS_EXPR) && (d->expr.kind == EXPR_FN)) {
+				/* allow using a function before declaring it */
+				if (!type_of_fn(tr, &d->expr, t)) return false;
+				return true;
+			} else {
+				if (location_after(d->where, where)) {
 					char *s = ident_to_str(i);
-					err_print(where, "Use of identifier %s within its own declaration.", s);
+					err_print(where, "Use of identifier %s before its declaration.\nNote that it is only possible to use a constant function before it is directly declared (e.g. x @= fn() {}).", s);
+					info_print(d->where, "%s will be declared here.", s);
 					free(s);
-					info_print(d->where, "Declaration was here.");
-					d->flags |= DECL_FLAG_ERRORED_ABOUT_SELF_REFERENCE;
+				} else {
+					/* let's type the declaration, and redo this (for evaling future functions) */
+					if (!types_decl(tr, d)) return false;
+					return type_of_ident(tr, where, i, t);
 				}
 				return false;
 			}
 		}
-	}
-	
-	if (d->flags & DECL_FLAG_FOUND_TYPE) {
-		if (d->type.kind == TYPE_TUPLE) {
-			/* get correct item in tuple */
-			long index = 0;
-			arr_foreach(d->idents, Identifier, decl_i) {
-				if (*decl_i == i) {
-					break;
-				}
-				index++;
-				assert(index < (long)arr_len(d->idents)); /* identifier got its declaration set to here, but it's not here */
-			}
-			*t = d->type.tuple[index];
-		} else {
-			*t = d->type;
-		}
-		return true;
-	} else {
-		if ((d->flags & DECL_FLAG_HAS_EXPR) && (d->expr.kind == EXPR_FN)) {
-			/* allow using a function before declaring it */
-			if (!type_of_fn(tr, &d->expr, t)) return false;
-			return true;
-		} else {
-			if (location_after(d->where, where)) {
-				char *s = ident_to_str(i);
-				err_print(where, "Use of identifier %s before its declaration.\nNote that it is only possible to use a constant function before it is directly declared (e.g. x @= fn() {}).", s);
-				info_print(d->where, "%s will be declared here.", s);
-				free(s);
+	} break;
+	case IDECL_EXPR: {
+		Expression *e = decl->expr;
+		switch (e->kind) {
+		case EXPR_EACH:
+			if (i == e->each.index) {
+				t->kind = TYPE_BUILTIN;
+				t->builtin = BUILTIN_I64;
 			} else {
-			    /* let's type the declaration, and redo this (for evaling future functions) */
-				if (!types_decl(tr, d)) return false;
-				return type_of_ident(tr, where, i, t);
+				assert(i == e->each.value);
+				*t = e->each.type;
 			}
-			return false;
+			break;
+		default: assert(0); return false;
 		}
+	} break;
 	}
+	return true;
 }
 
 /* fixes the type (replaces [5+3]int with [8]int, etc.) */
@@ -389,6 +419,7 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 			free(s);
 			return false;
 		}
+		assert(idecl->kind == IDECL_DECL);
 		Declaration *decl = idecl->decl;
 		/* now, type the declaration (in case we are using it before its declaration) */
 		if (!types_decl(tr, decl))
@@ -558,7 +589,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 			tr->ret_type = t->fn.types[0];
 		}
 		tr->can_ret = true;
-		fn_enter(f, SCOPE_FLAG_CHECK_REDECL);
+		if (!fn_enter(f, SCOPE_FLAG_CHECK_REDECL))
+			return false;
 		bool block_success = true;
 		block_success = types_block(tr, &e->fn.body);
 		fn_exit(f);
@@ -634,6 +666,116 @@ static bool types_expr(Typer *tr, Expression *e) {
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_CHAR;
 		break;
+	case EXPR_EACH: {
+		EachExpr *ea = &e->each;
+		if (ea->flags & EACH_IS_RANGE) {
+			/* TODO: allow user-defined numerical types */
+			if (!types_expr(tr, ea->range.from)) return false;
+			{
+				Type *ft = &ea->range.from->type;
+				if (ft->kind != TYPE_BUILTIN || !type_builtin_is_numerical(ft->builtin)) {
+					char *s = type_to_str(ft);
+					err_print(e->where, "from expression of each must be a builtin numerical type, not %s", s);
+					free(s);
+				}
+			}
+			if (ea->range.step) {
+				if (!types_expr(tr, ea->range.step)) return false;
+				Type *st = &ea->range.step->type;
+				if (st->kind != TYPE_BUILTIN || !type_builtin_is_numerical(st->builtin)) {
+					char *s = type_to_str(st);
+					err_print(e->where, "step expression of each must be a builtin numerical type, not %s", s);
+					free(s);
+				}
+			}
+			if (ea->range.to) {
+				if (!types_expr(tr, ea->range.to)) return false;
+				Type *tt = &ea->range.to->type;
+				if (tt->kind != TYPE_BUILTIN || !type_builtin_is_numerical(tt->builtin)) {
+					char *s = type_to_str(tt);
+					err_print(e->where, "to expression of each must be a builtin numerical type, not %s", s);
+					free(s);
+				}
+			}
+
+			if (!(ea->flags & EACH_ANNOTATED_TYPE)) {
+			    ea->type = ea->range.from->type;
+			}
+			
+			if (!type_eq(&ea->type, &ea->range.from->type)) {
+				char *exp = type_to_str(&ea->type);
+				char *got = type_to_str(&ea->range.from->type);
+				err_print(e->where, "Type of each does not match the type of the from expression. Expected %s, but got %s.", exp, got);
+				free(exp); free(got);
+				return false;
+			}
+			
+			if (ea->range.step && !type_eq(&ea->type, &ea->range.step->type)) {
+				char *exp = type_to_str(&ea->type);
+				char *got = type_to_str(&ea->range.step->type);
+				err_print(e->where, "Type of each does not match the type of the step expression. Expected %s, but got %s.", exp, got);
+				free(exp); free(got);
+				return false;
+			}
+			
+			if ((ea->type.flags & TYPE_FLAG_FLEXIBLE) && ea->range.step)
+				ea->type = ea->range.step->type;
+			
+			if (ea->range.to && !type_eq(&ea->type, &ea->range.to->type)) {
+				char *exp = type_to_str(&ea->type);
+				char *got = type_to_str(&ea->range.to->type);
+				err_print(e->where, "Type of each does not match the type of the to expression. Expected %s, but got %s.", exp, got);
+				free(exp); free(got);
+				return false;
+			}
+			
+			if ((ea->type.flags & TYPE_FLAG_FLEXIBLE) && ea->range.to)
+				ea->type = ea->range.to->type;
+			
+		} else {
+			if (!types_expr(tr, ea->of))
+				return false;
+			Type *of_type = NULL;
+			switch (ea->of->type.kind) {
+			case TYPE_SLICE:
+				of_type = ea->of->type.slice;
+				break;
+			case TYPE_ARR:
+				of_type = ea->of->type.arr.of;
+				break;
+			default: {
+				char *s = type_to_str(&ea->of->type);
+				err_print(e->where, "Cannot iterate over non-array non-slice type %s.", s);
+				free(s);
+				return false;
+			}
+			}
+			if (ea->flags & EACH_ANNOTATED_TYPE) {
+				if (!type_eq(of_type, &ea->type)) {
+					char *exp = type_to_str(of_type);
+					char *got = type_to_str(&ea->type);
+					err_print(e->where, "Expected to iterate over type %s, but it was annotated as iterating over type %s.");
+					free(exp); free(got);
+					return false;
+				}
+			} else ea->type = *of_type;
+		}
+		if ((ea->flags & EACH_IS_RANGE) && ea->range.step) {
+			Value *stepval = typer_malloc(tr, sizeof *ea->range.stepval);
+			if (!eval_expr(tr->evalr, ea->range.step, stepval)) {
+				info_print(ea->range.step->where, "Note that the step of an each loop must be a compile-time constant.");
+				return false;
+			}
+				ea->range.stepval = stepval;
+		}
+		if (!each_enter(e, SCOPE_FLAG_CHECK_REDECL)) return false;
+		if (!types_block(tr, &ea->body)) return false;
+		each_exit(e);
+		if (ea->body.ret_expr)
+			*t = ea->body.ret_expr->type;
+		else
+			t->kind = TYPE_VOID;
+	} break;
 	case EXPR_IDENT: {
 		if (!type_of_ident(tr, e->where, e->ident, t)) return false;
 	} break;
@@ -785,10 +927,12 @@ static bool types_expr(Typer *tr, Expression *e) {
 		if (f->kind == EXPR_IDENT) {
 			IdentDecl *decl = ident_decl(f->ident);
 			assert(decl);
-			if (decl->decl->flags & DECL_FLAG_HAS_EXPR) {
-				Expression *expr = &decl->decl->expr;
-				if (expr->kind == EXPR_FN)
-					fn_decl = &decl->decl->expr.fn;
+			if (decl->kind == IDECL_DECL) {
+				if (decl->decl->flags & DECL_FLAG_HAS_EXPR) {
+					Expression *expr = &decl->decl->expr;
+					if (expr->kind == EXPR_FN)
+						fn_decl = &decl->decl->expr.fn;
+				}
 			}
 		}
 		if (!fn_decl && nargs != nparams) {
@@ -819,7 +963,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 					char *s = ident_to_str(args[p].name);
 					err_print(args[p].where, "Argument '%s' does not appear in declaration of function.", s);
 					free(s);
-					info_print(ident_decl(f->ident)->decl->where, "Declaration is here.");
+					info_print(idecl_where(ident_decl(f->ident)), "Declaration is here.");
 					return false;
 				}
 				new_args[arg_index] = args[p].val;

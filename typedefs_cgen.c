@@ -56,6 +56,19 @@ static bool typedefs_expr(CGenerator *g, Expression *e) {
 		if (!typedefs_block(g, &e->while_.body))
 			return false;
 		break;
+	case EXPR_EACH: {
+		EachExpr *ea = &e->each;
+		if (ea->flags & EACH_IS_RANGE) {
+			if (!typedefs_expr(g, ea->range.from))
+				return false;
+			if (ea->range.to && !typedefs_expr(g, ea->range.to))
+				return false;
+			/* step is a value, not an expression */
+		} else {
+			if (!typedefs_expr(g, ea->of))
+				return false;
+		}
+	} break;
 	case EXPR_TUPLE:
 		arr_foreach(e->tuple, Expression, x)
 			if (!typedefs_expr(g, x))

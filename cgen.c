@@ -1,6 +1,6 @@
 static bool cgen_stmt(CGenerator *g, Statement *s);
-#define CGEN_BLOCK_FLAG_NOENTER 0x01 /* should cgen_block actually enter and exit the block? */
-#define CGEN_BLOCK_FLAG_NOBRACES 0x02 /* should it use braces? */
+#define CGEN_BLOCK_NOENTER 0x01 /* should cgen_block actually enter and exit the block? */
+#define CGEN_BLOCK_NOBRACES 0x02 /* should it use braces? */
 static bool cgen_block(CGenerator *g, Block *b, const char *ret_name, uint16_t flags);
 static bool cgen_expr_pre(CGenerator *g, Expression *e);
 static bool cgen_expr(CGenerator *g, Expression *e);
@@ -9,6 +9,7 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where);
 static bool cgen_type_post(CGenerator *g, Type *t, Location where);
 static bool cgen_decl(CGenerator *g, Declaration *d);
 static bool cgen_ret(CGenerator *g, Expression *ret);
+static bool cgen_val(CGenerator *g, Value *v, Type *t, Location where);
 static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where);
 
 static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *ev) {
@@ -19,6 +20,7 @@ static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *e
 	g->will_indent = true;
 	g->indent_lvl = 0;
 	g->anon_fns = NULL;
+	g->idents = ids;
 }
 
 static bool cgen_block_enter(CGenerator *g, Block *b) {
@@ -121,6 +123,7 @@ static void cgen_ident(CGenerator *g, Identifier i) {
 	}
 }
 
+
 static char *cgen_ident_to_str(Identifier i) {
 	return ident_to_str(i);
 }
@@ -129,6 +132,12 @@ static char *cgen_ident_to_str(Identifier i) {
 /* buffer should be at least 32 bytes */
 static inline void cgen_ident_id_to_str(char *buffer, IdentID id) {
 	snprintf(buffer, 32, "a%lu_", (unsigned long)id);
+}
+
+static inline Identifier cgen_ident_id_to_ident(CGenerator *g, IdentID id) {
+	char s[32];
+	cgen_ident_id_to_str(s, id);
+	return ident_get(g->idents, s);
 }
 
 static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
@@ -500,6 +509,9 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 	case EXPR_WHILE:
 		prefix_id = to->while_.c.id;
 		goto prefixed;
+	case EXPR_EACH:
+		prefix_id = to->each.c.id;
+		goto prefixed;
 	prefixed:
 		for (unsigned long i = 0; i < (unsigned long)arr_len(to->type.tuple); i++) {
 			cgen_write(g, "(");
@@ -596,6 +608,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 	switch (e->kind) {
 	case EXPR_IF:
 	case EXPR_WHILE:
+	case EXPR_EACH:
 	case EXPR_BLOCK: {
 		id = g->ident_counter++;
 		
@@ -657,6 +670,125 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		cgen_write(g, ") ");
 		if (!cgen_block(g, &w->body, ret_name, 0))
 			return false;
+	} break;
+	case EXPR_EACH: {
+		EachExpr *ea = &e->each;
+		int is_range = ea->flags & EACH_IS_RANGE;
+		IdentID slice_id;
+		IdentID from_id;
+		if (!is_range && ea->of->type.kind == TYPE_SLICE) {
+			/* pre-generate the slice */
+			slice_id = g->ident_counter++;
+			cgen_write(g, "slice_ ");
+			cgen_ident_id(g, slice_id);
+			cgen_write(g, " = ");
+			if (!cgen_expr(g, ea->of)) return false;
+			cgen_write(g, "; ");
+		} else if (is_range) {
+			/* pre-generate from */
+			from_id = g->ident_counter++;
+			if (!cgen_type_pre(g, &ea->type, e->where)) return false;
+			cgen_write(g, " ");
+			cgen_ident_id(g, from_id);
+			if (!cgen_type_post(g, &ea->type, e->where)) return false;
+			cgen_write(g, " = ");
+			if (!cgen_expr(g, ea->range.from))
+				return false;
+			cgen_write(g, "; ");
+		}
+		ea->c.id = id;
+		if (ea->index == NULL)
+			ea->c.index_id = g->ident_counter++;
+		if (!each_enter(e, 0)) return false;
+		cgen_write(g, "for (i64 ");
+		if (ea->index)
+			cgen_ident(g, ea->index);
+		else
+			cgen_ident_id(g, ea->c.index_id);
+		cgen_write(g, " = 0; ");
+		if (!(is_range && !ea->range.to)) {
+			if (ea->index)
+				cgen_ident(g, ea->index);
+			else
+				cgen_ident_id(g, ea->c.index_id);
+			if (is_range) {
+				bool positive_step
+					= ea->range.stepval == NULL || val_is_nonnegative(ea->range.stepval, &ea->type);
+				cgen_write(g, " %c= ", positive_step ? '<' : '>');
+				if (!cgen_expr(g, ea->range.to))
+					return false;
+				cgen_write(g, "-");
+				cgen_ident_id(g, from_id);
+			} else {
+				cgen_write(g, " < ");
+				switch (ea->of->type.kind) {
+				case TYPE_ARR:
+					cgen_write(g, "%lu", (unsigned long)ea->of->type.arr.n);
+					break;
+				case TYPE_SLICE:
+					cgen_ident_id(g, slice_id);
+					cgen_write(g, ".len");
+					break;
+				default: assert(0); break;
+				}
+			}
+		}
+		cgen_write(g, "; ");
+		if (ea->index)
+			cgen_ident(g, ea->index);
+		else
+			cgen_ident_id(g, ea->c.index_id);
+		cgen_write(g, " += ");
+		if (is_range && ea->range.stepval) {
+			if (!cgen_val(g, ea->range.stepval, &ea->type, e->where))
+				return false;
+		} else {
+			cgen_write(g, "1");
+		}
+		cgen_write(g, ") {");
+		cgen_nl(g);
+		if (ea->value) {
+			if (is_range) {
+				if (!cgen_type_pre(g, &ea->type, e->where)) return false;
+				cgen_write(g, " ");
+				cgen_ident(g, ea->value);
+				if (!cgen_type_post(g, &ea->type, e->where)) return false;
+				cgen_write(g, " = ");
+				cgen_ident_id(g, from_id);
+				cgen_write(g, " + ");
+				if (ea->index)
+					cgen_ident(g, ea->index);
+				else
+					cgen_ident_id(g, ea->c.index_id);
+				cgen_write(g, ";");
+				cgen_nl(g);
+			} else {
+				/* necessary for iterating over, e.g., an array of arrays */
+				Expression set;
+				set.flags = 0;
+				set.kind = EXPR_IDENT;
+				set.ident = ea->value;
+				
+				Expression to;
+				to.flags = 0;
+				to.kind = EXPR_BINARY_OP;
+				to.binary.op = BINARY_AT_INDEX;
+				to.binary.lhs = ea->of;
+				to.binary.rhs = err_malloc(sizeof(Expression));
+				to.binary.rhs->flags = 0;
+				to.binary.rhs->kind = EXPR_IDENT;
+				if (ea->index)
+					to.binary.rhs->ident = ea->index;
+				else
+					to.binary.rhs->ident = cgen_ident_id_to_ident(g, ea->c.id);
+				if (!cgen_set(g, &set, NULL, &to, NULL))
+					return false;
+			}
+		}
+		if (!cgen_block(g, &ea->body, ret_name, CGEN_BLOCK_NOBRACES))
+			return false;
+		cgen_write(g, "}");
+		each_exit(e);
 	} break;
 	case EXPR_BLOCK:
 		e->block_ret_id = id;
@@ -969,6 +1101,10 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		if (e->type.kind != TYPE_VOID)
 			cgen_ident_id(g, e->block_ret_id);
 		break;
+	case EXPR_EACH:
+		if (e->type.kind != TYPE_VOID)
+			cgen_ident_id(g, e->each.c.id);
+		break;
 	case EXPR_CALL:
 		if (cgen_uses_ptr(&e->type)) {
 			cgen_ident_id(g, e->call.c.id);
@@ -1047,11 +1183,11 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
   functions always call with NULL as ret_name, even if they use out params, for now
   at least. 
 */
-static bool cgen_block(CGenerator *g, Block *b, const char *ret_name, uint16_t flags) {
+static bool cgen_block(CGenerator *g, Block *b, const char *ret_name, U16 flags) {
 	Block *prev = g->block;
-	if (!(flags & CGEN_BLOCK_FLAG_NOBRACES))
+	if (!(flags & CGEN_BLOCK_NOBRACES))
 		cgen_write(g, "{");
-	if (!(flags & CGEN_BLOCK_FLAG_NOENTER))
+	if (!(flags & CGEN_BLOCK_NOENTER))
 		if (!cgen_block_enter(g, b))
 			return false;
 	cgen_nl(g);
@@ -1068,9 +1204,9 @@ static bool cgen_block(CGenerator *g, Block *b, const char *ret_name, uint16_t f
 		}
 		cgen_nl(g);
 	}
-	if (!(flags & CGEN_BLOCK_FLAG_NOENTER))
+	if (!(flags & CGEN_BLOCK_NOENTER))
 		cgen_block_exit(g, prev);
-	if (!(flags & CGEN_BLOCK_FLAG_NOBRACES))
+	if (!(flags & CGEN_BLOCK_NOBRACES))
 		cgen_write(g, "}");
 	return true;
 }
@@ -1118,7 +1254,7 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where) {
 			return false;
 	}
 	if (!cgen_block_enter(g, &f->body)) return false;
-	if (!cgen_block(g, &f->body, NULL, CGEN_BLOCK_FLAG_NOENTER | CGEN_BLOCK_FLAG_NOBRACES))
+	if (!cgen_block(g, &f->body, NULL, CGEN_BLOCK_NOENTER | CGEN_BLOCK_NOBRACES))
 		return false;
 	if (f->ret_decls) {
 		if (cgen_uses_ptr(&f->ret_type)) {
