@@ -72,11 +72,14 @@ static bool typedefs_expr(CGenerator *g, Expression *e) {
 			return false;
 		fn_exit(&e->fn);
 		break;
+	case EXPR_NEW:
+		if (e->new.n && !typedefs_expr(g, e->new.n))
+			return false;
+		break;
 	case EXPR_TYPE:
 	case EXPR_C:
 	case EXPR_DSIZEOF:
 	case EXPR_DALIGNOF:
-	case EXPR_NEW:
 	case EXPR_IDENT:
 	case EXPR_LITERAL_BOOL:
 	case EXPR_LITERAL_INT:
@@ -90,17 +93,41 @@ static bool typedefs_expr(CGenerator *g, Expression *e) {
 }
 
 static bool typedefs_decl(CGenerator *g, Declaration *d) {
+	d->c.ids = NULL;
 	for (int idx = 0; idx < (int)arr_len(d->idents); idx++) {
 		Identifier i = d->idents[idx];
 		Type *type = decl_type_at_index(d, idx);
 		Value *val = decl_val_at_index(d, idx);
 		if (type->kind == TYPE_TYPE) {
+			if (d->c.ids == NULL)
+				d->c.ids = calloc(arr_len(d->idents), sizeof *d->c.ids);
 			/* generate typedef */
+			IdentID id;
+			if (g->block != NULL) id = d->c.ids[idx] = g->ident_counter++;
 			cgen_write(g, "typedef ");
-			if (!cgen_type_pre(g, val->type, d->where)) return false;
+			if (val->type->kind == TYPE_STRUCT) {
+				cgen_write(g, "struct ");
+				if (g->block == NULL) {
+					/* we can refer to this by its name */
+					cgen_ident(g, i);
+				} else {
+					/* we need to use an ID ): */
+					cgen_ident_id(g, id);
+				}
+			} else {
+				if (!cgen_type_pre(g, val->type, d->where)) return false;
+			}
 			cgen_write(g, " ");
-			cgen_ident(g, i);
-			if (!cgen_type_post(g, val->type, d->where)) return false;
+			if (g->block == NULL) {
+				/* we can refer to this by its name */
+				cgen_ident(g, i);
+			} else {
+				/* we need to use an ID ): */
+				cgen_ident_id(g, id);
+			}
+			if (val->type->kind != TYPE_STRUCT) {
+				if (!cgen_type_post(g, val->type, d->where)) return false;
+			}
 			cgen_write(g, ";");
 			cgen_nl(g);
 		}

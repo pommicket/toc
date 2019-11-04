@@ -513,6 +513,9 @@ typedef struct Declaration {
 	Expression expr;
 	Value val; /* only for constant decls. */
 	
+	struct {
+		IdentID *ids; /* array of IDs used in place of ident names. unfortunately needed for user defined types. this is NOT a dynamic array, but is of length arr_len(idents). */
+	} c;
 } Declaration;
 
 typedef enum {

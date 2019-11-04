@@ -21,17 +21,17 @@ total @= fn() int {
 	 t
 };
 
-// Foo @= struct {
-// 	x: &Bar;
-// };
+Foo @= struct {
+	x: &Bar;
+};
 
-// Bar @= struct {
-// 	y : &Foo;
-// };
+Bar @= struct {
+	y : &Foo;
+};
 
 
 main @= fn() {
-	 // f: Foo;
+	 f: Foo;
 	 
 	 puti(total());
 	 X @= total();

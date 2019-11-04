@@ -131,8 +131,8 @@ static inline void cgen_ident_id_to_str(char *buffer, IdentID id) {
 	snprintf(buffer, 32, "a%lu_", (unsigned long)id);
 }
 
-static bool cgen_type_post(CGenerator *g, Type *t, Location where);
 static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
+	assert(t->flags & TYPE_FLAG_RESOLVED);
 	switch (t->kind) {
 	case TYPE_BUILTIN:
 		switch (t->builtin) {
@@ -196,8 +196,24 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
 		assert(0);
 		return false;
 	case TYPE_USER: {
-		Identifier i = t->user.decl->idents[t->user.index];
-		cgen_ident(g, i);
+		Type *this = t;
+		do {
+			Type *next = type_user_underlying(this);
+			if (next->kind == TYPE_STRUCT) {
+				/* use struct tag */
+				cgen_write(g, "struct ");
+				t = this;
+				break;
+			}
+			this = next;
+		} while (this->kind == TYPE_USER);
+
+		Declaration *d = t->user.decl;
+		int idx = t->user.index;
+		if (d->c.ids[idx])
+			cgen_ident_id(g, d->c.ids[idx]);
+		else
+			cgen_ident(g, d->idents[idx]);
 	} break;
 	}
 	return true;
