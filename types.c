@@ -379,6 +379,7 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 			return false;
 		break;
 	case TYPE_USER: {
+		t->flags |= TYPE_FLAG_RESOLVED; /* pre-resolve type to avoid infinite recursion */
 		/* find declaration */
 		Identifier ident = t->user.ident;
 		IdentDecl *idecl = ident_decl(ident);
@@ -1330,10 +1331,6 @@ static bool types_decl(Typer *tr, Declaration *d) {
 			if (t->kind == TYPE_TYPE) {
 				if (!(d->flags & DECL_FLAG_CONST)) {
 					err_print(d->where, "Cannot declare non-constant type.");
-					success = false;
-					goto ret;
-				}
-				if (!type_resolve(tr, val->type, d->where)) {
 					success = false;
 					goto ret;
 				}

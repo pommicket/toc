@@ -731,7 +731,6 @@ static bool eval_address_of(Evaluator *ev, Expression *e, void **ptr) {
 	return true;
 }
 
-
 static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 	switch (set->kind) {
 	case EXPR_IDENT: {
@@ -953,7 +952,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (!eval_expr(ev, lhs_expr, &lhs)) return false;
 		if (e->binary.op != BINARY_DOT)
 			if (!eval_expr(ev, rhs_expr, &rhs)) return false;
-		
 		BuiltinType builtin = e->binary.lhs->type.builtin;
 		switch (e->binary.op) {
 		case BINARY_DOT: {
@@ -1038,7 +1036,8 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		while (1) {
 			if (w->cond) {
 				if (!eval_expr(ev, w->cond, &cond)) return false;
-				if (!val_truthiness(&cond, &w->cond->type))
+				Type *cond_type = &w->cond->type;
+				if (!val_truthiness(&cond, cond_type))
 					break;
 			}
 			if (!eval_block(ev, &w->body, &e->type, v)) return false;
@@ -1069,6 +1068,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		IdentDecl *idecl = ident_decl(e->ident);
 		Declaration *d = idecl->decl;
 		if (!types_decl(ev->typer, d)) return false;
+		assert(d->type.flags & TYPE_FLAG_RESOLVED);
 		if (idecl->flags & IDECL_FLAG_HAS_VAL) {
 			*v = idecl->val;
 		} else if (d->flags & DECL_FLAG_CONST) {
@@ -1087,7 +1087,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				v->type->user.decl = d;
 				v->type->user.index = index;
 			} else {
-				*v = d->type.kind == TYPE_TUPLE ? d->val.tuple[index] : d->val;
+				*v = *decl_val_at_index(d, index); 
 			}
 		} else {
 			char *s = ident_to_str(e->ident);
@@ -1232,42 +1232,46 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 }
 
 static bool eval_decl(Evaluator *ev, Declaration *d) {
-	Value val = {0};
 	int has_expr = d->flags & DECL_FLAG_HAS_EXPR;
+	int is_const = d->flags & DECL_FLAG_CONST;
+	Value val = {0};
+
 	if (has_expr) {
-		if (d->flags & DECL_FLAG_CONST) {
+		if (is_const) {
 			if (!(d->flags & DECL_FLAG_FOUND_VAL)) {
 				if (!eval_expr(ev, &d->expr, &d->val))
 					return false;
 				d->flags |= DECL_FLAG_FOUND_VAL;
 			}
-			val = d->val;
 		} else {
+			/* TODO: tuples allocated here will never be freed! */
 			if (!eval_expr(ev, &d->expr, &val))
 				return false;
 		}
 	}
-	long index = 0;
-	arr_foreach(d->idents, Identifier, i) {
-		IdentDecl *id = ident_decl(*i);
-		Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[index] : &d->type;
-		Value *thisval = NULL;
-		if (has_expr)
-			thisval = d->type.kind == TYPE_TUPLE ? &val.tuple[index] : &val;
-		Type *inner = type_inner(type);
-		if (inner->kind == TYPE_STRUCT) {
-			id->val.struc = err_calloc(1, compiler_sizeof(inner));
-		} else if (inner->kind == TYPE_ARR) {
-			id->val.arr = err_calloc(inner->arr.n, compiler_sizeof(inner->arr.of));
+	
+	if (!is_const) {
+		int index = 0;
+		arr_foreach(d->idents, Identifier, i) {
+			IdentDecl *id = ident_decl(*i);
+			Type *type = decl_type_at_index(d, index);
+			Type *inner = type_inner(type);
+			if (!is_const) {
+				if (has_expr) {
+					val_copy(NULL, &id->val, &val, type);
+				} else {
+					if (inner->kind == TYPE_STRUCT) {
+						id->val.struc = err_calloc(1, compiler_sizeof(inner));
+					} else if (inner->kind == TYPE_ARR) {
+						id->val.arr = err_calloc(inner->arr.n, compiler_sizeof(inner->arr.of));
+					} else {
+						id->val = val; /* = (Value)({0}) */
+					}
+				}
+			}
+			index++;
+			id->flags |= IDECL_FLAG_HAS_VAL;
 		}
-
-		if (has_expr)
-			val_copy(d->flags & DECL_FLAG_CONST ? ev : NULL, &id->val, thisval, type);
-		index++;
-		id->flags |= IDECL_FLAG_HAS_VAL;
-	}
-	if (has_expr && d->expr.kind == EXPR_TUPLE) {
-		val_free(&val, &d->type); /* free the tuple */
 	}
 	return true;
 }

@@ -21,12 +21,21 @@ total @= fn() int {
 	 t
 };
 
+// Foo @= struct {
+// 	x: &Bar;
+// };
+
+// Bar @= struct {
+// 	y : &Foo;
+// };
+
 
 main @= fn() {
+	 // f: Foo;
+	 
 	 puti(total());
 	 X @= total();
 	 puti(X);
 	 puti(#sizeof(int));
 	 puti(#alignof(int));
-	 puti(#sizeof({ Foo, Bar @= int, struct { x: i64; y: char; } ; f: Foo; f }));
 };

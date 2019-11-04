@@ -90,10 +90,10 @@ static bool typedefs_expr(CGenerator *g, Expression *e) {
 }
 
 static bool typedefs_decl(CGenerator *g, Declaration *d) {
-	for (size_t idx = 0; idx < arr_len(d->idents); idx++) {
+	for (int idx = 0; idx < (int)arr_len(d->idents); idx++) {
 		Identifier i = d->idents[idx];
-		Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx] : &d->type;
-		Value *val = d->type.kind == TYPE_TUPLE ? &d->val.tuple[idx] : &d->val;
+		Type *type = decl_type_at_index(d, idx);
+		Value *val = decl_val_at_index(d, idx);
 		if (type->kind == TYPE_TYPE) {
 			/* generate typedef */
 			cgen_write(g, "typedef ");

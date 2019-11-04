@@ -893,7 +893,10 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	if (parser_is_definitely_type(p, NULL)) {
 		/* it's a type! */
 		e->kind = EXPR_TYPE;
-		return parse_type(p, &e->typeval);
+		if (!parse_type(p, &e->typeval))
+			return false;
+		if (t->token == end) return true;
+		/* there's more stuff after. maybe it's, e.g. int, float */
 	}
 	t->token = before;
     

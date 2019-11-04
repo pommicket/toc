@@ -1,6 +1,6 @@
 /* 
 TODO:
-pointers to futurely-declared types
+pointers to futurely-declared types (or to this type)
 for
 +=, -=, *=, /=
 compile-time arguments
