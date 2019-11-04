@@ -1268,7 +1268,28 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 			Type *type = is_tuple ? &d->type.tuple[idx] : &d->type;
 			Value *val = is_tuple ? &d->val.tuple[idx] : &d->val;
 			if (type->kind == TYPE_TYPE) {
-				/* handled in decls_cgen */
+				/* mostly handled in typedefs_cgen, except for struct declarations */
+				if (val->type->kind == TYPE_STRUCT) {
+					cgen_write(g, "struct ");
+					if (g->block == NULL)
+						cgen_ident(g, i);
+					else
+						cgen_ident_id(g, d->c.ids[idx]);
+					cgen_write(g, "{");
+					cgen_nl(g);
+					g->indent_lvl++;
+					arr_foreach(val->type->struc.fields, Field, f) {
+						if (!cgen_type_pre(g, f->type, d->where)) return false;
+						cgen_write(g, " ");
+						cgen_ident(g, f->name);
+						if (!cgen_type_post(g, f->type, d->where)) return false;
+						cgen_write(g, ";");
+						cgen_nl(g);
+					}
+					g->indent_lvl--;
+					cgen_write(g, "};");
+					cgen_nl(g);
+				}
 				continue;
 			}
 			if (!cgen_val_pre(g, val, type, d->where))

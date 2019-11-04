@@ -104,19 +104,9 @@ static bool typedefs_decl(CGenerator *g, Declaration *d) {
 			/* generate typedef */
 			IdentID id;
 			if (g->block != NULL) id = d->c.ids[idx] = g->ident_counter++;
+			if (val->type->kind == TYPE_STRUCT) continue; /* we don't need to typedef this; we can just use its tag */
 			cgen_write(g, "typedef ");
-			if (val->type->kind == TYPE_STRUCT) {
-				cgen_write(g, "struct ");
-				if (g->block == NULL) {
-					/* we can refer to this by its name */
-					cgen_ident(g, i);
-				} else {
-					/* we need to use an ID ): */
-					cgen_ident_id(g, id);
-				}
-			} else {
-				if (!cgen_type_pre(g, val->type, d->where)) return false;
-			}
+			if (!cgen_type_pre(g, val->type, d->where)) return false;
 			cgen_write(g, " ");
 			if (g->block == NULL) {
 				/* we can refer to this by its name */

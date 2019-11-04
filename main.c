@@ -1,6 +1,5 @@
 /* 
 TODO:
-pointers to futurely-declared types (or to this type)
 make sure futurely/currently-declared types are *only* used by pointer
 for
 +=, -=, *=, /=

@@ -32,7 +32,21 @@ Bar @= struct {
 
 main @= fn() {
 	 f: Foo;
-	 
+	 b: Bar;
+	 f.x = &b;
+	 b.y = &f;
+
+	 Baz @= struct { a : &Quux; };
+	 Quux @= struct { b: &Baz; };
+	 B : Baz;
+	 q : Quux;
+	 B.a = &q;
+	 q.b = &B;
+
+	 Wow @= struct { w: &Wow; };
+	 w: Wow;
+	 w.w = &w;
+
 	 puti(total());
 	 X @= total();
 	 puti(X);
