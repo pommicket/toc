@@ -4,13 +4,42 @@ puti @= fn(x: int) {
 ");
 };
 
+putf @= fn(x: float) {
+	 #C("printf(\"%f\\n\", (double)x);
+");
+};
 
 
 main @= fn() {
-	each i := 1..10 {
+	each i := 1..4 {
 		 puti(i);
 	}
-	each i := 10,-1..1 {
+	each i := 4,-1..1 {
 		 puti(i);
 	}
+	each i := 1.0..4.0 {
+		 putf(i);
+	}
+	each i := 7.0,-1..4.0 {
+		 putf(i);
+	}
+	// each i := 0.0,-3.0.. { putf(i); }
+	foo := new(int, 10);
+	each _, i := foo {
+		 foo[i] = i;
+	};
+	each x := foo {
+		 puti(x);
+	}
+	each _ := foo {
+		 #C("puts(\"Hello!\")");
+	}
+	bar : [10]int;
+	each _, i := foo {
+		 bar[i] = i*i*i;
+	};
+	each x := bar {
+		 puti(x);
+	}
+	
 };

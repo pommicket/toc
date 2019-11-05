@@ -427,7 +427,6 @@ typedef struct EachExpr {
 	U16 flags;
 	struct {
 		IdentID id;
-		IdentID index_id; /* only set if index is NULL */
 	} c;
 	Type type;
 	Identifier index; /* NULL = no index */

@@ -236,6 +236,13 @@ static void u64_to_val(Value *v, BuiltinType v_type, U64 x) {
 
 static bool val_is_nonnegative(Value *v, Type *t) {
 	assert(t->kind == TYPE_BUILTIN);
+	switch (t->builtin) {
+	case BUILTIN_BOOL: assert(0); return false;
+	case BUILTIN_CHAR: return v->charv >= 0;
+	case BUILTIN_F32: return v->f32 >= 0;
+	case BUILTIN_F64: return v->f64 >= 0;
+	default: break;
+	}
 	if (!type_builtin_is_signed(t->builtin))
 		return true;
 	return val_to_i64(v, t->builtin) >= 0;

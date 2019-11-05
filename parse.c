@@ -1076,6 +1076,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 						ea->index = t->token->ident;
 						if (ident_eq_str(ea->index, "_")) /* ignore index */
 							ea->index = NULL;
+						t->token++;
 					} else {
 						tokr_err(t, "Expected identifier after , in each statement.");
 						return false;

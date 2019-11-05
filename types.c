@@ -766,7 +766,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 				info_print(ea->range.step->where, "Note that the step of an each loop must be a compile-time constant.");
 				return false;
 			}
-				ea->range.stepval = stepval;
+			val_cast(stepval, &ea->range.step->type, stepval, &ea->type);
+			ea->range.stepval = stepval;
 		}
 		if (!each_enter(e, SCOPE_FLAG_CHECK_REDECL)) return false;
 		if (!types_block(tr, &ea->body)) return false;

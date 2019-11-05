@@ -674,120 +674,162 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 	case EXPR_EACH: {
 		EachExpr *ea = &e->each;
 		int is_range = ea->flags & EACH_IS_RANGE;
-		IdentID slice_id;
-		IdentID from_id;
-		if (!is_range && ea->of->type.kind == TYPE_SLICE) {
-			/* pre-generate the slice */
-			slice_id = g->ident_counter++;
-			cgen_write(g, "slice_ ");
-			cgen_ident_id(g, slice_id);
-			cgen_write(g, " = ");
-			if (!cgen_expr(g, ea->of)) return false;
-			cgen_write(g, "; ");
-		} else if (is_range) {
-			/* pre-generate from */
-			from_id = g->ident_counter++;
-			if (!cgen_type_pre(g, &ea->type, e->where)) return false;
-			cgen_write(g, " ");
-			cgen_ident_id(g, from_id);
-			if (!cgen_type_post(g, &ea->type, e->where)) return false;
-			cgen_write(g, " = ");
-			if (!cgen_expr(g, ea->range.from))
-				return false;
-			cgen_write(g, "; ");
+		if (is_range) {
+			if (!cgen_expr_pre(g, ea->range.from)) return false;
+			if (ea->range.to && !cgen_expr_pre(g, ea->range.to)) return false;
+		} else {
+			if (!cgen_expr_pre(g, ea->of)) return false;
 		}
+	    
 		ea->c.id = id;
-		if (ea->index == NULL)
-			ea->c.index_id = g->ident_counter++;
 		if (!each_enter(e, 0)) return false;
+		cgen_write(g, "{");
+		if (is_range) {
+			/* set value to from */
+			if (ea->value) {
+				if (!cgen_type_pre(g, &ea->type, e->where)) return false;
+				cgen_write(g, " ");
+				cgen_ident(g, ea->value);
+				if (!cgen_type_post(g, &ea->type, e->where)) return false;
+				cgen_write(g, "; ");
+				Expression val_expr;
+				val_expr.flags = EXPR_FLAG_FOUND_TYPE;
+				val_expr.kind = EXPR_IDENT;
+				val_expr.ident = ea->value;
+				val_expr.type = ea->type;
+				if (!cgen_set(g, &val_expr, NULL, ea->range.from, NULL))
+					return false;
+			} else {
+				if (!cgen_type_pre(g, &ea->type, e->where)) return false;
+				cgen_write(g, " val_");
+				if (!cgen_type_post(g, &ea->type, e->where)) return false;
+				cgen_write(g, "; ");
+				if (!cgen_set(g, NULL, "val_", ea->range.from, NULL))
+					return false;
+			}
+			if (ea->range.to) {
+				/* pre generate to */
+				if (!cgen_type_pre(g, &ea->type, e->where)) return false;
+				cgen_write(g, " to_");
+				if (!cgen_type_post(g, &ea->type, e->where)) return false;
+				cgen_write(g, " = ");
+				if (!cgen_expr(g, ea->range.to))
+					return false;
+				cgen_write(g, "; ");
+			}
+		} else {
+			/* pre-generate of */
+			if (!cgen_type_pre(g, &ea->of->type, e->where))
+				return false;
+			cgen_write(g, " of_");
+			if (!cgen_type_post(g, &ea->of->type, e->where))
+				return false;
+			
+			cgen_write(g, "; ");
+			
+			if (!cgen_set(g, NULL, "of_", ea->of, NULL))
+				return false;
+		}
 		cgen_write(g, "for (i64 ");
 		if (ea->index)
 			cgen_ident(g, ea->index);
 		else
-			cgen_ident_id(g, ea->c.index_id);
+			cgen_write(g, "i_");
 		cgen_write(g, " = 0; ");
-		if (!(is_range && !ea->range.to)) {
-			if (ea->index)
-				cgen_ident(g, ea->index);
-			else
-				cgen_ident_id(g, ea->c.index_id);
+		if (!(is_range && !ea->range.to)) { /* if it's finite */
 			if (is_range) {
+				if (ea->value)
+					cgen_ident(g, ea->value);
+				else
+					cgen_write(g, "val_");
 				bool positive_step
 					= ea->range.stepval == NULL || val_is_nonnegative(ea->range.stepval, &ea->type);
-				cgen_write(g, " %c= ", positive_step ? '<' : '>');
-				if (!cgen_expr(g, ea->range.to))
-					return false;
-				cgen_write(g, "-");
-				cgen_ident_id(g, from_id);
+				cgen_write(g, " %c= to_", positive_step ? '<' : '>');
 			} else {
+				if (ea->index)
+					cgen_ident(g, ea->index);
+				else
+					cgen_write(g, "i_");
 				cgen_write(g, " < ");
 				switch (ea->of->type.kind) {
 				case TYPE_ARR:
 					cgen_write(g, "%lu", (unsigned long)ea->of->type.arr.n);
 					break;
 				case TYPE_SLICE:
-					cgen_ident_id(g, slice_id);
-					cgen_write(g, ".len");
+					cgen_write(g, "of_.n");
 					break;
 				default: assert(0); break;
 				}
 			}
 		}
 		cgen_write(g, "; ");
+		if (is_range) {
+			if (ea->value)
+				cgen_ident(g, ea->value);
+			else
+				cgen_write(g, "val_");
+			cgen_write(g, " += ");
+			if (ea->range.stepval) {
+				if (!cgen_val(g, ea->range.stepval, &ea->type, e->where))
+					return false;
+			} else {
+				cgen_write(g, "1");
+			}
+			cgen_write(g, ", ");
+		}
+		
 		if (ea->index)
 			cgen_ident(g, ea->index);
 		else
-			cgen_ident_id(g, ea->c.index_id);
-		cgen_write(g, " += ");
-		if (is_range && ea->range.stepval) {
-			if (!cgen_val(g, ea->range.stepval, &ea->type, e->where))
-				return false;
-		} else {
-			cgen_write(g, "1");
-		}
+			cgen_write(g, "i_");
+		cgen_write(g, "++");
 		cgen_write(g, ") {");
 		cgen_nl(g);
 		if (ea->value) {
-			if (is_range) {
+			if (!is_range) {
+				/* necessary for iterating over, e.g., an array of arrays */
+				if (!cgen_type_pre(g, &ea->type, e->where))
+					return false;
+				cgen_write(g, "(*p_)");
+				if (!cgen_type_post(g, &ea->type, e->where))
+					return false;
+				cgen_write(g, " = ");
+				if (ea->of->type.kind == TYPE_SLICE) {
+					cgen_write(g, "((");
+					if (!cgen_type_pre(g, &ea->type, e->where)) return false;
+					cgen_write(g, "(*)");
+					if (!cgen_type_post(g, &ea->type, e->where)) return false;
+					cgen_write(g, ")of_.data) + ");
+					if (ea->index)
+						cgen_ident(g, ea->index);
+					else
+						cgen_write(g, "i_");
+				} else {
+					cgen_write(g, "&of_[");
+					if (ea->index)
+						cgen_ident(g, ea->index);
+					else
+						cgen_write(g, "i_");
+					cgen_write(g, "]");
+				}
+				cgen_write(g, "; ");
 				if (!cgen_type_pre(g, &ea->type, e->where)) return false;
 				cgen_write(g, " ");
 				cgen_ident(g, ea->value);
 				if (!cgen_type_post(g, &ea->type, e->where)) return false;
-				cgen_write(g, " = ");
-				cgen_ident_id(g, from_id);
-				cgen_write(g, " + ");
-				if (ea->index)
-					cgen_ident(g, ea->index);
-				else
-					cgen_ident_id(g, ea->c.index_id);
-				cgen_write(g, ";");
-				cgen_nl(g);
-			} else {
-				/* necessary for iterating over, e.g., an array of arrays */
-				Expression set;
-				set.flags = 0;
-				set.kind = EXPR_IDENT;
-				set.ident = ea->value;
-				
-				Expression to;
-				to.flags = 0;
-				to.kind = EXPR_BINARY_OP;
-				to.binary.op = BINARY_AT_INDEX;
-				to.binary.lhs = ea->of;
-				to.binary.rhs = err_malloc(sizeof(Expression));
-				to.binary.rhs->flags = 0;
-				to.binary.rhs->kind = EXPR_IDENT;
-				if (ea->index)
-					to.binary.rhs->ident = ea->index;
-				else
-					to.binary.rhs->ident = cgen_ident_id_to_ident(g, ea->c.id);
-				if (!cgen_set(g, &set, NULL, &to, NULL))
+				cgen_write(g, "; ");
+				Expression set_expr;
+				set_expr.kind = EXPR_IDENT;
+				set_expr.ident = ea->value;
+				set_expr.type = ea->type;
+				set_expr.flags = EXPR_FLAG_FOUND_TYPE;
+				if (!cgen_set(g, &set_expr, NULL, NULL, "(*p_)"))
 					return false;
 			}
 		}
 		if (!cgen_block(g, &ea->body, ret_name, CGEN_BLOCK_NOBRACES))
 			return false;
-		cgen_write(g, "}");
+		cgen_write(g, "}}");
 		each_exit(e);
 	} break;
 	case EXPR_BLOCK:

@@ -2,6 +2,7 @@
 TODO:
 each
 compile-time each
+allow just each arr { ... } 
 each pointer
 compile-time each pointer
 prevent each x := x
