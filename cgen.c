@@ -583,7 +583,7 @@ static bool cgen_new_slice(CGenerator *g, Type *t, IdentID id, Location where) {
 	if (t->arr.of->kind == TYPE_ARR) {
 		/* slice of slices. initialize the inner slices. */
 		IdentID child_id = g->ident_counter++;
-		cgen_write(g, "for (u64 i_ = 0; i_ < s");
+		cgen_write(g, "for (i64 i_ = 0; i_ < s");
 		cgen_ident_id(g, id);
 		cgen_write(g, "; i_++) {");
 		cgen_nl(g);
@@ -730,12 +730,16 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			if (!cgen_set(g, NULL, "of_", ea->of, NULL))
 				return false;
 		}
-		cgen_write(g, "for (i64 ");
-		if (ea->index)
-			cgen_ident(g, ea->index);
-		else
-			cgen_write(g, "i_");
-		cgen_write(g, " = 0; ");
+		cgen_write(g, "for (");
+		if (ea->index || !is_range) {
+			cgen_write(g, "i64 ");
+			if (ea->index)
+				cgen_ident(g, ea->index);
+			else
+				cgen_write(g, "i_");
+			cgen_write(g, " = 0");
+		}
+		cgen_write(g, "; ");
 		if (!(is_range && !ea->range.to)) { /* if it's finite */
 			if (is_range) {
 				if (ea->value)
@@ -775,14 +779,15 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			} else {
 				cgen_write(g, "1");
 			}
-			cgen_write(g, ", ");
+			if (ea->index) cgen_write(g, ", ");
 		}
-		
-		if (ea->index)
-			cgen_ident(g, ea->index);
-		else
-			cgen_write(g, "i_");
-		cgen_write(g, "++");
+		if (ea->index || !is_range) {
+			if (ea->index)
+				cgen_ident(g, ea->index);
+			else
+				cgen_write(g, "i_");
+			cgen_write(g, "++");
+		}
 		cgen_write(g, ") {");
 		cgen_nl(g);
 		if (ea->value) {
@@ -893,7 +898,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		cgen_write(g, "; { slice_ of__ = ");
 		if (!cgen_expr(g, s->of))
 			return false;
-		cgen_write(g, "; u64 ");
+		cgen_write(g, "; i64 ");
 		cgen_ident_id(g, from_id);
 		cgen_write(g, " = ");
 		if (s->from) {
@@ -1110,7 +1115,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		if (e->new.n) {
 			cgen_write(g, "mkslice_(e__calloc(");
 			if (!cgen_expr(g, e->new.n)) return false;
-			cgen_write(g, ", sizeof(");
+			cgen_write(g, ", (i64)sizeof(");
 			if (!cgen_type_pre(g, &e->new.type, e->where)) return false;
 			if (!cgen_type_post(g, &e->new.type, e->where)) return false;
 			cgen_write(g, ")), ");
@@ -1559,8 +1564,10 @@ static bool cgen_ret(CGenerator *g, Expression *ret) {
 static bool cgen_stmt(CGenerator *g, Statement *s) {
 	/*
 	  TODO(eventually): optionally this:
-	  cgen_write(g, "/\* %s:%d *\/", s->where.filename, s->where.line);
 	*/
+	// cgen_write(g, "/* %s:%d */", s->where.ctx->filename, s->where.line);
+	/* (or even #line directives!) */
+	
 	switch (s->kind) {
 	case STMT_DECL:
 		if (!cgen_decl(g, &s->decl)) return false;
@@ -1595,9 +1602,9 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 			   "typedef uint64_t u64;\n"
 			   "typedef float f32;\n"
 			   "typedef double f64;\n"
-			   "typedef unsigned char bool;\n"
-			   "typedef struct { void *data; u64 n; } slice_;\n"
-			   "static slice_ mkslice_(void *data, u64 n) { slice_ ret; ret.data = data; ret.n = n; return ret; }\n"
+			   "typedef u8 bool;\n"
+			   "typedef struct { void *data; i64 n; } slice_;\n"
+			   "static slice_ mkslice_(void *data, i64 n) { slice_ ret; ret.data = data; ret.n = n; return ret; }\n"
 			   "static void *e__calloc(size_t n, size_t sz) { void *ret = calloc(n, sz); if (!ret) { fprintf(stderr, \"Out of memory.\\n\"); abort(); } return ret; }\n"
 			   "#define false ((bool)0)\n"
 			   "#define true ((bool)1)\n\n\n");
