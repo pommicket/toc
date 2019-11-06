@@ -1065,43 +1065,50 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			ea->value = NULL;
 			ea->index = NULL;
 			t->token++;
-			if (t->token->kind == TOKEN_IDENT) {
-				ea->value = t->token->ident;
-				if (ident_eq_str(ea->value, "_")) /* ignore value */
-					ea->value = NULL;
-				t->token++;
-				if (token_is_kw(t->token, KW_COMMA)) {
+			if (token_is_kw(t->token, KW_COLON)
+				|| (t->token->kind == TOKEN_IDENT
+				 && (token_is_kw(t->token + 1, KW_COLON)
+					 || (token_is_kw(t->token + 1, KW_COMMA)
+						 && t->token[2].kind == TOKEN_IDENT
+						 && token_is_kw(t->token + 3, KW_COLON))))) {
+				if (t->token->kind == TOKEN_IDENT) {
+					ea->value = t->token->ident;
+					if (ident_eq_str(ea->value, "_")) /* ignore value */
+						ea->value = NULL;
 					t->token++;
-					if (t->token->kind == TOKEN_IDENT) {
-						ea->index = t->token->ident;
-						if (ident_eq_str(ea->index, "_")) /* ignore index */
-							ea->index = NULL;
+					if (token_is_kw(t->token, KW_COMMA)) {
 						t->token++;
-					} else {
-						tokr_err(t, "Expected identifier after , in each statement.");
+						if (t->token->kind == TOKEN_IDENT) {
+							ea->index = t->token->ident;
+							if (ident_eq_str(ea->index, "_")) /* ignore index */
+								ea->index = NULL;
+							t->token++;
+						} else {
+							tokr_err(t, "Expected identifier after , in each statement.");
+							return false;
+						}
+					}
+				}
+				if (token_is_kw(t->token, KW_AT)) {
+					tokr_err(t, "The variable(s) in a for loop cannot be constant.");
+					return false;
+				}
+				if (!token_is_kw(t->token, KW_COLON)) {
+					tokr_err(t, "Expected : following identifiers in for statement.");
+					return false;
+				}
+				t->token++;
+				if (!token_is_kw(t->token, KW_EQ)) {
+					ea->flags |= EACH_ANNOTATED_TYPE;
+					if (!parse_type(p, &ea->type))
+						return false;
+					if (!token_is_kw(t->token, KW_EQ)) {
+						tokr_err(t, "Expected = in for statement.");
 						return false;
 					}
 				}
+				t->token++;
 			}
-			if (token_is_kw(t->token, KW_AT)) {
-				tokr_err(t, "The variable(s) in a for loop cannot be constant.");
-				return false;
-			}
-			if (!token_is_kw(t->token, KW_COLON)) {
-				tokr_err(t, "Expected : following identifiers in for statement.");
-				return false;
-			}
-			t->token++;
-			if (!token_is_kw(t->token, KW_EQ)) {
-				ea->flags |= EACH_ANNOTATED_TYPE;
-				if (!parse_type(p, &ea->type))
-					return false;
-				if (!token_is_kw(t->token, KW_EQ)) {
-					tokr_err(t, "Expected = in for statement.");
-					return false;
-				}
-			}
-			t->token++;
 			Token *first_end = expr_find_end(p, EXPR_CAN_END_WITH_COMMA|EXPR_CAN_END_WITH_DOTDOT|EXPR_CAN_END_WITH_LBRACE, NULL);
 			Expression *first = parser_new_expr(p);
 			if (!parse_expr(p, first, first_end))
