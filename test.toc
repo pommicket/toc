@@ -45,7 +45,7 @@ putf @= fn(x: float) {
 // };
 
 g @= fn() int {
-  // foo := new(int, 10);
+  // foo : [10]int; // = new(int, 10);
   // each _, i := foo {
   // 	   foo[i] = i;
   // };
@@ -55,16 +55,16 @@ g @= fn() int {
   // }
   // total
   
-  // total := 0;
-  // each i := 1..10 {
-  // 	   total = total + i;
-  // 	   total
-  // }
   total := 0;
-  each i, j := 1..10 {
-  	   total = total + i * j;
+  each i := 1..10 {
+  	   total = total + i;
+  	   total
   }
-  total
+  // total := 0;
+  // each i, j := 1..10 {
+  // 	   total = total + i * j;
+  // }
+  // total
 };
 
 main @= fn() {

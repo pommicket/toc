@@ -1207,7 +1207,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				value_val = NULL;
 			}
 			bool step_is_negative = ea->range.stepval && !val_is_nonnegative(&stepval, &ea->type);
-			index_val->i64 = 0;
+			if (index_val) index_val->i64 = 0;
 			while (1) {
 				if (ea->range.to) {
 					/* check if loop has ended */
@@ -1232,7 +1232,50 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				eval_numerical_bin_op(x, &ea->type, BINARY_ADD, stepval, ea->range.stepval ? &ea->type : &i64t, &x, &ea->type);
 			}
 		} else {
-			assert(!*"Not implemented yet");
+			Value of;
+			if (!eval_expr(ev, ea->of, &of)) return false;
+			Value *index_val, *value_val;
+			Value i, val;
+			if (ea->index) {
+				IdentDecl *idecl = ident_decl(ea->index);
+				idecl->flags |= IDECL_HAS_VAL;
+				index_val = &idecl->val;
+			} else {
+				index_val = &i;
+			}
+			if (ea->value) {
+				IdentDecl *idecl = ident_decl(ea->value);
+				idecl->flags |= IDECL_HAS_VAL;
+				value_val = &idecl->val;
+			} else {
+				value_val = &val;
+			}
+			index_val->i64 = 0;
+			I64 len;
+			switch (ea->of->type.kind) {
+			case TYPE_ARR:
+				len = (I64)ea->of->type.arr.n;
+				break;
+			case TYPE_SLICE:
+				len = of.slice.n;
+				break;
+			default: assert(0); return false;
+			}
+				
+			Type i64t;
+			i64t.flags = TYPE_FLAG_RESOLVED;
+			i64t.kind = TYPE_BUILTIN;
+			i64t.builtin = BUILTIN_I64;
+			
+			while (index_val->i64 < len) {
+				void *ptr;
+				if (!eval_val_ptr_at_index(ev, e->where, &of, (U64)index_val->i64, &ea->of->type, &i64t, &ptr, NULL))
+					return false;
+				eval_deref(value_val, ptr, &ea->type);
+				if (!eval_block(ev, &ea->body, &e->type, v))
+					return false;
+				index_val->i64++;
+			}
 		}
 		each_exit(e);
 	} break;
