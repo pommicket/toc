@@ -9,37 +9,66 @@ putf @= fn(x: float) {
 ");
 };
 
+// f @= fn() {
+
+// 	each i := 1..4 {
+// 		 puti(i);
+// 	}
+// 	each i := 4,-1..1 {
+// 		 puti(i);
+// 	}
+// 	each i := 1.0..4.0 {
+// 		 putf(i);
+// 	}
+// 	each i := 7.0,-1..4.0 {
+// 		 putf(i);
+// 	}
+// 	// each i := 0.0,-3.0.. { putf(i); }
+// 	foo := new(int, 3);
+// 	each _, i := foo {
+// 		 foo[i] = i;
+// 	};
+// 	each x := foo {
+// 		 puti(x);
+// 	}
+// 	each _ := foo {
+// 		 #C("puts(\"Hello!\")");
+// 	}
+// 	bar : [3]int;
+// 	each _, i := bar {
+// 		 bar[i] = i*i*i;
+// 	};
+// 	each x := bar {
+// 		 puti(x);
+// 	}
+
+// };
+
+g @= fn() int {
+  // foo := new(int, 10);
+  // each _, i := foo {
+  // 	   foo[i] = i;
+  // };
+  // total := 0;
+  // each x := foo {
+  // 	   total = total + x;
+  // }
+  // total
+  
+  // total := 0;
+  // each i := 1..10 {
+  // 	   total = total + i;
+  // 	   total
+  // }
+  total := 0;
+  each i, j := 1..10 {
+  	   total = total + i * j;
+  }
+  total
+};
 
 main @= fn() {
-	each i := 1..4 {
-		 puti(i);
-	}
-	each i := 4,-1..1 {
-		 puti(i);
-	}
-	each i := 1.0..4.0 {
-		 putf(i);
-	}
-	each i := 7.0,-1..4.0 {
-		 putf(i);
-	}
-	// each i := 0.0,-3.0.. { putf(i); }
-	foo := new(int, 10);
-	each _, i := foo {
-		 foo[i] = i;
-	};
-	each x := foo {
-		 puti(x);
-	}
-	each _ := foo {
-		 #C("puts(\"Hello!\")");
-	}
-	bar : [10]int;
-	each _, i := foo {
-		 bar[i] = i*i*i;
-	};
-	each x := bar {
-		 puti(x);
-	}
-	
+	 puti(g());
+	 X @= g();
+	 puti(X);
 };

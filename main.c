@@ -1,6 +1,5 @@
 /* 
 TODO:
-each
 compile-time each
 allow just each arr { ... } 
 each pointer

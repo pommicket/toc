@@ -233,21 +233,6 @@ static void u64_to_val(Value *v, BuiltinType v_type, U64 x) {
 		i64_to_val(v, v_type, (I64)x);
 }
 
-
-static bool val_is_nonnegative(Value *v, Type *t) {
-	assert(t->kind == TYPE_BUILTIN);
-	switch (t->builtin) {
-	case BUILTIN_BOOL: assert(0); return false;
-	case BUILTIN_CHAR: return v->charv >= 0;
-	case BUILTIN_F32: return v->f32 >= 0;
-	case BUILTIN_F64: return v->f64 >= 0;
-	default: break;
-	}
-	if (!type_builtin_is_signed(t->builtin))
-		return true;
-	return val_to_i64(v, t->builtin) >= 0;
-}
-
 static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 	switch (t->kind) {
 	case TYPE_VOID:
@@ -909,23 +894,8 @@ static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 	return true;
 }
 
-static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
-	if (!ev->enabled) return false; /* silently fail */
-	/* WARNING: macros ahead */
-#define eval_unary_op_one(low, up, op)			\
-	case BUILTIN_##up:							\
-		v->low = (up)(op of.low); break
-#define eval_unary_op_nums(builtin, op)			\
-	eval_unary_op_one(i8, I8, op);				\
-	eval_unary_op_one(i16, I16, op);			\
-	eval_unary_op_one(i32, I32, op);			\
-	eval_unary_op_one(i64, I64, op);			\
-	eval_unary_op_one(u8, U8, op);				\
-	eval_unary_op_one(u16, U16, op);			\
-	eval_unary_op_one(u32, U32, op);			\
-	eval_unary_op_one(u64, U64, op);			\
-	eval_unary_op_one(f32, F32, op);			\
-	eval_unary_op_one(f64, F64, op);	    
+static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value rhs, Type *rhs_type, Value *out, Type *out_type) {
+		/* WARNING: macros ahead */
 
 #define eval_unary_op_nums_only(op)				\
 	switch (builtin) {							\
@@ -935,7 +905,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 
 #define eval_binary_op_one(low, up, op)			\
 	case BUILTIN_##up:							\
-		v->low = (up)(lhs.low op rhs.low); break
+		out->low = (up)(lhs.low op rhs.low); break
 	
 #define eval_binary_op_nums(builtin, op)		\
 	eval_binary_op_one(i8, I8, op);				\
@@ -951,9 +921,9 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 
 	
 #define eval_binary_op_nums_only(op)						\
-	val_cast(&lhs, &e->binary.lhs->type, &lhs, &e->type);	\
-	val_cast(&rhs, &e->binary.rhs->type, &rhs, &e->type);	\
-	assert(e->type.kind == TYPE_BUILTIN);					\
+	val_cast(&lhs, lhs_type, &lhs, out_type);				\
+	val_cast(&rhs, rhs_type, &rhs, out_type);				\
+	assert(out_type->kind == TYPE_BUILTIN);					\
 	switch (builtin) {										\
 		eval_binary_op_nums(builtin, op);					\
 	default: assert(0); break;								\
@@ -962,7 +932,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 
 #define eval_binary_bool_op_one(low, up, op)	\
 	case BUILTIN_##up:							\
-	v->boolv = lhs.low op rhs.low; break
+	out->boolv = lhs.low op rhs.low; break
 
 #define eval_binary_bool_op_nums(builtin, op)			\
 	eval_binary_bool_op_one(i8, I8, op);				\
@@ -978,25 +948,82 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	eval_binary_bool_op_one(boolv, BOOL, op);			\
 	eval_binary_bool_op_one(charv, CHAR, op);
 
-#define eval_binary_bool_op_nums_only(op)					\
-	{Type *ltype=&e->binary.lhs->type,						\
-	 *rtype=&e->binary.rhs->type;							\
-	 Type *cast_to =	ltype->flags & TYPE_FLAG_FLEXIBLE ?	\
-	 rtype : ltype;											\
-	 val_cast(&lhs, ltype, &lhs, cast_to);					\
-	 val_cast(&rhs, rtype, &rhs, cast_to);					\
-	 assert(e->binary.lhs->type.kind == TYPE_BUILTIN);	  	\
-	 switch (builtin) {										\
-		 eval_binary_bool_op_nums(builtin, op);				\
-	 default:												\
-		 assert(!("Invalid builtin to "#op)[0]); break;		\
-	 }}
+#define eval_binary_bool_op_nums_only(op)								\
+	{Type *cast_to =	lhs_type->flags & TYPE_FLAG_FLEXIBLE ?			\
+			rhs_type : lhs_type;										\
+		val_cast(&lhs, lhs_type, &lhs, cast_to);						\
+		val_cast(&rhs, rhs_type, &rhs, cast_to);						\
+		assert(lhs_type->kind == TYPE_BUILTIN);							\
+		switch (builtin) {												\
+			eval_binary_bool_op_nums(builtin, op);						\
+		default:														\
+			assert(!("Invalid builtin to "#op)[0]); break;				\
+		}}
 	
 #define eval_binary_bool_op(op)					\
-	if (e->binary.lhs->type.kind == TYPE_PTR)	\
-		v->boolv = lhs.ptr op rhs.ptr;			\
+	if (lhs_type->kind == TYPE_PTR)				\
+		out->boolv = lhs.ptr op rhs.ptr;		\
 	else { eval_binary_bool_op_nums_only(op); }
 	
+	assert(out_type->kind == TYPE_BUILTIN);
+	BuiltinType builtin = out_type->builtin;
+	switch (op) {
+	case BINARY_ADD:
+		eval_binary_op_nums_only(+); break;
+	case BINARY_SUB:
+		eval_binary_op_nums_only(-); break;
+	case BINARY_MUL:
+		eval_binary_op_nums_only(*); break;
+	case BINARY_DIV:
+		eval_binary_op_nums_only(/); break;
+	case BINARY_LT:
+		eval_binary_bool_op(<); break;
+	case BINARY_LE:
+		eval_binary_bool_op(<=); break;
+	case BINARY_GT:
+		eval_binary_bool_op(>); break;
+	case BINARY_GE:
+		eval_binary_bool_op(>=); break;
+	case BINARY_EQ:
+		eval_binary_bool_op(==); break;
+	case BINARY_NE:
+		eval_binary_bool_op(!=); break;
+	default: assert(0); break;
+	}
+}
+
+
+static bool val_is_nonnegative(Value *v, Type *t) {
+	switch (t->builtin) {
+	case BUILTIN_BOOL: assert(0); return false;
+	case BUILTIN_CHAR: return v->charv >= 0;
+	case BUILTIN_F32: return v->f32 >= 0;
+	case BUILTIN_F64: return v->f64 >= 0;
+	default: break;
+	}
+	if (!type_builtin_is_signed(t->builtin))
+		return true;
+	return val_to_i64(v, t->builtin) >= 0;
+}
+
+static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
+	
+#define eval_unary_op_one(low, up, op)			\
+	case BUILTIN_##up:							\
+		v->low = (up)(op of.low); break
+#define eval_unary_op_nums(builtin, op)			\
+	eval_unary_op_one(i8, I8, op);				\
+	eval_unary_op_one(i16, I16, op);			\
+	eval_unary_op_one(i32, I32, op);			\
+	eval_unary_op_one(i64, I64, op);			\
+	eval_unary_op_one(u8, U8, op);				\
+	eval_unary_op_one(u16, U16, op);			\
+	eval_unary_op_one(u32, U32, op);			\
+	eval_unary_op_one(u64, U64, op);			\
+	eval_unary_op_one(f32, F32, op);			\
+	eval_unary_op_one(f64, F64, op);
+	
+	if (!ev->enabled) return false; /* silently fail */	
 	switch (e->kind) {
 	case EXPR_UNARY_OP: {
 		Value of;
@@ -1063,7 +1090,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (!eval_expr(ev, lhs_expr, &lhs)) return false;
 		if (e->binary.op != BINARY_DOT)
 			if (!eval_expr(ev, rhs_expr, &rhs)) return false;
-		BuiltinType builtin = e->binary.lhs->type.builtin;
 		switch (e->binary.op) {
 		case BINARY_DOT: {
 			void *ptr = eval_ptr_to_struct_field(ev, e);
@@ -1075,7 +1101,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				v->ptr = (char *)lhs.ptr + val_to_i64(&rhs, e->binary.rhs->type.builtin)
 					* (I64)compiler_sizeof(e->binary.lhs->type.ptr);
 			} else {
-				eval_binary_op_nums_only(+);
+				eval_numerical_bin_op(lhs, &e->binary.lhs->type, BINARY_ADD, rhs, &e->binary.rhs->type, v, &e->type);
 			}
 			break;
 		case BINARY_SUB:
@@ -1083,25 +1109,19 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				v->ptr = (char *)lhs.ptr - val_to_i64(&rhs, e->binary.rhs->type.builtin)
 					* (I64)compiler_sizeof(e->binary.lhs->type.ptr);
 			} else {
-				eval_binary_op_nums_only(-);
+				eval_numerical_bin_op(lhs, &e->binary.lhs->type, BINARY_SUB, rhs, &e->binary.rhs->type, v, &e->type);
 			}
 			break;
 		case BINARY_MUL:
-			eval_binary_op_nums_only(*); break;
 		case BINARY_DIV:
-			eval_binary_op_nums_only(/); break;
 		case BINARY_LT:
-			eval_binary_bool_op(<); break;
 		case BINARY_LE:
-			eval_binary_bool_op(<=); break;
 		case BINARY_GT:
-			eval_binary_bool_op(>); break;
 		case BINARY_GE:
-			eval_binary_bool_op(>=); break;
 		case BINARY_EQ:
-			eval_binary_bool_op(==); break;
 		case BINARY_NE:
-			eval_binary_bool_op(!=); break;
+			eval_numerical_bin_op(lhs, &e->binary.lhs->type, e->binary.op, rhs, &e->binary.rhs->type, v, &e->type);
+			break;
 		case BINARY_SET:
 			if (!eval_set(ev, e->binary.lhs, &rhs)) return false;
 			break;
@@ -1156,11 +1176,65 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	} break;
 	case EXPR_EACH: {
 		EachExpr *ea = &e->each;
-		/* TODO: ASDF */
+		if (!each_enter(e, 0)) return false;
 		if (ea->flags & EACH_IS_RANGE) {
-			
+			Value from, to;
+			Value stepval;
+			stepval.i64 = 1;
+			Type i64t;
+			i64t.flags = TYPE_FLAG_RESOLVED;
+			i64t.kind = TYPE_BUILTIN;
+			i64t.builtin = BUILTIN_I64;
+			if (!eval_expr(ev, ea->range.from, &from)) return false;
+			if (ea->range.to && !eval_expr(ev, ea->range.to, &to)) return false;
+			if (ea->range.stepval)
+				stepval = *ea->range.stepval;
+			Value x = from;
+		    Value *index_val;
+			Value *value_val;
+			if (ea->index) {
+				IdentDecl *idecl = ident_decl(ea->index);
+				idecl->flags |= IDECL_HAS_VAL;
+				index_val = &idecl->val;
+			} else {
+				index_val = NULL;
+			}
+			if (ea->value) {
+				IdentDecl *idecl = ident_decl(ea->value);
+				idecl->flags |= IDECL_HAS_VAL;
+				value_val = &idecl->val;
+			} else {
+				value_val = NULL;
+			}
+			bool step_is_negative = ea->range.stepval && !val_is_nonnegative(&stepval, &ea->type);
+			index_val->i64 = 0;
+			while (1) {
+				if (ea->range.to) {
+					/* check if loop has ended */
+					Value lhs = x;
+					Value rhs = to;
+					assert(ea->type.kind == TYPE_BUILTIN);
+					Type boolt;
+					boolt.flags = TYPE_FLAG_RESOLVED;
+					boolt.kind = TYPE_BUILTIN;
+					boolt.builtin = BUILTIN_BOOL;
+					eval_numerical_bin_op(lhs, &ea->type, step_is_negative ? BINARY_GE : BINARY_LE, rhs, &ea->range.to->type, v, &boolt);
+					
+					if (!v->boolv) break;
+				}
+				if (value_val) *value_val = x;
+
+				if (!eval_block(ev, &ea->body, &e->type, v)) return false;
+				
+				if (index_val) {
+					index_val->i64++;
+				}
+				eval_numerical_bin_op(x, &ea->type, BINARY_ADD, stepval, ea->range.stepval ? &ea->type : &i64t, &x, &ea->type);
+			}
 		} else {
+			assert(!*"Not implemented yet");
 		}
+		each_exit(e);
 	} break;
 	case EXPR_BLOCK:
 		if (!eval_block(ev, &e->block, &e->type, v)) return false;
@@ -1185,12 +1259,16 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		break;
 	case EXPR_IDENT: {
 		IdentDecl *idecl = ident_decl(e->ident);
-		Declaration *d = idecl->decl;
-		if (!types_decl(ev->typer, d)) return false;
-		assert(d->type.flags & TYPE_FLAG_RESOLVED);
+		bool is_decl = idecl->kind == IDECL_DECL;
+		Declaration *d;
+		if (is_decl) {
+			d = idecl->decl;
+			if (!types_decl(ev->typer, d)) return false;
+			assert(d->type.flags & TYPE_FLAG_RESOLVED);
+		}
 		if (idecl->flags & IDECL_HAS_VAL) {
 			*v = idecl->val;
-		} else if (d->flags & DECL_FLAG_CONST) {
+		} else if (is_decl && (d->flags & DECL_FLAG_CONST)) {
 			if (!(d->flags & DECL_FLAG_FOUND_VAL)) {
 				if (!eval_expr(ev, &d->expr, &d->val)) return false;
 				d->flags |= DECL_FLAG_FOUND_VAL;
