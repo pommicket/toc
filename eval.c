@@ -1218,19 +1218,20 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 					boolt.flags = TYPE_FLAG_RESOLVED;
 					boolt.kind = TYPE_BUILTIN;
 					boolt.builtin = BUILTIN_BOOL;
-					eval_numerical_bin_op(lhs, &ea->type, step_is_negative ? BINARY_GE : BINARY_LE, rhs, &ea->range.to->type, v, &boolt);
+					Value cont;
+					eval_numerical_bin_op(lhs, &ea->type, step_is_negative ? BINARY_GE : BINARY_LE, rhs, &ea->range.to->type, &cont, &boolt);
 					
-					if (!v->boolv) break;
+					if (!cont.boolv) break;
 				}
 				if (value_val) *value_val = x;
 
 				if (!eval_block(ev, &ea->body, &e->type, v)) return false;
-				
 				if (index_val) {
 					index_val->i64++;
 				}
 				eval_numerical_bin_op(x, &ea->type, BINARY_ADD, stepval, ea->range.stepval ? &ea->type : &i64t, &x, &ea->type);
 			}
+				
 		} else {
 			Value of;
 			if (!eval_expr(ev, ea->of, &of)) return false;
