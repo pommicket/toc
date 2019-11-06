@@ -735,13 +735,19 @@ static bool types_expr(Typer *tr, Expression *e) {
 		} else {
 			if (!types_expr(tr, ea->of))
 				return false;
-			Type *of_type = NULL;
-			switch (ea->of->type.kind) {
+			Type *iter_type = &ea->of->type;
+
+			bool uses_ptr = false;
+			if (iter_type->kind == TYPE_PTR) {
+				uses_ptr = true;
+				iter_type = iter_type->ptr;
+			}
+			switch (iter_type->kind) {
 			case TYPE_SLICE:
-				of_type = ea->of->type.slice;
+				iter_type = iter_type->slice;
 				break;
 			case TYPE_ARR:
-				of_type = ea->of->type.arr.of;
+				iter_type = iter_type->arr.of;
 				break;
 			default: {
 				char *s = type_to_str(&ea->of->type);
@@ -750,15 +756,22 @@ static bool types_expr(Typer *tr, Expression *e) {
 				return false;
 			}
 			}
+			Type ptr_type;
+			if (uses_ptr) {
+				ptr_type.flags = TYPE_FLAG_RESOLVED;
+				ptr_type.kind = TYPE_PTR;
+				ptr_type.ptr = iter_type;
+				iter_type = &ptr_type;
+			}
 			if (ea->flags & EACH_ANNOTATED_TYPE) {
-				if (!type_eq(of_type, &ea->type)) {
-					char *exp = type_to_str(of_type);
+				if (!type_eq(iter_type, &ea->type)) {
+					char *exp = type_to_str(iter_type);
 					char *got = type_to_str(&ea->type);
 					err_print(e->where, "Expected to iterate over type %s, but it was annotated as iterating over type %s.");
 					free(exp); free(got);
 					return false;
 				}
-			} else ea->type = *of_type;
+			} else ea->type = *iter_type;
 		}
 		if ((ea->flags & EACH_IS_RANGE) && ea->range.step) {
 			Value *stepval = typer_malloc(tr, sizeof *ea->range.stepval);

@@ -740,6 +740,8 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			cgen_write(g, " = 0");
 		}
 		cgen_write(g, "; ");
+		bool uses_ptr;
+		Type *of_type;
 		if (!(is_range && !ea->range.to)) { /* if it's finite */
 			if (is_range) {
 				if (ea->value)
@@ -755,12 +757,17 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 				else
 					cgen_write(g, "i_");
 				cgen_write(g, " < ");
-				switch (ea->of->type.kind) {
+				of_type = &ea->of->type;
+				uses_ptr = of_type->kind == TYPE_PTR;
+				if (uses_ptr) {
+					of_type = of_type->ptr;
+				}
+				switch (of_type->kind) {
 				case TYPE_ARR:
-					cgen_write(g, "%lu", (unsigned long)ea->of->type.arr.n);
+					cgen_write(g, "%lu", (unsigned long)of_type->arr.n);
 					break;
 				case TYPE_SLICE:
-					cgen_write(g, "of_.n");
+					cgen_write(g, "of_%sn", uses_ptr ? "->" : ".");
 					break;
 				default: assert(0); break;
 				}
@@ -795,22 +802,25 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 				/* necessary for iterating over, e.g., an array of arrays */
 				if (!cgen_type_pre(g, &ea->type, e->where))
 					return false;
-				cgen_write(g, "(*p_)");
+				if (uses_ptr)
+					cgen_write(g, "p_");
+				else
+					cgen_write(g, "(*p_)");
 				if (!cgen_type_post(g, &ea->type, e->where))
 					return false;
 				cgen_write(g, " = ");
-				if (ea->of->type.kind == TYPE_SLICE) {
+				if (of_type->kind == TYPE_SLICE) {
 					cgen_write(g, "((");
 					if (!cgen_type_pre(g, &ea->type, e->where)) return false;
-					cgen_write(g, "(*)");
+					if (!uses_ptr) cgen_write(g, "(*)");
 					if (!cgen_type_post(g, &ea->type, e->where)) return false;
-					cgen_write(g, ")of_.data) + ");
+					cgen_write(g, ")of_%sdata) + ", uses_ptr ? "->" : ".");
 					if (ea->index)
 						cgen_ident(g, ea->index);
 					else
 						cgen_write(g, "i_");
 				} else {
-					cgen_write(g, "&of_[");
+					cgen_write(g, "&%sof_%s[", uses_ptr ? "(*" : "", uses_ptr ? ")" : "");
 					if (ea->index)
 						cgen_ident(g, ea->index);
 					else
@@ -823,13 +833,20 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 				cgen_ident(g, ea->value);
 				if (!cgen_type_post(g, &ea->type, e->where)) return false;
 				cgen_write(g, "; ");
-				Expression set_expr;
-				set_expr.kind = EXPR_IDENT;
-				set_expr.ident = ea->value;
-				set_expr.type = ea->type;
-				set_expr.flags = EXPR_FLAG_FOUND_TYPE;
-				if (!cgen_set(g, &set_expr, NULL, NULL, "(*p_)"))
-					return false;
+				if (uses_ptr) {
+					cgen_ident(g, ea->value);
+					cgen_write(g, " = p_;");
+					cgen_nl(g);
+				} else {
+					Expression set_expr;
+					set_expr.kind = EXPR_IDENT;
+					set_expr.ident = ea->value;
+					set_expr.type = ea->type;
+					set_expr.flags = EXPR_FLAG_FOUND_TYPE;
+				
+					if (!cgen_set(g, &set_expr, NULL, NULL, "(*p_)"))
+						return false;
+				}
 			}
 		}
 		if (!cgen_block(g, &ea->body, ret_name, CGEN_BLOCK_NOBRACES))

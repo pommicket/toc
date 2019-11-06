@@ -1,8 +1,5 @@
 /* 
 TODO:
-allow just each arr { ... } 
-each pointer
-compile-time each pointer
 prevent each x := x
 +=, -=, *=, /=
 compile-time arguments

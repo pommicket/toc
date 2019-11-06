@@ -1251,28 +1251,42 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			} else {
 				value_val = &val;
 			}
-			index_val->i64 = 0;
 			I64 len;
-			switch (ea->of->type.kind) {
+			bool uses_ptr = false;
+			Type *of_type = &ea->of->type;
+			if (of_type->kind == TYPE_PTR) {
+				uses_ptr = true;
+				of_type = of_type->ptr;
+			}
+			switch (of_type->kind) {
 			case TYPE_ARR:
-				len = (I64)ea->of->type.arr.n;
+				len = (I64)of_type->arr.n;
+				if (uses_ptr) {
+			    	of.arr = of.ptr;
+				}
+				
 				break;
 			case TYPE_SLICE:
+				if (uses_ptr) {
+			    	of.slice = *(Slice *)of.ptr;
+				}
 				len = of.slice.n;
 				break;
 			default: assert(0); return false;
 			}
-				
 			Type i64t;
 			i64t.flags = TYPE_FLAG_RESOLVED;
 			i64t.kind = TYPE_BUILTIN;
 			i64t.builtin = BUILTIN_I64;
-			
+			index_val->i64 = 0;
 			while (index_val->i64 < len) {
 				void *ptr;
-				if (!eval_val_ptr_at_index(ev, e->where, &of, (U64)index_val->i64, &ea->of->type, &i64t, &ptr, NULL))
+				if (!eval_val_ptr_at_index(ev, e->where, &of, (U64)index_val->i64, of_type, &i64t, &ptr, NULL))
 					return false;
-				eval_deref(value_val, ptr, &ea->type);
+				if (uses_ptr)
+					value_val->ptr = ptr;
+				else
+					eval_deref(value_val, ptr, &ea->type);
 				if (!eval_block(ev, &ea->body, &e->type, v))
 					return false;
 				index_val->i64++;

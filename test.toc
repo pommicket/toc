@@ -45,22 +45,21 @@ putf @= fn(x: float) {
 // };
 
 g @= fn() int {
-  foo : [10]int; // = new(int, 10);
+  foo : = new(int, 10);
   total := 0;
-  each foo { total = total + 1; }
-// each _, i := foo {
-  // 	   foo[i] = i;
-  // };
-  // total := 0;
-  // each x := foo {
-  // 	   total = total + x;
-  // }
-  // total
-  
-  each i := 1..10 {
-  	   total = total + i;
-  	   total
+  // each foo { total = total + 1; }
+  each x, i := &foo {
+  	   *x = i;
+  };
+  each x, i := foo {
+  	   total = total + x * i;
   }
+  total
+  
+  // each i := 1..10 {
+  // 	   total = total + i;
+  // 	   total
+  // }
   // total := 0;
   // each i, j := 1..10 {
   // 	   total = total + i * j;
