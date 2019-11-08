@@ -685,6 +685,17 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		if (!each_enter(e, 0)) return false;
 		cgen_write(g, "{");
 		if (is_range) {
+			if (ea->range.to) {
+				/* pre generate to */
+				if (!cgen_type_pre(g, &ea->type, e->where)) return false;
+				cgen_write(g, " to_");
+				if (!cgen_type_post(g, &ea->type, e->where)) return false;
+				cgen_write(g, " = ");
+				if (!cgen_expr(g, ea->range.to))
+					return false;
+				cgen_write(g, "; ");
+			}
+			
 			/* set value to from */
 			if (ea->value) {
 				if (!cgen_type_pre(g, &ea->type, e->where)) return false;
@@ -706,16 +717,6 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 				cgen_write(g, "; ");
 				if (!cgen_set(g, NULL, "val_", ea->range.from, NULL))
 					return false;
-			}
-			if (ea->range.to) {
-				/* pre generate to */
-				if (!cgen_type_pre(g, &ea->type, e->where)) return false;
-				cgen_write(g, " to_");
-				if (!cgen_type_post(g, &ea->type, e->where)) return false;
-				cgen_write(g, " = ");
-				if (!cgen_expr(g, ea->range.to))
-					return false;
-				cgen_write(g, "; ");
 			}
 		} else {
 			/* pre-generate of */
@@ -740,8 +741,8 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			cgen_write(g, " = 0");
 		}
 		cgen_write(g, "; ");
-		bool uses_ptr;
-		Type *of_type;
+		bool uses_ptr = false;
+		Type *of_type = NULL;
 		if (!(is_range && !ea->range.to)) { /* if it's finite */
 			if (is_range) {
 				if (ea->value)
@@ -1427,7 +1428,7 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 		case BUILTIN_U32: cgen_write(g, "%"PRIu32, *(U32 *)v); break;
 		case BUILTIN_I64: cgen_write(g, "%"PRId64, *(I64 *)v); break;
 		case BUILTIN_U64: cgen_write(g, "%"PRIu64, *(U64 *)v); break;
-		case BUILTIN_F32: cgen_write(g, F32_FMT, *(F32 *)v); break;
+		case BUILTIN_F32: cgen_write(g, F32_FMT"f", *(F32 *)v); break;
 		case BUILTIN_F64: cgen_write(g, F64_FMT, *(F64 *)v); break;
 		case BUILTIN_CHAR: cgen_write(g, "\\x%02x", *(char *)v); break;
 		case BUILTIN_BOOL: cgen_write(g, "%s", *(bool *)v ? "true" : "false"); break;

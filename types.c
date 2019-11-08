@@ -284,7 +284,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 					/* if we've complained about it before when we were figuring out the type, don't complain again */
 					if (!(d->flags & DECL_FLAG_ERRORED_ABOUT_SELF_REFERENCE)) {
 						char *s = ident_to_str(i);
-						err_print(where, "Use of identifier %s within its own declaration.", s);
+						err_print(where, "Use of identifier %s in its own declaration.", s);
 						free(s);
 						info_print(d->where, "Declaration was here.");
 						d->flags |= DECL_FLAG_ERRORED_ABOUT_SELF_REFERENCE;
@@ -332,6 +332,17 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 	} break;
 	case IDECL_EXPR: {
 		Expression *e = decl->expr;
+		/* are we inside this expression? */
+		typedef Expression *ExpressionPtr;
+		arr_foreach(tr->in_expr_decls, ExpressionPtr, in_e) {
+			if (*in_e == e) {
+				char *s = ident_to_str(i);
+				err_print(where, "Use of identifier %s in its own declaration.", s);
+				free(s);
+				return false;
+			}
+		}
+		
 		switch (e->kind) {
 		case EXPR_EACH:
 			if (i == e->each.index) {
@@ -668,6 +679,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 		break;
 	case EXPR_EACH: {
 		EachExpr *ea = &e->each;
+		*(Expression **)arr_add(&tr->in_expr_decls) = e;
+		if (!each_enter(e, SCOPE_FLAG_CHECK_REDECL)) return false;
 		if (ea->flags & EACH_IS_RANGE) {
 			/* TODO: allow user-defined numerical types */
 			if (!types_expr(tr, ea->range.from)) return false;
@@ -782,9 +795,12 @@ static bool types_expr(Typer *tr, Expression *e) {
 			val_cast(stepval, &ea->range.step->type, stepval, &ea->type);
 			ea->range.stepval = stepval;
 		}
-		if (!each_enter(e, SCOPE_FLAG_CHECK_REDECL)) return false;
+		
+		arr_remove_last(&tr->in_expr_decls);
+		
 		if (!types_block(tr, &ea->body)) return false;
 		each_exit(e);
+		
 		if (ea->body.ret_expr)
 			*t = ea->body.ret_expr->type;
 		else
@@ -1573,6 +1589,7 @@ static void typer_create(Typer *tr, Evaluator *ev) {
 	tr->can_ret = false;
 	tr->evalr = ev;
 	tr->in_decls = NULL;
+	tr->in_expr_decls = NULL;
 	allocr_create(&tr->allocr);
 }
 

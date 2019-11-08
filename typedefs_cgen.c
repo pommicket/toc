@@ -115,7 +115,7 @@ static bool typedefs_decl(CGenerator *g, Declaration *d) {
 			if (d->c.ids == NULL)
 				d->c.ids = calloc(arr_len(d->idents), sizeof *d->c.ids);
 			/* generate typedef */
-			IdentID id;
+			IdentID id = 0;
 			if (g->block != NULL) id = d->c.ids[idx] = g->ident_counter++;
 			if (val->type->kind == TYPE_STRUCT) continue; /* we don't need to typedef this; we can just use its tag */
 			cgen_write(g, "typedef ");

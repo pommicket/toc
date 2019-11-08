@@ -1176,7 +1176,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	} break;
 	case EXPR_EACH: {
 		EachExpr *ea = &e->each;
-		if (!each_enter(e, 0)) return false;
 		if (ea->flags & EACH_IS_RANGE) {
 			Value from, to;
 			Value stepval;
@@ -1192,6 +1191,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			Value x = from;
 		    Value *index_val;
 			Value *value_val;
+			if (!each_enter(e, 0)) return false;
 			if (ea->index) {
 				IdentDecl *idecl = ident_decl(ea->index);
 				idecl->flags |= IDECL_HAS_VAL;
@@ -1237,6 +1237,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (!eval_expr(ev, ea->of, &of)) return false;
 			Value *index_val, *value_val;
 			Value i, val;
+			if (!each_enter(e, 0)) return false;
 			if (ea->index) {
 				IdentDecl *idecl = ident_decl(ea->index);
 				idecl->flags |= IDECL_HAS_VAL;
@@ -1318,7 +1319,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	case EXPR_IDENT: {
 		IdentDecl *idecl = ident_decl(e->ident);
 		bool is_decl = idecl->kind == IDECL_DECL;
-		Declaration *d;
+		Declaration *d = NULL;
 		if (is_decl) {
 			d = idecl->decl;
 			if (!types_decl(ev->typer, d)) return false;
@@ -1331,7 +1332,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				if (!eval_expr(ev, &d->expr, &d->val)) return false;
 				d->flags |= DECL_FLAG_FOUND_VAL;
 			}
-			
 			int index = ident_index_in_decl(e->ident, d);
 			assert(index != -1);
 			if (e->type.kind == TYPE_TYPE) {

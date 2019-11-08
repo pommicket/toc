@@ -276,7 +276,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 		if (isdigit(*t->s)) {
 			/* it's a numeric literal */
 			int base = 10;
-			Floating decimal_pow10;
+			Floating decimal_pow10 = 0;
 			NumLiteral n;
 			n.kind = NUM_LITERAL_INT;
 			n.intval = 0;

@@ -1,6 +1,5 @@
 /* 
 TODO:
-prevent each x := x
 +=, -=, *=, /=
 compile-time arguments
 don't allow while {3; 5} (once break is added)
@@ -61,6 +60,7 @@ int main(int argc, char **argv) {
 	err_ctx.enabled = true;
 	tokr_create(&t, &file_idents, &err_ctx);
 	if (!tokenize_string(&t, contents)) {
+		
 		err_fprint(TEXT_IMPORTANT("Errors occured while preprocessing.\n"));
 		return EXIT_FAILURE;
 	}
@@ -75,6 +75,7 @@ int main(int argc, char **argv) {
 	parser_from_tokenizer(&p, &t);
    	ParsedFile f;
 	if (!parse_file(&p, &f)) {
+		
 		err_fprint(TEXT_IMPORTANT("Errors occured while parsing.\n"));
 		return EXIT_FAILURE;
 	}
@@ -92,7 +93,7 @@ int main(int argc, char **argv) {
 		return false;
 
 	if (!types_file(&tr, &f)) {
-		err_fprint(TEXT_IMPORTANT("Errors occured while determining types.\n"));
+	    err_fprint(TEXT_IMPORTANT("Errors occured while determining types.\n"));
 		return EXIT_FAILURE;
 	}
 	parse_printing_after_types = true;
@@ -106,6 +107,7 @@ int main(int argc, char **argv) {
 	CGenerator g;
 	cgen_create(&g, out, &file_idents, &ev);
 	if (!cgen_file(&g, &f)) {
+		fclose(out);
 		err_fprint(TEXT_IMPORTANT("Errors occured while generating C code.\n"));
 		return EXIT_FAILURE;
 	}
