@@ -95,8 +95,8 @@ static bool type_must_eq(Location where, Type *expected, Type *got) {
 
 
 /*
-this expression, which is an array (or slice), must be mutable (otherwise print an error,
-return false)!
+  this expression, which is an array (or slice), must be mutable (otherwise print an error,
+  return false)!
 */
 static bool expr_arr_must_mut(Expression *e) {
 	switch (e->kind) {
@@ -116,6 +116,7 @@ static bool expr_arr_must_mut(Expression *e) {
 	case EXPR_NEW:
 	case EXPR_UNARY_OP:
 	case EXPR_C:
+	case EXPR_VAL:
 		return true;
 	case EXPR_SLICE:
 		return expr_arr_must_mut(e->slice.of);
@@ -218,7 +219,8 @@ static bool expr_must_lval(Expression *e) {
 	case EXPR_DSIZEOF:
 	case EXPR_BLOCK:
 	case EXPR_SLICE:
-	case EXPR_TYPE: {
+	case EXPR_TYPE:
+	case EXPR_VAL: {
 		err_print(e->where, "Cannot use %s as l-value.", expr_kind_to_str(e->kind));
 		return false;
 	}
@@ -633,7 +635,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				if (last_stmt->kind == STMT_RET) {
 					/*
 					  last statement is a return, so it doesn't matter that the function has no return value
-					ideally this would handle if foo { return 5; } else { return 6; } */
+					  ideally this would handle if foo { return 5; } else { return 6; } */
 					success = true;
 					goto fn_ret;
 				}
@@ -1438,6 +1440,9 @@ static bool types_expr(Typer *tr, Expression *e) {
 	case EXPR_TYPE:
 		t->kind = TYPE_TYPE;
 		break;
+	case EXPR_VAL:
+		assert(0);
+		return false;
 	}
     e->type.flags |= TYPE_FLAG_RESOLVED;
 	return true;

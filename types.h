@@ -367,7 +367,8 @@ typedef enum {
 			  EXPR_DSIZEOF,
 			  EXPR_DALIGNOF,
 			  EXPR_SLICE,
-			  EXPR_TYPE
+			  EXPR_TYPE,
+			  EXPR_VAL /* a value (it's useful to have this). for now, tuples are not supported. see cgen_set_tuple */
 } ExprKind;
 
 typedef enum {
@@ -535,6 +536,10 @@ typedef struct Expression {
 		};
 		struct Expression *tuple;
 		Type typeval;
+		struct {
+			Value val;
+			IdentID val_c_id;
+		};
 	};
 } Expression;
 

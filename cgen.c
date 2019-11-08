@@ -453,6 +453,9 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents, const char *prefix, Expression *to) {
 	IdentID prefix_id; /* ID of prefix for block */
 	switch (to->kind) {
+	case EXPR_VAL:
+		assert(0); /* never needed at the moment */
+		break;
 	case EXPR_TUPLE:
 		/* e.g. a, b = 3, 5; */
 		for (size_t i = 0; i < arr_len(to->tuple); i++) {
@@ -957,6 +960,17 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		if (e->new.n && !cgen_expr_pre(g, e->new.n))
 			return false;
 		break;
+	case EXPR_VAL:
+		if (!cgen_type_pre(g, &e->type, e->where)) return false;
+		e->val_c_id = g->ident_counter++;
+		cgen_write(g, " ");
+		cgen_ident_id(g, e->val_c_id);
+		if (!cgen_type_post(g, &e->type, e->where)) return false;
+		cgen_write(g, " = ");
+		cgen_val(g, &e->val, &e->type, e->where);
+		cgen_write(g, ";");
+		cgen_nl(g);
+		break;
 	case EXPR_LITERAL_INT:
 	case EXPR_LITERAL_FLOAT:
 	case EXPR_LITERAL_BOOL:
@@ -1246,6 +1260,9 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 	} break;
 	case EXPR_SLICE:
 		cgen_ident_id(g, e->slice.c.id);
+		break;
+	case EXPR_VAL:
+		cgen_ident_id(g, e->val_c_id);
 		break;
 	}
 	return true;

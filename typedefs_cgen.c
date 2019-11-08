@@ -89,6 +89,7 @@ static bool typedefs_expr(CGenerator *g, Expression *e) {
 		if (e->new.n && !typedefs_expr(g, e->new.n))
 			return false;
 		break;
+	case EXPR_VAL:
 	case EXPR_TYPE:
 	case EXPR_C:
 	case EXPR_DSIZEOF:

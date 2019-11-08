@@ -313,21 +313,21 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 	}
 }
 
-static void fprint_val(FILE *f, Value *v, Type *t) {
+static void fprint_val(FILE *f, Value v, Type *t) {
 	if (t->kind == TYPE_TUPLE) {
 		fprintf(f, "(");
 		for (size_t i = 0; i < arr_len(t->tuple); i++) {
-			fprint_val(f, &v->tuple[i], &t->tuple[i]);
+			fprint_val(f, v.tuple[i], &t->tuple[i]);
 		}
 		fprintf(f, ")");
 	} else {
-		fprint_val_ptr(f, v, t);
+		fprint_val_ptr(f, &v, t);
 	}
 }
 
 /* 
-IMPORTANT: Only pass an evaluator if you want it to use its allocator.
-Otherwise, pass NULL.
+   IMPORTANT: Only pass an evaluator if you want it to use its allocator.
+   Otherwise, pass NULL.
 */
 static void val_copy(Evaluator *ev, Value *dest, Value *src, Type *t) {
 	switch (t->kind) {
@@ -421,21 +421,21 @@ static void val_free(Value *v, Type *t) {
 	case BUILTIN_F64:							\
 	vout->f64 = (F64)vin->x; break
 
-#define builtin_int_casts(low, up)										\
-	case BUILTIN_##up:													\
-	switch (to) {														\
-		builtin_casts_to_num(low);										\
-	case BUILTIN_CHAR: vout->charv = (char)vin->low; break;				\
-	case BUILTIN_BOOL: vout->boolv = vin->low != 0; break;				\
+#define builtin_int_casts(low, up)							\
+	case BUILTIN_##up:										\
+	switch (to) {											\
+		builtin_casts_to_num(low);							\
+	case BUILTIN_CHAR: vout->charv = (char)vin->low; break;	\
+	case BUILTIN_BOOL: vout->boolv = vin->low != 0; break;	\
 	} break
 
-#define builtin_float_casts(low, up)									\
-	case BUILTIN_##up:													\
-	switch (to) {														\
-	builtin_casts_to_num(low);											\
-	case BUILTIN_BOOL: vout->boolv = vin->low != 0.0f; break;			\
-	case BUILTIN_CHAR:													\
-		assert(0); break;												\
+#define builtin_float_casts(low, up)							\
+	case BUILTIN_##up:											\
+	switch (to) {												\
+		builtin_casts_to_num(low);								\
+	case BUILTIN_BOOL: vout->boolv = vin->low != 0.0f; break;	\
+	case BUILTIN_CHAR:											\
+		assert(0); break;										\
 	} break
 	
 static void val_builtin_cast(Value *vin, BuiltinType from, Value *vout, BuiltinType to) {
@@ -895,7 +895,7 @@ static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 }
 
 static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value rhs, Type *rhs_type, Value *out, Type *out_type) {
-		/* WARNING: macros ahead */
+	/* WARNING: macros ahead */
 
 #define eval_unary_op_nums_only(op)				\
 	switch (builtin) {							\
@@ -903,8 +903,8 @@ static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value 
 	default: assert(0); break;					\
 	}
 
-#define eval_binary_op_one(low, up, op)			\
-	case BUILTIN_##up:							\
+#define eval_binary_op_one(low, up, op)				\
+	case BUILTIN_##up:								\
 		out->low = (up)(lhs.low op rhs.low); break
 	
 #define eval_binary_op_nums(builtin, op)		\
@@ -920,44 +920,44 @@ static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value 
 	eval_binary_op_one(f64, F64, op)
 
 	
-#define eval_binary_op_nums_only(op)						\
-	val_cast(&lhs, lhs_type, &lhs, out_type);				\
-	val_cast(&rhs, rhs_type, &rhs, out_type);				\
-	assert(out_type->kind == TYPE_BUILTIN);					\
-	switch (builtin) {										\
-		eval_binary_op_nums(builtin, op);					\
-	default: assert(0); break;								\
+#define eval_binary_op_nums_only(op)			\
+	val_cast(&lhs, lhs_type, &lhs, out_type);	\
+	val_cast(&rhs, rhs_type, &rhs, out_type);	\
+	assert(out_type->kind == TYPE_BUILTIN);		\
+	switch (builtin) {							\
+		eval_binary_op_nums(builtin, op);		\
+	default: assert(0); break;					\
 	}
 
 
 #define eval_binary_bool_op_one(low, up, op)	\
 	case BUILTIN_##up:							\
-	out->boolv = lhs.low op rhs.low; break
+		out->boolv = lhs.low op rhs.low; break
 
-#define eval_binary_bool_op_nums(builtin, op)			\
-	eval_binary_bool_op_one(i8, I8, op);				\
-	eval_binary_bool_op_one(i16, I16, op);				\
-	eval_binary_bool_op_one(i32, I32, op);				\
-	eval_binary_bool_op_one(i64, I64, op);				\
-	eval_binary_bool_op_one(u8, U8, op);				\
-	eval_binary_bool_op_one(u16, U16, op);				\
-	eval_binary_bool_op_one(u32, U32, op);				\
-	eval_binary_bool_op_one(u64, U64, op);				\
-	eval_binary_bool_op_one(f32, F32, op);				\
-	eval_binary_bool_op_one(f64, F64, op);				\
-	eval_binary_bool_op_one(boolv, BOOL, op);			\
+#define eval_binary_bool_op_nums(builtin, op)	\
+	eval_binary_bool_op_one(i8, I8, op);		\
+	eval_binary_bool_op_one(i16, I16, op);		\
+	eval_binary_bool_op_one(i32, I32, op);		\
+	eval_binary_bool_op_one(i64, I64, op);		\
+	eval_binary_bool_op_one(u8, U8, op);		\
+	eval_binary_bool_op_one(u16, U16, op);		\
+	eval_binary_bool_op_one(u32, U32, op);		\
+	eval_binary_bool_op_one(u64, U64, op);		\
+	eval_binary_bool_op_one(f32, F32, op);		\
+	eval_binary_bool_op_one(f64, F64, op);		\
+	eval_binary_bool_op_one(boolv, BOOL, op);	\
 	eval_binary_bool_op_one(charv, CHAR, op);
 
-#define eval_binary_bool_op_nums_only(op)								\
-	{Type *cast_to =	lhs_type->flags & TYPE_FLAG_FLEXIBLE ?			\
-			rhs_type : lhs_type;										\
-		val_cast(&lhs, lhs_type, &lhs, cast_to);						\
-		val_cast(&rhs, rhs_type, &rhs, cast_to);						\
-		assert(lhs_type->kind == TYPE_BUILTIN);							\
-		switch (builtin) {												\
-			eval_binary_bool_op_nums(builtin, op);						\
-		default:														\
-			assert(!("Invalid builtin to "#op)[0]); break;				\
+#define eval_binary_bool_op_nums_only(op)						\
+	{Type *cast_to =	lhs_type->flags & TYPE_FLAG_FLEXIBLE ?	\
+			rhs_type : lhs_type;								\
+		val_cast(&lhs, lhs_type, &lhs, cast_to);				\
+		val_cast(&rhs, rhs_type, &rhs, cast_to);				\
+		assert(lhs_type->kind == TYPE_BUILTIN);					\
+		switch (builtin) {										\
+			eval_binary_bool_op_nums(builtin, op);				\
+		default:												\
+			assert(!("Invalid builtin to "#op)[0]); break;		\
 		}}
 	
 #define eval_binary_bool_op(op)					\
@@ -1495,6 +1495,10 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	} break;
 	case EXPR_TYPE:
 		v->type = &e->typeval;
+		break;
+	case EXPR_VAL:
+		*v = e->val;
+		break;
 	}
 	return true;
 }

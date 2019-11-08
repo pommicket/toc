@@ -27,6 +27,7 @@ static const char *expr_kind_to_str(ExprKind k) {
 	case EXPR_IDENT: return "identifier";
 	case EXPR_SLICE: return "slice";
 	case EXPR_TYPE: return "type";
+	case EXPR_VAL: return "value";
 	}
 	assert(0);
 	return "";
@@ -1956,7 +1957,7 @@ static void fprint_arg_exprs(FILE *out, Expression *args) {
 	fprintf(out, ")");
 }
 
-static void fprint_val(FILE *f, Value *v, Type *t);
+static void fprint_val(FILE *f, Value v, Type *t);
 
 static void fprint_expr(FILE *out, Expression *e) {
 	PARSE_PRINT_LOCATION(e->where);
@@ -2048,7 +2049,7 @@ static void fprint_expr(FILE *out, Expression *e) {
 			if (parse_printing_after_types) {
 				if (ea->range.stepval) {
 					fprintf(out, ",");
-					fprint_val(out, ea->range.stepval, &ea->type);
+					fprint_val(out, *ea->range.stepval, &ea->type);
 				}
 			} else {
 				if (ea->range.step) {
@@ -2111,6 +2112,9 @@ static void fprint_expr(FILE *out, Expression *e) {
 	} break;
 	case EXPR_TYPE:
 		fprint_type(out, &e->typeval);
+		break;
+	case EXPR_VAL:
+		fprint_val(out, e->val, &e->type);
 		break;
 	}
 	if (parse_printing_after_types) {
