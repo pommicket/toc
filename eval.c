@@ -965,13 +965,24 @@ static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value 
 		out->boolv = lhs.ptr op rhs.ptr;		\
 	else { eval_binary_bool_op_nums_only(op); }
 	
-	assert(out_type->kind == TYPE_BUILTIN);
 	BuiltinType builtin = out_type->builtin;
 	switch (op) {
 	case BINARY_ADD:
-		eval_binary_op_nums_only(+); break;
+		if (lhs_type->kind == TYPE_PTR) {
+			out->ptr = (char *)lhs.ptr + val_to_i64(&rhs, rhs_type->builtin)
+				* (I64)compiler_sizeof(lhs_type->ptr);
+		} else {
+			eval_binary_op_nums_only(+);
+		}
+		break;
 	case BINARY_SUB:
-		eval_binary_op_nums_only(-); break;
+		if (lhs_type->kind == TYPE_PTR) {
+			out->ptr = (char *)lhs.ptr - val_to_i64(&rhs, rhs_type->builtin)
+				* (I64)compiler_sizeof(lhs_type->ptr);
+		} else {
+			eval_binary_op_nums_only(-);
+		}
+		break;
 	case BINARY_MUL:
 		eval_binary_op_nums_only(*); break;
 	case BINARY_DIV:
@@ -1097,21 +1108,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			eval_deref(v, ptr, &e->type);
 		} break;
 		case BINARY_ADD:
-			if (e->binary.lhs->type.kind == TYPE_PTR) {
-				v->ptr = (char *)lhs.ptr + val_to_i64(&rhs, e->binary.rhs->type.builtin)
-					* (I64)compiler_sizeof(e->binary.lhs->type.ptr);
-			} else {
-				eval_numerical_bin_op(lhs, &e->binary.lhs->type, BINARY_ADD, rhs, &e->binary.rhs->type, v, &e->type);
-			}
-			break;
 		case BINARY_SUB:
-			if (e->binary.lhs->type.kind == TYPE_PTR) {
-				v->ptr = (char *)lhs.ptr - val_to_i64(&rhs, e->binary.rhs->type.builtin)
-					* (I64)compiler_sizeof(e->binary.lhs->type.ptr);
-			} else {
-				eval_numerical_bin_op(lhs, &e->binary.lhs->type, BINARY_SUB, rhs, &e->binary.rhs->type, v, &e->type);
-			}
-			break;
 		case BINARY_MUL:
 		case BINARY_DIV:
 		case BINARY_LT:

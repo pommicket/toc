@@ -1208,7 +1208,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 					&& type_builtin_is_numerical(lhs_type->builtin) && lhs_type->builtin == rhs_type->builtin) {
 					valid = true;
 				}
-				if (o == BINARY_ADD || o == BINARY_SUB) {
+				if (o == BINARY_ADD || o == BINARY_SUB || o == BINARY_SET_ADD || o == BINARY_SET_SUB) {
 					if (lhs_type->kind == TYPE_PTR &&
 						rhs_type->kind == TYPE_BUILTIN &&
 						type_builtin_is_numerical(rhs_type->builtin)) {
