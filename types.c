@@ -1177,10 +1177,13 @@ static bool types_expr(Typer *tr, Expression *e) {
 		}
 		switch (o) {
 		case BINARY_SET:
+		case BINARY_SET_ADD:
+		case BINARY_SET_SUB:
+		case BINARY_SET_MUL:
+		case BINARY_SET_DIV:
 			if (!expr_must_lval(e->binary.lhs)) {
 				return false;
 			}
-		
 			/* fallthrough */
 		case BINARY_ADD:
 		case BINARY_SUB:
@@ -1270,6 +1273,14 @@ static bool types_expr(Typer *tr, Expression *e) {
 				err_print(e->where, "Invalid types to operator %s: %s and %s", op, s1, s2);
 				return false;
 			}
+			if (o == BINARY_SET_ADD ||
+				o == BINARY_SET_SUB ||
+				o == BINARY_SET_MUL ||
+				o == BINARY_SET_DIV) {
+				t->kind = TYPE_VOID; /* actually, it's just void */
+				t->flags = 0;
+			}
+				
 			break;
 		}
 		case BINARY_AT_INDEX:

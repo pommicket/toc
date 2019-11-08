@@ -52,6 +52,10 @@ static const char *binary_op_to_str(BinaryOp b) {
 	case BINARY_MUL: return "*";
 	case BINARY_DIV: return "/";
 	case BINARY_SET: return "=";
+	case BINARY_SET_ADD: return "+=";
+	case BINARY_SET_SUB: return "-=";
+	case BINARY_SET_MUL: return "*=";
+	case BINARY_SET_DIV: return "/=";
 	case BINARY_AT_INDEX: return "[]";
 	case BINARY_LT: return "<";
 	case BINARY_LE: return "<=";
@@ -869,13 +873,18 @@ static void fprint_expr(FILE *out, Expression *e);
 #define NEW_PRECEDENCE 22
 static int op_precedence(Keyword op) {
 	switch (op) {
-	case KW_EQ: return 0;
+	case KW_EQ:
+	case KW_PLUS_EQ:
+	case KW_MINUS_EQ:
+	case KW_ASTERISK_EQ:
+	case KW_SLASH_EQ:
+		return 0;
 	case KW_COMMA: return 1;
 	case KW_LT: return 3;
 	case KW_GT: return 3;
 	case KW_LE: return 3;
 	case KW_GE: return 3;
-	case KW_EQEQ: return 3;
+	case KW_EQ_EQ: return 3;
 	case KW_NE: return 3; 
 	case KW_PLUS: return 10;
 	case KW_MINUS: return 20;
@@ -1393,7 +1402,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		case KW_MINUS:
 			op = BINARY_SUB;
 			break;
-		case KW_EQEQ:
+		case KW_EQ_EQ:
 			op = BINARY_EQ;
 			break;
 		case KW_NE:
@@ -1413,6 +1422,18 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			break;
 		case KW_EQ:
 			op = BINARY_SET;
+			break;
+		case KW_PLUS_EQ:
+			op = BINARY_SET_ADD;
+			break;
+		case KW_MINUS_EQ:
+			op = BINARY_SET_SUB;
+			break;
+		case KW_ASTERISK_EQ:
+			op = BINARY_SET_MUL;
+			break;
+		case KW_SLASH_EQ:
+			op = BINARY_SET_DIV;
 			break;
 		case KW_ASTERISK:
 			op = BINARY_MUL;

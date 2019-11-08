@@ -1029,6 +1029,14 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			s = "=="; break;
 		case BINARY_NE:
 			s = "!="; break;
+		case BINARY_SET_ADD:
+			s = "+="; break;
+		case BINARY_SET_SUB:
+			s = "-="; break;
+		case BINARY_SET_MUL:
+			s = "*="; break;
+		case BINARY_SET_DIV:
+			s = "/="; break;
 		case BINARY_AT_INDEX:
 			cgen_write(g, "(");
 			switch (e->binary.lhs->type.kind) {

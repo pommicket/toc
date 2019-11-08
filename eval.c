@@ -1125,6 +1125,22 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		case BINARY_SET:
 			if (!eval_set(ev, e->binary.lhs, &rhs)) return false;
 			break;
+		case BINARY_SET_ADD:
+		case BINARY_SET_SUB:
+		case BINARY_SET_MUL:
+		case BINARY_SET_DIV: {
+			BinaryOp subop = (BinaryOp)0;
+			switch (e->binary.op) {
+			case BINARY_SET_ADD: subop = BINARY_ADD; break;
+			case BINARY_SET_SUB: subop = BINARY_SUB; break;
+			case BINARY_SET_MUL: subop = BINARY_MUL; break;
+			case BINARY_SET_DIV: subop = BINARY_DIV; break;
+			default: assert(0);
+			}
+			eval_numerical_bin_op(lhs, &e->binary.lhs->type, subop, rhs, &e->binary.rhs->type, v, &e->binary.lhs->type);
+			if (!eval_set(ev, e->binary.lhs, v)) return false;
+			break;
+		} break;
 		case BINARY_AT_INDEX: {
 			void *ptr;
 			Type *type;
