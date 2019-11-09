@@ -294,9 +294,9 @@ typedef struct {
 	size_t offset; /* offset during compile time */
 } Field;
 
-#define TYPE_FLAG_FLEXIBLE 0x01
-#define TYPE_FLAG_RESOLVED 0x02
-#define TYPE_FLAG_STRUCT_FOUND_OFFSETS 0x04
+#define TYPE_IS_FLEXIBLE 0x01
+#define TYPE_IS_RESOLVED 0x02
+#define TYPE_STRUCT_FOUND_OFFSETS 0x04
 
 typedef struct Type {
 	Location where;
@@ -334,8 +334,8 @@ typedef struct Type {
 	};
 } Type;
 
-#define BLOCK_FLAG_FN 0x01
-#define BLOCK_FLAG_FOUND_TYPES 0x02
+#define BLOCK_IS_FN 0x01
+#define BLOCK_FOUND_TYPES 0x02
 typedef struct Block {
 	U16 flags;
 	Location start;
@@ -485,7 +485,7 @@ typedef struct {
 	} c;
 } SliceExpr;
 
-#define EXPR_FLAG_FOUND_TYPE 0x01
+#define EXPR_FOUND_TYPE 0x01
 
 typedef struct Expression {
 	Type type;
@@ -549,13 +549,12 @@ typedef struct Argument {
 	Expression val;
 } Argument;
 
-#define DECL_FLAG_ANNOTATES_TYPE 0x01
-#define DECL_FLAG_CONST 0x02
-#define DECL_FLAG_HAS_EXPR 0x04
-#define DECL_FLAG_FOUND_TYPE 0x08
-#define DECL_FLAG_ERRORED_ABOUT_SELF_REFERENCE 0x10 /* has there been an error about this decl referencing itself? */
-#define DECL_FLAG_FOUND_VAL 0x20
-#define DECL_FLAG_PARAM 0x40 /* is this a parameter declaration? (needed because parameters are immutable) */
+#define DECL_ANNOTATES_TYPE 0x01
+#define DECL_IS_CONST 0x02
+#define DECL_HAS_EXPR 0x04
+#define DECL_FOUND_TYPE 0x08
+#define DECL_ERRORED_ABOUT_SELF_REFERENCE 0x10 /* has there been an error about this decl referencing itself? */
+#define DECL_FOUND_VAL 0x20
 
 /* OPTIM: Instead of using dynamic arrays, do two passes. */
 typedef struct Declaration {
@@ -583,7 +582,7 @@ typedef struct {
 	Expression expr;
 } Return;
 
-#define STMT_FLAG_VOIDED_EXPR 0x01 /* the "4;" in fn () { 4; } is a voided expression, but the "4" in fn () int { 4 } is not */
+#define STMT_VOIDED_EXPR 0x01 /* the "4;" in fn () { 4; } is a voided expression, but the "4" in fn () int { 4 } is not */
 typedef struct Statement {
 	Location where;
 	StatementKind kind;

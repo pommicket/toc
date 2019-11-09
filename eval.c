@@ -92,7 +92,7 @@ static size_t compiler_alignof(Type *t) {
 /* OPTIM: don't do this once per Type, but once per struct */
 static void eval_struct_find_offsets(Type *t) {
 	assert(t->kind == TYPE_STRUCT);
-	if (!(t->flags & TYPE_FLAG_STRUCT_FOUND_OFFSETS)) {
+	if (!(t->flags & TYPE_STRUCT_FOUND_OFFSETS)) {
 		size_t bytes = 0;
 		arr_foreach(t->struc.fields, Field, f) {
 			size_t falign = compiler_alignof(f->type);
@@ -107,7 +107,7 @@ static void eval_struct_find_offsets(Type *t) {
 		size_t align = compiler_alignof(t);
 		bytes += ((align - bytes) % align + align) % align; /* = -bytes mod align */
 		t->struc.size = bytes;
-		t->flags |= TYPE_FLAG_STRUCT_FOUND_OFFSETS;
+		t->flags |= TYPE_STRUCT_FOUND_OFFSETS;
 	}
 }
 
@@ -949,7 +949,7 @@ static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value 
 	eval_binary_bool_op_one(charv, CHAR, op);
 
 #define eval_binary_bool_op_nums_only(op)						\
-	{Type *cast_to =	lhs_type->flags & TYPE_FLAG_FLEXIBLE ?	\
+	{Type *cast_to =	lhs_type->flags & TYPE_IS_FLEXIBLE ?	\
 			rhs_type : lhs_type;								\
 		val_cast(&lhs, lhs_type, &lhs, cast_to);				\
 		val_cast(&rhs, rhs_type, &rhs, cast_to);				\
@@ -1194,7 +1194,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			Value stepval;
 			stepval.i64 = 1;
 			Type i64t;
-			i64t.flags = TYPE_FLAG_RESOLVED;
+			i64t.flags = TYPE_IS_RESOLVED;
 			i64t.kind = TYPE_BUILTIN;
 			i64t.builtin = BUILTIN_I64;
 			if (!eval_expr(ev, ea->range.from, &from)) return false;
@@ -1228,7 +1228,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 					Value rhs = to;
 					assert(ea->type.kind == TYPE_BUILTIN);
 					Type boolt;
-					boolt.flags = TYPE_FLAG_RESOLVED;
+					boolt.flags = TYPE_IS_RESOLVED;
 					boolt.kind = TYPE_BUILTIN;
 					boolt.builtin = BUILTIN_BOOL;
 					Value cont;
@@ -1289,7 +1289,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			default: assert(0); return false;
 			}
 			Type i64t;
-			i64t.flags = TYPE_FLAG_RESOLVED;
+			i64t.flags = TYPE_IS_RESOLVED;
 			i64t.kind = TYPE_BUILTIN;
 			i64t.builtin = BUILTIN_I64;
 			index_val->i64 = 0;
@@ -1336,21 +1336,21 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		if (is_decl) {
 			d = idecl->decl;
 			if (!types_decl(ev->typer, d)) return false;
-			assert(d->type.flags & TYPE_FLAG_RESOLVED);
+			assert(d->type.flags & TYPE_IS_RESOLVED);
 		}
 		if (idecl->flags & IDECL_HAS_VAL) {
 			*v = idecl->val;
-		} else if (is_decl && (d->flags & DECL_FLAG_CONST)) {
-			if (!(d->flags & DECL_FLAG_FOUND_VAL)) {
+		} else if (is_decl && (d->flags & DECL_IS_CONST)) {
+			if (!(d->flags & DECL_FOUND_VAL)) {
 				if (!eval_expr(ev, &d->expr, &d->val)) return false;
-				d->flags |= DECL_FLAG_FOUND_VAL;
+				d->flags |= DECL_FOUND_VAL;
 			}
 			int index = ident_index_in_decl(e->ident, d);
 			assert(index != -1);
 			if (e->type.kind == TYPE_TYPE) {
 				/* set v to a user type, not the underlying type */
 				v->type = evalr_malloc(ev, sizeof *v->type); /* TODO: fix this (free eventually) */
-				v->type->flags = TYPE_FLAG_RESOLVED;
+				v->type->flags = TYPE_IS_RESOLVED;
 				v->type->kind = TYPE_USER;
 				v->type->user.decl = d;
 				v->type->user.index = index;
@@ -1504,16 +1504,16 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 }
 
 static bool eval_decl(Evaluator *ev, Declaration *d) {
-	int has_expr = d->flags & DECL_FLAG_HAS_EXPR;
-	int is_const = d->flags & DECL_FLAG_CONST;
+	int has_expr = d->flags & DECL_HAS_EXPR;
+	int is_const = d->flags & DECL_IS_CONST;
 	Value val = {0};
 
 	if (has_expr) {
 		if (is_const) {
-			if (!(d->flags & DECL_FLAG_FOUND_VAL)) {
+			if (!(d->flags & DECL_FOUND_VAL)) {
 				if (!eval_expr(ev, &d->expr, &d->val))
 					return false;
-				d->flags |= DECL_FLAG_FOUND_VAL;
+				d->flags |= DECL_FOUND_VAL;
 			}
 		} else {
 			/* TODO: tuples allocated here will never be freed! */

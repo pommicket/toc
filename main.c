@@ -7,8 +7,7 @@ compile-time arguments for functions returning tuples
 don't allow pointers to functions with compile-time arguments
 don't allow while {3; 5} (once break is added)
 any odd number of "s for a string
-modifiable strings:
-s := ["sakjdfhkjh ksjdahfkjsd ahs ahdf hsdaf khsadkjfh"];
+modifiable string literals
 unicode variable names (cgen support)
 make sure futurely/currently-declared types are only used by pointer/slice
 allow omission of trailing ; in foo @= fn() {}?
@@ -92,7 +91,7 @@ int main(int argc, char **argv) {
 	evalr_create(&ev, &tr);
 	typer_create(&tr, &ev);
 
-	if (!block_enter(NULL, f.stmts, SCOPE_FLAG_CHECK_REDECL)) /* enter global scope */
+	if (!block_enter(NULL, f.stmts, SCOPE_CHECK_REDECL)) /* enter global scope */
 		return false;
 
 	if (!types_file(&tr, &f)) {

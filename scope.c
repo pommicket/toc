@@ -1,4 +1,4 @@
-#define SCOPE_FLAG_CHECK_REDECL 0x0001
+#define SCOPE_CHECK_REDECL 0x0001
 
 
 static void val_free(Value *v, Type *t);
@@ -7,7 +7,7 @@ static bool add_ident_decls(Block *b, Declaration *d, U32 flags) {
 	bool ret = true;
 	arr_foreach(d->idents, Identifier, ident) {
 		IdentDecl *decls = (*ident)->decls;
-		if ((flags & SCOPE_FLAG_CHECK_REDECL) && arr_len(decls)) {
+		if ((flags & SCOPE_CHECK_REDECL) && arr_len(decls)) {
 			/* check that it hasn't been declared in this block */
 			IdentDecl *prev = arr_last(decls);
 			if (prev->scope == b) {
@@ -32,7 +32,7 @@ static void remove_ident_decls(Block *b, Declaration *d) {
 		if (last_decl && last_decl->scope == b) {
 			if ((last_decl->flags & IDECL_HAS_VAL)
 				/* don't free const vals (there's only one per decl) */
-				&& !(last_decl->decl->flags & DECL_FLAG_CONST)) {
+				&& !(last_decl->decl->flags & DECL_IS_CONST)) {
 				val_free(&last_decl->val, is_tuple ? &d->type.tuple[i++] : &d->type);
 			}
 			arr_remove_last(decls); /* remove that declaration */

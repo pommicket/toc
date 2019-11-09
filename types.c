@@ -25,11 +25,11 @@ static inline bool type_is_builtin(Type *t, BuiltinType b) {
 static bool type_eq(Type *a, Type *b) {
 	if (a->kind == TYPE_UNKNOWN || b->kind == TYPE_UNKNOWN)
 		return true; /* allow things such as 3 + #C("5") */
-	assert(a->flags & TYPE_FLAG_RESOLVED);
-	assert(b->flags & TYPE_FLAG_RESOLVED);
+	assert(a->flags & TYPE_IS_RESOLVED);
+	assert(b->flags & TYPE_IS_RESOLVED);
 	if (a->kind != b->kind) return false;
-	if (a->flags & TYPE_FLAG_FLEXIBLE) {
-		if (b->flags & TYPE_FLAG_FLEXIBLE) return true;
+	if (a->flags & TYPE_IS_FLEXIBLE) {
+		if (b->flags & TYPE_IS_FLEXIBLE) return true;
 		assert(a->kind == TYPE_BUILTIN);
 		
 		if (type_builtin_is_float(a->builtin)) {
@@ -38,7 +38,7 @@ static bool type_eq(Type *a, Type *b) {
 		assert(a->builtin == BUILTIN_I64);
 		return type_builtin_is_numerical(b->builtin);
 	}
-	if (b->flags & TYPE_FLAG_FLEXIBLE) {
+	if (b->flags & TYPE_IS_FLEXIBLE) {
 		Type *tmp = a;
 		a = b;
 		b = tmp;
@@ -104,7 +104,7 @@ static bool expr_arr_must_mut(Expression *e) {
 		IdentDecl *idecl = ident_decl(e->ident);
 		if (idecl->kind == IDECL_DECL) {
 			Declaration *d = idecl->decl;
-			if (d->flags & DECL_FLAG_CONST) {
+			if (d->flags & DECL_IS_CONST) {
 				err_print(e->where, "Cannot modify a constant array.");
 				return false;
 			}
@@ -163,7 +163,7 @@ static bool expr_must_lval(Expression *e) {
 		assert(id_decl);
 		if (id_decl->kind == IDECL_DECL) {
 			Declaration *d = id_decl->decl;
-			if (d->flags & DECL_FLAG_CONST) {
+			if (d->flags & DECL_IS_CONST) {
 				char *istr = ident_to_str(e->ident);
 				err_print(e->where, "Use of constant %s as a non-constant expression.", istr);
 				info_print(d->where, "%s was declared here.", istr);
@@ -268,12 +268,12 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 		bool captured = false;
 		if (decl->scope != NULL)
 			for (Block *block = tr->block; block != decl->scope; block = block->parent) {
-				if (block->flags & BLOCK_FLAG_FN) {
+				if (block->flags & BLOCK_IS_FN) {
 					captured = true;
 					break;
 				}
 			}
-		if (captured && !(d->flags & DECL_FLAG_CONST)) {
+		if (captured && !(d->flags & DECL_IS_CONST)) {
 			err_print(where, "Variables cannot be captured into inner functions (but constants can).");
 			return false;
 		}
@@ -281,22 +281,22 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 		typedef Declaration *DeclarationPtr;
 		arr_foreach(tr->in_decls, DeclarationPtr, in_decl) {
 			if (d == *in_decl) {
-				assert(d->flags & DECL_FLAG_HAS_EXPR); /* we can only be in decls with an expr */
+				assert(d->flags & DECL_HAS_EXPR); /* we can only be in decls with an expr */
 				if (d->expr.kind != EXPR_FN) { /* it's okay if a function references itself */
 					/* if we've complained about it before when we were figuring out the type, don't complain again */
-					if (!(d->flags & DECL_FLAG_ERRORED_ABOUT_SELF_REFERENCE)) {
+					if (!(d->flags & DECL_ERRORED_ABOUT_SELF_REFERENCE)) {
 						char *s = ident_to_str(i);
 						err_print(where, "Use of identifier %s in its own declaration.", s);
 						free(s);
 						info_print(d->where, "Declaration was here.");
-						d->flags |= DECL_FLAG_ERRORED_ABOUT_SELF_REFERENCE;
+						d->flags |= DECL_ERRORED_ABOUT_SELF_REFERENCE;
 					}
 					return false;
 				}
 			}
 		}
 	
-		if (d->flags & DECL_FLAG_FOUND_TYPE) {
+		if (d->flags & DECL_FOUND_TYPE) {
 			if (d->type.kind == TYPE_TUPLE) {
 				/* get correct item in tuple */
 				long index = 0;
@@ -313,7 +313,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 			}
 			return true;
 		} else {
-			if ((d->flags & DECL_FLAG_HAS_EXPR) && (d->expr.kind == EXPR_FN)) {
+			if ((d->flags & DECL_HAS_EXPR) && (d->expr.kind == EXPR_FN)) {
 				/* allow using a function before declaring it */
 				if (!type_of_fn(tr, &d->expr, t)) return false;
 				return true;
@@ -365,7 +365,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 /* fixes the type (replaces [5+3]int with [8]int, etc.) */
 static bool type_resolve(Typer *tr, Type *t, Location where) {
 	Evaluator *ev = tr->evalr;
-	if (t->flags & TYPE_FLAG_RESOLVED) return true;
+	if (t->flags & TYPE_IS_RESOLVED) return true;
 	switch (t->kind) {
 	case TYPE_ARR: {
 		/* it's an array */
@@ -422,7 +422,7 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 			return false;
 		break;
 	case TYPE_USER: {
-		t->flags |= TYPE_FLAG_RESOLVED; /* pre-resolve type to avoid infinite recursion */
+		t->flags |= TYPE_IS_RESOLVED; /* pre-resolve type to avoid infinite recursion */
 		/* find declaration */
 		Identifier ident = t->user.ident;
 		IdentDecl *idecl = ident_decl(ident);
@@ -465,7 +465,7 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 	case TYPE_BUILTIN:
 		break;
 	}
-	t->flags |= TYPE_FLAG_RESOLVED;
+	t->flags |= TYPE_IS_RESOLVED;
 	return true;
 }
 
@@ -578,11 +578,11 @@ static Status type_cast_status(Type *from, Type *to) {
 }
 
 static bool types_expr(Typer *tr, Expression *e) {
-	if (e->flags & EXPR_FLAG_FOUND_TYPE) return true;
+	if (e->flags & EXPR_FOUND_TYPE) return true;
 	Type *t = &e->type;
 	t->flags = 0;
 	t->kind = TYPE_UNKNOWN; /* default to unknown type (in the case of an error) */
-	e->flags |= EXPR_FLAG_FOUND_TYPE; /* even if failed, pretend we found the type */
+	e->flags |= EXPR_FOUND_TYPE; /* even if failed, pretend we found the type */
 	bool success = true;
 	switch (e->kind) {
 	case EXPR_FN: {
@@ -602,7 +602,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			tr->ret_type = t->fn.types[0];
 		}
 		tr->can_ret = true;
-		if (!fn_enter(f, SCOPE_FLAG_CHECK_REDECL))
+		if (!fn_enter(f, SCOPE_CHECK_REDECL))
 			return false;
 		bool block_success = true;
 		block_success = types_block(tr, &e->fn.body);
@@ -656,20 +656,20 @@ static bool types_expr(Typer *tr, Expression *e) {
 	case EXPR_LITERAL_INT:
 	    t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_I64;
-		t->flags |= TYPE_FLAG_FLEXIBLE;
+		t->flags |= TYPE_IS_FLEXIBLE;
 		break;
 	case EXPR_LITERAL_STR:
 		t->kind = TYPE_SLICE;
 		t->slice = typer_malloc(tr, sizeof *t->slice);
-		t->slice->flags = TYPE_FLAG_RESOLVED;
+		t->slice->flags = TYPE_IS_RESOLVED;
 		t->slice->kind = TYPE_BUILTIN;
 		t->slice->builtin = BUILTIN_CHAR;
-		t->flags |= TYPE_FLAG_RESOLVED;
+		t->flags |= TYPE_IS_RESOLVED;
 		break;
 	case EXPR_LITERAL_FLOAT:
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_F32;
-		t->flags |= TYPE_FLAG_FLEXIBLE;
+		t->flags |= TYPE_IS_FLEXIBLE;
 		break;
 	case EXPR_LITERAL_BOOL:
 		t->kind = TYPE_BUILTIN;
@@ -682,7 +682,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 	case EXPR_EACH: {
 		EachExpr *ea = &e->each;
 		*(Expression **)arr_add(&tr->in_expr_decls) = e;
-		if (!each_enter(e, SCOPE_FLAG_CHECK_REDECL)) return false;
+		if (!each_enter(e, SCOPE_CHECK_REDECL)) return false;
 		if (ea->flags & EACH_IS_RANGE) {
 			/* TODO: allow user-defined numerical types */
 			if (!types_expr(tr, ea->range.from)) return false;
@@ -733,7 +733,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				return false;
 			}
 			
-			if ((ea->type.flags & TYPE_FLAG_FLEXIBLE) && ea->range.step)
+			if ((ea->type.flags & TYPE_IS_FLEXIBLE) && ea->range.step)
 				ea->type = ea->range.step->type;
 			
 			if (ea->range.to && !type_eq(&ea->type, &ea->range.to->type)) {
@@ -744,7 +744,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				return false;
 			}
 			
-			if ((ea->type.flags & TYPE_FLAG_FLEXIBLE) && ea->range.to)
+			if ((ea->type.flags & TYPE_IS_FLEXIBLE) && ea->range.to)
 				ea->type = ea->range.to->type;
 			
 		} else {
@@ -773,7 +773,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			}
 			Type ptr_type;
 			if (uses_ptr) {
-				ptr_type.flags = TYPE_FLAG_RESOLVED;
+				ptr_type.flags = TYPE_IS_RESOLVED;
 				ptr_type.kind = TYPE_PTR;
 				ptr_type.ptr = iter_type;
 				iter_type = &ptr_type;
@@ -960,7 +960,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			IdentDecl *decl = ident_decl(f->ident);
 			assert(decl);
 			if (decl->kind == IDECL_DECL) {
-				if (decl->decl->flags & DECL_FLAG_HAS_EXPR) {
+				if (decl->decl->flags & DECL_HAS_EXPR) {
 					Expression *expr = &decl->decl->expr;
 					if (expr->kind == EXPR_FN)
 						fn_decl = &decl->decl->expr.fn;
@@ -1025,7 +1025,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				assert(fn_decl); /* we can only miss an arg if we're using named/optional args */
 				
 				arr_foreach(fn_decl->params, Declaration, param) {
-					bool is_required = !(param->flags & DECL_FLAG_HAS_EXPR);
+					bool is_required = !(param->flags & DECL_HAS_EXPR);
 					arr_foreach(param->idents, Identifier, ident) {
 						if (index == i) {
 							if (is_required) {
@@ -1046,7 +1046,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			/* evaluate compile-time arguments */
 			size_t i = 0;
 			arr_foreach(fn_decl->params, Declaration, param) {
-				if (param->flags & DECL_FLAG_CONST) {
+				if (param->flags & DECL_IS_CONST) {
 					arr_foreach(param->idents, Identifier, ident) {
 						Value arg_val;
 						if (!eval_expr(tr->evalr, &new_args[i], &arg_val)) {
@@ -1272,8 +1272,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 					t->builtin = BUILTIN_BOOL;
 					break;
 				default: {
-					int lhs_is_flexible = lhs_type->flags & TYPE_FLAG_FLEXIBLE;
-					int rhs_is_flexible = rhs_type->flags & TYPE_FLAG_FLEXIBLE;
+					int lhs_is_flexible = lhs_type->flags & TYPE_IS_FLEXIBLE;
+					int rhs_is_flexible = rhs_type->flags & TYPE_IS_FLEXIBLE;
 					if (lhs_is_flexible && rhs_is_flexible) {
 						/* both flexible */
 						*t = *lhs_type;
@@ -1469,17 +1469,17 @@ static bool types_expr(Typer *tr, Expression *e) {
 		assert(0);
 		return false;
 	}
-    e->type.flags |= TYPE_FLAG_RESOLVED;
+    e->type.flags |= TYPE_IS_RESOLVED;
 	return true;
 }
 
 static bool types_block(Typer *tr, Block *b) {
-	if (b->flags & BLOCK_FLAG_FOUND_TYPES)
+	if (b->flags & BLOCK_FOUND_TYPES)
 		return true;
 	bool success = true;
 	Block *prev_block = tr->block;
 	tr->block = b;
-	if (!block_enter(b, b->stmts, SCOPE_FLAG_CHECK_REDECL)) return false;
+	if (!block_enter(b, b->stmts, SCOPE_CHECK_REDECL)) return false;
 	arr_foreach(b->stmts, Statement, s) {
 		if (!types_stmt(tr, s))
 			success = false;
@@ -1494,16 +1494,16 @@ static bool types_block(Typer *tr, Block *b) {
 	}
 	block_exit(b, b->stmts);
 	tr->block = prev_block;
-	b->flags |= BLOCK_FLAG_FOUND_TYPES;
+	b->flags |= BLOCK_FOUND_TYPES;
 	return success;
 }
 
 static bool types_decl(Typer *tr, Declaration *d) {
 	bool success = true;
-	if (d->flags & DECL_FLAG_FOUND_TYPE) return true;
+	if (d->flags & DECL_FOUND_TYPE) return true;
 	Declaration **dptr = typer_arr_add(tr, &tr->in_decls);
 	*dptr = d;
-	if (d->flags & DECL_FLAG_ANNOTATES_TYPE) {
+	if (d->flags & DECL_ANNOTATES_TYPE) {
 		/* type supplied */
 		assert(d->type.kind != TYPE_VOID); /* there's no way to annotate void */
 		if (!type_resolve(tr, &d->type, d->where)) {
@@ -1511,12 +1511,12 @@ static bool types_decl(Typer *tr, Declaration *d) {
 			goto ret;
 		}
 	}
-	if (d->flags & DECL_FLAG_HAS_EXPR) {
+	if (d->flags & DECL_HAS_EXPR) {
 		if (!types_expr(tr, &d->expr)) {
 			success = false;
 			goto ret;
 		}
-		if (d->flags & DECL_FLAG_ANNOTATES_TYPE) {
+		if (d->flags & DECL_ANNOTATES_TYPE) {
 			if (!type_must_eq(d->expr.where, &d->type, &d->expr.type)) {
 				success = false;
 				goto ret;
@@ -1529,22 +1529,22 @@ static bool types_decl(Typer *tr, Declaration *d) {
 				goto ret;
 			}
 			d->type = d->expr.type;
-			d->type.flags &= (uint16_t)~(uint16_t)TYPE_FLAG_FLEXIBLE; /* x := 5; => x is not flexible */
+			d->type.flags &= (uint16_t)~(uint16_t)TYPE_IS_FLEXIBLE; /* x := 5; => x is not flexible */
 		}
-		if ((d->flags & DECL_FLAG_CONST) || tr->block == NULL) {
-			if (!(d->flags & DECL_FLAG_FOUND_VAL)) {
+		if ((d->flags & DECL_IS_CONST) || tr->block == NULL) {
+			if (!(d->flags & DECL_FOUND_VAL)) {
 				if (!eval_expr(tr->evalr, &d->expr, &d->val)) {
 					success = false;
 					goto ret;
 				}
-				d->flags |= DECL_FLAG_FOUND_VAL;
+				d->flags |= DECL_FOUND_VAL;
 			}
 		}
 		for (size_t i = 0; i < arr_len(d->idents); i++) {
 			Type *t = d->type.kind == TYPE_TUPLE ? &d->type.tuple[i] : &d->type;
 			Value *val = d->type.kind == TYPE_TUPLE ? &d->val.tuple[i] : &d->val;
 			if (t->kind == TYPE_TYPE) {
-				if (!(d->flags & DECL_FLAG_CONST)) {
+				if (!(d->flags & DECL_IS_CONST)) {
 					err_print(d->where, "Cannot declare non-constant type.");
 					success = false;
 					goto ret;
@@ -1570,7 +1570,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 	}
  ret:
 	/* pretend we found the type even if we didn't to prevent too many errors */
-	d->flags |= DECL_FLAG_FOUND_TYPE;
+	d->flags |= DECL_FOUND_TYPE;
 	if (!success) {
 		/* use unknown type if we didn't get the type */
 		d->type.flags = 0;

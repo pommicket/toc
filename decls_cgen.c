@@ -52,7 +52,7 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 		if (!cgen_decls_block(g, &d->expr.fn.body))
 			return false;
 		fn_exit(&d->expr.fn);
-	} else if (d->flags & DECL_FLAG_HAS_EXPR) {
+	} else if (d->flags & DECL_HAS_EXPR) {
 		if (!cgen_decls_expr(g, &d->expr))
 			return false;
 	}

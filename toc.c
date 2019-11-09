@@ -26,12 +26,12 @@
 static Type *type_user_underlying(Type *t) {
 	assert(t->kind == TYPE_USER);
 	Declaration *d = t->user.decl;
-	assert(d->flags & DECL_FLAG_FOUND_VAL);
+	assert(d->flags & DECL_FOUND_VAL);
 	return (d->type.kind == TYPE_TUPLE ? d->val.tuple[t->user.index] : d->val).type;
 }
 
 static Type *type_inner(Type *t) {
-	assert(t->flags & TYPE_FLAG_RESOLVED);
+	assert(t->flags & TYPE_IS_RESOLVED);
 	while (t->kind == TYPE_USER) {
 		t = type_user_underlying(t);
 	}

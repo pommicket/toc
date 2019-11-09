@@ -190,7 +190,7 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 	}
 	case TYPE_ARR: {
 		size_t written = str_copy(buffer, bufsize, "[");
-		if (t->flags & TYPE_FLAG_RESOLVED) {
+		if (t->flags & TYPE_IS_RESOLVED) {
 			snprintf(buffer + written, bufsize - written, UINTEGER_FMT, t->arr.n);
 			written += strlen(buffer + written);
 		} else {
@@ -224,7 +224,7 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 	case TYPE_TYPE:
 		return str_copy(buffer, bufsize, "<type>");
 	case TYPE_USER: {
-		char *ident_str = ident_to_str((t->flags & TYPE_FLAG_RESOLVED)
+		char *ident_str = ident_to_str((t->flags & TYPE_IS_RESOLVED)
 									   ? t->user.decl->idents[t->user.index]
 									   : t->user.ident);
 		size_t ret = str_copy(buffer, bufsize, ident_str);
@@ -498,12 +498,12 @@ static bool parse_type(Parser *p, Type *type) {
 					if (!parse_decl(p, &field_decl, DECL_END_SEMICOLON, 0)) {
 						return false;
 					}
-					if (field_decl.flags & DECL_FLAG_CONST) {
+					if (field_decl.flags & DECL_IS_CONST) {
 						/* TODO */
 						err_print(field_decl.where, "Constant struct members are not supported (yet).");
 						return false;
 					}
-					if (field_decl.flags & DECL_FLAG_HAS_EXPR) {
+					if (field_decl.flags & DECL_HAS_EXPR) {
 						err_print(field_decl.where, "struct members cannot have initializers.");
 						return false;
 					}
@@ -712,7 +712,7 @@ static bool parse_block(Parser *p, Block *b) {
 			
 			if (token_is_kw(t->token, KW_RBRACE)) {
 				if (success && stmt->kind == STMT_EXPR) {
-					if (!(stmt->flags & STMT_FLAG_VOIDED_EXPR)) {
+					if (!(stmt->flags & STMT_VOIDED_EXPR)) {
 						b->ret_expr = parser_new_expr(p);
 						*b->ret_expr = stmt->expr;
 						arr_remove_last(&b->stmts); /* only keep this expression in the return value */
@@ -722,7 +722,7 @@ static bool parse_block(Parser *p, Block *b) {
 			}
 			
 			if (success) {
-				if (stmt->kind == STMT_EXPR && !(stmt->flags & STMT_FLAG_VOIDED_EXPR)) {
+				if (stmt->kind == STMT_EXPR && !(stmt->flags & STMT_VOIDED_EXPR)) {
 					/* in theory, this should never happen right now */
 					err_print(stmt->where, "Non-voided expression is not the last statement in a block (you might want to add a ';' to the end of this statement).");
 					return false;
@@ -786,8 +786,6 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 	} else {
 		if (!parse_decl_list(p, &f->params, DECL_END_RPAREN_COMMA))
 		    return false;
-		arr_foreach(f->params, Declaration, pdecl)
-			pdecl->flags |= DECL_FLAG_PARAM;
 	}
 	
 	if (t->token->kind == TOKEN_EOF) {
@@ -824,7 +822,7 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 	}
 	if (!parse_block(p, &f->body))
 		ret = false;
-	f->body.flags |= BLOCK_FLAG_FN;
+	f->body.flags |= BLOCK_IS_FN;
 	return ret;
 }
 
@@ -1715,7 +1713,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_
 			break;
 		}
 		if (token_is_kw(t->token, KW_AT)) {
-			d->flags |= DECL_FLAG_CONST;
+			d->flags |= DECL_IS_CONST;
 			t->token++;
 			break;
 		}
@@ -1731,7 +1729,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_
 
 	bool annotates_type = !token_is_kw(t->token, KW_EQ) && !token_is_kw(t->token, KW_COMMA);
 	if (annotates_type) {
-		d->flags |= DECL_FLAG_ANNOTATES_TYPE;
+		d->flags |= DECL_ANNOTATES_TYPE;
 		Type type;
 		if (!parse_type(p, &type)) {
 		    goto ret_false;
@@ -1751,7 +1749,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_
 			
 	if (token_is_kw(t->token, KW_EQ)) {
 		t->token++;
-		d->flags |= DECL_FLAG_HAS_EXPR;
+		d->flags |= DECL_HAS_EXPR;
 		uint16_t expr_flags = 0;
 		if (ends_with == DECL_END_RPAREN_COMMA)
 			expr_flags |= EXPR_CAN_END_WITH_COMMA;
@@ -1777,7 +1775,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_
 	    goto ret_false;
 	}
 	
-	if ((d->flags & DECL_FLAG_CONST) && !(d->flags & DECL_FLAG_HAS_EXPR) && !(flags & PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR)) {
+	if ((d->flags & DECL_IS_CONST) && !(d->flags & DECL_HAS_EXPR) && !(flags & PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR)) {
 		t->token--;
 		/* disallowed constant without an expression, e.g. x @ int; */
 		tokr_err(t, "You must have an expression at the end of this constant declaration.");
@@ -1852,7 +1850,7 @@ static bool parse_stmt(Parser *p, Statement *s) {
 			return false;
 		}
 		if (is_vbs || token_is_kw(end, KW_SEMICOLON)) {
-			s->flags |= STMT_FLAG_VOIDED_EXPR;
+			s->flags |= STMT_VOIDED_EXPR;
 		}
 	    bool success = parse_expr(p, &s->expr, end);
 		
@@ -2130,15 +2128,15 @@ static void fprint_decl(FILE *out, Declaration *d) {
 		if (ident != d->idents) fprintf(out, ", ");
 		fprint_ident(out, *ident);
 	}
-	if (d->flags & DECL_FLAG_CONST) {
+	if (d->flags & DECL_IS_CONST) {
 		fprintf(out, "@");
 	} else {
 		fprintf(out, ":");
 	}
-	if ((d->flags & DECL_FLAG_FOUND_TYPE) || (d->flags & DECL_FLAG_ANNOTATES_TYPE)) {
+	if ((d->flags & DECL_FOUND_TYPE) || (d->flags & DECL_ANNOTATES_TYPE)) {
 		fprint_type(out, &d->type);
 	}
-	if (d->flags & DECL_FLAG_HAS_EXPR) {
+	if (d->flags & DECL_HAS_EXPR) {
 		fprintf(out, "=");
 		fprint_expr(out, &d->expr);
 	}
@@ -2146,7 +2144,7 @@ static void fprint_decl(FILE *out, Declaration *d) {
 
 static void fprint_stmt(FILE *out, Statement *s) {
 	PARSE_PRINT_LOCATION(s->where);
-	if (s->flags & STMT_FLAG_VOIDED_EXPR)
+	if (s->flags & STMT_VOIDED_EXPR)
 		fprintf(out, "(void)");
 	switch (s->kind) {
 	case STMT_DECL:
