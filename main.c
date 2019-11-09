@@ -1,6 +1,9 @@
 /* 
 TODO:
 compile-time arguments
+evaluate default arguments
+compile-time arguments for out parameter functions
+compile-time arguments for functions returning tuples
 don't allow pointers to functions with compile-time arguments
 don't allow while {3; 5} (once break is added)
 any odd number of "s for a string

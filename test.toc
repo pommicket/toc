@@ -4,31 +4,13 @@ puti @= fn(x: int) {
 ");
 };
 
-putf @= fn(x: float) {
-	 #C("printf(\"%f\\n\", (double)x);
-");
-};
-
-sum @= fn(x: []int) int {
-	total := 0;
-	p := &x[0];
-	while p < &x[0] + x.len {
-		  total += *p;
-		  p += 1;
-	}
-	total
-};
-
-some_sum @= fn() int {
-	 foo := new(int, 10);
-	 each _, i := foo {
-	 	  foo[i] = i;
-	 }
-	 sum(foo)
-};
+// putf @= fn(x: float) {
+// 	 #C("printf(\"%f\\n\", (double)x);
+// ");
+// };
 
 main @= fn() {
-	 puti(some_sum());
-	 X @= some_sum();
-	 puti(X);
+	 b @= fn(x: int) int { 2*x };
+	 puti(b(10));
 };
+

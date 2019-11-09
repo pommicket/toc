@@ -1042,6 +1042,31 @@ static bool types_expr(Typer *tr, Expression *e) {
 				}
 			}
 		}
+		if (fn_decl) {
+			/* evaluate compile-time arguments */
+			size_t i = 0;
+			arr_foreach(fn_decl->params, Declaration, param) {
+				if (param->flags & DECL_FLAG_CONST) {
+					arr_foreach(param->idents, Identifier, ident) {
+						Value arg_val;
+						if (!eval_expr(tr->evalr, &new_args[i], &arg_val)) {
+							if (tr->evalr->enabled) {
+								char *s = ident_to_str(*ident);
+								info_print(new_args[i].where, "(error occured while trying to evaluate compile-time argument, %s)", s);
+								info_print(param->where, "(%s was declared constant here)", s);
+								free(s);
+							}
+							return false;
+						}
+						new_args[i].kind = EXPR_VAL;
+						new_args[i].val = arg_val;
+						i++;
+					}
+				} else {
+					i += arr_len(param->idents);
+				}
+			}
+		}
 		*t = *ret_type;
 		c->arg_exprs = new_args;
 		break;

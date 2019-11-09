@@ -3,72 +3,15 @@ static bool cgen_decls_block(CGenerator *g, Block *b);
 
 static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 	switch (e->kind) {
-	case EXPR_UNARY_OP:
-		if (!cgen_decls_expr(g, e->unary.of))
-			return false;
-		break;
-	case EXPR_BINARY_OP:
-		if (!cgen_decls_expr(g, e->binary.lhs))
-			return false;
-		
-		if (e->binary.op != BINARY_DOT)
-			if (!cgen_decls_expr(g, e->binary.rhs))
-			return false;
-		break;
-	case EXPR_CAST:
-		if (!cgen_decls_expr(g, e->cast.expr))
-			return false;
-		break;
 	case EXPR_CALL:
-		if (!cgen_decls_expr(g, e->call.fn))
-			return false;
-		arr_foreach(e->call.arg_exprs, Expression, a)
-			if (!cgen_decls_expr(g, a))
-				return false;
-		break;
-	case EXPR_BLOCK:
-		if (!cgen_decls_block(g, &e->block))
-			return false;
-		break;
-	case EXPR_IF:
-		if (e->if_.cond)
-			if (!cgen_decls_expr(g, e->if_.cond))
-				return false;
-		if (!cgen_decls_block(g, &e->if_.body))
-			return false;
-		if (e->if_.next_elif)
-			if (!cgen_decls_expr(g, e->if_.next_elif))
-				return false;
-		break;
-	case EXPR_WHILE:
-		if (e->while_.cond)
-			if (!cgen_decls_expr(g, e->while_.cond))
-				return false;
-		if (!cgen_decls_block(g, &e->while_.body))
-			return false;
-		break;
-	case EXPR_EACH: {
-		EachExpr *ea = &e->each;
-		if (ea->flags & EACH_IS_RANGE) {
-			if (!cgen_decls_expr(g, ea->range.from))
-				return false;
-			if (ea->range.to && !cgen_decls_expr(g, ea->range.to))
-				return false;
-			/* step is a value, not an expression */
-		} else {
-			if (!cgen_decls_expr(g, ea->of))
-				return false;
+		if (e->call.fn->kind == EXPR_IDENT) {
+			IdentDecl *idecl = ident_decl(e->call.fn->ident);
+			if (idecl->kind == IDECL_DECL &&
+				idecl->decl->expr.kind == EXPR_FN) {
+				/* directly calling a function; might need to generate a copy of this function */
+				/* TODO ASDF */
+			}
 		}
-	} break;
-	case EXPR_TUPLE:
-		arr_foreach(e->tuple, Expression, x)
-			if (!cgen_decls_expr(g, x))
-				return false;
-		break;
-	case EXPR_SLICE:
-		if (!cgen_decls_expr(g, e->slice.of)) return false;
-		if (e->slice.from && !cgen_decls_expr(g, e->slice.from)) return false;
-		if (e->slice.to && !cgen_decls_expr(g, e->slice.to)) return false;
 		break;
 	case EXPR_FN:
 		e->fn.c.name = NULL;
@@ -78,24 +21,13 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 			return false;
 		cgen_write(g, ";");
 		cgen_nl(g);
-		if (!cgen_decls_block(g, &e->fn.body))
-			return false;
 		fn_exit(&e->fn);
 		break;
-	case EXPR_TYPE:
-	case EXPR_VAL:
-	case EXPR_C:
-	case EXPR_DSIZEOF:
-	case EXPR_DALIGNOF:
-	case EXPR_NEW:
-	case EXPR_IDENT:
-	case EXPR_LITERAL_BOOL:
-	case EXPR_LITERAL_INT:
-	case EXPR_LITERAL_STR:
-	case EXPR_LITERAL_CHAR:
-	case EXPR_LITERAL_FLOAT:
+	default:
 		break;
 	}
+	cgen_recurse_subexprs(g, e, cgen_decls_expr, cgen_decls_block);
+	
 	return true;
 }
 
@@ -148,12 +80,6 @@ static bool cgen_decls_stmt(CGenerator *g, Statement *s) {
 
 static bool cgen_decls_file(CGenerator *g, ParsedFile *f) {
 	cgen_write(g, "/* declarations */\n");
-	arr_foreach(f->stmts, Statement, s) {
-		/* if only (you need to recurse!) */
-		/* OPTIM?? */
-		if (s->kind == STMT_DECL) {
-		}
-	}
 	arr_foreach(f->stmts, Statement, s) {
 		if (!cgen_decls_stmt(g, s))
 			return false;
