@@ -1,10 +1,12 @@
 /*
-hash tables are initialized by setting them to {0}, e.g.
-HashTable x = {0};
+  hash tables are initialized by setting them to {0}, e.g.
+  HashTable x = {0};
 */
 static void *val_get_ptr(Value *v, Type *t);
 static U64 val_hash(Value *v, Type *t);
 static size_t compiler_sizeof(Type *t);
+static bool val_eq(Value *u, Value *v, Type *t);
+static bool type_eq(Type *t1, Type *t2);
 
 static U64 f32_hash(F32 f) {
 	/* OPTIM */
@@ -133,15 +135,89 @@ static U64 val_hash(Value *v, Type *t) {
 	return val_ptr_hash(val_get_ptr(v, t), t);
 }
 
-static bool val_eq(Value *u, Value *v, Type *t) {
-	/* TODO */
+static bool val_ptr_eq(void *u, void *v, Type *t) {
+	switch (t->kind) {
+	case TYPE_BUILTIN:
+		switch (t->builtin) {
+		case BUILTIN_I8: return *(I8 *)u == *(I8 *)v;
+		case BUILTIN_U8: return *(U8 *)u == *(U8 *)v;
+		case BUILTIN_I16: return *(I16 *)u == *(I16 *)v;
+		case BUILTIN_U16: return *(U16 *)u == *(U16 *)v;
+		case BUILTIN_I32: return *(I32 *)u == *(I32 *)v;
+		case BUILTIN_U32: return *(U32 *)u == *(U32 *)v;
+		case BUILTIN_I64: return *(I64 *)u == *(I64 *)v;
+		case BUILTIN_U64: return *(U64 *)u == *(U64 *)v;
+		case BUILTIN_F32: return *(F32 *)u == *(F32 *)v;
+		case BUILTIN_F64: return *(F64 *)u == *(F64 *)v;
+		case BUILTIN_BOOL: return *(bool *)u == *(bool *)v;
+		case BUILTIN_CHAR: return *(char *)u == *(char *)v;
+		}
+		break;
+	case TYPE_VOID:
+		return true;
+	case TYPE_UNKNOWN:
+		return false;
+	case TYPE_FN:
+		return *(FnExpr **)u == *(FnExpr **)v;
+	case TYPE_USER:
+		return val_ptr_eq(u, v, type_inner(t));
+	case TYPE_PTR:
+		return *(void **)u == *(void **)v;
+	case TYPE_TYPE:
+		return type_eq(*(Type **)u, *(Type **)v);
+	case TYPE_TUPLE: {
+		Value *us = *(Value **)u;
+		Value *vs = *(Value **)v;
+	    for (size_t i = 0; i < arr_len(t->tuple); i++) {
+			if (!val_eq(&us[i], &vs[i], &t->tuple[i]))
+				return false;
+		}
+	    return true;
+	}
+	case TYPE_ARR: {
+		U64 size = (U64)compiler_sizeof(t->arr.of);
+		char *uptr = u, *vptr = v;
+		for (U64 i = 0; i < t->arr.n; i++) {
+			if (!val_ptr_eq(uptr, vptr, t->arr.of))
+				return false;
+			uptr += size;
+			vptr += size;
+		}
+		return true;
+	}
+	case TYPE_SLICE: {
+		U64 size = (U64)compiler_sizeof(t->arr.of);
+		Slice *r = u;
+		Slice *s = v;
+		if (r->n != s->n) return false;
+		char *sptr = r->data, *tptr = s->data;
+		for (U64 i = 0; i < (U64)s->n; i++) {
+			if (!val_ptr_eq(sptr, tptr, t->slice))
+				return false;
+			sptr += size;
+			tptr += size;
+		}
+		return true;
+	}
+	case TYPE_STRUCT:
+		arr_foreach(t->struc.fields, Field, f) {
+			if (!val_ptr_eq((char *)u + f->offset, (char *)v + f->offset, f->type))
+				return false;
+		}
+	    return true;
+	}
+	assert(0);
 	return false;
 }
 
+static bool val_eq(Value *u, Value *v, Type *t) {
+	return val_ptr_eq(val_get_ptr(u, t), val_get_ptr(v, t), t);
+}
+
 /*
-for a value hash table, you must either ALWAYS or NEVER use an allocator 
-all values in the hash table must have the same type.
-returns true iff the value was already present
+  for a value hash table, you must either ALWAYS or NEVER use an allocator 
+  all values in the hash table must have the same type.
+  returns true iff the value was already present
 */
 static bool val_hash_table_adda(Allocator *a, HashTable *h, Value *v, Type *t) {
 	if (h->n * 2 >= h->cap) {

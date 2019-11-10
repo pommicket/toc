@@ -22,8 +22,8 @@ else
 	WARNINGS='-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wno-pointer-to-int-cast -Wno-unused-parameter'
 fi
 
-DEBUG_FLAGS="-O0 -g3 $WARNINGS -std=c11 -DTOC_DEBUG -lm"
-RELEASE_FLAGS="-O3 -s -DNDEBUG $WARNINGS -std=c11 -lm"
+DEBUG_FLAGS="-O0 -g3 $WARNINGS -std=c11 -DTOC_DEBUG"
+RELEASE_FLAGS="-O3 -s -DNDEBUG $WARNINGS -std=c11"
 
 if [ "$1" = "release" ]; then
 	FLAGS="$RELEASE_FLAGS $ADDITIONAL_FLAGS"
