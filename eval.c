@@ -233,6 +233,29 @@ static void u64_to_val(Value *v, BuiltinType v_type, U64 x) {
 		i64_to_val(v, v_type, (I64)x);
 }
 
+/* rerturns a pointer to the underlying data of v, e.g. an I64 * if t is the builtin BUILTIN_I64 */
+static void *val_get_ptr(Value *v, Type *t) {
+	switch (t->kind) {
+	case TYPE_PTR:
+	case TYPE_BUILTIN:
+	case TYPE_TUPLE:
+	case TYPE_VOID:
+	case TYPE_UNKNOWN:
+	case TYPE_FN:
+	case TYPE_SLICE:
+	case TYPE_TYPE:
+		return v;
+	case TYPE_USER:
+		return val_get_ptr(v, type_user_underlying(t));
+	case TYPE_ARR:
+		return v->arr;
+	case TYPE_STRUCT:
+		return v->struc;
+	}
+	assert(0);
+	return NULL;
+}
+
 static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 	switch (t->kind) {
 	case TYPE_VOID:
@@ -269,7 +292,7 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		if (n > 5) n = 5;
 		for (size_t i = 0; i < n; i++) {
 			if (i) fprintf(f, ", ");
-			fprint_val_ptr(f, *(char **)p + i * compiler_sizeof(t->arr.of), t->arr.of);
+			fprint_val_ptr(f, (char *)p + i * compiler_sizeof(t->arr.of), t->arr.of);
 		}
 		if (t->arr.n > n) {
 			fprintf(f, ", ...");
@@ -306,7 +329,7 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 				fprintf(f, ", ");
 			fprint_ident(f, fi->name);
 			fprintf(f, ": ");
-			fprint_val_ptr(f, *(char **)p + fi->offset, fi->type);
+			fprint_val_ptr(f, (char *)p + fi->offset, fi->type);
 		}
 		fprintf(f, "]");
 		break;
@@ -321,7 +344,7 @@ static void fprint_val(FILE *f, Value v, Type *t) {
 		}
 		fprintf(f, ")");
 	} else {
-		fprint_val_ptr(f, &v, t);
+		fprint_val_ptr(f, val_get_ptr(&v, t), t);
 	}
 }
 
@@ -708,7 +731,7 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 static bool eval_val_ptr_at_index(Evaluator *ev, Location where, Value *arr, U64 i, Type *arr_type, Type *idx_type, void **ptr, Type **type) {
 	switch (arr_type->kind) {
 	case TYPE_ARR: {
-		U64 arr_sz = arr_type->arr.n;
+		U64 arr_sz = (U64)arr_type->arr.n;
 		if (i >= arr_sz) {
 			err_print(where, "Array out of bounds (%lu, array size = %lu)\n", (unsigned long)i, (unsigned long)arr_sz);
 			return false;

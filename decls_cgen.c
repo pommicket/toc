@@ -43,16 +43,18 @@ static bool cgen_decls_block(CGenerator *g, Block *b) {
 
 static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 	if (cgen_fn_is_direct(g, d)) {
-		d->expr.fn.c.name = d->idents[0];
-		fn_enter(&d->expr.fn, 0);
-		if (!cgen_fn_header(g, &d->expr.fn, d->where))
-			return false;
-		cgen_write(g, ";");
-		cgen_nl(g);
+		if (!fn_has_any_const_params(&d->expr.fn)) {
+			d->expr.fn.c.name = d->idents[0];
+			fn_enter(&d->expr.fn, 0);
+			if (!cgen_fn_header(g, &d->expr.fn, d->where))
+				return false;
+			cgen_write(g, ";");
+			cgen_nl(g);
+		}
 		if (!cgen_decls_block(g, &d->expr.fn.body))
 			return false;
 		fn_exit(&d->expr.fn);
-	} else if (d->flags & DECL_HAS_EXPR) {
+	} else if ((d->flags & DECL_HAS_EXPR) && !(d->flags & DECL_IS_CONST)) {
 		if (!cgen_decls_expr(g, &d->expr))
 			return false;
 	}

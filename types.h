@@ -22,8 +22,13 @@ typedef int16_t I16;
 typedef int32_t I32;
 typedef int64_t I64;
 
+/* NOTE: if you change these, make sure you change hash_tables.c */
 typedef float F32;
 typedef double F64;
+#define F32_MANT_DIG FLT_MANT_DIG
+#define F32_DIG FLT_DIG
+#define F64_MANT_DIG DBL_MANT_DIG
+#define F64_DIG DBL_DIG
 
 #define F32_FMT "%.16f"
 #define F64_FMT "%.16f"
@@ -454,6 +459,13 @@ typedef struct EachExpr {
 	};
 } EachExpr;
 
+typedef struct {
+	void *data;
+	bool *occupied; /* OPTIM: use bits instead of bytes for bools */
+	U64 n;
+	U64 cap;
+} HashTable;
+
 typedef struct FnExpr {
     struct Declaration *params; /* declarations of the parameters to this function */
     struct Declaration *ret_decls; /* array of decls, if this has named return values. otherwise, NULL */
@@ -463,6 +475,7 @@ typedef struct FnExpr {
 		/* if name = NULL, this is an anonymous function, and id will be the ID of the fn. */
 		Identifier name;
 	    IdentID id;
+		HashTable *instances; /* for fns with co */
 	} c;
 } FnExpr; /* an expression such as fn(x: int) int { 2 * x } */
 

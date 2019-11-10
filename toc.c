@@ -9,19 +9,9 @@
 #include <limits.h>
 #include <inttypes.h>
 #include <stdbool.h>
+#include <float.h>
 
 #include "types.h"
-
-#include "location.c"
-#include "err.c"
-#include "allocator.c"
-#include "arr.c"
-#include "blockarr.c"
-#include "str.c"
-#include "identifiers.c"
-#include "tokenizer.c"
-#include "parse.c"
-#include "scope.c"
 
 static Type *type_user_underlying(Type *t) {
 	assert(t->kind == TYPE_USER);
@@ -37,6 +27,21 @@ static Type *type_inner(Type *t) {
 	}
 	return t;
 }
+
+#include "rand.c"
+#include "location.c"
+#include "err.c"
+#include "allocator.c"
+#include "arr.c"
+#include "blockarr.c"
+#include "str.c"
+#include "hash_tables.c"
+
+#include "identifiers.c"
+#include "tokenizer.c"
+#include "parse.c"
+#include "scope.c"
+
 
 #include "eval.c"
 #include "types.c"

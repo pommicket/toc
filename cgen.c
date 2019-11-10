@@ -1,3 +1,15 @@
+
+static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *ev) {
+	g->outc = out;
+	g->ident_counter = 1; /* some places use 0 to mean no id */
+	g->main_ident = ident_get(ids, "main");
+	g->evalr = ev;
+	g->will_indent = true;
+	g->indent_lvl = 0;
+	g->anon_fns = NULL;
+	g->idents = ids;
+}
+
 static bool cgen_stmt(CGenerator *g, Statement *s);
 #define CGEN_BLOCK_NOENTER 0x01 /* should cgen_block actually enter and exit the block? */
 #define CGEN_BLOCK_NOBRACES 0x02 /* should it use braces? */
@@ -109,16 +121,12 @@ static bool cgen_defs_block(CGenerator *g, Block *b);
 		break;											\
 	}
 
-
-static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *ev) {
-	g->outc = out;
-	g->ident_counter = 1; /* some places use 0 to mean no id */
-	g->main_ident = ident_get(ids, "main");
-	g->evalr = ev;
-	g->will_indent = true;
-	g->indent_lvl = 0;
-	g->anon_fns = NULL;
-	g->idents = ids;
+static inline bool fn_has_any_const_params(FnExpr *f) {
+	arr_foreach(f->params, Declaration, param) {
+		if (param->flags & DECL_IS_CONST)
+			return true;
+	}
+	return false;
 }
 
 static bool cgen_block_enter(CGenerator *g, Block *b) {
@@ -1571,11 +1579,7 @@ static bool cgen_val_pre(CGenerator *g, Value *v, Type *t, Location where) {
 
 /* generates a value fit for use as an initializer */
 static bool cgen_val(CGenerator *g, Value *v, Type *t, Location where) {
-	/* 
-	   Because Value is a union, a pointer to v works as a pointer to any member.
-	   As a result, this function is only needed for type checking.
-	*/
-	return cgen_val_ptr(g, v, t, where);
+	return cgen_val_ptr(g, val_get_ptr(v, t), t, where);
 }
 
 
@@ -1738,8 +1742,9 @@ static bool cgen_defs_expr(CGenerator *g, Expression *e) {
 
 static bool cgen_defs_decl(CGenerator *g, Declaration *d) {
 	if (cgen_fn_is_direct(g, d)) {
-		if (!cgen_fn(g, &d->expr.fn, d->where))
-			return false;
+		if (!fn_has_any_const_params(&d->expr.fn))
+			if (!cgen_fn(g, &d->expr.fn, d->where))
+				return false;
 		if (!cgen_defs_block(g, &d->expr.fn.body))
 			return false;
 	} else {

@@ -9,8 +9,14 @@ puti @= fn(x: int) {
 // ");
 // };
 
+add @= fn(x: int, y @int) int {
+  x + y
+};
+
 main @= fn() {
-	 b @= fn(x: int) int { 2*x };
-	 puti(b(10));
+	 puti(add(3, 10));
+	 x @= add(3, 7);
+	 puti(add(4, x));
+	 puti(add(3, 5));
 };
 

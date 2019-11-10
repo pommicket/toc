@@ -1,6 +1,7 @@
 allocr - allocator
 anon - anonymous
 arg - argument
+cap - capacity
 ctx - context
 decl - declaration
 del - delete
@@ -13,6 +14,7 @@ expr - expression
 fn - function
 ident - identifier
 kw - keyword
+len - length
 mut - mutable
 num - number
 op - operator
@@ -21,6 +23,5 @@ ptr - pointer
 ret - return
 stmt - statement
 str - string
-tdecl - type declaration
 tokr - tokenizer
 val - value

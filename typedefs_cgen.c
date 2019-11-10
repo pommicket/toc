@@ -46,7 +46,7 @@ static bool typedefs_decl(CGenerator *g, Declaration *d) {
 			cgen_nl(g);
 		}
 	}
-	if (d->flags & DECL_HAS_EXPR)
+	if ((d->flags & DECL_HAS_EXPR) && !(d->flags & DECL_IS_CONST))
 		if (!typedefs_expr(g, &d->expr))
 			return false;
 	return true;
