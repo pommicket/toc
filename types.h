@@ -316,8 +316,8 @@ typedef struct Type {
 		struct {
 			struct Type *of;
 			union {
-				UInteger n; /* this is NOT set by parse_type; it will be handled by types.c */
-				struct Expression *n_expr;
+			    U64 n; /* after typing */
+				struct Expression *n_expr; /* before typing */
 			};
 		} arr;
 	    struct Type *ptr;

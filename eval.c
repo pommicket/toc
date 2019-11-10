@@ -1171,7 +1171,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	} break;
 	case EXPR_LITERAL_INT:
 		assert(e->type.kind == TYPE_BUILTIN);
-		u64_to_val(v, e->type.builtin, e->intl);
+		u64_to_val(v, e->type.builtin, (U64)e->intl);
 		break;
 	case EXPR_LITERAL_FLOAT:
 		assert(e->type.kind == TYPE_BUILTIN);

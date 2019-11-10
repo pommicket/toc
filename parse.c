@@ -191,7 +191,7 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 	case TYPE_ARR: {
 		size_t written = str_copy(buffer, bufsize, "[");
 		if (t->flags & TYPE_IS_RESOLVED) {
-			snprintf(buffer + written, bufsize - written, UINTEGER_FMT, t->arr.n);
+			snprintf(buffer + written, bufsize - written, PRIu64, t->arr.n);
 			written += strlen(buffer + written);
 		} else {
 			written += str_copy(buffer + written, bufsize - written, "N");
