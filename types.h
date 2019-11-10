@@ -466,6 +466,12 @@ typedef struct {
 	U64 cap;
 } HashTable;
 
+/* these are found in value hash tables */
+typedef struct {
+	Value val;
+	I64 num;
+} ValNumPair;
+
 typedef struct FnExpr {
     struct Declaration *params; /* declarations of the parameters to this function */
     struct Declaration *ret_decls; /* array of decls, if this has named return values. otherwise, NULL */
@@ -475,7 +481,8 @@ typedef struct FnExpr {
 		/* if name = NULL, this is an anonymous function, and id will be the ID of the fn. */
 		Identifier name;
 	    IdentID id;
-		HashTable *instances; /* for fns with co */
+		HashTable *instances; /* for fns with constant parameters. the key is a tuple of the 
+							   constant parameters (note that this can be a 1-tuple) */
 	} c;
 } FnExpr; /* an expression such as fn(x: int) int { 2 * x } */
 

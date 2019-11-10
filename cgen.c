@@ -734,9 +734,9 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 				}
 			
 			} else {
-				cgen_type_pre(g, &e->type, e->where);
+				if (!cgen_type_pre(g, &e->type, e->where)) return false;
 				cgen_write(g, " %s", ret_name);
-				cgen_type_post(g, &e->type, e->where);
+				if (!cgen_type_post(g, &e->type, e->where)) return false;
 				cgen_write(g, ";");
 				cgen_nl(g);
 			}
@@ -913,7 +913,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 				if (!cgen_type_pre(g, &ea->type, e->where))
 					return false;
 				if (uses_ptr)
-					cgen_write(g, "p_");
+					cgen_write(g, " p_");
 				else
 					cgen_write(g, "(*p_)");
 				if (!cgen_type_post(g, &ea->type, e->where))

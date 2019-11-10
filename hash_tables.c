@@ -3,9 +3,9 @@
   HashTable x = {0};
 */
 static void *val_get_ptr(Value *v, Type *t);
-static U64 val_hash(Value *v, Type *t);
+static U64 val_hash(Value v, Type *t);
 static size_t compiler_sizeof(Type *t);
-static bool val_eq(Value *u, Value *v, Type *t);
+static bool val_eq(Value u, Value v, Type *t);
 static bool type_eq(Type *t1, Type *t2);
 
 static U64 f32_hash(F32 f) {
@@ -88,7 +88,7 @@ static U64 val_ptr_hash(void *v, Type *t) {
 		Value *elems = *(Value **)v;
 		U32 x = 1;
 		for (U64 i = 0; i < (U64)arr_len(t->tuple); i++) {
-			hash += (U64)x * val_hash(elems + i, &t->tuple[i]);
+			hash += (U64)x * val_hash(elems[i], &t->tuple[i]);
 			x = rand_u32(x);
 		}
 		return hash;
@@ -131,8 +131,8 @@ static U64 val_ptr_hash(void *v, Type *t) {
 	return 0;
 }
 
-static U64 val_hash(Value *v, Type *t) {
-	return val_ptr_hash(val_get_ptr(v, t), t);
+static U64 val_hash(Value v, Type *t) {
+	return val_ptr_hash(val_get_ptr(&v, t), t);
 }
 
 static bool val_ptr_eq(void *u, void *v, Type *t) {
@@ -169,7 +169,7 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 		Value *us = *(Value **)u;
 		Value *vs = *(Value **)v;
 	    for (size_t i = 0; i < arr_len(t->tuple); i++) {
-			if (!val_eq(&us[i], &vs[i], &t->tuple[i]))
+			if (!val_eq(us[i], vs[i], &t->tuple[i]))
 				return false;
 		}
 	    return true;
@@ -210,48 +210,108 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 	return false;
 }
 
-static bool val_eq(Value *u, Value *v, Type *t) {
-	return val_ptr_eq(val_get_ptr(u, t), val_get_ptr(v, t), t);
+static bool val_eq(Value u, Value v, Type *t) {
+	return val_ptr_eq(val_get_ptr(&u, t), val_get_ptr(&v, t), t);
 }
 
 /*
   for a value hash table, you must either ALWAYS or NEVER use an allocator 
   all values in the hash table must have the same type.
-  returns true iff the value was already present
+  returns true iff the value was already present, and sets associated_number accordingly.
+  otherwise, associates the value with associated_number, and returns false.
 */
-static bool val_hash_table_adda(Allocator *a, HashTable *h, Value *v, Type *t) {
+static bool val_hash_table_adda(Allocator *a, HashTable *h, Value v, Type *t, I64 *associated_number) {
 	if (h->n * 2 >= h->cap) {
 		U64 new_cap = h->cap * 2 + 2;
-		Value *new_data = a ? allocr_malloc(a, new_cap * (U64)sizeof(Value))
-			: malloc(new_cap * sizeof(Value));
-		h->occupied = a ? allocr_realloc(a, h->occupied, h->cap * (U64)sizeof(bool),
-										 new_cap * (U64)sizeof(bool))
-			: realloc(h->occupied, new_cap * sizeof(bool));
-		Value *old_data = h->data;
-		for (size_t i = 0; i < h->n; i++) {
+		ValNumPair *new_data = a ? allocr_malloc(a, new_cap * (U64)sizeof *new_data)
+			: malloc(new_cap * sizeof *new_data);
+		bool *new_occupied = a ? allocr_calloc(a, (size_t)new_cap, sizeof *new_occupied)
+			: calloc((size_t)new_cap, sizeof *new_occupied);
+		ValNumPair *old_data = h->data;
+		bool *old_occupied = h->occupied;
+		for (U64 i = 0; i < h->cap; i++) {
 			/* re-hash */
-			U64 index = val_hash(&old_data[i], t) % new_cap;
-			while (h->occupied[index]) index++;
-			new_data[index] = old_data[i];
-			h->occupied[index] = true;
+			if (old_occupied[i]) {
+				U64 index = val_hash(old_data[i].val, t) % new_cap;
+				while (new_occupied[index]) {
+					index++;
+					if (index >= new_cap)
+						index -= new_cap;
+				}
+				new_data[index] = old_data[i];
+			    new_occupied[index] = true;
+			}
 		}
 		h->data = new_data;
+		h->occupied = new_occupied;
+		if (a) {
+			allocr_free(a, old_occupied, h->cap * sizeof *old_occupied);
+			allocr_free(a, old_data, h->cap * sizeof *old_data);
+		} else {
+			free(old_occupied);
+			free(old_data);
+		}
 		h->cap = new_cap;
 	}
-	Value *vals = h->data;
+	ValNumPair *data = h->data;
 	U64 index = val_hash(v, t) % h->cap;
 	while (1) {
 		if (h->occupied[index]) {
-			if (val_eq(v, &vals[index], t))
+			if (val_eq(v, data[index].val, t)) {
+				*associated_number = data[index].num;
 				return true;
+			}
 		} else break;
 		index++;
+		if (index >= h->cap)
+			index -= h->cap;
 	}
-	vals[index] = *v;
+	data[index].val = v;
+	data[index].num = *associated_number;
 	h->occupied[index] = true;
+	h->n++;
 	return false;
 }
 
-static void val_hash_table_add(HashTable *h, Value *v, Type *t) {
-	val_hash_table_adda(NULL, h, v, t);
+/* see above */
+static bool val_hash_table_add(HashTable *h, Value v, Type *t, I64 *associated_number) {
+	return val_hash_table_adda(NULL, h, v, t, associated_number);
+}
+
+/* only call if you're not using an allocator */
+static void hash_table_free(HashTable *h) {
+	free(h->data);
+}
+
+static void val_hash_table_test(void) {
+	HashTable h = {0};
+	Type type = {0};
+	type.kind = TYPE_BUILTIN;
+	type.builtin = BUILTIN_I64;
+	for (I64 n = 0; n < 100; n++) {
+		Value v = {.i64 = n * n};
+		if (val_hash_table_add(&h, v, &type, &n)) {
+			assert(!*"n*n already exists.");
+		}
+	}
+	for (I64 n = 0; n < 100; n++) {
+		Value v = {.i64 = n * n};
+		I64 m = 0;
+		if (!val_hash_table_add(&h, v, &type, &m)) {
+			assert(!*"n*n does not exist.");
+		}
+		if (m != n) {
+			assert(!*"n*n exists, but has wrong associated value.");
+		}
+	}
+	I64 x = 100;
+	Value v = {.i64 = 8};
+	if (val_hash_table_add(&h, v, &type, &x)) {
+		assert(!*"8 exists");
+	}
+	hash_table_free(&h);
+}
+
+static void hash_table_test(void) {
+	val_hash_table_test();
 }

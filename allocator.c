@@ -63,6 +63,19 @@ static void *allocr_realloc(Allocator *a, void *data, size_t old_size, size_t ne
 #endif
 }
 
+static void allocr_free(Allocator *a, void *data, size_t size) {
+#if NO_ALLOCATOR
+	(void)a;
+	(void)size;
+    free(data);
+#else
+	/* OPTIM */
+	(void)a;
+	(void)size;
+	(void)data;
+#endif
+}
+
 static void allocr_free_all(Allocator *a) {
 	for (Page *page = a->first; page;) {
 		Page *next = page->next;
