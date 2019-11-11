@@ -5,15 +5,15 @@ static bool types_block(Typer *tr, Block *b);
 static bool type_resolve(Typer *tr, Type *t, Location where);
 
 static inline void *typer_malloc(Typer *tr, size_t bytes) {
-	return allocr_malloc(&tr->allocr, bytes);
+	return allocr_malloc(tr->allocr, bytes);
 }
 
 static inline void *typer_calloc(Typer *tr, size_t n, size_t sz) {
-	return allocr_calloc(&tr->allocr, n, sz);
+	return allocr_calloc(tr->allocr, n, sz);
 }
 
 static inline void *typer_arr_add_(Typer *tr, void **arr, size_t sz) {
-	return arr_adda_(arr, sz, &tr->allocr);
+	return arr_adda_(arr, sz, tr->allocr);
 }
 
 static inline bool type_is_builtin(Type *t, BuiltinType b) {
@@ -586,6 +586,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 	bool success = true;
 	switch (e->kind) {
 	case EXPR_FN: {
+		e->fn.c.instances = NULL; /* maybe this should be handled by cgen... oh well */
 		Type prev_ret_type = tr->ret_type;
 		bool prev_can_ret = tr->can_ret;
 		FnExpr *f = &e->fn;
@@ -954,7 +955,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		bool ret = true;
 		FnExpr *fn_decl = NULL;
 		Expression *new_args = NULL;
-		arr_set_lena(&new_args, nparams, &tr->allocr);
+		arr_set_lena(&new_args, nparams, tr->allocr);
 		bool *params_set = nparams ? typer_calloc(tr, nparams, sizeof *params_set) : NULL;
 		if (f->kind == EXPR_IDENT) {
 			IdentDecl *decl = ident_decl(f->ident);
@@ -1625,13 +1626,13 @@ static bool types_stmt(Typer *tr, Statement *s) {
 	return true;
 }
 
-static void typer_create(Typer *tr, Evaluator *ev) {
+static void typer_create(Typer *tr, Evaluator *ev, Allocator *allocr) {
 	tr->block = NULL;
 	tr->can_ret = false;
 	tr->evalr = ev;
 	tr->in_decls = NULL;
 	tr->in_expr_decls = NULL;
-	allocr_create(&tr->allocr);
+	tr->allocr = allocr;
 }
 
 static bool types_file(Typer *tr, ParsedFile *f) {
@@ -1644,6 +1645,3 @@ static bool types_file(Typer *tr, ParsedFile *f) {
 	return ret;
 }
 
-static void typer_free(Typer *tr) {
-	allocr_free_all(&tr->allocr);
-}

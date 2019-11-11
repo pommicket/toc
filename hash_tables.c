@@ -60,6 +60,8 @@ static U64 f64_hash(F64 f) {
 	return hash;
 }
 
+static void fprint_val(FILE *f, Value v, Type *t); /* DELME */
+static void fprint_type(FILE *out, Type *t);		   /* !! */
 /* Note that for these value hashing functions, values of different types may collide */
 static U64 val_ptr_hash(void *v, Type *t) {
 	switch (t->kind) {
@@ -223,8 +225,8 @@ static bool val_eq(Value u, Value v, Type *t) {
 static bool val_hash_table_adda(Allocator *a, HashTable *h, Value v, Type *t, I64 *associated_number) {
 	if (h->n * 2 >= h->cap) {
 		U64 new_cap = h->cap * 2 + 2;
-		ValNumPair *new_data = a ? allocr_malloc(a, new_cap * (U64)sizeof *new_data)
-			: malloc(new_cap * sizeof *new_data);
+		ValNumPair *new_data = a ? allocr_malloc(a, (size_t)new_cap * sizeof *new_data)
+			: malloc((size_t)new_cap * sizeof *new_data);
 		bool *new_occupied = a ? allocr_calloc(a, (size_t)new_cap, sizeof *new_occupied)
 			: calloc((size_t)new_cap, sizeof *new_occupied);
 		ValNumPair *old_data = h->data;
@@ -281,6 +283,7 @@ static bool val_hash_table_add(HashTable *h, Value v, Type *t, I64 *associated_n
 /* only call if you're not using an allocator */
 static void hash_table_free(HashTable *h) {
 	free(h->data);
+	free(h->occupied);
 }
 
 static void val_hash_table_test(void) {

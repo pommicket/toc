@@ -7,16 +7,15 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v);
 static bool block_enter(Block *b, Statement *stmts, U32 flags);
 static void block_exit(Block *b, Statement *stmts);
 
-static void evalr_create(Evaluator *ev, Typer *tr) {
-	allocr_create(&ev->allocr);
+static void evalr_create(Evaluator *ev, Typer *tr, Allocator *allocr) {
 	ev->returning = NULL;
 	ev->to_free = NULL;
 	ev->typer = tr;
 	ev->enabled = true;
+	ev->allocr = allocr;
 }
 
 static void evalr_free(Evaluator *ev) {
-	allocr_free_all(&ev->allocr);
 	typedef void *VoidPtr;
 	arr_foreach(ev->to_free, VoidPtr, f)
 		free(*f);
@@ -24,10 +23,10 @@ static void evalr_free(Evaluator *ev) {
 }
 
 static inline void *evalr_malloc(Evaluator *ev, size_t bytes) {
-	return allocr_malloc(&ev->allocr, bytes);
+	return allocr_malloc(ev->allocr, bytes);
 }
 static inline void *evalr_calloc(Evaluator *ev, size_t n, size_t bytes) {
-	return allocr_calloc(&ev->allocr, n, bytes);
+	return allocr_calloc(ev->allocr, n, bytes);
 }
 
 static size_t compiler_sizeof_builtin(BuiltinType b) {

@@ -4,16 +4,17 @@ puti @= fn(x: int) {
 ");
 };
 
-// putf @= fn(x: float) {
-// 	 #C("printf(\"%f\\n\", (double)x);
-// ");
-// };
+putf @= fn(x: float) {
+	 #C("printf(\"%f\\n\", (double)x);
+");
+};
 
 add @= fn(x: int, y @int) int {
   x + y
 };
 
 main @= fn() {
+add(3,10);
 	 puti(add(3, 10));
 	 x @= add(3, 7);
 	 puti(add(4, x));

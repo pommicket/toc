@@ -14,6 +14,7 @@ unicode variable names (cgen support)
 make sure futurely/currently-declared types are only used by pointer/slice
 allow omission of trailing ; in foo @= fn() {}?
  */
+
 #include "toc.c"
 
 int main(int argc, char **argv) {
@@ -59,10 +60,12 @@ int main(int argc, char **argv) {
 	Identifiers file_idents;
 	idents_create(&file_idents);
 	Tokenizer t;
+	Allocator main_allocr;
+	allocr_create(&main_allocr);
 	ErrCtx err_ctx;
 	err_ctx.filename = in_filename;
 	err_ctx.enabled = true;
-	tokr_create(&t, &file_idents, &err_ctx);
+	tokr_create(&t, &file_idents, &err_ctx, &main_allocr);
 	if (!tokenize_string(&t, contents)) {
 		
 		err_fprint(TEXT_IMPORTANT("Errors occured while preprocessing.\n"));
@@ -76,22 +79,24 @@ int main(int argc, char **argv) {
 	/* } */
 	/* printf("\n"); */
 	Parser p;
-	parser_from_tokenizer(&p, &t);
+	parser_create(&p, &t, &main_allocr);
    	ParsedFile f;
 	if (!parse_file(&p, &f)) {
 		
 		err_fprint(TEXT_IMPORTANT("Errors occured while parsing.\n"));
 		return EXIT_FAILURE;
 	}
-	tokr_free_tokens(&t);
 	/* fprint_parsed_file(stdout, &f); */
     
 	/* printf("\n\n-----\n\n"); */
 	
+	tokr_free(&t);
+	
 	Typer tr;
 	Evaluator ev;
-	evalr_create(&ev, &tr);
-	typer_create(&tr, &ev);
+	evalr_create(&ev, &tr, &main_allocr);
+	typer_create(&tr, &ev, &main_allocr);
+
 
 	if (!block_enter(NULL, f.stmts, SCOPE_CHECK_REDECL)) /* enter global scope */
 		return false;
@@ -109,7 +114,7 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 	CGenerator g;
-	cgen_create(&g, out, &file_idents, &ev);
+	cgen_create(&g, out, &file_idents, &ev, &main_allocr);
 	if (!cgen_file(&g, &f)) {
 		fclose(out);
 		err_fprint(TEXT_IMPORTANT("Errors occured while generating C code.\n"));
@@ -118,14 +123,11 @@ int main(int argc, char **argv) {
 	
 	block_exit(NULL, f.stmts); /* exit global scope */
 	
-	tokr_free(&t);
-    
 	free(contents);
+	allocr_free_all(&main_allocr);
 
-	parser_free(&p);
-	typer_free(&tr);
-	evalr_free(&ev);
 	fclose(out);
 	/* fclose(h_out); */
 	idents_free(&file_idents);
 }
+

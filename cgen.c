@@ -1,5 +1,5 @@
 
-static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *ev) {
+static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *ev, Allocator *allocr) {
 	g->outc = out;
 	g->ident_counter = 1; /* some places use 0 to mean no id */
 	g->main_ident = ident_get(ids, "main");
@@ -8,6 +8,7 @@ static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *e
 	g->indent_lvl = 0;
 	g->anon_fns = NULL;
 	g->idents = ids;
+	g->allocr = allocr;
 }
 
 static bool cgen_stmt(CGenerator *g, Statement *s);
@@ -411,7 +412,8 @@ static inline void cgen_fn_name(CGenerator *g, FnExpr *f) {
 	}
 }
 
-static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where) {
+/* unless f needs multiple instances, instance can be set to 0 */
+static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where, I64 instance) {
 	bool out_param = cgen_uses_ptr(&f->ret_type);
 	bool any_params = false;
 	if (!f->c.name) /* anonymous fn */
@@ -423,23 +425,28 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where) {
 		cgen_write(g, " ");
 	}
 	cgen_fn_name(g, f);
+	if (instance) {
+		cgen_write(g, "%"PRId64, instance);
+	}
 	if (!out_param) {
 		if (!cgen_type_post(g, &f->ret_type, where)) return false;
 	}
 	cgen_write(g, "(");
 	arr_foreach(f->params, Declaration, d) {
-		long idx = 0;
-		arr_foreach(d->idents, Identifier, i) {
-			if (d != f->params || i != d->idents)
-				cgen_write(g, ", ");
-			Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx++] : &d->type;
-			any_params = true;
-			if (!cgen_type_pre(g, type, where))
-				return false;
-			cgen_write(g, " ");
-			cgen_ident(g, *i);
-			if (!cgen_type_post(g, type, where))
-				return false;
+		if (!(d->flags & DECL_IS_CONST)) {
+			long idx = 0;
+			arr_foreach(d->idents, Identifier, i) {
+				if (d != f->params || i != d->idents)
+					cgen_write(g, ", ");
+				Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx++] : &d->type;
+				any_params = true;
+				if (!cgen_type_pre(g, type, where))
+					return false;
+				cgen_write(g, " ");
+				cgen_ident(g, *i);
+				if (!cgen_type_post(g, type, where))
+					return false;
+			}
 		}
 	}
 	if (out_param) {
@@ -1439,7 +1446,7 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where) {
 	FnExpr *prev_fn = g->fn;
 	Block *prev_block = g->block;
 	fn_enter(f, 0);
-	if (!cgen_fn_header(g, f, where))
+	if (!cgen_fn_header(g, f, where, 0))
 		return false;
 	cgen_write(g, " ");
 	g->fn = f;
@@ -1810,6 +1817,7 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 			   "#define true ((bool)1)\n"
 			   "static inline slice_ mkslice_(void *data, i64 n) { slice_ ret; ret.data = data; ret.n = n; return ret; }\n"
 			   "static void *e__calloc(size_t n, size_t sz) { void *ret = calloc(n, sz); if (!ret) { fprintf(stderr, \"Out of memory.\\n\"); abort(); } return ret; }\n\n\n");
+
 	if (!typedefs_file(g, f))
 		return false;
 	if (!cgen_decls_file(g, f))

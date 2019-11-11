@@ -174,16 +174,20 @@ static void tokr_get_location(Tokenizer *tokr, Token *t) {
 	tokr->s = t->where.code;
 }
 
-static void tokr_create(Tokenizer *t, Identifiers *idents, ErrCtx *err_ctx) {
+/* 
+the allocator you pass it will be used for string literals, so it shouldn't be freed
+until everything is done
+*/
+static void tokr_create(Tokenizer *t, Identifiers *idents, ErrCtx *err_ctx, Allocator *allocr) {
 	t->tokens = NULL;
 	arr_resv(&t->tokens, 256);
-	allocr_create(&t->allocr);
+	t->allocr = allocr;
 	t->idents = idents;
 	t->err_ctx = err_ctx;
 }
 
 static inline void *tokr_malloc(Tokenizer *t, size_t bytes) {
-	return allocr_malloc(&t->allocr, bytes);
+	return allocr_malloc(t->allocr, bytes);
 }
 
 static Token *tokr_add(Tokenizer *t) {
@@ -517,12 +521,7 @@ static void tokr_skip_semicolon(Tokenizer *t) {
 	}
 }
 
-/* ONLY frees tokens, not string literals. You can call this followed by tokr_free. */
-static void tokr_free_tokens(Tokenizer *t) {
-	arr_clear(&t->tokens);
-}
-
+/* only frees tokens, not string literals (because those are on the allocator). */
 static void tokr_free(Tokenizer *t) {
-	tokr_free_tokens(t);
-	allocr_free_all(&t->allocr);
+    arr_clear(&t->tokens);
 }

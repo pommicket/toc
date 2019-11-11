@@ -191,7 +191,7 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 	case TYPE_ARR: {
 		size_t written = str_copy(buffer, bufsize, "[");
 		if (t->flags & TYPE_IS_RESOLVED) {
-			snprintf(buffer + written, bufsize - written, PRIu64, t->arr.n);
+			snprintf(buffer + written, bufsize - written, "%"PRIu64, t->arr.n);
 			written += strlen(buffer + written);
 		} else {
 			written += str_copy(buffer + written, bufsize - written, "N");
@@ -245,13 +245,13 @@ static char *type_to_str(Type *t) {
 }
 
 static inline void *parser_arr_add_(Parser *p, void **a, size_t sz) {
-	return arr_adda_(a, sz, &p->allocr);
+	return arr_adda_(a, sz, p->allocr);
 }
 
 #define parser_arr_add(p, a) parser_arr_add_(p, (void **)(a), sizeof **(a))
 
 static inline void *parser_malloc(Parser *p, size_t bytes) {
-	return allocr_malloc(&p->allocr, bytes);
+	return allocr_malloc(p->allocr, bytes);
 }
 
 /* 
@@ -1864,10 +1864,10 @@ static bool parse_stmt(Parser *p, Statement *s) {
 	}
 }
 
-static void parser_from_tokenizer(Parser *p, Tokenizer *t) {
+static void parser_create(Parser *p, Tokenizer *t, Allocator *allocr) {
 	p->tokr = t;
 	p->block = NULL;
-	allocr_create(&p->allocr);
+	p->allocr = allocr;
 }
 
 static bool parse_file(Parser *p, ParsedFile *f) {
@@ -1884,10 +1884,6 @@ static bool parse_file(Parser *p, ParsedFile *f) {
 		}
 	}
 	return ret;
-}
-
-static void parser_free(Parser *p) {
-	allocr_free_all(&p->allocr);
 }
 
 #define PARSE_PRINT_LOCATION(l) //fprintf(out, "[l%lu]", (unsigned long)(l).line);

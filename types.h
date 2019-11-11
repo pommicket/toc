@@ -253,7 +253,7 @@ typedef struct {
 } Token;
 
 typedef struct {
-	Allocator allocr;
+	Allocator *allocr;
 	Token *tokens;
 	char *s; /* string being parsed */
 	ErrCtx *err_ctx;
@@ -620,7 +620,7 @@ typedef struct {
 
 typedef struct {
 	Tokenizer *tokr;
-	Allocator allocr;
+	Allocator *allocr;
 	Block *block; /* which block are we in? NULL = file scope */
 } Parser;
 
@@ -631,7 +631,7 @@ typedef enum {
 } DeclEndKind;
 
 typedef struct {
-	Allocator allocr;
+	Allocator *allocr;
 	struct Typer *typer;
 	bool returning;
 	Value ret_val;
@@ -640,7 +640,7 @@ typedef struct {
 } Evaluator;
 
 typedef struct Typer {
-	Allocator allocr;
+	Allocator *allocr;
 	Evaluator *evalr;
 	Expression **in_expr_decls; /* an array of expressions whose declarations (e.g. each **x := foo**) we are currently inside */
 	Declaration **in_decls; /* array of declarations we are currently inside */
@@ -650,6 +650,7 @@ typedef struct Typer {
 } Typer;
 
 typedef struct {
+	Allocator *allocr;
 	FILE *outc;
 	IdentID ident_counter;
 	int indent_lvl; /* how many levels of indentation? */
