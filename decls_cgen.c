@@ -4,13 +4,20 @@ static bool cgen_decls_block(CGenerator *g, Block *b);
 static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 	switch (e->kind) {
 	case EXPR_CALL:
+		e->call.c.instance = 0;
+
+		
 		if (e->call.fn->kind == EXPR_IDENT) {
 			IdentDecl *idecl = ident_decl(e->call.fn->ident);
 			Block *prev = g->block;
 			/* temporarily set g->block so that cgen_fn_is_direct works */
 			g->block = idecl->scope;
+			
+					
 			if (idecl->kind == IDECL_DECL &&
-				cgen_fn_is_direct(g, idecl->decl)) {
+				(idecl->decl->flags & DECL_IS_CONST) &&
+				(idecl->decl->flags & DECL_HAS_EXPR) &&
+				(idecl->decl->expr.kind == EXPR_FN)) {
 				g->block = prev;
 				FnExpr *f = &idecl->decl->expr.fn;
 				f->c.name = idecl->decl->idents[0];
@@ -54,7 +61,8 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 						cgen_nl(g);
 					}
 					arr_clear(&tuple_types);
-				}	/* else, there are no compile time arguments; we don't need to generate a separate declaration for this call */
+					e->call.c.instance = (U32)instance_number;
+				}
 			}
 		}
 		break;
@@ -99,9 +107,11 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 		if (!cgen_decls_block(g, &d->expr.fn.body))
 			return false;
 		fn_exit(&d->expr.fn);
-	} else if ((d->flags & DECL_HAS_EXPR) && !(d->flags & DECL_IS_CONST)) {
-		if (!cgen_decls_expr(g, &d->expr))
-			return false;
+	} else if (d->flags & DECL_HAS_EXPR) {
+		if (!(d->flags & DECL_IS_CONST) || (d->expr.kind == EXPR_FN)) {
+			if (!cgen_decls_expr(g, &d->expr))
+				return false;
+		}
 	}
 	return true;
 }

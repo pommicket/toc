@@ -22,7 +22,8 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where);
 static bool cgen_type_post(CGenerator *g, Type *t, Location where);
 static bool cgen_decl(CGenerator *g, Declaration *d);
 static bool cgen_ret(CGenerator *g, Expression *ret);
-static bool cgen_val(CGenerator *g, Value *v, Type *t, Location where);
+static bool cgen_val(CGenerator *g, Value v, Type *t, Location where);
+static bool cgen_val_pre(CGenerator *g, Value v, Type *t, Location where);
 static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where);
 static bool cgen_defs_block(CGenerator *g, Block *b);
 
@@ -892,13 +893,17 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		}
 		cgen_write(g, "; ");
 		if (is_range) {
+			if (ea->range.stepval) {
+				if (!cgen_val_pre(g, *ea->range.stepval, &ea->type, e->where))
+					return false;
+			}
 			if (ea->value)
 				cgen_ident(g, ea->value);
 			else
 				cgen_write(g, "val_");
 			cgen_write(g, " += ");
 			if (ea->range.stepval) {
-				if (!cgen_val(g, ea->range.stepval, &ea->type, e->where))
+				if (!cgen_val(g, *ea->range.stepval, &ea->type, e->where))
 					return false;
 			} else {
 				cgen_write(g, "1");
@@ -1074,13 +1079,16 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			return false;
 		break;
 	case EXPR_VAL:
+		if (!cgen_val_pre(g, e->val, &e->type, e->where))
+			return false;
 		if (!cgen_type_pre(g, &e->type, e->where)) return false;
 		e->val_c_id = g->ident_counter++;
 		cgen_write(g, " ");
 		cgen_ident_id(g, e->val_c_id);
 		if (!cgen_type_post(g, &e->type, e->where)) return false;
 		cgen_write(g, " = ");
-		cgen_val(g, &e->val, &e->type, e->where);
+		if (!cgen_val(g, e->val, &e->type, e->where))
+			return false;
 		cgen_write(g, ";");
 		cgen_nl(g);
 		break;
@@ -1308,6 +1316,33 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 	case EXPR_CALL:
 		if (cgen_uses_ptr(&e->type)) {
 			cgen_ident_id(g, e->call.c.id);
+		} else if (e->call.c.instance) {
+			assert(e->call.fn->kind == EXPR_IDENT);
+			Identifier name = e->call.fn->ident;
+			cgen_write(g, "(");
+			cgen_ident(g, name);
+			cgen_write(g, "%"PRIu32, e->call.c.instance);
+			cgen_write(g, "(");
+			FnExpr *f = &ident_decl(name)->decl->expr.fn;
+			Expression *args = e->call.arg_exprs;
+			bool first_arg = true;
+		    int i = 0;
+			arr_foreach(f->params, Declaration, param) {
+				if (!(param->flags & DECL_IS_CONST)) {
+					arr_foreach(param->idents, Identifier, ident) {
+						if (!first_arg)
+							cgen_write(g, ", ");
+						first_arg = false;
+						if (!cgen_expr(g, &args[i]))
+							return false;
+						i++;
+					}
+				} else {
+					i += (int)arr_len(param->idents);
+				}
+			}
+			cgen_write(g, ")");
+			cgen_write(g, ")");
 		} else {
 			cgen_write(g, "(");
 			if (!cgen_expr(g, e->call.fn))
@@ -1442,19 +1477,45 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 	}
 }
 
-static bool cgen_fn(CGenerator *g, FnExpr *f, Location where) {
+/* pass 0 for instance and NULL for compile_time_args if there are no compile time arguments. */
+static bool cgen_fn(CGenerator *g, FnExpr *f, Location where, I64 instance, Value *compile_time_args) {
+	/* see also cgen_defs_expr */
 	FnExpr *prev_fn = g->fn;
 	Block *prev_block = g->block;
 	fn_enter(f, 0);
-	if (!cgen_fn_header(g, f, where, 0))
+	if (!cgen_fn_header(g, f, where, instance))
 		return false;
-	cgen_write(g, " ");
 	g->fn = f;
-	cgen_write(g, "{");
+	cgen_write(g, " {");
 	cgen_nl(g);
 	arr_foreach(f->ret_decls, Declaration, d) {
 		if (!cgen_decl(g, d))
 			return false;
+	}
+	if (compile_time_args) {
+		int carg_idx = 0;
+		arr_foreach(f->params, Declaration, param) {
+			if (param->flags & DECL_IS_CONST) {
+				int i = 0;
+				arr_foreach(param->idents, Identifier, ident) {
+					Type *type = param->type.kind == TYPE_TUPLE ? &param->type.tuple[i]
+						: &param->type;
+					if (!cgen_val_pre(g, compile_time_args[carg_idx], type, where))
+						return false;
+					if (!cgen_type_pre(g, type, where)) return false;
+					cgen_write(g, " const ");
+					cgen_ident(g, *ident);
+					if (!cgen_type_post(g, type, where)) return false;
+					cgen_write(g, " = ");
+					if (!cgen_val(g, compile_time_args[carg_idx], type, where))
+						return false;
+					cgen_write(g, ";");
+					cgen_nl(g);
+					carg_idx++;
+				}
+			}
+		}
+					
 	}
 	if (!cgen_block_enter(g, &f->body)) return false;
 	if (!cgen_block(g, &f->body, NULL, CGEN_BLOCK_NOENTER | CGEN_BLOCK_NOBRACES))
@@ -1580,13 +1641,13 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 	return true;
 }
 
-static bool cgen_val_pre(CGenerator *g, Value *v, Type *t, Location where) {
-	return cgen_val_ptr_pre(g, v, t, where);
+static bool cgen_val_pre(CGenerator *g, Value v, Type *t, Location where) {
+	return cgen_val_ptr_pre(g, val_get_ptr(&v, t), t, where);
 }
 
 /* generates a value fit for use as an initializer */
-static bool cgen_val(CGenerator *g, Value *v, Type *t, Location where) {
-	return cgen_val_ptr(g, val_get_ptr(v, t), t, where);
+static bool cgen_val(CGenerator *g, Value v, Type *t, Location where) {
+	return cgen_val_ptr(g, val_get_ptr(&v, t), t, where);
 }
 
 
@@ -1627,7 +1688,7 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 				}
 				continue;
 			}
-			if (!cgen_val_pre(g, val, type, d->where))
+			if (!cgen_val_pre(g, *val, type, d->where))
 				return false;
 			if (g->block != NULL)
 				cgen_write(g, "static ");
@@ -1637,7 +1698,7 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 			if (!cgen_type_post(g, type, d->where)) return false;
 			if (has_expr) {
 				cgen_write(g, " = ");
-				if (!cgen_val(g, val, type, d->where))
+				if (!cgen_val(g, *val, type, d->where))
 					return false;
 			}
 			cgen_write(g, ";");
@@ -1740,25 +1801,33 @@ static bool cgen_stmt(CGenerator *g, Statement *s) {
 
 static bool cgen_defs_expr(CGenerator *g, Expression *e) {
 	if (e->kind == EXPR_FN) {
-		if (!cgen_fn(g, &e->fn, e->where))
-			return false;
+		FnExpr *f = &e->fn;
+		HashTable *instances = f->c.instances;
+		if (instances) {
+			/* generate each instance */
+			ValNumPair *pairs = instances->data;
+			for (U64 i = 0; i < instances->cap; i++) {
+				if (instances->occupied[i]) {
+					/* generate this instance */
+					if (!cgen_fn(g, f, e->where, pairs[i].num, pairs[i].val.tuple))
+						return false;
+				}
+			}
+			
+		} else {
+			if (!cgen_fn(g, &e->fn, e->where, 0, NULL))
+				return false;
+		}
+		
 	}
 	cgen_recurse_subexprs(g, e, cgen_defs_expr, cgen_defs_block);
 	return true;
 }
 
 static bool cgen_defs_decl(CGenerator *g, Declaration *d) {
-	if (cgen_fn_is_direct(g, d)) {
-		if (!fn_has_any_const_params(&d->expr.fn))
-			if (!cgen_fn(g, &d->expr.fn, d->where))
-				return false;
-		if (!cgen_defs_block(g, &d->expr.fn.body))
+    if (d->flags & DECL_HAS_EXPR) {
+		if (!cgen_defs_expr(g, &d->expr))
 			return false;
-	} else {
-		if (d->flags & DECL_HAS_EXPR) {
-			if (!cgen_defs_expr(g, &d->expr))
-				return false;
-		}
 	}
 	return true;
 }
@@ -1836,7 +1905,7 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 	typedef Expression *ExprPtr;
 	arr_foreach(g->anon_fns, ExprPtr, eptr) {
 		Expression *e = *eptr;
-		cgen_fn(g, &e->fn, e->where);
+		if (!cgen_fn(g, &e->fn, e->where, 0, NULL)) return false;
 	}
 	
 	return true;

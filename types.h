@@ -413,6 +413,7 @@ typedef struct {
 	};
 	struct {
 		IdentID id;
+		U32 instance; /* 0 = ordinary function, no compile time args */
 	} c;
 } CallExpr;
 

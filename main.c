@@ -1,12 +1,13 @@
 /* 
 TODO:
-compile-time arguments
+fix local functions
 double check that val_get_ptr is being used everywhere it should be
 evaluate default arguments
 compile-time arguments for out parameter functions
 compile-time arguments for functions returning tuples
 deal with x, y @= fn(x: int, y @ int){}
 don't allow pointers to functions with compile-time arguments
+struct parameters
 don't allow while {3; 5} (once break is added)
 any odd number of "s for a string
 modifiable string literals
