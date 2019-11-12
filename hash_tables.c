@@ -288,9 +288,10 @@ static void hash_table_free(HashTable *h) {
 
 static void val_hash_table_test(void) {
 	HashTable h = {0};
-	Type type = {0};
+	Type type;
 	type.kind = TYPE_BUILTIN;
 	type.builtin = BUILTIN_I64;
+	type.flags = TYPE_IS_RESOLVED;
 	for (I64 n = 0; n < 100; n++) {
 		Value v = {.i64 = n * n};
 		if (val_hash_table_add(&h, v, &type, &n)) {
