@@ -303,15 +303,18 @@ typedef struct {
 #define TYPE_IS_RESOLVED 0x02
 #define TYPE_STRUCT_FOUND_OFFSETS 0x04
 
+typedef struct {
+	struct Type *types; /* dynamic array [0] = ret_type, [1:] = param_types  */
+	bool *constant; /* [i] = is param #i constant? if NULL, none are constant. don't use it as a dynamic array, because eventually it might not be. */
+} FnType;
+
 typedef struct Type {
 	Location where;
 	TypeKind kind;
 	uint16_t flags;
 	union {
 	    BuiltinType builtin;
-		struct {
-			struct Type *types; /* [0] = ret_type, [1..] = param_types */
-		} fn;
+		FnType fn;
 		struct Type *tuple;
 		struct {
 			struct Type *of;
@@ -373,7 +376,12 @@ typedef enum {
 			  EXPR_DALIGNOF,
 			  EXPR_SLICE,
 			  EXPR_TYPE,
-			  EXPR_VAL /* a value (it's useful to have this). for now, tuples are not supported. see cgen_set_tuple */
+			  /* a value (it's useful to have this). 
+				 USE WITH CAUTION
+				 expression values are never to be cgenerated! if cgen encounters one, 
+				 it will assert(0)!
+			  */
+			  EXPR_VAL 
 } ExprKind;
 
 typedef enum {

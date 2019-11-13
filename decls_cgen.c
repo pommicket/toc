@@ -5,70 +5,58 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 	switch (e->kind) {
 	case EXPR_CALL:
 		e->call.c.instance = 0;
+		assert(e->call.fn->type.kind == TYPE_FN);
+		FnType *fn_type = &e->call.fn->type.fn;
+		if (fn_type->constant) {
+			Value fval;
+			/* e->call.fn had better be a compile-time constant if it has compile-time arguments */
+			if (!eval_expr(g->evalr, e->call.fn, &fval))
+				return false;
+			FnExpr *f = fval.fn;
+			/* directly calling a function; might need to generate a copy of this function */
 
-		
-		if (e->call.fn->kind == EXPR_IDENT) {
-			IdentDecl *idecl = ident_decl(e->call.fn->ident);
-			Block *prev = g->block;
-			/* temporarily set g->block so that cgen_fn_is_direct works */
-			g->block = idecl->scope;
-			
-					
-			if (idecl->kind == IDECL_DECL &&
-				(idecl->decl->flags & DECL_IS_CONST) &&
-				(idecl->decl->flags & DECL_HAS_EXPR) &&
-				(idecl->decl->expr.kind == EXPR_FN)) {
-				g->block = prev;
-				FnExpr *f = &idecl->decl->expr.fn;
-				f->c.name = idecl->decl->idents[0];
-				/* directly calling a function; might need to generate a copy of this function */
-
-				/* OPTIM should we really be constructing a tuple & type every time? */
-				Value *compile_time_args = NULL;
-				Type *tuple_types = NULL;
-				size_t i = 0;
-				arr_foreach(f->params, Declaration, param) {
-					if (param->flags & DECL_IS_CONST) {
-						arr_foreach(param->idents, Identifier, ident) {
-							Expression *arg = &e->call.arg_exprs[i];
-							assert(arg->kind == EXPR_VAL); /* should have been evaluated by types.c */
-							*(Value *)arr_adda(&compile_time_args, g->allocr) = arg->val;
-							*(Type *)arr_add(&tuple_types) = arg->type;
-							i++;
-						}
-					} else {
-						i += arr_len(param->idents);
-					}
+			/* OPTIM should we really be constructing a tuple & type every time? */
+			Value *compile_time_args = NULL;
+			Type *tuple_types = NULL;
+			size_t nparams = arr_len(fn_type->types)-1;
+			for (size_t i = 0; i < nparams; i++) {
+				if (fn_type->constant[i]) {
+					Expression *arg = &e->call.arg_exprs[i];
+					assert(arg->kind == EXPR_VAL); /* should have been evaluated by types.c */
+					*(Value *)arr_adda(&compile_time_args, g->allocr) = arg->val;
+					*(Type *)arr_add(&tuple_types) = arg->type;
+					i++;
 				}
-				if (compile_time_args) {
-					Value tuple;
-					Type tuple_type;
-					tuple.tuple = compile_time_args;
-					tuple_type.kind = TYPE_TUPLE;
-					tuple_type.flags = TYPE_IS_RESOLVED;
-					tuple_type.tuple = tuple_types;
-					if (!f->c.instances) {
-						f->c.instances = allocr_calloc(g->allocr, 1, sizeof *f->c.instances);
-					}
-					/* lookup compile time arguments */
-					I64 instance_number = (I64)f->c.instances->n + 1;
-					bool already_generated_decl = val_hash_table_adda(g->allocr, f->c.instances, tuple, &tuple_type, &instance_number);
-					if (!already_generated_decl) {
-						/* generate a copy of this function */
-						if (!cgen_fn_header(g, f, e->where, instance_number))
-							return false;
-						cgen_write(g, ";");
-						cgen_nl(g);
-					}
-					arr_clear(&tuple_types);
-					e->call.c.instance = (U32)instance_number;
+			}
+			if (compile_time_args) {
+				Value tuple;
+				Type tuple_type;
+				tuple.tuple = compile_time_args;
+				tuple_type.kind = TYPE_TUPLE;
+				tuple_type.flags = TYPE_IS_RESOLVED;
+				tuple_type.tuple = tuple_types;
+				if (!f->c.instances) {
+					f->c.instances = allocr_calloc(g->allocr, 1, sizeof *f->c.instances);
 				}
+				/* lookup compile time arguments */
+				I64 instance_number = (I64)f->c.instances->n + 1;
+				bool already_generated_decl = val_hash_table_adda(g->allocr, f->c.instances, tuple, &tuple_type, &instance_number);
+				if (!already_generated_decl) {
+					/* generate a copy of this function */
+					if (!cgen_fn_header(g, f, e->where, instance_number))
+						return false;
+					cgen_write(g, ";");
+					cgen_nl(g);
+				}
+				arr_clear(&tuple_types);
+				e->call.c.instance = (U32)instance_number;
 			}
 		}
 		break;
 	case EXPR_FN:
 		e->fn.c.name = NULL;
-		e->fn.c.id = g->ident_counter++;
+		if (!e->fn.c.id)
+			e->fn.c.id = g->ident_counter++;
 		fn_enter(&e->fn, 0);
 		if (!cgen_fn_header(g, &e->fn, e->where, 0))
 			return false;

@@ -1,6 +1,9 @@
 /* 
 TODO:
+make compile time arguments part of type
 fix local functions
+test direct calling of function with compile time arguments (kind of useless, but test it anyways)
+compile time arguments + out parameters
 double check that val_get_ptr is being used everywhere it should be
 evaluate default arguments
 compile-time arguments for out parameter functions

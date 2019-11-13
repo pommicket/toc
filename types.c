@@ -234,19 +234,35 @@ static bool type_of_fn(Typer *tr, Expression *e, Type *t) {
 	FnExpr *f = &e->fn;
 	t->kind = TYPE_FN;
 	t->fn.types = NULL;
+	t->fn.constant = NULL; /* OPTIM: constant doesn't need to be a dynamic array */
 	Type *ret_type = typer_arr_add(tr, &t->fn.types);
 	if (!type_resolve(tr, &f->ret_type, e->where))
 		return false;
 	*ret_type = f->ret_type;
+	size_t idx = 0;
 	arr_foreach(f->params, Declaration, decl) {
 		if (!types_decl(tr, decl)) return false;
 		if (!type_resolve(tr, &decl->type, e->where))
 			return false;
+		unsigned is_const = decl->flags & DECL_IS_CONST;
+		if (is_const) {
+			if (!t->fn.constant) {
+				for (size_t i = 0; i < idx; i++) {
+					*(bool *)typer_arr_add(tr, &t->fn.constant) = false;
+				}
+			}
+		}
 		for (size_t i = 0; i < arr_len(decl->idents); i++) {
 			Type *param_type = typer_arr_add(tr, &t->fn.types);
 			*param_type = decl->type;
+			if (t->fn.constant) {
+				*(bool *)typer_arr_add(tr, &t->fn.constant) = is_const != 0;
+			}
+			idx++;
 		}
 	}
+	
+	
 	arr_foreach(f->ret_decls, Declaration, decl) {
 		if (!types_decl(tr, decl)) return false;
 	}

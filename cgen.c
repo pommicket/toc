@@ -1079,18 +1079,6 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			return false;
 		break;
 	case EXPR_VAL:
-		if (!cgen_val_pre(g, e->val, &e->type, e->where))
-			return false;
-		if (!cgen_type_pre(g, &e->type, e->where)) return false;
-		e->val_c_id = g->ident_counter++;
-		cgen_write(g, " ");
-		cgen_ident_id(g, e->val_c_id);
-		if (!cgen_type_post(g, &e->type, e->where)) return false;
-		cgen_write(g, " = ");
-		if (!cgen_val(g, e->val, &e->type, e->where))
-			return false;
-		cgen_write(g, ";");
-		cgen_nl(g);
 		break;
 	case EXPR_LITERAL_INT:
 	case EXPR_LITERAL_FLOAT:
@@ -1317,28 +1305,20 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		if (cgen_uses_ptr(&e->type)) {
 			cgen_ident_id(g, e->call.c.id);
 		} else if (e->call.c.instance) {
-			assert(e->call.fn->kind == EXPR_IDENT);
-			Identifier name = e->call.fn->ident;
 			cgen_write(g, "(");
-			cgen_ident(g, name);
-			cgen_write(g, "%"PRIu32, e->call.c.instance);
-			cgen_write(g, "(");
-			FnExpr *f = &ident_decl(name)->decl->expr.fn;
+			if (!cgen_expr(g, e->call.fn))
+				return false;
+			cgen_write(g, "%"PRId64"(", e->call.c.instance);
 			Expression *args = e->call.arg_exprs;
+			FnType *fn_type = &e->call.fn->type.fn;
 			bool first_arg = true;
-		    int i = 0;
-			arr_foreach(f->params, Declaration, param) {
-				if (!(param->flags & DECL_IS_CONST)) {
-					arr_foreach(param->idents, Identifier, ident) {
-						if (!first_arg)
-							cgen_write(g, ", ");
-						first_arg = false;
-						if (!cgen_expr(g, &args[i]))
-							return false;
-						i++;
-					}
-				} else {
-					i += (int)arr_len(param->idents);
+			for (size_t i = 0; i < arr_len(fn_type->types)-1; i++) {
+				if (!fn_type->constant[i]) {
+					if (!first_arg)
+						cgen_write(g, ", ");
+					first_arg = false;
+					if (!cgen_expr(g, &args[i]))
+						return false;
 				}
 			}
 			cgen_write(g, ")");
@@ -1410,7 +1390,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		cgen_ident_id(g, e->slice.c.id);
 		break;
 	case EXPR_VAL:
-		cgen_ident_id(g, e->val_c_id);
+		assert(!*"Value expressions cannot be cgenerated!!!");
 		break;
 	}
 	return true;
@@ -1423,12 +1403,13 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 */
 static bool cgen_block(CGenerator *g, Block *b, const char *ret_name, U16 flags) {
 	Block *prev = g->block;
-	if (!(flags & CGEN_BLOCK_NOBRACES))
+	if (!(flags & CGEN_BLOCK_NOBRACES)) {
 		cgen_write(g, "{");
+		cgen_nl(g);
+	}
 	if (!(flags & CGEN_BLOCK_NOENTER))
 		if (!cgen_block_enter(g, b))
 			return false;
-	cgen_nl(g);
 	arr_foreach(b->stmts, Statement, s)
 		if (!cgen_stmt(g, s))
 			return false;
@@ -1649,8 +1630,6 @@ static bool cgen_val_pre(CGenerator *g, Value v, Type *t, Location where) {
 static bool cgen_val(CGenerator *g, Value v, Type *t, Location where) {
 	return cgen_val_ptr(g, val_get_ptr(&v, t), t, where);
 }
-
-
 
 static bool cgen_decl(CGenerator *g, Declaration *d) {
 	int has_expr = d->flags & DECL_HAS_EXPR;
