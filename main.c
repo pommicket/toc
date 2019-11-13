@@ -1,8 +1,9 @@
 /* 
 TODO:
+evaluate default arguments
+make sure they're only evaluated once
 compile time arguments + out parameters (in C)
 double check that val_get_ptr is being used everywhere it should be
-evaluate default arguments
 compile-time arguments for out parameter functions
 compile-time arguments for functions returning tuples
 deal with x, y @= fn(x: int, y @ int){}

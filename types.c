@@ -254,6 +254,15 @@ static bool type_of_fn(Typer *tr, Expression *e, Type *t) {
 				}
 			}
 		}
+		if (decl->flags & DECL_HAS_EXPR) {
+			Value val;
+			if (!eval_expr(tr->evalr, &decl->expr, &val)) {
+				info_print(decl->where, "Was trying to evaluate default arguments (which must be constants!)");
+				return false;
+			}
+			decl->expr.kind = EXPR_VAL;
+			decl->expr.val = val;
+		}
 		for (size_t i = 0; i < arr_len(decl->idents); i++) {
 			Type *param_type = typer_arr_add(tr, &t->fn.types);
 			*param_type = decl->type;
@@ -1050,6 +1059,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				
 				arr_foreach(fn_decl->params, Declaration, param) {
 					bool is_required = !(param->flags & DECL_HAS_EXPR);
+					long ident_idx = 0;
 					arr_foreach(param->idents, Identifier, ident) {
 						if (index == i) {
 							if (is_required) {
@@ -1058,9 +1068,18 @@ static bool types_expr(Typer *tr, Expression *e) {
 								free(s);
 								return false;
 							} else {
-								new_args[i] = param->expr;
+								assert(param->expr.kind == EXPR_VAL); /* evaluated in type_of_fn */
+								new_args[i].kind = EXPR_VAL;
+								new_args[i].flags = param->expr.flags;
+								new_args[i].type = param->type.kind == TYPE_TUPLE
+									? param->type.tuple[ident_idx]
+									: param->type;
+								new_args[i].val = param->type.kind == TYPE_TUPLE
+									? param->expr.val.tuple[ident_idx]
+									: param->expr.val;
 							}
 						}
+						ident_idx++;
 						index++;
 					}
 				}
@@ -1449,7 +1468,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 		t->tuple = NULL;
 		arr_foreach(e->tuple, Expression, x) {
 			Type *x_type = typer_arr_add(tr, &t->tuple);
-			types_expr(tr, x);
+			if (!types_expr(tr, x))
+				return false;
 			*x_type = x->type;
 		}
 		break;

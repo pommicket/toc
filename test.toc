@@ -22,15 +22,22 @@ puti @= fn(x: int) {
 // 	f.z += 43.2;
 // };
 
-f @= fn(x @ int) i: int {
+f @= fn(x @ int = 3+5) i: int {
   i = x;
 };
+g @= fn(x, y : (int, int) = (3+5, 4+9)) i: int {
+  i = x + y;
+};
+
 
 main @= fn() {
 	 puti(f(313));
 	 puti(f(128));
 	 puti(f(231));
 	 puti(f(100+213));
+	 puti(f());
+	 puti(g());
+
 };
 // b := bar();
 

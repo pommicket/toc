@@ -982,8 +982,14 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		break;
 	case EXPR_CALL: {
 		if (!cgen_expr_pre(g, e->call.fn)) return false;
-		arr_foreach(e->call.arg_exprs, Expression, arg)
-			if (!cgen_expr_pre(g, arg)) return false;
+		int i = 0;
+		bool *constant = e->call.fn->type.fn.constant;
+		arr_foreach(e->call.arg_exprs, Expression, arg) {
+			if (!constant || !constant[i]) {
+				if (!cgen_expr_pre(g, arg)) return false;
+			}
+			i++;
+		}
 		if (cgen_uses_ptr(&e->type)) {
 			e->call.c.id = g->ident_counter++;
 			if (!cgen_type_pre(g, &e->type, e->where)) return false;
@@ -1078,6 +1084,18 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			return false;
 		break;
 	case EXPR_VAL:
+		if (!cgen_val_pre(g, e->val, &e->type, e->where))
+			return false;
+		if (!cgen_type_pre(g, &e->type, e->where)) return false;
+		e->val_c_id = g->ident_counter++;
+		cgen_write(g, " ");
+		cgen_ident_id(g, e->val_c_id);
+		if (!cgen_type_post(g, &e->type, e->where)) return false;
+		cgen_write(g, " = ");
+		if (!cgen_val(g, e->val, &e->type, e->where))
+			return false;
+		cgen_write(g, ";");
+		cgen_nl(g);
 		break;
 	case EXPR_LITERAL_INT:
 	case EXPR_LITERAL_FLOAT:
@@ -1399,7 +1417,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		cgen_ident_id(g, e->slice.c.id);
 		break;
 	case EXPR_VAL:
-		assert(!*"Value expressions cannot be cgenerated!!!");
+		cgen_ident_id(g, e->val_c_id);
 		break;
 	}
 	return true;
