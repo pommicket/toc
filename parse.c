@@ -3,6 +3,10 @@ static bool parse_stmt(Parser *p, Statement *s);
 #define PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR 0x01
 static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_t flags);
 
+static bool is_decl(Tokenizer *t);
+static inline bool ends_decl(Token *t, DeclEndKind ends_with);
+
+
 static const char *expr_kind_to_str(ExprKind k) {
 	switch (k) {
 	case EXPR_LITERAL_FLOAT: return "float literal";
@@ -636,6 +640,8 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 							if (paren_level == 0) {
 								t->token++;
 								if (token_is_kw(t->token, KW_LBRACE)) goto end; /* void fn expr */
+								if (is_decl(t)) /* has return declaration */
+									goto end;
 								Type return_type;
 								bool prev = t->token->where.ctx->enabled;
 								t->token->where.ctx->enabled = false;
@@ -743,9 +749,6 @@ static bool parse_block(Parser *p, Block *b) {
 	p->block = prev_block;
 	return ret;
 }
-
-static bool is_decl(Tokenizer *t);
-static inline bool ends_decl(Token *t, DeclEndKind ends_with);
 
 static bool parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end) {
 	Tokenizer *t = p->tokr;

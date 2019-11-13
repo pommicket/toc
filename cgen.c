@@ -1689,6 +1689,9 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 				cgen_write(g, " = ");
 				if (!cgen_val(g, *val, type, d->where))
 					return false;
+			} else {
+				cgen_write(g, " = ");
+				cgen_zero_value(g, type);
 			}
 			cgen_write(g, ";");
 			cgen_nl(g);
@@ -1791,18 +1794,20 @@ static bool cgen_stmt(CGenerator *g, Statement *s) {
 static bool cgen_defs_expr(CGenerator *g, Expression *e) {
 	if (e->kind == EXPR_FN) {
 		FnExpr *f = &e->fn;
-		HashTable *instances = f->c.instances;
-		if (instances) {
-			/* generate each instance */
-			ValNumPair *pairs = instances->data;
-			for (U64 i = 0; i < instances->cap; i++) {
-				if (instances->occupied[i]) {
-					/* generate this instance */
-					if (!cgen_fn(g, f, e->where, pairs[i].num, pairs[i].val.tuple))
-						return false;
+
+		if (e->type.fn.constant) {
+			HashTable *instances = f->c.instances;
+			if (instances) {
+				/* generate each instance */
+				ValNumPair *pairs = instances->data;
+				for (U64 i = 0; i < instances->cap; i++) {
+					if (instances->occupied[i]) {
+						/* generate this instance */
+						if (!cgen_fn(g, f, e->where, pairs[i].num, pairs[i].val.tuple))
+							return false;
+					}
 				}
 			}
-			
 		} else {
 			if (!cgen_fn(g, &e->fn, e->where, 0, NULL))
 				return false;

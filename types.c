@@ -235,6 +235,7 @@ static bool type_of_fn(Typer *tr, Expression *e, Type *t) {
 	t->kind = TYPE_FN;
 	t->fn.types = NULL;
 	t->fn.constant = NULL; /* OPTIM: constant doesn't need to be a dynamic array */
+	bool has_constant_params = false;
 	Type *ret_type = typer_arr_add(tr, &t->fn.types);
 	if (!type_resolve(tr, &f->ret_type, e->where))
 		return false;
@@ -247,6 +248,7 @@ static bool type_of_fn(Typer *tr, Expression *e, Type *t) {
 		unsigned is_const = decl->flags & DECL_IS_CONST;
 		if (is_const) {
 			if (!t->fn.constant) {
+				has_constant_params = true;
 				for (size_t i = 0; i < idx; i++) {
 					*(bool *)typer_arr_add(tr, &t->fn.constant) = false;
 				}
@@ -255,7 +257,7 @@ static bool type_of_fn(Typer *tr, Expression *e, Type *t) {
 		for (size_t i = 0; i < arr_len(decl->idents); i++) {
 			Type *param_type = typer_arr_add(tr, &t->fn.types);
 			*param_type = decl->type;
-			if (t->fn.constant) {
+			if (has_constant_params) {
 				*(bool *)typer_arr_add(tr, &t->fn.constant) = is_const != 0;
 			}
 			idx++;
