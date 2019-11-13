@@ -2,6 +2,7 @@ static bool cgen_decls_stmt(CGenerator *g, Statement *s);
 static bool cgen_decls_block(CGenerator *g, Block *b);
 
 static bool cgen_decls_expr(CGenerator *g, Expression *e) {
+	cgen_recurse_subexprs(g, e, cgen_decls_expr, cgen_decls_block);
 	switch (e->kind) {
 	case EXPR_CALL:
 		e->call.c.instance = 0;
@@ -57,17 +58,18 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 		e->fn.c.name = NULL;
 		if (!e->fn.c.id)
 			e->fn.c.id = g->ident_counter++;
-		fn_enter(&e->fn, 0);
-		if (!cgen_fn_header(g, &e->fn, e->where, 0))
-			return false;
-		cgen_write(g, ";");
-		cgen_nl(g);
-		fn_exit(&e->fn);
-		break;
+		if (!e->type.fn.constant) {
+			fn_enter(&e->fn, 0);
+			if (!cgen_fn_header(g, &e->fn, e->where, 0))
+				return false;
+			cgen_write(g, ";");
+			cgen_nl(g);
+			fn_exit(&e->fn);
+		}
+		break;	
 	default:
 		break;
 	}
-	cgen_recurse_subexprs(g, e, cgen_decls_expr, cgen_decls_block);
 	
 	return true;
 }

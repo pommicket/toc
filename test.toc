@@ -1,8 +1,8 @@
 
-// puti @= fn(x: int) {
-// 	 #C("printf(\"%ld\\n\", (long)x);
-// ");
-// };
+puti @= fn(x: int) {
+	 #C("printf(\"%ld\\n\", (long)x);
+");
+};
 
 // putf @= fn(x: float) {
 // 	 #C("printf(\"%f\\n\", (double)x);
@@ -10,10 +10,13 @@
 // };
 
 
-f @= fn(x: int, y @ int) int { x + y };
 
 main @= fn() {
-	 f(3,5);
-
+f @= fn(x: int, y @ int) int { x + y };
+	 puti(f(3,5));
+	 
+	 puti(f(4, 5));
+	 puti(f(3, 6));
+puti((fn(x: int, y @ int) int { x + y })(1,2));
 };
 

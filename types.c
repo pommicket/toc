@@ -1036,7 +1036,12 @@ static bool types_expr(Typer *tr, Expression *e) {
 			params_set[p] = true;
 		}
 		if (!ret) return false;
+
+		bool any_const = false;
+		FnType *fn_type = &f->type.fn;
 		for (size_t i = 0; i < nparams; i++) {
+			if (fn_type->constant && fn_type->constant[i])
+				any_const = true;
 			if (!params_set[i]) {
 				size_t index = 0;
 				assert(fn_decl); /* we can only miss an arg if we're using named/optional args */
@@ -1059,28 +1064,20 @@ static bool types_expr(Typer *tr, Expression *e) {
 				}
 			}
 		}
-		if (fn_decl) {
+		if (any_const) {
 			/* evaluate compile-time arguments */
-			size_t i = 0;
-			arr_foreach(fn_decl->params, Declaration, param) {
-				if (param->flags & DECL_IS_CONST) {
-					arr_foreach(param->idents, Identifier, ident) {
-						Value arg_val;
-						if (!eval_expr(tr->evalr, &new_args[i], &arg_val)) {
-							if (tr->evalr->enabled) {
-								char *s = ident_to_str(*ident);
-								info_print(new_args[i].where, "(error occured while trying to evaluate compile-time argument, %s)", s);
-								info_print(param->where, "(%s was declared constant here)", s);
-								free(s);
-							}
-							return false;
+			for (size_t i = 0; i < arr_len(fn_type->types)-1; i++) {
+				if (fn_type->constant[i]) {
+					Value arg_val;
+					if (!eval_expr(tr->evalr, &new_args[i], &arg_val)) {
+						if (tr->evalr->enabled) {
+							info_print(new_args[i].where, "(error occured while trying to evaluate compile-time argument, argument #%lu)", (unsigned long)i);
 						}
-						new_args[i].kind = EXPR_VAL;
-						new_args[i].val = arg_val;
-						i++;
+						return false;
 					}
-				} else {
-					i += arr_len(param->idents);
+					new_args[i].kind = EXPR_VAL;
+					new_args[i].val = arg_val;
+					i++;
 				}
 			}
 		}
