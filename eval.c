@@ -1526,8 +1526,8 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 }
 
 static bool eval_decl(Evaluator *ev, Declaration *d) {
-	int has_expr = d->flags & DECL_HAS_EXPR;
-	int is_const = d->flags & DECL_IS_CONST;
+	unsigned has_expr = d->flags & DECL_HAS_EXPR;
+	unsigned is_const = d->flags & DECL_IS_CONST;
 	Value val = {0};
 
 	if (has_expr) {

@@ -226,7 +226,7 @@ static void cgen_ident(CGenerator *g, Identifier i) {
 		cgen_write(g, "main__");
 	} else {
 		cgen_indent(g);
-		fprint_ident(cgen_writing_to(g), i);
+		fprint_ident_reduced_charset(cgen_writing_to(g), i);
 	}
 }
 
@@ -449,7 +449,7 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where, I64 instanc
 			}
 		}
 	}
-	if (out_param) {
+	if (out_param) {		
 		if (f->ret_type.kind == TYPE_TUPLE) {
 			/* multiple return variables */
 			for (size_t i = 0; i < arr_len(f->ret_type.tuple); i++) {
@@ -480,7 +480,7 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where, I64 instanc
 /* 
    Either set_expr or set_str should be NULL and either to_expr or to_str should be NULL 
    Also, set_str and/or to_str should be NULL
-   this will call cgen_expr_pre for set_expr and to_expr
+   this DOES NOT call cgen_expr_pre for set_expr or to_expr
 */
 static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, Expression *to_expr,
 					 const char *to_str) {
@@ -489,12 +489,10 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 	if (set_expr) {
 		type = &set_expr->type;
 		where = set_expr->where;
-		if (!cgen_expr_pre(g, set_expr)) return false;
 	} else {
 		assert(to_expr);
 		type = &to_expr->type;
 		where = to_expr->where;
-		if (!cgen_expr_pre(g, to_expr)) return false;
 	}
 	type = type_inner(type);
 	switch (type->kind) {
@@ -562,7 +560,7 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 	return true;
 }
 
-/* one of exprs, idents, and prefix should be NULL. */
+/* one of exprs, idents, and prefix should be NULL. does NOT call cgen_expr_pre for to/exprs */
 static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents, const char *prefix, Expression *to) {
 	IdentID prefix_id; /* ID of prefix for block */
 	switch (to->kind) {
@@ -614,7 +612,7 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 				cgen_write(g, "&(%s%lu_)", prefix, i);
 			}
 		}
-		cgen_writeln(g, ");");
+		cgen_writeln(g, "); ");
 	} break;
 	case EXPR_IF:
 	    prefix_id = to->if_.c.id;
@@ -663,57 +661,6 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 	case EXPR_TYPE:
 		assert(0);
 		return false;
-	}
-	return true;
-}
-
-/* generates the C code for new'ing a slice of array type t (e.g. [5]int) and putting it in the given ident id. */
-static bool cgen_new_slice(CGenerator *g, Type *t, IdentID id, Location where) {
-	Expression *n_expr = t->arr.n_expr;
-	assert(!(t->flags & TYPE_IS_RESOLVED)); /* we don't want this to be resolved, because the size might only be known at runtime. */
-	if (!cgen_expr_pre(g, n_expr)) return false;
-	cgen_write(g, "size_t s");
-	cgen_ident_id(g, id);
-	cgen_write(g, " = ");
-	if (!cgen_expr(g, n_expr)) return false;
-	cgen_write(g, "; slice_ ");
-	cgen_ident_id(g, id);
-	cgen_write(g, ";");
-	cgen_ident_id(g, id);
-	cgen_write(g, ".data = e__calloc(s");
-	cgen_ident_id(g, id);
-	cgen_write(g, ", sizeof(");
-	if (t->arr.of->kind == TYPE_ARR) {
-		cgen_write(g, "slice_");
-	} else {
-		if (!cgen_type_pre(g, t->arr.of, where))
-			return false;
-		if (!cgen_type_post(g, t->arr.of, where))
-			return false;
-	}
-	cgen_write(g, ")); ");
-	cgen_ident_id(g, id);
-	cgen_write(g, ".n = s");
-	cgen_ident_id(g, id);
-	cgen_write(g, ";");
-	if (t->arr.of->kind == TYPE_ARR) {
-		/* slice of slices. initialize the inner slices. */
-		IdentID child_id = g->ident_counter++;
-		cgen_write(g, "for (i64 i_ = 0; i_ < s");
-		cgen_ident_id(g, id);
-		cgen_write(g, "; i_++) {");
-		cgen_nl(g);
-		g->indent_lvl++;
-		if (!cgen_new_slice(g, t->arr.of, child_id, where))
-			return false;
-		cgen_write(g, " ((slice_*)");
-		cgen_ident_id(g, id);
-		cgen_write(g, ".data)[i_] = ");
-		cgen_ident_id(g, child_id);
-		cgen_write(g, ";");
-		cgen_nl(g);
-		g->indent_lvl--;
-		cgen_write(g, "}");
 	}
 	return true;
 }
@@ -990,7 +937,8 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			}
 			i++;
 		}
-		if (cgen_uses_ptr(&e->type)) {
+		if (cgen_uses_ptr(&e->type)
+			&& e->type.kind != TYPE_TUPLE) {
 			e->call.c.id = g->ident_counter++;
 			if (!cgen_type_pre(g, &e->type, e->where)) return false;
 			cgen_write(g, " ");
@@ -1441,6 +1389,8 @@ static bool cgen_block(CGenerator *g, Block *b, const char *ret_name, U16 flags)
 		if (!cgen_stmt(g, s))
 			return false;
 	if (b->ret_expr && ret_name) {
+		if (!cgen_expr_pre(g, b->ret_expr))
+			return false;
 		if (b->ret_expr->type.kind == TYPE_TUPLE) {
 			if (!cgen_set_tuple(g, NULL, NULL, ret_name, b->ret_expr))
 				return false;
@@ -1529,12 +1479,34 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where, I64 instance, Valu
 	if (!cgen_block(g, &f->body, NULL, CGEN_BLOCK_NOENTER | CGEN_BLOCK_NOBRACES))
 		return false;
 	if (f->ret_decls) {
-		if (cgen_uses_ptr(&f->ret_type)) {
+		/* OPTIM */
+
+		/* long-winded code to generate a return expression using the ret_decls. */
+		Expression ret_expr;
+		ret_expr.flags = EXPR_FOUND_TYPE;
+	    ret_expr.type = f->ret_type;
+		if (arr_len(f->ret_decls) == 1
+			&& arr_len(f->ret_decls[0].idents) == 1) {
+			ret_expr.kind = EXPR_IDENT;
+			ret_expr.ident = f->ret_decls[0].idents[0];
 		} else {
-			cgen_write(g, "return ");
-			cgen_ident(g, f->ret_decls[0].idents[0]);
-			cgen_writeln(g, ";");
+			ret_expr.kind = EXPR_TUPLE;
+			ret_expr.tuple = NULL;
+			size_t i = 0;
+			arr_foreach(f->ret_decls, Declaration, d) {
+				arr_foreach(d->idents, Identifier, ident) {
+					Expression *element = arr_add(&ret_expr.tuple);
+					element->flags = EXPR_FOUND_TYPE;
+					element->kind = EXPR_IDENT;
+					element->type = f->ret_type.tuple[i];
+					element->ident = *ident;
+					i++;
+				}
+			}
 		}
+		
+		if (!cgen_ret(g, &ret_expr))
+			return false;
 	} else if (f->body.ret_expr) {
 		if (!cgen_ret(g, f->body.ret_expr)) return false;
 	}
@@ -1668,28 +1640,12 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 			Type *type = is_tuple ? &d->type.tuple[idx] : &d->type;
 			Value *val = is_tuple ? &d->val.tuple[idx] : &d->val;
 			if (type->kind == TYPE_TYPE) {
-				/* mostly handled in typedefs_cgen, except for struct declarations */
-				if (val->type->kind == TYPE_STRUCT) {
-					cgen_write(g, "struct ");
-					if (g->block == NULL)
-						cgen_ident(g, i);
-					else
-						cgen_ident_id(g, d->c.ids[idx]);
-					cgen_write(g, "{");
-					cgen_nl(g);
-					g->indent_lvl++;
-					arr_foreach(val->type->struc.fields, Field, f) {
-						if (!cgen_type_pre(g, f->type, d->where)) return false;
-						cgen_write(g, " ");
-						cgen_ident(g, f->name);
-						if (!cgen_type_post(g, f->type, d->where)) return false;
-						cgen_write(g, ";");
-						cgen_nl(g);
-					}
-					g->indent_lvl--;
-					cgen_write(g, "};");
-					cgen_nl(g);
-				}
+				/* 
+				   confusingly,
+				   struct declarations are handled by typedefs_cgen,
+				   and struct definitions are handled by decls_cgen.
+				   we don't need to do anything here.
+				 */
 				continue;
 			} else if (type->kind == TYPE_FN && (d->flags & DECL_IS_CONST)) {
 				/* don't generate function pointer declaration for constant fns */
@@ -1731,11 +1687,11 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 			cgen_write(g, "; ");
 		}
 		if (has_expr) {
+			if (!cgen_expr_pre(g, &d->expr)) return false;
 			if (d->expr.type.kind == TYPE_TUPLE) {
 				if (!cgen_set_tuple(g, NULL, d->idents, NULL, &d->expr)) return false;
 			} else {
 				cgen_write(g, "{");
-		 
 				cgen_nl(g);
 				if (!cgen_type_pre(g, &d->type, d->expr.where)) return false;
 				cgen_write(g, " expr__");
@@ -1760,6 +1716,7 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 	return true;
 }
 
+/* does NOT call cgen_expr_pre for ret. */
 static bool cgen_ret(CGenerator *g, Expression *ret) {
 	assert((g->fn->ret_type.kind == TYPE_VOID) == (ret == NULL));
 	if (!ret) {
@@ -1771,9 +1728,8 @@ static bool cgen_ret(CGenerator *g, Expression *ret) {
 		} else {
 			if (!cgen_set(g, NULL, "*ret_", ret, NULL)) return false;
 		}
-		cgen_write(g, "return");
+		cgen_write(g, " return");
 	} else {
-		if (!cgen_expr_pre(g, ret)) return false;
 		cgen_write(g, "return ");
 			
 		if (!cgen_expr(g, ret)) return false;
@@ -1787,10 +1743,9 @@ static bool cgen_ret(CGenerator *g, Expression *ret) {
 static bool cgen_stmt(CGenerator *g, Statement *s) {
 	/*
 	  TODO(eventually): optionally this:
+	  cgen_write(g, "/\* %s:%d *\/", s->where.ctx->filename, s->where.line);
+	  (or even #line directives!) 
 	*/
-	// cgen_write(g, "/* %s:%d */", s->where.ctx->filename, s->where.line);
-	/* (or even #line directives!) */
-	
 	switch (s->kind) {
 	case STMT_DECL:
 		if (!cgen_decl(g, &s->decl)) return false;
@@ -1801,10 +1756,15 @@ static bool cgen_stmt(CGenerator *g, Statement *s) {
 		cgen_write(g, ";");
 		cgen_nl(g);
 		break;
-	case STMT_RET:
-		if (!cgen_ret(g, s->ret.flags & RET_HAS_EXPR ? &s->ret.expr : NULL))
+	case STMT_RET: {
+		unsigned has_expr = s->ret.flags & RET_HAS_EXPR;
+		if (has_expr) {
+			if (!cgen_expr_pre(g, &s->ret.expr))
+				return false;
+		}
+		if (!cgen_ret(g, has_expr ? &s->ret.expr : NULL))
 			return false;
-		break;
+	} break;
 	}
 	return true;
 }

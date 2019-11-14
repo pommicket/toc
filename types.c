@@ -62,7 +62,7 @@ static bool type_eq(Type *a, Type *b) {
 		}
 		return true;
 	}
-	case TYPE_TUPLE:
+	case TYPE_TUPLE: {
 		if (arr_len(a->tuple) != arr_len(b->tuple)) return false;
 		Type *a_types = a->tuple, *b_types = b->tuple;
 		for (size_t i = 0; i < arr_len(a->tuple); i++) {
@@ -70,6 +70,7 @@ static bool type_eq(Type *a, Type *b) {
 				return false;
 		}
 		return true;
+	}
 	case TYPE_ARR:
 		if (a->arr.n != b->arr.n) return false;
 		return type_eq(a->arr.of, b->arr.of);
@@ -255,13 +256,15 @@ static bool type_of_fn(Typer *tr, Expression *e, Type *t) {
 			}
 		}
 		if (decl->flags & DECL_HAS_EXPR) {
-			Value val;
-			if (!eval_expr(tr->evalr, &decl->expr, &val)) {
-				info_print(decl->where, "Was trying to evaluate default arguments (which must be constants!)");
-				return false;
+			if (decl->expr.kind != EXPR_VAL) {
+				Value val;
+				if (!eval_expr(tr->evalr, &decl->expr, &val)) {
+					info_print(decl->where, "Was trying to evaluate default arguments (which must be constants!)");
+					return false;
+				}
+				decl->expr.kind = EXPR_VAL;
+				decl->expr.val = val;
 			}
-			decl->expr.kind = EXPR_VAL;
-			decl->expr.val = val;
 		}
 		for (size_t i = 0; i < arr_len(decl->idents); i++) {
 			Type *param_type = typer_arr_add(tr, &t->fn.types);
@@ -614,22 +617,13 @@ static bool types_expr(Typer *tr, Expression *e) {
 	switch (e->kind) {
 	case EXPR_FN: {
 		e->fn.c.instances = NULL; /* maybe this should be handled by cgen... oh well */
-		Type prev_ret_type = tr->ret_type;
-		bool prev_can_ret = tr->can_ret;
+		FnExpr *prev_fn = tr->fn;
 		FnExpr *f = &e->fn;
 		if (!type_of_fn(tr, e, t)) {
 			success = false;
 			goto fn_ret;
 		}
-		bool has_named_ret_vals = f->ret_decls != NULL;
-		if (has_named_ret_vals) {
-			/* set return type to void to not allow return values */
-			tr->ret_type.kind = TYPE_VOID;
-			tr->ret_type.flags = 0;
-		} else {
-			tr->ret_type = t->fn.types[0];
-		}
-		tr->can_ret = true;
+		tr->fn = f;
 		if (!fn_enter(f, SCOPE_CHECK_REDECL))
 			return false;
 		bool block_success = true;
@@ -642,6 +636,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		Expression *ret_expr = f->body.ret_expr;
 		assert(t->kind == TYPE_FN);
 		Type *ret_type = t->fn.types;
+		bool has_named_ret_vals = f->ret_decls != NULL;
 		if (ret_expr) {
 			if (!types_expr(tr, ret_expr)) {
 				success = false;
@@ -663,7 +658,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 				if (last_stmt->kind == STMT_RET) {
 					/*
 					  last statement is a return, so it doesn't matter that the function has no return value
-					  ideally this would handle if foo { return 5; } else { return 6; } */
+					  ideally this would handle if foo { return 5; } else { return 6; }
+					*/
 					success = true;
 					goto fn_ret;
 				}
@@ -677,8 +673,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			goto fn_ret;
 		}
 		fn_ret:
-		tr->ret_type = prev_ret_type;
-		tr->can_ret = prev_can_ret;
+		tr->fn = prev_fn;
 		if (!success) return false;
 	} break;
 	case EXPR_LITERAL_INT:
@@ -1567,7 +1562,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 			d->type = d->expr.type;
 			d->type.flags &= (uint16_t)~(uint16_t)TYPE_IS_FLEXIBLE; /* x := 5; => x is not flexible */
 		}
-		if ((d->flags & DECL_IS_CONST) || tr->block == NULL) {
+		if ((d->flags & DECL_IS_CONST) || (tr->block == NULL && tr->fn == NULL)) {
 			if (!(d->flags & DECL_FOUND_VAL)) {
 				if (!eval_expr(tr->evalr, &d->expr, &d->val)) {
 					success = false;
@@ -1633,25 +1628,30 @@ static bool types_stmt(Typer *tr, Statement *s) {
 			return false;
 		break;
 	case STMT_RET:
-		if (!tr->can_ret) {
+		if (!tr->fn) {
 			err_print(s->where, "return outside of a function.");
 			return false;
 		}
 		if (s->ret.flags & RET_HAS_EXPR) {
-			if (tr->ret_type.kind == TYPE_VOID) {
-				err_print(s->where, "Return value in function which should not return a value.");
+			if (tr->fn->ret_type.kind == TYPE_VOID) {
+				err_print(s->where, "Return value in a void function.");
+				return false;
+			}
+			if (tr->fn->ret_decls) {
+				err_print(s->where, "Return expression in a function with named return values.");
 				return false;
 			}
 			if (!types_expr(tr, &s->ret.expr))
 				return false;
-			if (!type_eq(&tr->ret_type, &s->ret.expr.type)) {
+			if (!type_eq(&tr->fn->ret_type, &s->ret.expr.type)) {
 				char *got = type_to_str(&s->ret.expr.type);
-				char *expected = type_to_str(&tr->ret_type);
+				char *expected = type_to_str(&tr->fn->ret_type);
 				err_print(s->where, "Returning type %s in function which returns %s.", got, expected);
 				return false;
 			}
 		} else {
-			if (tr->ret_type.kind != TYPE_VOID) {
+			if (tr->fn->ret_type.kind != TYPE_VOID
+				&& !tr->fn->ret_decls) {
 				err_print(s->where, "No return value in non-void function.");
 				return false;
 			}
@@ -1663,7 +1663,7 @@ static bool types_stmt(Typer *tr, Statement *s) {
 
 static void typer_create(Typer *tr, Evaluator *ev, Allocator *allocr) {
 	tr->block = NULL;
-	tr->can_ret = false;
+	tr->fn = NULL;
 	tr->evalr = ev;
 	tr->in_decls = NULL;
 	tr->in_expr_decls = NULL;

@@ -1,7 +1,7 @@
 /* 
 TODO:
-evaluate default arguments
-make sure they're only evaluated once
+memory leaks!
+deal with unused functions
 compile time arguments + out parameters (in C)
 double check that val_get_ptr is being used everywhere it should be
 compile-time arguments for out parameter functions
@@ -12,7 +12,6 @@ struct parameters
 don't allow while {3; 5} (once break is added)
 any odd number of "s for a string
 modifiable string literals
-unicode variable names (cgen support)
 make sure futurely/currently-declared types are only used by pointer/slice
 allow omission of trailing ; in foo @= fn() {}?
  */
@@ -127,7 +126,8 @@ int main(int argc, char **argv) {
 	
 	free(contents);
 	allocr_free_all(&main_allocr);
-
+	evalr_free(&ev);
+	
 	fclose(out);
 	/* fclose(h_out); */
 	idents_free(&file_idents);

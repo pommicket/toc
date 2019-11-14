@@ -4,7 +4,7 @@ static bool cgen_decls_block(CGenerator *g, Block *b);
 static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 	cgen_recurse_subexprs(g, e, cgen_decls_expr, cgen_decls_block);
 	switch (e->kind) {
-	case EXPR_CALL:
+	case EXPR_CALL: {
 		e->call.c.instance = 0;
 		assert(e->call.fn->type.kind == TYPE_FN);
 		FnType *fn_type = &e->call.fn->type.fn;
@@ -53,7 +53,7 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 				e->call.c.instance = (U32)instance_number;
 			}
 		}
-		break;
+	} break;
 	case EXPR_FN:
 		e->fn.c.name = NULL;
 		if (!e->fn.c.id)
@@ -98,6 +98,37 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 			return false;
 		fn_exit(&d->expr.fn);
 	} else if (d->flags & DECL_HAS_EXPR) {
+		if (d->flags & DECL_IS_CONST) {
+			for (size_t idx = 0; idx < arr_len(d->idents); idx++) {
+				Identifier i = d->idents[idx];
+				Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx] : &d->type;
+				if (type->kind == TYPE_TYPE) {
+					Value *val = d->type.kind == TYPE_TUPLE ? &d->val.tuple[idx] : &d->val;
+					if (val->type->kind == TYPE_STRUCT) {
+						/* generate struct definition */
+						cgen_write(g, "struct ");
+						if (g->block == NULL)
+							cgen_ident(g, i);
+						else
+							cgen_ident_id(g, d->c.ids[idx]);
+						cgen_write(g, "{");
+						cgen_nl(g);
+						g->indent_lvl++;
+						arr_foreach(val->type->struc.fields, Field, f) {
+							if (!cgen_type_pre(g, f->type, d->where)) return false;
+							cgen_write(g, " ");
+							cgen_ident(g, f->name);
+							if (!cgen_type_post(g, f->type, d->where)) return false;
+							cgen_write(g, ";");
+							cgen_nl(g);
+						}
+						g->indent_lvl--;
+						cgen_write(g, "};");
+						cgen_nl(g);
+					}
+				}
+			}
+		}
 		if (!(d->flags & DECL_IS_CONST) || (d->expr.kind == EXPR_FN)) {
 			if (!cgen_decls_expr(g, &d->expr))
 				return false;

@@ -188,27 +188,6 @@ static int ident_index_in_decl(Identifier i, Declaration *d) {
 	return -1;
 }
 
-static Type *ident_typeval(Identifier i) {
-	Value *val;
-	IdentDecl *idecl = ident_decl(i);
-	if (!idecl) return NULL;
-	Declaration *d = idecl->decl;
-	if (!(d->flags & DECL_IS_CONST))
-		return NULL;
-	assert(d->flags & DECL_FOUND_TYPE);
-	if (d->type.kind == TYPE_TUPLE) {
-		size_t idx;
-		for (idx = 0; idx < arr_len(d->idents); idx++) {
-			if (d->idents[idx] == i)
-				break;
-		}
-		assert(idx < arr_len(d->idents));
-		val = &d->val.tuple[idx];
-	} else val = &d->val;
-
-	return val->type;
-}
-
 static bool ident_eq_str(Identifier i, const char *s) {
 	const char *t = s + (strlen(s) - 1);
 	while (1) {

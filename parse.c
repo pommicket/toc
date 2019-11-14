@@ -622,7 +622,7 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 					} else break;
 				}
 			} break;
-			case KW_FN:
+			case KW_FN: {
 				ret = false;
 				t->token++;
 				if (!token_is_kw(t->token, KW_LPAREN)) {
@@ -643,14 +643,16 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 								if (is_decl(t)) /* has return declaration */
 									goto end;
 								Type return_type;
-								bool prev = t->token->where.ctx->enabled;
-								t->token->where.ctx->enabled = false;
+								bool *enabled = &t->token->where.ctx->enabled;
+								bool prev_enabled = *enabled;
+							    *enabled = false;
 								if (!parse_type(p, &return_type)) {
 									/* couldn't parse a return type. void fn type */
+									*enabled = prev_enabled;
 									ret = true;
 									goto end;
 								}
-							    t->token->where.ctx->enabled = prev;
+							    *enabled = prev_enabled;
 								if (token_is_kw(t->token, KW_LBRACE)) {
 									/* non-void fn expr */
 									goto end;
@@ -664,7 +666,7 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 						}
 					t->token++;
 				}
-				break;
+			} break;
 			case KW_AMPERSAND:
 				t->token++; /* continue; see if next thing is definitely a type */
 				goto continu;
@@ -804,6 +806,12 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 	    f->ret_decls = NULL;
 		if (!parse_decl_list(p, &f->ret_decls, DECL_END_LBRACE_COMMA))
 			return false;
+		arr_foreach(f->ret_decls, Declaration, d) {
+			if (d->flags & DECL_IS_CONST) {
+				err_print(d->where, "Named return values cannot be constant.");
+				return false;
+			}
+		}
 		t->token--;	/* move back to { */
 		if (arr_len(f->ret_decls) > 1 || arr_len(f->ret_decls[0].idents) > 1) {
 			f->ret_type.kind = TYPE_TUPLE;

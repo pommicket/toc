@@ -1,7 +1,7 @@
-#define NO_ALLOCATOR 0 /* useful for debugging; valgrind checks writing past the end of a malloc, but that won't work with an allocator */
+/* #define NO_ALLOCATOR 0 /\* useful for debugging; valgrind checks writing past the end of a malloc, but that won't work with an allocator *\/ */
 /* number of bytes a page hold, not including the header */
 #define PAGE_BYTES (16384 - sizeof(Page))
-#define PAGE_MAX_ALIGNS (PAGE_BYTES / sizeof(max_align_t))
+#define PAGE_MAX_ALIGNS (PAGE_BYTES / sizeof(MaxAlign))
 
 static void allocr_create(Allocator *a) {
 	a->first = a->last = NULL;
@@ -17,7 +17,7 @@ static void *allocr_malloc(Allocator *a, size_t bytes) {
 	size_t pos = PAGE_MAX_ALIGNS;
 	if (a->last)
 		pos = a->last->used;
-	size_t max_aligns = (bytes + sizeof(max_align_t) - 1) / sizeof(max_align_t);
+	size_t max_aligns = (bytes + sizeof(MaxAlign) - 1) / sizeof(MaxAlign);
 	
 	if (pos + max_aligns > PAGE_MAX_ALIGNS) {
 		/* make a new page for this data */

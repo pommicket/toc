@@ -2,7 +2,7 @@
 typedef struct {
 	size_t len;
 	size_t cap;
-	max_align_t data[];
+	MaxAlign data[];
 } ArrHeader;
 
 static inline ArrHeader *arr_hdr(void *arr) {

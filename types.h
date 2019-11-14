@@ -3,8 +3,18 @@ typedef uint64_t UInteger;
 typedef long double Floating; /* OPTIM: Switch to double, but make sure floating-point literals are right */
 
 #if __STDC_VERSION__ < 201112
-/* assume long double has the strictest alignment */
-typedef long double max_align_t;
+/* try to find the type with the strictest alignment */
+typedef union {
+	long double floating;
+	void *ptr;
+	#if __STDC_VERSION__ >= 199901
+	long
+	#endif
+	long integer;
+	void (*fn_ptr)(void);
+} MaxAlign;
+#else
+typedef max_align_t MaxAlign;
 #endif
 
 #define INTEGER_MAX INT64_MAX
@@ -50,8 +60,8 @@ typedef struct {
 
 typedef struct Page {
 	struct Page *next;
-	size_t used; /* number of max_align_t's used, not bytes */
-	max_align_t data[];
+	size_t used; /* number MaxAligns used, not bytes */
+    MaxAlign data[];
 } Page;
 
 typedef struct {
@@ -376,10 +386,10 @@ typedef enum {
 			  EXPR_DALIGNOF,
 			  EXPR_SLICE,
 			  EXPR_TYPE,
-			  /* a value (it's useful to have this). 
-				 USE WITH CAUTION
-				 expression values are never to be cgenerated! if cgen encounters one, 
-				 it will assert(0)!
+			  /* 
+				 a value (it's useful to have this). 
+				 right now they don't work with cgen_set_tuple
+				 (as of yet, that is unneeded)
 			  */
 			  EXPR_VAL 
 } ExprKind;
@@ -654,8 +664,7 @@ typedef struct Typer {
 	Expression **in_expr_decls; /* an array of expressions whose declarations (e.g. each **x := foo**) we are currently inside */
 	Declaration **in_decls; /* array of declarations we are currently inside */
 	Block *block;
-	bool can_ret;
-	Type ret_type; /* the return type of the function we're currently parsing. */
+	FnExpr *fn; /* the function we're currently parsing. */
 } Typer;
 
 typedef struct {

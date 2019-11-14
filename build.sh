@@ -14,7 +14,7 @@ fi
 #   - must be set if the zero value of a pointer (as might be set by calloc/memset)
 #     is not the NULL pointer.
 
-ADDITIONAL_FLAGS='-Wno-unused-function'
+# ADDITIONAL_FLAGS='-Wno-unused-function'
 
 if [ "$CC" = "clang" ]; then
 	WARNINGS='-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wimplicit-fallthrough -Wno-unused-parameter'

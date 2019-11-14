@@ -1,51 +1,28 @@
-
 puti @= fn(x: int) {
 	 #C("printf(\"%ld\\n\", (long)x);
 ");
 };
 
-// putf @= fn(x: float) {
-// 	 #C("printf(\"%f\\n\", (double)x);
-// ");
-// };
-
-
-// Foo @= struct {
-// 	x, y: int;
-// 	z: float;
-// };
-
-
-// bar @= fn() (f: Foo) {
-// 	f.x = 3;
-// 	f.y = 123;
-// 	f.z += 43.2;
-// };
-
-f @= fn(x @ int = 3+5) i: int {
-  i = x;
+☃ @= struct {
+	x, y: int;
+	z: float;
 };
-g @= fn(x, y : (int, int) = (3+5, 4+9)) i: int {
-  i = x + y;
+something @= fn() int {
+		  5
 };
 
+bar @= fn(a := something()) f: ☃, g: int {
+	f.x = a;
+	f.y = 123;
+	f.z += 43.2;
+	g = 17;
+};
 
 main @= fn() {
-	 puti(f(313));
-	 puti(f(128));
-	 puti(f(231));
-	 puti(f(100+213));
-	 puti(f());
-	 puti(g());
-
+f,g := bar();
+puti(g);
+puti(f.x);
+puti(f.y);
+h,i := bar();
+puti(h.x);
 };
-// b := bar();
-
-// f @= fn(x: int, y @ int) int { x + y };
-// 	 puti(f(3,5));
-	 
-// 	 puti(f(4, 5));
-// 	 puti(f(3, 6));
-// puti((fn(x: int, y @ int) int { x + y })(1,2));
-// };
-
