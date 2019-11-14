@@ -232,6 +232,7 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 									   ? t->user.decl->idents[t->user.index]
 									   : t->user.ident);
 		size_t ret = str_copy(buffer, bufsize, ident_str);
+		free(ident_str);
 		return ret;
 	}
 	}
@@ -2177,8 +2178,8 @@ static void fprint_parsed_file(FILE *out, ParsedFile *f) {
 	}
 }
 
-static long decl_ident_index(Declaration *d, Identifier i) {
-	long idx = 0;
+static int decl_ident_index(Declaration *d, Identifier i) {
+	int idx = 0;
 	arr_foreach(d->idents, Identifier, j) {
 		if (i == *j)
 			return idx;

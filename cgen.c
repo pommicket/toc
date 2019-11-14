@@ -84,7 +84,7 @@ static bool cgen_defs_block(CGenerator *g, Block *b);
 		break;											\
 	case EXPR_EACH: {									\
 		EachExpr *ea = &e->each;						\
-		if (!each_enter(e, 0)) return false;			\
+		if (!each_enter(e)) return false;				\
 		if (ea->flags & EACH_IS_RANGE) {				\
 			if (!f(g, ea->range.from))					\
 				return false;							\
@@ -203,8 +203,8 @@ static bool cgen_uses_ptr(Type *t) {
 	switch (t->kind) {
 	case TYPE_TUPLE:
 	case TYPE_STRUCT:
+	case TYPE_ARR:
 		return true;
-	case TYPE_ARR: /* TODO: test me */
 	case TYPE_BUILTIN:
 	case TYPE_PTR:
 	case TYPE_FN:
@@ -587,18 +587,26 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 	case EXPR_CALL: {
 		/* e.g. a, b = fn_which_returns_tuple(); */
 		if (!cgen_expr(g, to->call.fn)) return false;
+		if (to->call.c.instance)
+			cgen_write(g, "%"PRId64, to->call.c.instance);
 		cgen_write(g, "(");
-		bool any_args = arr_len(to->call.arg_exprs) != 0;
+		bool any_args = false;
+		bool *constant = to->call.fn->type.fn.constant;
+		int i = 0;
 		arr_foreach(to->call.arg_exprs, Expression, arg) {
-			if (arg != to->call.arg_exprs)
-				cgen_write(g, ", ");
-			if (!cgen_expr(g, arg))
-				return false;
+			if (!constant || !constant[i]) {
+				if (any_args)
+					cgen_write(g, ", ");
+				any_args = true;
+				if (!cgen_expr(g, arg))
+					return false;
+			}
+			i++;
 		}
 		/* out params */
 		size_t len = exprs ? arr_len(exprs) : arr_len(idents);
 
-		for (unsigned long i = 0; i < (unsigned long)len; i++) {
+		for (i = 0; i < (int)len; i++) {
 			if (any_args || i > 0)
 				cgen_write(g, ", ");
 			if (exprs) {
@@ -609,7 +617,7 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 				cgen_write(g, "&");
 				cgen_ident(g, idents[i]);
 			} else {
-				cgen_write(g, "&(%s%lu_)", prefix, i);
+				cgen_write(g, "&(%s%d_)", prefix, i);
 			}
 		}
 		cgen_writeln(g, "); ");
@@ -745,7 +753,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		}
 	    
 		ea->c.id = id;
-		if (!each_enter(e, 0)) return false;
+		if (!each_enter(e)) return false;
 		cgen_write(g, "{");
 		if (is_range) {
 			if (ea->range.to) {
@@ -946,14 +954,20 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			if (!cgen_type_post(g, &e->type, e->where)) return false;
 			cgen_write(g, ";"); cgen_nl(g);
 			if (!cgen_expr(g, e->call.fn)) return false;
+			if (e->call.c.instance) {
+				cgen_write(g, "%"PRId64, e->call.c.instance);
+			}
 			cgen_write(g, "(");
 			bool any_args = false;
+			i = 0;
 			arr_foreach(e->call.arg_exprs, Expression, arg) {
-				any_args = true;
-				if (arg != e->call.arg_exprs)
-					cgen_write(g, ", ");
-				if (!cgen_expr(g, arg))
-					return false;
+				if (!constant || !constant[i]) {
+					if (any_args) cgen_write(g, ", ");
+					any_args = true;
+					if (!cgen_expr(g, arg))
+						return false;
+				}
+				i++;
 			}
 			if (any_args) {
 				cgen_write(g, ", ");
@@ -1283,35 +1297,26 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 	case EXPR_CALL:
 		if (cgen_uses_ptr(&e->type)) {
 			cgen_ident_id(g, e->call.c.id);
-		} else if (e->call.c.instance) {
+		} else {
+			FnType *fn_type = &e->call.fn->type.fn;
 			cgen_write(g, "(");
 			if (!cgen_expr(g, e->call.fn))
 				return false;
-			cgen_write(g, "%"PRId64"(", e->call.c.instance);
-			Expression *args = e->call.arg_exprs;
-			FnType *fn_type = &e->call.fn->type.fn;
+			if (e->call.c.instance) {
+				cgen_write(g, "%"PRId64, e->call.c.instance);
+			}
+			cgen_write(g, "(");
 			bool first_arg = true;
-			for (size_t i = 0; i < arr_len(fn_type->types)-1; i++) {
-				if (!fn_type->constant[i]) {
+			size_t i = 0;
+			arr_foreach(e->call.arg_exprs, Expression, arg) {
+				if (!fn_type->constant || !fn_type->constant[i]) {
 					if (!first_arg)
 						cgen_write(g, ", ");
 					first_arg = false;
-					if (!cgen_expr(g, &args[i]))
+					if (!cgen_expr(g, arg))
 						return false;
 				}
-			}
-			cgen_write(g, ")");
-			cgen_write(g, ")");
-		} else {
-			cgen_write(g, "(");
-			if (!cgen_expr(g, e->call.fn))
-				return false;
-			cgen_write(g, "(");
-			arr_foreach(e->call.arg_exprs, Expression, arg) {
-				if (arg != e->call.arg_exprs)
-					cgen_write(g, ", ");
-				if (!cgen_expr(g, arg))
-					return false;
+				i++;
 			}
 			cgen_write(g, "))");
 		}
@@ -1507,6 +1512,8 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where, I64 instance, Valu
 		
 		if (!cgen_ret(g, &ret_expr))
 			return false;
+		if (ret_expr.kind == EXPR_TUPLE)
+			arr_clear(&ret_expr.tuple);
 	} else if (f->body.ret_expr) {
 		if (!cgen_ret(g, f->body.ret_expr)) return false;
 	}
@@ -1579,7 +1586,7 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 		cgen_write(g, "{");
 		for (size_t i = 0; i < t->arr.n; i++) {
 			if (i) cgen_write(g, ", ");
-			if (!cgen_val_ptr(g, *(char **)v + i * compiler_sizeof(t->arr.of), t->arr.of, where))
+			if (!cgen_val_ptr(g, (char *)v + i * compiler_sizeof(t->arr.of), t->arr.of, where))
 				return false;
 		}
 		cgen_write(g, "}");
@@ -1588,8 +1595,13 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 		cgen_write(g, "{d%p_, %lu}", v, ((Slice *)v)->n);
 		break;
 	case TYPE_STRUCT:
-		err_print(where, "TODO");
-		/* TODO */
+		cgen_write(g, "{");
+		arr_foreach(t->struc.fields, Field, f) {
+			if (f != t->struc.fields)
+				cgen_write(g, ", ");
+			cgen_val_ptr(g, (char *)v + f->offset, f->type, where);
+		}
+		cgen_write(g, "}");
 		break;
 	case TYPE_FN:
 		cgen_fn_name(g, *(FnExpr **)v);

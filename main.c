@@ -1,14 +1,12 @@
 /* 
 TODO:
-running release build under valgrind produces an error that shouldn't be there!!! 
-memory leaks!
-deal with unused functions
-compile time arguments + out parameters (in C)
-double check that val_get_ptr is being used everywhere it should be
-compile-time arguments for out parameter functions
-compile-time arguments for functions returning tuples
+ah need to be consistent about whether eval_expr returns a value which should be copied or not!!!
+check for leaks
+make sure return declarations with initializers work (also, eval initializers)
 deal with x, y @= fn(x: int, y @ int){}
 don't allow pointers to functions with compile-time arguments
+type parameters (e.g. fn(foo @ type) {x: foo;})
+
 struct parameters
 don't allow while {3; 5} (once break is added)
 any odd number of "s for a string

@@ -29,6 +29,7 @@ static inline void *evalr_calloc(Evaluator *ev, size_t n, size_t bytes) {
 	return allocr_calloc(ev->allocr, n, bytes);
 }
 
+
 static size_t compiler_sizeof_builtin(BuiltinType b) {
 	switch (b) {
 	case BUILTIN_I8: return sizeof(I8);
@@ -348,10 +349,9 @@ static void fprint_val(FILE *f, Value v, Type *t) {
 }
 
 /* 
-   IMPORTANT: Only pass an evaluator if you want it to use its allocator.
-   Otherwise, pass NULL.
+allocr can be NULL
 */
-static void val_copy(Evaluator *ev, Value *dest, Value *src, Type *t) {
+static void val_copy(Allocator *allocr, Value *dest, Value *src, Type *t) {
 	switch (t->kind) {
 	case TYPE_BUILTIN:
 	case TYPE_FN:
@@ -364,30 +364,30 @@ static void val_copy(Evaluator *ev, Value *dest, Value *src, Type *t) {
 		break;
 	case TYPE_ARR: {
 		size_t bytes = t->arr.n * compiler_sizeof(t->arr.of);
-		if (ev)
-			dest->arr = evalr_malloc(ev, bytes);
+		if (allocr)
+			dest->arr = allocr_malloc(allocr, bytes);
 		else
 			dest->arr = err_malloc(bytes);
 		memcpy(dest->arr, src->arr, bytes);
 	} break;
 	case TYPE_TUPLE: {
 		size_t bytes = arr_len(t->tuple) * sizeof(*dest->tuple);
-		if (ev)
-			dest->tuple = evalr_malloc(ev, bytes);
+		if (allocr)
+			dest->tuple = allocr_malloc(allocr, bytes);
 		else
 			dest->tuple = err_malloc(bytes);
 		memcpy(dest->tuple, src->tuple, bytes);
 	} break;
 	case TYPE_STRUCT: {
 		size_t bytes = compiler_sizeof(t);
-		if (ev)
-			dest->struc = evalr_malloc(ev, bytes);
+		if (allocr)
+			dest->struc = allocr_malloc(allocr, bytes);
 		else
 			dest->struc = err_malloc(bytes);
 		memcpy(dest->struc, src->struc, bytes);
 	} break;
 	case TYPE_USER:
-		val_copy(ev, dest, src, type_user_underlying(t));
+		val_copy(allocr, dest, src, type_user_underlying(t));
 		break;
 	}
 }
@@ -727,7 +727,7 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 	}
 }
 
-static bool eval_val_ptr_at_index(Evaluator *ev, Location where, Value *arr, U64 i, Type *arr_type, Type *idx_type, void **ptr, Type **type) {
+static bool eval_val_ptr_at_index(Location where, Value *arr, U64 i, Type *arr_type, void **ptr, Type **type) {
 	switch (arr_type->kind) {
 	case TYPE_ARR: {
 		U64 arr_sz = (U64)arr_type->arr.n;
@@ -771,7 +771,7 @@ static bool eval_expr_ptr_at_index(Evaluator *ev, Expression *e, void **ptr, Typ
 		}
 		i = (U64)signed_index;
 	}
-	return eval_val_ptr_at_index(ev, e->where, &arr, i, ltype, rtype, ptr, type);
+	return eval_val_ptr_at_index(e->where, &arr, i, ltype, ptr, type);
 }
 
 static void *eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr) {
@@ -1026,6 +1026,22 @@ static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value 
 }
 
 
+static Value val_zero(Type *t) {
+	Value val = {0};
+	t = type_inner(t);
+	switch (t->kind) {
+	case TYPE_STRUCT:
+		val.struc = err_calloc(1, compiler_sizeof(t));
+		break;
+	case TYPE_ARR:
+		val.arr = err_calloc(t->arr.n, compiler_sizeof(t->arr.of));
+		break;
+    default:
+		break;
+	}
+	return val;
+}
+	
 static bool val_is_nonnegative(Value *v, Type *t) {
 	switch (t->builtin) {
 	case BUILTIN_BOOL: assert(0); return false;
@@ -1226,7 +1242,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			Value x = from;
 		    Value *index_val;
 			Value *value_val;
-			if (!each_enter(e, 0)) return false;
+			if (!each_enter(e)) return false;
 			if (ea->index) {
 				IdentDecl *idecl = ident_decl(ea->index);
 				idecl->flags |= IDECL_HAS_VAL;
@@ -1272,7 +1288,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (!eval_expr(ev, ea->of, &of)) return false;
 			Value *index_val, *value_val;
 			Value i, val;
-			if (!each_enter(e, 0)) return false;
+			if (!each_enter(e)) return false;
 			if (ea->index) {
 				IdentDecl *idecl = ident_decl(ea->index);
 				idecl->flags |= IDECL_HAS_VAL;
@@ -1310,14 +1326,11 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				break;
 			default: assert(0); return false;
 			}
-			Type i64t;
-			i64t.flags = TYPE_IS_RESOLVED;
-			i64t.kind = TYPE_BUILTIN;
-			i64t.builtin = BUILTIN_I64;
+			
 			index_val->i64 = 0;
 			while (index_val->i64 < len) {
 				void *ptr;
-				if (!eval_val_ptr_at_index(ev, e->where, &of, (U64)index_val->i64, of_type, &i64t, &ptr, NULL))
+				if (!eval_val_ptr_at_index(e->where, &of, (U64)index_val->i64, of_type, &ptr, NULL))
 					return false;
 				if (uses_ptr)
 					value_val->ptr = ptr;
@@ -1451,7 +1464,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		fn_enter(fn, 0);
 		long arg = 0;
 		arr_foreach(params, Declaration, p) {
-			long idx = 0;
+			int idx = 0;
 			arr_foreach(p->idents, Identifier, i) {
 				Type *type = p->type.kind == TYPE_TUPLE ? &p->type.tuple[idx++] : &p->type;
 				IdentDecl *id = ident_decl(*i);
@@ -1460,13 +1473,54 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				arg++;
 			}
 		}
+		arr_foreach(fn->ret_decls, Declaration, d) {
+			int idx = 0;
+			arr_foreach(d->idents, Identifier, i) {
+				Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx++] : &d->type;
+				IdentDecl *id = ident_decl(*i);
+				if (d->flags & DECL_HAS_EXPR) {
+					assert(d->expr.kind == EXPR_VAL);
+					val_copy(NULL, &id->val, &d->expr.val, type);
+					id->flags |= IDECL_HAS_VAL;
+				} else {
+					id->flags |= IDECL_HAS_VAL;
+					id->val = val_zero(type);
+				}
+			}
+		}
 		arr_clear(&args);
 		if (!eval_block(ev, &fn->body, &e->type, v)) {
 			fn_exit(fn);
 			return false;
 		}
+		if (fn->ret_decls) {
+			Value *tuple = NULL;
+			arr_foreach(fn->ret_decls, Declaration, d) {
+				int i = 0;
+				arr_foreach(d->idents, Identifier, ident) {
+					Value this_one;
+					Expression expr;
+					expr.flags = EXPR_FOUND_TYPE;
+					expr.kind = EXPR_IDENT;
+					expr.ident = *ident;
+					if (!eval_expr(ev, &expr, &this_one))
+						return false;
+					Value *element = arr_add(&tuple);
+					Type *type = decl_type_at_index(d, i);
+					val_copy(NULL, element, &this_one, type);
+					i++;
+				}
+			}
+			if (arr_len(tuple) == 1) {
+				*v = tuple[0];
+				arr_clear(&tuple);
+			} else {
+				v->tuple = tuple;
+			}
+		}
 		if (ev->returning) {
-			*v = ev->ret_val;
+			if (fn->ret_type.kind != TYPE_VOID && !fn->ret_decls)
+				*v = ev->ret_val;
 			ev->returning = false;
 		}
 		fn_exit(fn);
@@ -1504,9 +1558,9 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		}
 		void *ptr1, *ptr2;
 		if (from < to) {
-			if (!eval_val_ptr_at_index(ev, e->where, &ofv, from, of_type, &s->from->type, &ptr1, NULL))
+			if (!eval_val_ptr_at_index(e->where, &ofv, from, of_type, &ptr1, NULL))
 				return false;
-			if (!eval_val_ptr_at_index(ev, e->where, &ofv, to, of_type, &s->to->type, &ptr2, NULL))
+			if (!eval_val_ptr_at_index(e->where, &ofv, to, of_type, &ptr2, NULL))
 				return false;
 			v->slice.data = ptr1;
 			v->slice.n = (I64)(to - from);
@@ -1549,18 +1603,11 @@ static bool eval_decl(Evaluator *ev, Declaration *d) {
 		arr_foreach(d->idents, Identifier, i) {
 			IdentDecl *id = ident_decl(*i);
 			Type *type = decl_type_at_index(d, index);
-			Type *inner = type_inner(type);
 			if (!is_const) {
 				if (has_expr) {
 					val_copy(NULL, &id->val, &val, type);
 				} else {
-					if (inner->kind == TYPE_STRUCT) {
-						id->val.struc = err_calloc(1, compiler_sizeof(inner));
-					} else if (inner->kind == TYPE_ARR) {
-						id->val.arr = err_calloc(inner->arr.n, compiler_sizeof(inner->arr.of));
-					} else {
-						id->val = val; /* = (Value)({0}) */
-					}
+					id->val = val_zero(type);
 				}
 			}
 			index++;

@@ -31,7 +31,7 @@ static bool typedefs_decl(CGenerator *g, Declaration *d) {
 		Value *val = decl_val_at_index(d, idx);
 		if (type->kind == TYPE_TYPE) {
 			if (d->c.ids == NULL)
-				d->c.ids = calloc(arr_len(d->idents), sizeof *d->c.ids);
+				d->c.ids = allocr_calloc(g->allocr, arr_len(d->idents), sizeof *d->c.ids);
 			/* generate typedef */
 			IdentID id = 0;
 			if (g->block != NULL) id = d->c.ids[idx] = g->ident_counter++;

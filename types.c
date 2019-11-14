@@ -94,67 +94,6 @@ static bool type_must_eq(Location where, Type *expected, Type *got) {
 	return true;
 }
 
-
-/*
-  this expression, which is an array (or slice), must be mutable (otherwise print an error,
-  return false)!
-*/
-static bool expr_arr_must_mut(Expression *e) {
-	switch (e->kind) {
-	case EXPR_IDENT: {
-		IdentDecl *idecl = ident_decl(e->ident);
-		if (idecl->kind == IDECL_DECL) {
-			Declaration *d = idecl->decl;
-			if (d->flags & DECL_IS_CONST) {
-				err_print(e->where, "Cannot modify a constant array.");
-				return false;
-			}
-		}
-		return true;
-	}
-	case EXPR_CAST:
-	case EXPR_CALL:
-	case EXPR_NEW:
-	case EXPR_UNARY_OP:
-	case EXPR_C:
-	case EXPR_VAL:
-		return true;
-	case EXPR_SLICE:
-		return expr_arr_must_mut(e->slice.of);
-	case EXPR_WHILE:
-		assert(e->while_.body.ret_expr);
-		return expr_arr_must_mut(e->while_.body.ret_expr);
-	case EXPR_EACH:
-		return expr_arr_must_mut(e->each.body.ret_expr);
-	case EXPR_IF:
-		for (IfExpr *i = &e->if_; i; i->next_elif ? i = &i->next_elif->if_ : (i = NULL)) {
-			assert(i->body.ret_expr);
-			if (!expr_arr_must_mut(i->body.ret_expr))
-				return false;
-		}
-		return true;
-	case EXPR_BLOCK:
-		assert(e->block.ret_expr);
-		return expr_arr_must_mut(e->block.ret_expr);
-	case EXPR_LITERAL_STR:
-		err_print(e->where, "String constants are immutable.");
-		return false;
-	case EXPR_LITERAL_BOOL:
-	case EXPR_FN:
-	case EXPR_TUPLE:
-	case EXPR_LITERAL_FLOAT:
-	case EXPR_LITERAL_CHAR:
-	case EXPR_LITERAL_INT:
-	case EXPR_BINARY_OP:
-	case EXPR_TYPE:
-	case EXPR_DALIGNOF:
-	case EXPR_DSIZEOF:
-		break;
-	}
-	assert(0);
-	return false;
-}
-
 /* prints an error and returns false if the given expression is not an l-value */
 static bool expr_must_lval(Expression *e) {
 	/* NOTE: make sure you update eval when you change this */
@@ -190,7 +129,10 @@ static bool expr_must_lval(Expression *e) {
 		return false;
 	case EXPR_BINARY_OP:
 		switch (e->binary.op) {
-		case BINARY_AT_INDEX: return true;
+		case BINARY_AT_INDEX:
+			if (!expr_must_lval(e->binary.lhs))
+				return false;
+			return true;
 		case BINARY_DOT: return true;
 		default: break;
 		}
@@ -327,20 +269,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 		}
 	
 		if (d->flags & DECL_FOUND_TYPE) {
-			if (d->type.kind == TYPE_TUPLE) {
-				/* get correct item in tuple */
-				long index = 0;
-				arr_foreach(d->idents, Identifier, decl_i) {
-					if (*decl_i == i) {
-						break;
-					}
-					index++;
-					assert(index < (long)arr_len(d->idents)); /* identifier got its declaration set to here, but it's not here */
-				}
-				*t = d->type.tuple[index];
-			} else {
-				*t = d->type;
-			}
+			*t = *decl_type_at_index(d, decl_ident_index(d, i));
 			return true;
 		} else {
 			if ((d->flags & DECL_HAS_EXPR) && (d->expr.kind == EXPR_FN)) {
@@ -705,7 +634,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 	case EXPR_EACH: {
 		EachExpr *ea = &e->each;
 		*(Expression **)arr_add(&tr->in_expr_decls) = e;
-		if (!each_enter(e, SCOPE_CHECK_REDECL)) return false;
+		if (!each_enter(e)) return false;
 		if (ea->flags & EACH_IS_RANGE) {
 			/* TODO: allow user-defined numerical types */
 			if (!types_expr(tr, ea->range.from)) return false;
@@ -1560,14 +1489,16 @@ static bool types_decl(Typer *tr, Declaration *d) {
 				goto ret;
 			}
 			d->type = d->expr.type;
-			d->type.flags &= (uint16_t)~(uint16_t)TYPE_IS_FLEXIBLE; /* x := 5; => x is not flexible */
+			d->type.flags &= (U16)~(U16)TYPE_IS_FLEXIBLE; /* x := 5; => x is not flexible */
 		}
 		if ((d->flags & DECL_IS_CONST) || (tr->block == NULL && tr->fn == NULL)) {
 			if (!(d->flags & DECL_FOUND_VAL)) {
-				if (!eval_expr(tr->evalr, &d->expr, &d->val)) {
+				Value val;
+				if (!eval_expr(tr->evalr, &d->expr, &val)) {
 					success = false;
 					goto ret;
 				}
+				val_copy(tr->allocr, &d->val, &val, &d->type);
 				d->flags |= DECL_FOUND_VAL;
 			}
 		}

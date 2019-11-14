@@ -80,7 +80,7 @@ static void fn_exit(FnExpr *f) {
 		remove_ident_decls(&f->body, decl);
 }
 
-static bool each_enter(Expression *e, U32 flags) {
+static bool each_enter(Expression *e) {
 	assert(e->kind == EXPR_EACH);
 	EachExpr *ea = &e->each;
     if (ea->index && ea->index == ea->value) {

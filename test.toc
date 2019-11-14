@@ -3,26 +3,21 @@ puti @= fn(x: int) {
 ");
 };
 
-☃ @= struct {
+
+Foo @= struct {
 	x, y: int;
 	z: float;
 };
-something @= fn() int {
-		  5
+
+mkfoo @= fn() f: Foo {
+	  f.x = 12;
+	  f.y = -983;
+	  f.z = 21.34-1.2;
 };
 
-bar @= fn(a := something()) f: ☃, g: int {
-	f.x = a;
-	f.y = 123;
-	f.z += 43.2;
-	g = 17;
-};
 
 main @= fn() {
-f,g := bar();
-puti(g);
-puti(f.x);
-puti(f.y);
-h,i := bar();
-puti(h.x);
+	f @= mkfoo();
+	puti(f.x);
+	puti(f.y);
 };

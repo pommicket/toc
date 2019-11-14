@@ -310,7 +310,6 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 					}
 				}
 			}
-
 			while (1) {
 				if (*t->s == '.') {
 					if (t->s[1] == '.') {
@@ -382,8 +381,8 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 				}
 				switch (n.kind) {
 				case NUM_LITERAL_INT:
-					if (n.intval > UINTEGER_MAX / (UInteger)base ||
-						n.intval * (UInteger)base > UINT_MAX - (UInteger)digit) {
+					if ((UInteger)n.intval > (UInteger)UINTEGER_MAX / (UInteger)base ||
+						(UInteger)n.intval * (UInteger)base > (UInteger)UINTEGER_MAX - (UInteger)digit) {
 						/* too big! */
 						tokenization_err(t, "Number too big to fit in a numeric literal.");
 						goto err;
