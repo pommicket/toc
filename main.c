@@ -1,5 +1,6 @@
 /* 
 TODO:
+running release build under valgrind produces an error that shouldn't be there!!! 
 memory leaks!
 deal with unused functions
 compile time arguments + out parameters (in C)
