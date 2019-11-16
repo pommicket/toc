@@ -5,7 +5,8 @@ static bool typedefs_block(CGenerator *g, Block *b) {
 	if (!cgen_block_enter(g, b))
 		return false;
 	arr_foreach(b->stmts, Statement, s)
-		typedefs_stmt(g, s);
+		if (!typedefs_stmt(g, s))
+			return false;
 	cgen_block_exit(g, prev);
 	return true;
 }

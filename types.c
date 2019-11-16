@@ -55,7 +55,16 @@ static bool type_eq(Type *a, Type *b) {
 	case TYPE_FN: {
 		if (arr_len(a->fn.types) != arr_len(b->fn.types)) return false;
 		Type *a_types = a->fn.types, *b_types = b->fn.types;
+		Constness *a_constness = a->fn.constness, *b_constness = b->fn.constness;
 		for (size_t i = 0; i < arr_len(a->fn.types); i++) {
+			Constness const_a = CONSTNESS_NO, const_b = CONSTNESS_NO;
+			if (a_constness)
+				const_a = a_constness[i];
+			if (b_constness)
+				const_b = b_constness[i];
+			if ((const_a == CONSTNESS_NO && const_b == CONSTNESS_YES)
+				|| (const_a == CONSTNESS_YES && const_b == CONSTNESS_NO))
+				return false;
 			if (!type_eq(&a_types[i], &b_types[i]))
 				return false;
 			
@@ -177,7 +186,7 @@ static bool type_of_fn(Typer *tr, Expression *e, Type *t) {
 	FnExpr *f = &e->fn;
 	t->kind = TYPE_FN;
 	t->fn.types = NULL;
-	t->fn.constant = NULL; /* OPTIM: constant doesn't need to be a dynamic array */
+	t->fn.constness = NULL; /* OPTIM: constant doesn't need to be a dynamic array */
 	bool has_constant_params = false;
 	Type *ret_type = typer_arr_add(tr, &t->fn.types);
 	if (f->ret_decls && f->ret_type.kind == TYPE_VOID /* haven't found return type yet */) {
@@ -215,12 +224,12 @@ static bool type_of_fn(Typer *tr, Expression *e, Type *t) {
 		if (!types_decl(tr, decl)) return false;
 		if (!type_resolve(tr, &decl->type, e->where))
 			return false;
-		unsigned is_const = decl->flags & DECL_IS_CONST;
-		if (is_const) {
-			if (!t->fn.constant) {
+		U32 is_at_all_const = decl->flags & (DECL_IS_CONST | DECL_SEMI_CONST);
+		if (is_at_all_const) {
+			if (!t->fn.constness) {
 				has_constant_params = true;
 				for (size_t i = 0; i < idx; i++) {
-					*(bool *)typer_arr_add(tr, &t->fn.constant) = false;
+					*(Constness *)typer_arr_add(tr, &t->fn.constness) = CONSTNESS_NO;
 				}
 			}
 		}
@@ -239,7 +248,15 @@ static bool type_of_fn(Typer *tr, Expression *e, Type *t) {
 			Type *param_type = typer_arr_add(tr, &t->fn.types);
 			*param_type = decl->type;
 			if (has_constant_params) {
-				*(bool *)typer_arr_add(tr, &t->fn.constant) = is_const != 0;
+				Constness constn;
+				if (decl->flags & DECL_IS_CONST) {
+					constn = CONSTNESS_YES;
+				} else if (decl->flags & DECL_SEMI_CONST) {
+					constn = CONSTNESS_SEMI;
+				} else {
+					constn = CONSTNESS_NO;
+				}
+				*(Constness *)typer_arr_add(tr, &t->fn.constness) = constn;
 			}
 			idx++;
 		}
@@ -562,6 +579,17 @@ static Status type_cast_status(Type *from, Type *to) {
 	assert(0);
     return STATUS_ERR;
 }
+
+static bool arg_is_const(Expression *arg, Constness constness) {
+	switch (constness) {
+	case CONSTNESS_NO: return false;
+	case CONSTNESS_SEMI: return expr_is_definitely_const(arg);
+	case CONSTNESS_YES: return true;
+	}
+	assert(0);
+	return false;
+}
+
 
 static bool types_expr(Typer *tr, Expression *e) {
 	if (e->flags & EXPR_FOUND_TYPE) return true;
@@ -999,11 +1027,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 		}
 		if (!ret) return false;
 
-		bool any_const = false;
 		FnType *fn_type = &f->type.fn;
 		for (size_t i = 0; i < nparams; i++) {
-			if (fn_type->constant && fn_type->constant[i])
-				any_const = true;
 			if (!params_set[i]) {
 				size_t index = 0;
 				assert(fn_decl); /* we can only miss an arg if we're using named/optional args */
@@ -1036,10 +1061,12 @@ static bool types_expr(Typer *tr, Expression *e) {
 				}
 			}
 		}
-		if (any_const) {
+		if (fn_type->constness) {
 			/* evaluate compile-time arguments */
 			for (size_t i = 0; i < arr_len(fn_type->types)-1; i++) {
-				if (fn_type->constant[i]) {
+				bool should_be_evald = arg_is_const(&new_args[i], fn_type->constness[i]);
+				
+				if (should_be_evald) {
 					Value arg_val;
 					if (!eval_expr(tr->evalr, &new_args[i], &arg_val)) {
 						if (tr->evalr->enabled) {
@@ -1048,6 +1075,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 						return false;
 					}
 					new_args[i].kind = EXPR_VAL;
+					new_args[i].flags = 0;
 					new_args[i].val = arg_val;
 					i++;
 				}
@@ -1544,6 +1572,16 @@ static bool types_decl(Typer *tr, Declaration *d) {
 					success = false;
 					goto ret;
 				}
+			} else if (!(d->flags & DECL_IS_CONST) && t->kind == TYPE_FN && t->fn.constness) {
+				for (size_t p = 0; p < arr_len(t->fn.types)-1; p++) {
+					if (t->fn.constness[p] == CONSTNESS_YES) {
+						err_print(d->where, "You can't have a pointer to a function with constant parameters.");
+						success = false;
+						goto ret;
+					}
+				}
+				/* make constness NULL, so that semi-constant parameters turn into non-constant arguments */
+				t->fn.constness = NULL;
 			}
 		}
 

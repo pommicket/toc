@@ -1,6 +1,7 @@
 static bool parse_expr(Parser *p, Expression *e, Token *end);
 static bool parse_stmt(Parser *p, Statement *s);
 #define PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR 0x01
+#define PARSE_DECL_ALLOW_SEMI_CONST 0x02
 static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_t flags);
 
 static bool is_decl(Tokenizer *t);
@@ -174,6 +175,17 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 		for (size_t i = 0; i < nparams; i++) {
 			if (i > 0)
 				written += str_copy(buffer + written, bufsize - written, ", ");
+			if (t->fn.constness) {
+				switch (t->fn.constness[i]) {
+				case CONSTNESS_NO: break;
+				case CONSTNESS_SEMI:
+					written += str_copy(buffer + written, bufsize - written, ":@");
+					break;
+				case CONSTNESS_YES:
+					written += str_copy(buffer + written, bufsize - written, "@");
+					break;
+				}
+			}
 			written += type_to_str_(&param_types[i], buffer + written, bufsize - written);
 		}
 		written += str_copy(buffer + written, bufsize - written, ")");
@@ -382,6 +394,7 @@ static bool parse_type(Parser *p, Type *type) {
 			/* function type */
 			type->kind = TYPE_FN;
 			type->fn.types = NULL;
+			type->fn.constness = NULL;
 			t->token++;
 			if (!token_is_kw(t->token, KW_LPAREN)) {
 				tokr_err(t, "Expected ( to follow fn.");
@@ -763,7 +776,7 @@ static bool parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end
 			!token_is_kw(t->token - 1, KW_LBRACE)))) {
 		first = false;
 		Declaration *decl = parser_arr_add(p, decls);
-		if (!parse_decl(p, decl, decl_end, PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR)) {
+		if (!parse_decl(p, decl, decl_end, PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR | PARSE_DECL_ALLOW_SEMI_CONST)) {
 			ret = false;
 			/* skip to end of list */
 			while (t->token->kind != TOKEN_EOF && !ends_decl(t->token, decl_end))
@@ -808,7 +821,7 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 		if (!parse_decl_list(p, &f->ret_decls, DECL_END_LBRACE_COMMA))
 			return false;
 		arr_foreach(f->ret_decls, Declaration, d) {
-			if (d->flags & DECL_IS_CONST) {
+			if ((d->flags & DECL_IS_CONST) || (d->flags & DECL_SEMI_CONST)) {
 				err_print(d->where, "Named return values cannot be constant.");
 				return false;
 			}
@@ -1691,7 +1704,7 @@ static inline bool ends_decl(Token *t, DeclEndKind ends_with) {
 	}
 }
 
-static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_t flags) {
+static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 flags) {
 	d->where = p->tokr->token->where;
     d->idents = NULL;
 	Tokenizer *t = p->tokr;
@@ -1711,6 +1724,10 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_
 		}
 		if (token_is_kw(t->token, KW_COLON)) {
 			t->token++;
+			if (token_is_kw(t->token, KW_AT) && (flags & PARSE_DECL_ALLOW_SEMI_CONST)) {
+				t->token++;
+				d->flags |= DECL_SEMI_CONST;
+			}
 			break;
 		}
 		if (token_is_kw(t->token, KW_AT)) {
@@ -2188,3 +2205,44 @@ static inline Type *decl_type_at_index(Declaration *d, int i) {
 	return d->type.kind == TYPE_TUPLE ? &d->type.tuple[i] : &d->type;
 }
 
+
+static bool expr_is_definitely_const(Expression *e) {
+	switch (e->kind) {
+	case EXPR_LITERAL_FLOAT:
+	case EXPR_LITERAL_INT:
+	case EXPR_LITERAL_CHAR:
+	case EXPR_LITERAL_STR:
+	case EXPR_LITERAL_BOOL:
+	case EXPR_DSIZEOF:
+	case EXPR_DALIGNOF:
+	case EXPR_TYPE:
+	case EXPR_VAL:
+		return true;
+	case EXPR_IF:
+	case EXPR_WHILE:
+	case EXPR_C:
+	case EXPR_NEW:
+	case EXPR_CAST:
+	case EXPR_CALL:
+	case EXPR_BLOCK:
+	case EXPR_TUPLE:
+	case EXPR_EACH:
+	case EXPR_FN:
+		return false;
+	case EXPR_UNARY_OP:
+		return expr_is_definitely_const(e->unary.of);
+	case EXPR_BINARY_OP:
+		return expr_is_definitely_const(e->binary.lhs)
+			&& expr_is_definitely_const(e->binary.rhs);
+	case EXPR_SLICE:
+		return expr_is_definitely_const(e->slice.of);
+	case EXPR_IDENT: {
+		IdentDecl *idecl = ident_decl(e->ident);
+		assert(idecl);
+		return idecl->kind == IDECL_DECL
+			&& (idecl->decl->flags & DECL_IS_CONST);
+	}
+	}
+	assert(0);
+	return false;
+}

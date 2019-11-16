@@ -2,19 +2,17 @@ puti @= fn(x: int) {
 	 #C("printf(\"%ld\\n\", (long)x);
 ");
 };
-putf @= fn(x: float) {
-	 #C("printf(\"%f\\n\", (double)x);
-");
-};
-x,z @= fn(x: int, y @ int) int {
-  x+y
-};
+// putf @= fn(x: float) {
+	 // #C("printf(\"%f\\n\", (double)x);
+// ");
+// };
+// f@= fn(x: int, y :@ int) int {
+//   x+y
+// };
+
+asdf @= fn(x :@= 18) int { x };
 
 main @= fn() {
-	 puti(x(10, 30));
-	 a @= x(20, 40);
-	 puti(a);
-	 puti(z(10, 30));
-	 b @= z(20, 40);
-	 puti(b);
+	 something := asdf;
+	 puti(something(100));
 };

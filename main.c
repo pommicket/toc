@@ -1,7 +1,5 @@
 /* 
 TODO:
-:@
-don't allow pointers to functions with compile-time arguments
 type parameters (e.g. fn(foo @ type) {x: foo;})
 
 struct parameters

@@ -313,9 +313,15 @@ typedef struct {
 #define TYPE_IS_RESOLVED 0x02
 #define TYPE_STRUCT_FOUND_OFFSETS 0x04
 
+typedef U8 Constness;
+
+#define CONSTNESS_NO ((Constness)0)
+#define CONSTNESS_SEMI ((Constness)1)
+#define CONSTNESS_YES ((Constness)2)
+
 typedef struct {
 	struct Type *types; /* dynamic array [0] = ret_type, [1:] = param_types  */
-	bool *constant; /* [i] = is param #i constant? if NULL, none are constant. don't use it as a dynamic array, because eventually it might not be. */
+	Constness *constness; /* [i] = constness of param #i. iff no parameters are constant, this is NULL. don't use it as a dynamic array, because eventually it might not be. */
 } FnType;
 
 typedef struct Type {
@@ -588,13 +594,16 @@ typedef struct Argument {
 	Expression val;
 } Argument;
 
-#define DECL_ANNOTATES_TYPE 0x01
-#define DECL_IS_CONST 0x02
-#define DECL_HAS_EXPR 0x04
-#define DECL_FOUND_TYPE 0x08
-#define DECL_ERRORED_ABOUT_SELF_REFERENCE 0x10 /* has there been an error about this decl referencing itself? */
-#define DECL_FOUND_VAL 0x20
-
+enum {
+	  DECL_ANNOTATES_TYPE = 0x01,
+	  DECL_IS_CONST = 0x02,
+	  DECL_SEMI_CONST = 0x04,
+	  DECL_HAS_EXPR = 0x08,
+	  DECL_FOUND_TYPE = 0x10,
+	  DECL_ERRORED_ABOUT_SELF_REFERENCE = 0x20, /* has there been an error about this decl referencing itself? */
+	  DECL_FOUND_VAL = 0x40,
+};
+	
 /* OPTIM: Instead of using dynamic arrays, do two passes. */
 typedef struct Declaration {
 	Location where;

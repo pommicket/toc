@@ -8,7 +8,7 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 		e->call.c.instance = 0;
 		assert(e->call.fn->type.kind == TYPE_FN);
 		FnType *fn_type = &e->call.fn->type.fn;
-		if (fn_type->constant) {
+		if (fn_type->constness) {
 			Value fval;
 			/* e->call.fn had better be a compile-time constant if it has compile-time arguments */
 			if (!eval_expr(g->evalr, e->call.fn, &fval))
@@ -20,9 +20,25 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 			Value *compile_time_args = NULL;
 			Type *tuple_types = NULL;
 			size_t nparams = arr_len(fn_type->types)-1;
+			Value *which_are_const_val = arr_add(&compile_time_args);
+			U64 *which_are_const = &which_are_const_val->u64;
+			Type *u64t = arr_add(&tuple_types);
+			u64t->kind = TYPE_BUILTIN;
+			u64t->flags = TYPE_IS_RESOLVED;
+			u64t->builtin = BUILTIN_U64;
+			*which_are_const = 0;
+			int semi_const_arg_index = 0;
 			for (size_t i = 0; i < nparams; i++) {
-				if (fn_type->constant[i]) {
-					Expression *arg = &e->call.arg_exprs[i];
+				Expression *arg = &e->call.arg_exprs[i];
+				if (arg_is_const(arg, fn_type->constness[i])) {
+					if (fn_type->constness[i] == CONSTNESS_SEMI) {
+						if (semi_const_arg_index >= 64) {
+							err_print(e->where, "You can't have more than 64 semi-constant parameters in a function at the moment.");
+							return false;
+						}
+						*which_are_const |= ((U64)1) << semi_const_arg_index;
+						semi_const_arg_index++;
+					}
 					assert(arg->kind == EXPR_VAL); /* should have been evaluated by types.c */
 					*(Value *)arr_adda(&compile_time_args, g->allocr) = arg->val;
 					*(Type *)arr_add(&tuple_types) = arg->type;
@@ -44,7 +60,7 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 				bool already_generated_decl = val_hash_table_adda(g->allocr, f->c.instances, tuple, &tuple_type, &instance_number);
 				if (!already_generated_decl) {
 					/* generate a copy of this function */
-					if (!cgen_fn_header(g, f, e->where, instance_number))
+					if (!cgen_fn_header(g, f, e->where, instance_number, *which_are_const))
 						return false;
 					cgen_write(g, ";");
 					cgen_nl(g);
@@ -58,9 +74,18 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 		e->fn.c.name = NULL;
 		if (!e->fn.c.id)
 			e->fn.c.id = g->ident_counter++;
-		if (!e->type.fn.constant) {
+		bool any_const = false;
+		FnType *fn_type = &e->type.fn;
+		if (fn_type->constness) {
+			for (size_t i = 0; i < arr_len(fn_type->types)-1; i++) {
+				if (fn_type->constness[i] == CONSTNESS_YES)
+					any_const = true;
+			}
+		}
+		
+		if (!any_const) {
 			fn_enter(&e->fn, 0);
-			if (!cgen_fn_header(g, &e->fn, e->where, 0))
+			if (!cgen_fn_header(g, &e->fn, e->where, 0, 0))
 				return false;
 			cgen_write(g, ";");
 			cgen_nl(g);
@@ -79,17 +104,18 @@ static bool cgen_decls_block(CGenerator *g, Block *b) {
 	if (!cgen_block_enter(g, b))
 		return false;
 	arr_foreach(b->stmts, Statement, s)
-		cgen_decls_stmt(g, s);
+		if (!cgen_decls_stmt(g, s))
+			return false;
 	cgen_block_exit(g, prev);
 	return true;
 }
 
 static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 	if (cgen_fn_is_direct(g, d)) {
+		d->expr.fn.c.name = d->idents[0];
 		if (!fn_has_any_const_params(&d->expr.fn)) {
-			d->expr.fn.c.name = d->idents[0];
 			fn_enter(&d->expr.fn, 0);
-			if (!cgen_fn_header(g, &d->expr.fn, d->where, 0))
+			if (!cgen_fn_header(g, &d->expr.fn, d->where, 0, 0))
 				return false;
 			cgen_write(g, ";");
 			cgen_nl(g);
