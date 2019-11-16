@@ -180,6 +180,33 @@ static bool type_of_fn(Typer *tr, Expression *e, Type *t) {
 	t->fn.constant = NULL; /* OPTIM: constant doesn't need to be a dynamic array */
 	bool has_constant_params = false;
 	Type *ret_type = typer_arr_add(tr, &t->fn.types);
+	if (f->ret_decls && f->ret_type.kind == TYPE_VOID /* haven't found return type yet */) {
+		/* find return type */
+		arr_foreach(f->ret_decls, Declaration, d) {
+			if (!types_decl(tr, d))
+				return false;
+			/* evaluate ret decl initializer */
+			if (d->flags & DECL_HAS_EXPR) {
+				Value val;
+				if (!eval_expr(tr->evalr, &d->expr, &val))
+					return false;
+				d->expr.kind = EXPR_VAL;
+				d->expr.val = val;
+			}
+		}
+		if (arr_len(f->ret_decls) == 1 && arr_len(f->ret_decls[0].idents) == 1) {
+			f->ret_type = f->ret_decls[0].type;
+		} else {
+			f->ret_type.kind = TYPE_TUPLE;
+			f->ret_type.flags = 0;
+			f->ret_type.tuple = NULL;
+			arr_foreach(f->ret_decls, Declaration, d) {
+				arr_foreach(d->idents, Identifier, i) {
+					*(Type *)arr_add(&f->ret_type.tuple) = d->type;
+				}
+			}
+		}
+	}
 	if (!type_resolve(tr, &f->ret_type, e->where))
 		return false;
 	*ret_type = f->ret_type;

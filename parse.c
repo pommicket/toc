@@ -814,19 +814,8 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 			}
 		}
 		t->token--;	/* move back to { */
-		if (arr_len(f->ret_decls) > 1 || arr_len(f->ret_decls[0].idents) > 1) {
-			f->ret_type.kind = TYPE_TUPLE;
-			f->ret_type.flags = 0;
-			f->ret_type.tuple = NULL;
-			arr_foreach(f->ret_decls, Declaration, decl) {
-				for (size_t i = 0, len = arr_len(decl->idents); i < len; i++) {
-					Type *tuple_type = parser_arr_add(p, &f->ret_type.tuple);
-					*tuple_type = decl->type;
-				}
-			}
-		} else {
-			f->ret_type = f->ret_decls[0].type;
-		}
+		/* just set return type to void. the actual return type will be set by types.c:type_of_fn */
+		f->ret_type.kind = TYPE_VOID;
 	} else {
 		if (!parse_type(p, &f->ret_type)) {
 			ret = false;
@@ -1765,8 +1754,11 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_
 		uint16_t expr_flags = 0;
 		if (ends_with == DECL_END_RPAREN_COMMA)
 			expr_flags |= EXPR_CAN_END_WITH_COMMA;
+		if (ends_with == DECL_END_LBRACE_COMMA)
+			expr_flags |= EXPR_CAN_END_WITH_LBRACE;
 		Token *end = expr_find_end(p, expr_flags, NULL);
 		if (!end || !ends_decl(end, ends_with)) {
+			t->token = end;
 			tokr_err(t, "Expected %s at end of declaration.", end_str);
 		    goto ret_false;
 		}

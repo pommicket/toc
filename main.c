@@ -1,9 +1,6 @@
 /* 
 TODO:
-ah need to be consistent about whether eval_expr returns a value which should be copied or not!!!
-check for leaks
-make sure return declarations with initializers work (also, eval initializers)
-deal with x, y @= fn(x: int, y @ int){}
+:@
 don't allow pointers to functions with compile-time arguments
 type parameters (e.g. fn(foo @ type) {x: foo;})
 

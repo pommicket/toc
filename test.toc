@@ -2,22 +2,19 @@ puti @= fn(x: int) {
 	 #C("printf(\"%ld\\n\", (long)x);
 ");
 };
-
-
-Foo @= struct {
-	x, y: int;
-	z: float;
+putf @= fn(x: float) {
+	 #C("printf(\"%f\\n\", (double)x);
+");
 };
-
-mkfoo @= fn() f: Foo {
-	  f.x = 12;
-	  f.y = -983;
-	  f.z = 21.34-1.2;
+x,z @= fn(x: int, y @ int) int {
+  x+y
 };
-
 
 main @= fn() {
-	f @= mkfoo();
-	puti(f.x);
-	puti(f.y);
+	 puti(x(10, 30));
+	 a @= x(20, 40);
+	 puti(a);
+	 puti(z(10, 30));
+	 b @= z(20, 40);
+	 puti(b);
 };

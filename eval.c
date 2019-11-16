@@ -1508,6 +1508,9 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 					Value *element = arr_add(&tuple);
 					Type *type = decl_type_at_index(d, i);
 					val_copy(NULL, element, &this_one, type);
+					void *to_free = val_ptr_to_free(element, type);
+					if (to_free)
+						*(void **)arr_add(&ev->to_free) = to_free;
 					i++;
 				}
 			}
