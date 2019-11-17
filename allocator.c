@@ -1,4 +1,4 @@
-/* #define NO_ALLOCATOR 0 /\* useful for debugging; valgrind checks writing past the end of a malloc, but that won't work with an allocator *\/ */
+#define NO_ALLOCATOR 1 /* useful for debugging; valgrind (maybe) checks writing past the end of a malloc, but that won't work with an allocator */
 /* number of bytes a page hold, not including the header */
 #define PAGE_BYTES (16384 - sizeof(Page))
 #define PAGE_MAX_ALIGNS (PAGE_BYTES / sizeof(MaxAlign))

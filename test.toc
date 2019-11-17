@@ -6,13 +6,24 @@ puti @= fn(x: int) {
 	 // #C("printf(\"%f\\n\", (double)x);
 // ");
 // };
-// f@= fn(x: int, y :@ int) int {
-//   x+y
-// };
 
-asdf @= fn(x :@= 18) int { x };
-
+f@= fn(x : int, y :@ int) int {
+  x+y
+};
 main @= fn() {
-	 something := asdf;
-	 puti(something(100));
+	 something := f(10, 20);
+	 puti(something);
+	 something2 @= f(10, 20);
+	 puti(something2);
+	 something3 := f(10, 10+10);
+	 puti(something3);
+	 something4 := f(10, 23);
+	 puti(something4);
+	 r := 20;
+	 something5 := f(10, r);
+	 puti(something5);
+g := f;
+something6 := g(10, r);
+puti(something6);
+
 };

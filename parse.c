@@ -389,6 +389,11 @@ static bool parse_type(Parser *p, Type *type) {
 			}
 		}
 		/* Not a builtin */
+		if (t->token->kw == KW_TYPE) {
+			type->kind = TYPE_TYPE;
+			t->token++;
+			break;
+		}
 		switch (t->token->kw) {
 		case KW_FN: {
 			/* function type */

@@ -447,7 +447,7 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 			err_print(where, "Use of non-type identifier %s as type.", s);
 			info_print(decl->where, "%s is declared here.", s);
 			free(s);
-			return s;
+			return false;
 		}
 		/* resolve inner type */
 		Value *val = decl_val_at_index(decl, index);
@@ -600,7 +600,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 	bool success = true;
 	switch (e->kind) {
 	case EXPR_FN: {
-		e->fn.c.instances = NULL; /* maybe this should be handled by cgen... oh well */
+		{
+			HashTable z = {0};
+			e->fn.instances = z;
+		}
 		FnExpr *prev_fn = tr->fn;
 		FnExpr *f = &e->fn;
 		if (!type_of_fn(tr, e, t)) {
@@ -933,6 +936,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 	} break;
 	case EXPR_CALL: {
 		CallExpr *c = &e->call;
+		c->instance = NULL;
 		Expression *f = c->fn;
 		if (f->kind == EXPR_IDENT) {
 			/* allow calling a function before declaring it */
@@ -1062,13 +1066,28 @@ static bool types_expr(Typer *tr, Expression *e) {
 			}
 		}
 		if (fn_type->constness) {
-			/* evaluate compile-time arguments */
+			/* evaluate compile-time arguments + add an instance */
+			Type table_index_type;
+			table_index_type.flags = TYPE_IS_RESOLVED;
+			table_index_type.kind = TYPE_TUPLE;
+			table_index_type.tuple = NULL;
+			Type *u64t = arr_add(&table_index_type.tuple);
+			u64t->flags = TYPE_IS_RESOLVED;
+			u64t->kind = TYPE_BUILTIN;
+			u64t->builtin = BUILTIN_U64;
+			Value table_index;
+			table_index.tuple = NULL;
+			/* we need to keep table_index's memory around because instance_table_add makes a copy of it to compare against. */
+		    Value *which_are_const_val = typer_arr_add(tr, &table_index.tuple);
+			U64 *which_are_const = &which_are_const_val->u64;
+			*which_are_const = 0;
+			int semi_const_index = 0;
 			for (size_t i = 0; i < arr_len(fn_type->types)-1; i++) {
 				bool should_be_evald = arg_is_const(&new_args[i], fn_type->constness[i]);
 				
 				if (should_be_evald) {
-					Value arg_val;
-					if (!eval_expr(tr->evalr, &new_args[i], &arg_val)) {
+					Value *arg_val = typer_arr_add(tr, &table_index.tuple);
+					if (!eval_expr(tr->evalr, &new_args[i], arg_val)) {
 						if (tr->evalr->enabled) {
 							info_print(new_args[i].where, "(error occured while trying to evaluate compile-time argument, argument #%lu)", (unsigned long)i);
 						}
@@ -1076,10 +1095,35 @@ static bool types_expr(Typer *tr, Expression *e) {
 					}
 					new_args[i].kind = EXPR_VAL;
 					new_args[i].flags = 0;
-					new_args[i].val = arg_val;
-					i++;
+					new_args[i].val = *arg_val;
+
+					Type *type = arr_add(&table_index_type.tuple);
+					*type = fn_type->types[i+1];
+
+					if (fn_type->constness[i] == CONSTNESS_SEMI) {
+						if (semi_const_index >= 64) {
+							err_print(new_args[i].where, "You can't have more than 64 semi-constant arguments to a function at the moment (sorry).");
+							return false;
+						}
+						*which_are_const |= ((U64)1) << semi_const_index;
+					}
+				}
+				if (fn_type->constness[i] == CONSTNESS_SEMI) {
+					semi_const_index++;
 				}
 			}
+
+			/* the function had better be a compile time constant if it has constant params */
+			Value fn_val = {0};
+			if (!eval_expr(tr->evalr, f, &fn_val))
+				return false;
+
+			FnExpr *fn = fn_val.fn;
+			
+			bool instance_already_exists;
+			c->instance = instance_table_adda(tr->allocr, &fn->instances, table_index, &table_index_type, &instance_already_exists);
+			c->instance->c.id = fn->instances.n; /* let's help cgen out and assign an ID to this */
+			arr_clear(&table_index_type.tuple);
 		}
 		*t = *ret_type;
 		c->arg_exprs = new_args;

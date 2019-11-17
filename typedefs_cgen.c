@@ -1,4 +1,5 @@
 static bool typedefs_stmt(CGenerator *g, Statement *s);
+static bool typedefs_decl(CGenerator *g, Declaration *d);
 
 static bool typedefs_block(CGenerator *g, Block *b) {
 	Block *prev = g->block;
@@ -12,7 +13,7 @@ static bool typedefs_block(CGenerator *g, Block *b) {
 }
 
 static bool typedefs_expr(CGenerator *g, Expression *e) {
-	cgen_recurse_subexprs(g, e, typedefs_expr, typedefs_block);
+	cgen_recurse_subexprs(g, e, typedefs_expr, typedefs_block, typedefs_decl);
 	if (e->kind == EXPR_FN) {
 		/* needs to go before decls_cgen.c... */
 		e->fn.c.id = g->ident_counter++;

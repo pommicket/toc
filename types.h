@@ -222,6 +222,7 @@ typedef enum {
 			  KW_FLOAT,
 			  KW_F32,
 			  KW_F64,
+			  KW_TYPE,
 			  KW_CHAR,
 			  KW_BOOL,
 			  KW_TRUE,
@@ -430,14 +431,21 @@ typedef enum {
 } BinaryOp;
 
 typedef struct {
+	Value val;
+	struct {
+	    U64 id;
+	} c;
+} Instance;
+
+typedef struct {
 	struct Expression *fn;
     union {
 	    struct Argument *args;
 		struct Expression *arg_exprs;
 	};
+	Instance *instance; /* NULL = ordinary function, no compile time args */
 	struct {
 		IdentID id;
-		U32 instance; /* 0 = ordinary function, no compile time args */
 	} c;
 } CallExpr;
 
@@ -491,23 +499,19 @@ typedef struct {
 	U64 cap;
 } HashTable;
 
-/* these are found in value hash tables */
-typedef struct {
-	Value val;
-	I64 num;
-} ValNumPair;
-
 typedef struct FnExpr {
     struct Declaration *params; /* declarations of the parameters to this function */
     struct Declaration *ret_decls; /* array of decls, if this has named return values. otherwise, NULL */
 	Type ret_type;
 	Block body;
+	HashTable instances; /* for fns with constant parameters. the key is a tuple where
+							the first element is a u64 value whose ith bit (1<<i) is 1
+							if the ith semi-constant parameter is constant.
+						 */
 	struct {
 		/* if name = NULL, this is an anonymous function, and id will be the ID of the fn. */
 		Identifier name;
 	    IdentID id;
-		HashTable *instances; /* for fns with constant parameters. the key is a tuple of the 
-							   constant parameters (note that this can be a 1-tuple) */
 	} c;
 } FnExpr; /* an expression such as fn(x: int) int { 2 * x } */
 

@@ -27,5 +27,4 @@ static void test_all(void) {
 	arr_test();
 	block_arr_test();
 	idents_test();
-	hash_table_test();
 }

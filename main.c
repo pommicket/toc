@@ -1,6 +1,7 @@
 /* 
 TODO:
-type parameters (e.g. fn(foo @ type) {x: foo;})
+declarations of things with constant params
+deal with typing functions with type parameters (we need to type every single instance)
 
 struct parameters
 don't allow while {3; 5} (once break is added)

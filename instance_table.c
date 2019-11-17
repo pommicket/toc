@@ -217,24 +217,24 @@ static bool val_eq(Value u, Value v, Type *t) {
 }
 
 /*
-  for a value hash table, you must either ALWAYS or NEVER use an allocator 
-  all values in the hash table must have the same type.
-  returns true iff the value was already present, and sets associated_number accordingly.
-  otherwise, associates the value with associated_number, and returns false.
+  if already_exists is not NULL, this will create the instance if it does not exist,
+  and set already_exists accordingly
 */
-static bool val_hash_table_adda(Allocator *a, HashTable *h, Value v, Type *t, I64 *associated_number) {
+/* OPTIM: store instances in a block array (remember that the pointers need to stay valid!) */
+static Instance *instance_table_adda(Allocator *a, HashTable *h, Value v, Type *t,
+									 bool *already_exists) {
 	if (h->n * 2 >= h->cap) {
-		U64 new_cap = h->cap * 2 + 2;
-		ValNumPair *new_data = a ? allocr_malloc(a, (size_t)new_cap * sizeof *new_data)
+		U64 new_cap = h->cap * 2 + 3;
+		Instance **new_data = a ? allocr_malloc(a, (size_t)new_cap * sizeof *new_data)
 			: malloc((size_t)new_cap * sizeof *new_data);
 		bool *new_occupied = a ? allocr_calloc(a, (size_t)new_cap, sizeof *new_occupied)
 			: calloc((size_t)new_cap, sizeof *new_occupied);
-		ValNumPair *old_data = h->data;
+		Instance **old_data = h->data;
 		bool *old_occupied = h->occupied;
 		for (U64 i = 0; i < h->cap; i++) {
 			/* re-hash */
 			if (old_occupied[i]) {
-				U64 index = val_hash(old_data[i].val, t) % new_cap;
+				U64 index = val_hash(old_data[i]->val, t) % new_cap;
 				while (new_occupied[index]) {
 					index++;
 					if (index >= new_cap)
@@ -255,67 +255,37 @@ static bool val_hash_table_adda(Allocator *a, HashTable *h, Value v, Type *t, I6
 		}
 		h->cap = new_cap;
 	}
-	ValNumPair *data = h->data;
+	Instance **data = h->data;
 	U64 index = val_hash(v, t) % h->cap;
 	while (1) {
 		if (h->occupied[index]) {
-			if (val_eq(v, data[index].val, t)) {
-				*associated_number = data[index].num;
-				return true;
+			if (val_eq(v, data[index]->val, t)) {
+				*already_exists = true;
+				return data[index];
 			}
 		} else break;
 		index++;
 		if (index >= h->cap)
 			index -= h->cap;
 	}
-	data[index].val = v;
-	data[index].num = *associated_number;
-	h->occupied[index] = true;
-	h->n++;
-	return false;
+	if (already_exists) {
+		/* create, because it doesn't exist */
+		*already_exists = false;
+		data[index] = a ? allocr_malloc(a, sizeof *data[index])
+			: malloc(sizeof *data[index]);
+		data[index]->val = v;
+		h->occupied[index] = true;
+		h->n++;
+		return data[index];
+	}
+	return NULL;
 }
 
-/* see above */
-static bool val_hash_table_add(HashTable *h, Value v, Type *t, I64 *associated_number) {
-	return val_hash_table_adda(NULL, h, v, t, associated_number);
-}
 
+#if 0
 /* only call if you're not using an allocator */
 static void hash_table_free(HashTable *h) {
 	free(h->data);
 	free(h->occupied);
 }
-
-static void val_hash_table_test(void) {
-	HashTable h = {0};
-	Type type;
-	type.kind = TYPE_BUILTIN;
-	type.builtin = BUILTIN_I64;
-	type.flags = TYPE_IS_RESOLVED;
-	for (I64 n = 0; n < 100; n++) {
-		Value v = {.i64 = n * n};
-		if (val_hash_table_add(&h, v, &type, &n)) {
-			assert(!*"n*n already exists.");
-		}
-	}
-	for (I64 n = 0; n < 100; n++) {
-		Value v = {.i64 = n * n};
-		I64 m = 0;
-		if (!val_hash_table_add(&h, v, &type, &m)) {
-			assert(!*"n*n does not exist.");
-		}
-		if (m != n) {
-			assert(!*"n*n exists, but has wrong associated value.");
-		}
-	}
-	I64 x = 100;
-	Value v = {.i64 = 8};
-	if (val_hash_table_add(&h, v, &type, &x)) {
-		assert(!*"8 exists");
-	}
-	hash_table_free(&h);
-}
-
-static void hash_table_test(void) {
-	val_hash_table_test();
-}
+#endif
