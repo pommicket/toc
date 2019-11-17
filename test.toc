@@ -7,23 +7,15 @@ puti @= fn(x: int) {
 // ");
 // };
 
-f@= fn(x : int, y :@ int) int {
-  x+y
-};
-main @= fn() {
-	 something := f(10, 20);
-	 puti(something);
-	 something2 @= f(10, 20);
-	 puti(something2);
-	 something3 := f(10, 10+10);
-	 puti(something3);
-	 something4 := f(10, 23);
-	 puti(something4);
-	 r := 20;
-	 something5 := f(10, r);
-	 puti(something5);
-g := f;
-something6 := g(10, r);
-puti(something6);
 
+
+main @= fn() {
+	 a, b := f(10, 20);
+	 c, d := f(10, 10+10);
+	 puti(a); puti(b);
+	 puti(c); puti(d);
+
+f @= fn(a: int, x @ int) (int, int) {
+  x * a, x + a
+};
 };

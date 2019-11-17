@@ -128,14 +128,6 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 		break;											\
 	}
 
-static inline bool fn_has_any_const_params(FnExpr *f) {
-	arr_foreach(f->params, Declaration, param) {
-		if (param->flags & DECL_IS_CONST)
-			return true;
-	}
-	return false;
-}
-
 static bool cgen_block_enter(CGenerator *g, Block *b) {
 	g->block = b;
 	Statement *stmts;
@@ -418,6 +410,10 @@ static inline void cgen_fn_name(CGenerator *g, FnExpr *f) {
 	}
 }
 
+static inline void cgen_fn_instance_number(CGenerator *g, U64 instance) {
+	cgen_write(g, "%"PRIu64"_", instance);
+}
+
 /* unless f has const/semi-const args, instance and which_are_const can be set to 0 */
 static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where, U64 instance, U64 which_are_const) {
 	bool out_param = cgen_uses_ptr(&f->ret_type);
@@ -432,7 +428,7 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where, U64 instanc
 	}
 	cgen_fn_name(g, f);
 	if (instance) {
-		cgen_write(g, "%"PRIu64, instance);
+		cgen_fn_instance_number(g, instance);
 	}
 	if (!out_param) {
 		if (!cgen_type_post(g, &f->ret_type, where)) return false;
@@ -599,7 +595,7 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 		/* e.g. a, b = fn_which_returns_tuple(); */
 		if (!cgen_expr(g, to->call.fn)) return false;
 		if (to->call.instance)
-			cgen_write(g, "%"PRIu64, to->call.instance->c.id);
+			cgen_fn_instance_number(g, to->call.instance->c.id);
 		cgen_write(g, "(");
 		bool any_args = false;
 		Constness *constness = to->call.fn->type.fn.constness;
@@ -966,7 +962,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			cgen_write(g, ";"); cgen_nl(g);
 			if (!cgen_expr(g, e->call.fn)) return false;
 			if (e->call.instance) {
-				cgen_write(g, "%"PRIu64, e->call.instance->c.id);
+				cgen_fn_instance_number(g, e->call.instance->c.id);
 			}
 			cgen_write(g, "(");
 			bool any_args = false;
@@ -1325,7 +1321,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			if (!cgen_expr(g, e->call.fn))
 				return false;
 			if (e->call.instance) {
-				cgen_write(g, "%"PRIu64, e->call.instance->c.id);
+				cgen_fn_instance_number(g, e->call.instance->c.id);
 			}
 			cgen_write(g, "(");
 			bool first_arg = true;

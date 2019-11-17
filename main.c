@@ -1,6 +1,5 @@
 /* 
 TODO:
-declarations of things with constant params
 deal with typing functions with type parameters (we need to type every single instance)
 
 struct parameters
