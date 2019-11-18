@@ -7,6 +7,12 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_
 static bool is_decl(Tokenizer *t);
 static inline bool ends_decl(Token *t, DeclEndKind ends_with);
 
+static bool fn_has_any_const_params(FnExpr *f) {
+	arr_foreach(f->params, Declaration, param)
+		if (param->flags & (DECL_IS_CONST | DECL_SEMI_CONST))
+			return true;
+	return false;
+}
 
 static const char *expr_kind_to_str(ExprKind k) {
 	switch (k) {
@@ -1952,7 +1958,13 @@ static void fprint_fn_expr(FILE *out, FnExpr *f) {
 	fprintf(out, ") ");
 	fprint_type(out, &f->ret_type);
 	fprintf(out, " ");
+	bool anyc = fn_has_any_const_params(f);
+	bool prev = parse_printing_after_types;
+	if (anyc)
+		parse_printing_after_types = false;
 	fprint_block(out, &f->body);
+	if (anyc)
+		parse_printing_after_types = prev;
 }
 
 static void fprint_args(FILE *out, Argument *args) {
@@ -2251,3 +2263,4 @@ static bool expr_is_definitely_const(Expression *e) {
 	assert(0);
 	return false;
 }
+

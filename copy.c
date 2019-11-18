@@ -1,6 +1,7 @@
 /* these copy functions MUST be used before typing!!!! (except for copy_val) */
 
 static void copy_expr(Allocator *a, Expression *out, Expression *in);
+static void copy_decl(Allocator *a, Declaration *out, Declaration *in);
 static void copy_block(Allocator *a, Block *out, Block *in);
 
 static void copy_val(Allocator *allocr, Value *out, Value *in, Type *t) {
@@ -88,6 +89,23 @@ static void copy_type(Allocator *a, Type *out, Type *in) {
 	}
 }
 
+static void copy_fn_expr(Allocator *a, FnExpr *fout, FnExpr *fin, bool copy_body) {
+	size_t i;
+	fout->params = NULL;
+	size_t nparam_decls = arr_len(fin->params);
+	arr_set_lena(&fout->params, nparam_decls, a);
+	for (i = 0; i < nparam_decls; i++)
+		copy_decl(a, fout->params + i, fin->params + i);
+	size_t nret_decls = arr_len(fin->ret_decls);
+	fout->ret_decls = NULL;
+	arr_set_lena(&fout->ret_decls, nret_decls, a);
+	for (i = 0; i < nret_decls; i++)
+		copy_decl(a, fout->ret_decls + i, fin->ret_decls + i);
+	copy_type(a, &fout->ret_type, &fin->ret_type);
+	if (copy_body)
+		copy_block(a, &fout->body, &fin->body);
+}
+
 static void copy_expr(Allocator *a, Expression *out, Expression *in) {
 	*out = *in;
 	switch (in->kind) {
@@ -136,7 +154,79 @@ static void copy_expr(Allocator *a, Expression *out, Expression *in) {
 		}
 		copy_block(a, &eout->body, &ein->body);
 	} break;
+	case EXPR_FN:
+		copy_fn_expr(a, &out->fn, &in->fn, true);
+		break;
+	case EXPR_CAST: {
+		CastExpr *cin = &in->cast;
+		CastExpr *cout = &out->cast;
+		copy_type(a, &cout->type, &cin->type);
+		copy_expr(a, cout->expr = allocr_malloc(a, sizeof *cout->expr), cin->expr);
+	} break;
+	case EXPR_NEW: {
+		NewExpr *nin = &in->new;
+		NewExpr *nout = &out->new;
+		copy_type(a, &nout->type, &nin->type);
+		if (nin->n) copy_expr(a, nout->n = allocr_malloc(a, sizeof *nout->n), nin->n);
+	} break;
+	case EXPR_CALL: {
+		CallExpr *cin = &in->call;
+		CallExpr *cout = &out->call;
+		copy_expr(a, cout->fn = allocr_malloc(a, sizeof *cout->fn), cin->fn);
+		size_t nargs = arr_len(cin->arg_exprs);
+		cout->arg_exprs = NULL;
+		arr_set_lena(&cout->arg_exprs, nargs, a);
+		for (size_t i = 0; i < nargs; i++) {
+			copy_expr(a, cout->arg_exprs + i, cin->arg_exprs + i);
+		}
+	} break;
+	case EXPR_BLOCK:
+		copy_block(a, &out->block, &in->block);
+		break;
+	case EXPR_TUPLE: {
+		size_t nexprs = arr_len(in->tuple);
+		out->tuple = NULL;
+		arr_set_lena(&out->tuple, nexprs, a);
+		for (size_t i = 0; i < nexprs; i++)
+			copy_expr(a, out->tuple + i, in->tuple + i);
+	} break;
+	case EXPR_C:
+		copy_expr(a, out->c.code = allocr_malloc(a, sizeof *out->c.code), in->c.code);
+		break;
+	case EXPR_DSIZEOF:
+		copy_expr(a, out->dsizeof.of = allocr_malloc(a, sizeof *out->dsizeof.of), in->dsizeof.of);
+		break;
+	case EXPR_DALIGNOF:
+		copy_expr(a, out->dalignof.of = allocr_malloc(a, sizeof *out->dalignof.of), in->dalignof.of);
+		break;
+	case EXPR_SLICE: {
+		SliceExpr *sin = &in->slice;
+		SliceExpr *sout = &out->slice;
+		copy_expr(a, sout->of = allocr_malloc(a, sizeof *sout->of), sin->of);
+		if (sin->from)
+			copy_expr(a, sout->from = allocr_malloc(a, sizeof *sout->from), sin->from);
+		if (sin->to)
+			copy_expr(a, sout->to = allocr_malloc(a, sizeof *sout->to), sin->to);
+	} break;
+	case EXPR_TYPE:
+		copy_type(a, &out->typeval, &in->typeval);
+		break;
+	case EXPR_VAL:
+		copy_val(a, &out->val, &in->val, &in->type);
+		break;
 	}
+}
+
+static void copy_decl(Allocator *a, Declaration *out, Declaration *in) {
+	*out = *in;
+	if (in->flags & DECL_HAS_EXPR)
+		copy_expr(a, &out->expr, &in->expr);
+	if (in->flags & DECL_FOUND_VAL) {
+		copy_val(a, &out->val, &in->val, &in->type);
+	}
+	if (in->flags & DECL_ANNOTATES_TYPE)
+		copy_type(a, &out->type, &in->type);
+	
 }
 
 static void copy_stmt(Allocator *a, Statement *out, Statement *in) {
@@ -151,12 +241,7 @@ static void copy_stmt(Allocator *a, Statement *out, Statement *in) {
 		copy_expr(a, &out->expr, &in->expr);
 		break;
 	case STMT_DECL:
-		copy_expr(a, &out->decl.expr, &in->decl.expr);
-		if (in->decl.flags & DECL_FOUND_VAL) {
-			copy_val(a, &out->decl.val, &in->decl.val, &in->decl.type);
-		}
-		if (in->decl.flags & DECL_ANNOTATES_TYPE)
-			copy_type(a, &out->decl.type, &in->decl.type);
+		copy_decl(a, &out->decl, &in->decl);
 		break;
 	}
 }

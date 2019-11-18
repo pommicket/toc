@@ -185,6 +185,14 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t) {
 	t->kind = TYPE_FN;
 	t->fn.types = NULL;
 	t->fn.constness = NULL; /* OPTIM: constant doesn't need to be a dynamic array */
+	FnExpr *newf = NULL;
+    if (fn_has_any_const_params(f)) {
+		/* OPTIM don't copy so much */
+		newf = typer_malloc(tr, sizeof *newf);
+		copy_fn_expr(tr->allocr, newf, f, false);
+		f = newf;
+	}
+	
 	bool has_constant_params = false;
 	Type *ret_type = typer_arr_add(tr, &t->fn.types);
 	if (f->ret_decls && f->ret_type.kind == TYPE_VOID /* haven't found return type yet */) {
@@ -264,7 +272,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t) {
 	arr_foreach(f->ret_decls, Declaration, decl) {
 		if (!types_decl(tr, decl)) return false;
 	}
-	return true;
+    return true;
 }
 
 static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
@@ -589,7 +597,9 @@ static bool arg_is_const(Expression *arg, Constness constness) {
 }
 
 
-static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where) {
+/* pass NULL for instance if this isn't an instance */
+static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where,
+					 Instance *instance) {
 	FnExpr *prev_fn = tr->fn;
 	bool success = true;
 	{
@@ -598,10 +608,34 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where) {
 	}
 
 	assert(t->kind == TYPE_FN);
-	
-	/* don't type function body yet; we need to do that for every instance */
-	if (t->fn.constness)
-		return true;
+
+
+	if (instance) {
+		copy_fn_expr(tr->allocr, &instance->fn, f, true);
+		f = &instance->fn;
+		Value *compile_time_args = instance->val.tuple;
+		U64 which_are_const = compile_time_args[0].u64;
+		compile_time_args++;
+		int compile_time_arg_idx = 0;
+		int semi_const_arg_idx = 0; 
+		arr_foreach(f->params, Declaration, param) {
+			if (param->flags & DECL_IS_CONST) {
+				param->val = compile_time_args[compile_time_arg_idx];
+				param->flags |= DECL_FOUND_VAL;
+				compile_time_arg_idx++;
+			} else if (param->flags & DECL_SEMI_CONST) {
+				if (which_are_const & (((U64)1) << semi_const_arg_idx)) {
+					param->val = compile_time_args[compile_time_arg_idx];
+					param->flags |= DECL_FOUND_VAL | DECL_IS_CONST; /* pretend it's constant */
+					compile_time_arg_idx++;
+				}
+				semi_const_arg_idx++;
+			}
+		}
+	} else {
+		if (t->fn.constness)
+			return true; /* don't type function body yet; we need to do that for every instance */
+	}
 	
 	tr->fn = f;
 	if (!fn_enter(f, SCOPE_CHECK_REDECL)) {
@@ -665,12 +699,17 @@ static bool types_expr(Typer *tr, Expression *e) {
 	t->kind = TYPE_UNKNOWN; /* default to unknown type (in the case of an error) */
 	e->flags |= EXPR_FOUND_TYPE; /* even if failed, pretend we found the type */
 	switch (e->kind) {
-	case EXPR_FN:
+	case EXPR_FN: {
 		if (!type_of_fn(tr, &e->fn, e->where, &e->type))
-		    return false;
-		if (!types_fn(tr, &e->fn, &e->type, e->where))
 			return false;
-		break;
+		if (fn_has_any_const_params(&e->fn)) {
+			HashTable z = {0};
+			e->fn.instances = z;
+		} else {
+			if (!types_fn(tr, &e->fn, &e->type, e->where, NULL))
+				return false;
+		}
+	} break;
 	case EXPR_LITERAL_INT:
 	    t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_I64;
@@ -946,12 +985,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 		CallExpr *c = &e->call;
 		c->instance = NULL;
 		Expression *f = c->fn;
-		if (f->kind == EXPR_IDENT) {
-			/* allow calling a function before declaring it */
-			if (!type_of_ident(tr, f->where, f->ident, &f->type)) return false;
-		} else {
-			if (!types_expr(tr, f)) return false;
-		}
+		FnExpr *fn_decl = NULL;
+		if (!types_expr(tr, f)) return false;
 		arr_foreach(c->args, Argument, arg) {
 			if (!types_expr(tr, &arg->val))
 				return false;
@@ -971,7 +1006,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 		size_t nparams = arr_len(f->type.fn.types) - 1;
 		size_t nargs = arr_len(c->args);
 		bool ret = true;
-		FnExpr *fn_decl = NULL;
 		Expression *new_args = NULL;
 		arr_set_lena(&new_args, nparams, tr->allocr);
 		bool *params_set = nparams ? typer_calloc(tr, nparams, sizeof *params_set) : NULL;
@@ -1132,6 +1166,9 @@ static bool types_expr(Typer *tr, Expression *e) {
 			c->instance = instance_table_adda(tr->allocr, &fn->instances, table_index, &table_index_type, &instance_already_exists);
 			c->instance->c.id = fn->instances.n; /* let's help cgen out and assign an ID to this */
 			arr_clear(&table_index_type.tuple);
+			/* type this instance */
+			if (!types_fn(tr, fn, &f->type, e->where, c->instance))
+				return false;
 		}
 		*t = *ret_type;
 		c->arg_exprs = new_args;
