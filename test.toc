@@ -8,14 +8,11 @@ puti @= fn(x: int) {
 // };
 
 
+stuff @= fn(t @ Type) int {
+	  4327834 as t as int
+};
+
 
 main @= fn() {
-	 a, b := f(10, 20);
-	 c, d := f(10, 10+10);
-	 puti(a); puti(b);
-	 puti(c); puti(d);
-
-f @= fn(a: int, x @ int) (int, int) {
-  x * a, x + a
-};
+	 puti(stuff(int));
 };

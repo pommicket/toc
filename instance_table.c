@@ -225,10 +225,8 @@ static Instance *instance_table_adda(Allocator *a, HashTable *h, Value v, Type *
 									 bool *already_exists) {
 	if (h->n * 2 >= h->cap) {
 		U64 new_cap = h->cap * 2 + 3;
-		Instance **new_data = a ? allocr_malloc(a, (size_t)new_cap * sizeof *new_data)
-			: malloc((size_t)new_cap * sizeof *new_data);
-		bool *new_occupied = a ? allocr_calloc(a, (size_t)new_cap, sizeof *new_occupied)
-			: calloc((size_t)new_cap, sizeof *new_occupied);
+		Instance **new_data = allocr_malloc(a, (size_t)new_cap * sizeof *new_data);
+		bool *new_occupied = allocr_calloc(a, (size_t)new_cap, sizeof *new_occupied);
 		Instance **old_data = h->data;
 		bool *old_occupied = h->occupied;
 		for (U64 i = 0; i < h->cap; i++) {
@@ -246,13 +244,8 @@ static Instance *instance_table_adda(Allocator *a, HashTable *h, Value v, Type *
 		}
 		h->data = new_data;
 		h->occupied = new_occupied;
-		if (a) {
-			allocr_free(a, old_occupied, h->cap * sizeof *old_occupied);
-			allocr_free(a, old_data, h->cap * sizeof *old_data);
-		} else {
-			free(old_occupied);
-			free(old_data);
-		}
+		allocr_free(a, old_occupied, h->cap * sizeof *old_occupied);
+		allocr_free(a, old_data, h->cap * sizeof *old_data);
 		h->cap = new_cap;
 	}
 	Instance **data = h->data;
@@ -271,8 +264,7 @@ static Instance *instance_table_adda(Allocator *a, HashTable *h, Value v, Type *
 	if (already_exists) {
 		/* create, because it doesn't exist */
 		*already_exists = false;
-		data[index] = a ? allocr_malloc(a, sizeof *data[index])
-			: malloc(sizeof *data[index]);
+		data[index] = allocr_malloc(a, sizeof *data[index]);
 		data[index]->val = v;
 		h->occupied[index] = true;
 		h->n++;

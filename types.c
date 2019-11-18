@@ -181,9 +181,7 @@ static bool expr_must_lval(Expression *e) {
 	return false;
 }
 
-static bool type_of_fn(Typer *tr, Expression *e, Type *t) {
-	assert(e->kind == EXPR_FN);
-	FnExpr *f = &e->fn;
+static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t) {
 	t->kind = TYPE_FN;
 	t->fn.types = NULL;
 	t->fn.constness = NULL; /* OPTIM: constant doesn't need to be a dynamic array */
@@ -216,13 +214,13 @@ static bool type_of_fn(Typer *tr, Expression *e, Type *t) {
 			}
 		}
 	}
-	if (!type_resolve(tr, &f->ret_type, e->where))
+	if (!type_resolve(tr, &f->ret_type, where))
 		return false;
 	*ret_type = f->ret_type;
 	size_t idx = 0;
 	arr_foreach(f->params, Declaration, decl) {
 		if (!types_decl(tr, decl)) return false;
-		if (!type_resolve(tr, &decl->type, e->where))
+		if (!type_resolve(tr, &decl->type, where))
 			return false;
 		U32 is_at_all_const = decl->flags & (DECL_IS_CONST | DECL_SEMI_CONST);
 		if (is_at_all_const) {
@@ -318,7 +316,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 		} else {
 			if ((d->flags & DECL_HAS_EXPR) && (d->expr.kind == EXPR_FN)) {
 				/* allow using a function before declaring it */
-				if (!type_of_fn(tr, &d->expr, t)) return false;
+				if (!type_of_fn(tr, &d->expr.fn, d->expr.where, t)) return false;
 				return true;
 			} else {
 				if (location_after(d->where, where)) {
@@ -591,78 +589,88 @@ static bool arg_is_const(Expression *arg, Constness constness) {
 }
 
 
+static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where) {
+	FnExpr *prev_fn = tr->fn;
+	bool success = true;
+	{
+		HashTable z = {0};
+		f->instances = z;
+	}
+
+	assert(t->kind == TYPE_FN);
+	
+	/* don't type function body yet; we need to do that for every instance */
+	if (t->fn.constness)
+		return true;
+	
+	tr->fn = f;
+	if (!fn_enter(f, SCOPE_CHECK_REDECL)) {
+		success = false;
+		goto ret;
+	}
+	bool block_success = true;
+	block_success = types_block(tr, &f->body);
+	fn_exit(f);
+	if (!block_success) {
+		success = false;
+		goto ret;
+	}
+	Expression *ret_expr = f->body.ret_expr;
+	Type *ret_type = t->fn.types;
+	bool has_named_ret_vals = f->ret_decls != NULL;
+	if (ret_expr) {
+		if (!types_expr(tr, ret_expr)) {
+			success = false;
+			goto ret;
+		}
+		if (!type_eq(ret_type, &ret_expr->type)) {
+			char *got = type_to_str(&ret_expr->type);
+			char *expected = type_to_str(ret_type);
+			err_print(ret_expr->where, "Returning type %s, but function returns type %s.", got, expected);
+			info_print(where, "Function declaration is here.");
+			free(got); free(expected);
+			success = false;
+			goto ret;
+		}
+	} else if (ret_type->kind != TYPE_VOID && !has_named_ret_vals) {
+		Statement *stmts = f->body.stmts;
+		if (arr_len(stmts)) {
+			Statement *last_stmt = (Statement *)stmts + (arr_len(stmts) - 1);
+			if (last_stmt->kind == STMT_RET) {
+				/*
+				  last statement is a return, so it doesn't matter that the function has no return value
+				  ideally this would handle if foo { return 5; } else { return 6; }
+				*/
+				success = true;
+				goto ret;
+			}
+		}
+		/* TODO: this should really be at the closing brace, and not the function declaration */
+		char *expected = type_to_str(ret_type);
+		err_print(f->body.end, "No return value in function which returns %s.", expected);
+		free(expected);
+		info_print(where, "Function was declared here:");
+		success = false;
+		goto ret;
+	}
+ ret:
+	tr->fn = prev_fn;
+	return success;
+}
+
 static bool types_expr(Typer *tr, Expression *e) {
 	if (e->flags & EXPR_FOUND_TYPE) return true;
 	Type *t = &e->type;
 	t->flags = 0;
 	t->kind = TYPE_UNKNOWN; /* default to unknown type (in the case of an error) */
 	e->flags |= EXPR_FOUND_TYPE; /* even if failed, pretend we found the type */
-	bool success = true;
 	switch (e->kind) {
-	case EXPR_FN: {
-		{
-			HashTable z = {0};
-			e->fn.instances = z;
-		}
-		FnExpr *prev_fn = tr->fn;
-		FnExpr *f = &e->fn;
-		if (!type_of_fn(tr, e, t)) {
-			success = false;
-			goto fn_ret;
-		}
-		tr->fn = f;
-		if (!fn_enter(f, SCOPE_CHECK_REDECL))
+	case EXPR_FN:
+		if (!type_of_fn(tr, &e->fn, e->where, &e->type))
+		    return false;
+		if (!types_fn(tr, &e->fn, &e->type, e->where))
 			return false;
-		bool block_success = true;
-		block_success = types_block(tr, &e->fn.body);
-		fn_exit(f);
-		if (!block_success) {
-			success = false;
-			goto fn_ret;
-		}
-		Expression *ret_expr = f->body.ret_expr;
-		assert(t->kind == TYPE_FN);
-		Type *ret_type = t->fn.types;
-		bool has_named_ret_vals = f->ret_decls != NULL;
-		if (ret_expr) {
-			if (!types_expr(tr, ret_expr)) {
-				success = false;
-				goto fn_ret;
-			}
-			if (!type_eq(ret_type, &ret_expr->type)) {
-				char *got = type_to_str(&ret_expr->type);
-				char *expected = type_to_str(ret_type);
-				err_print(ret_expr->where, "Returning type %s, but function returns type %s.", got, expected);
-				info_print(e->where, "Function declaration is here.");
-				free(got); free(expected);
-				success = false;
-				goto fn_ret;
-			}
-		} else if (ret_type->kind != TYPE_VOID && !has_named_ret_vals) {
-			Statement *stmts = e->fn.body.stmts;
-			if (arr_len(stmts)) {
-				Statement *last_stmt = (Statement *)stmts + (arr_len(stmts) - 1);
-				if (last_stmt->kind == STMT_RET) {
-					/*
-					  last statement is a return, so it doesn't matter that the function has no return value
-					  ideally this would handle if foo { return 5; } else { return 6; }
-					*/
-					success = true;
-					goto fn_ret;
-				}
-			}
-			/* TODO: this should really be at the closing brace, and not the function declaration */
-			char *expected = type_to_str(ret_type);
-			err_print(f->body.end, "No return value in function which returns %s.", expected);
-			free(expected);
-			info_print(e->where, "Function was declared here:");
-			success = false;
-			goto fn_ret;
-		}
-		fn_ret:
-		tr->fn = prev_fn;
-		if (!success) return false;
-	} break;
+		break;
 	case EXPR_LITERAL_INT:
 	    t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_I64;
@@ -1597,7 +1605,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 					success = false;
 					goto ret;
 				}
-				val_copy(tr->allocr, &d->val, &val, &d->type);
+				copy_val(tr->allocr, &d->val, &val, &d->type);
 				d->flags |= DECL_FOUND_VAL;
 			}
 		}

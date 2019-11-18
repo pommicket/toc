@@ -348,50 +348,6 @@ static void fprint_val(FILE *f, Value v, Type *t) {
 	}
 }
 
-/* 
-allocr can be NULL
-*/
-static void val_copy(Allocator *allocr, Value *dest, Value *src, Type *t) {
-	switch (t->kind) {
-	case TYPE_BUILTIN:
-	case TYPE_FN:
-	case TYPE_PTR:
-	case TYPE_SLICE:
-	case TYPE_VOID:
-	case TYPE_UNKNOWN:
-	case TYPE_TYPE:
-		*dest = *src;
-		break;
-	case TYPE_ARR: {
-		size_t bytes = t->arr.n * compiler_sizeof(t->arr.of);
-		if (allocr)
-			dest->arr = allocr_malloc(allocr, bytes);
-		else
-			dest->arr = err_malloc(bytes);
-		memcpy(dest->arr, src->arr, bytes);
-	} break;
-	case TYPE_TUPLE: {
-		size_t bytes = arr_len(t->tuple) * sizeof(*dest->tuple);
-		if (allocr)
-			dest->tuple = allocr_malloc(allocr, bytes);
-		else
-			dest->tuple = err_malloc(bytes);
-		memcpy(dest->tuple, src->tuple, bytes);
-	} break;
-	case TYPE_STRUCT: {
-		size_t bytes = compiler_sizeof(t);
-		if (allocr)
-			dest->struc = allocr_malloc(allocr, bytes);
-		else
-			dest->struc = err_malloc(bytes);
-		memcpy(dest->struc, src->struc, bytes);
-	} break;
-	case TYPE_USER:
-		val_copy(allocr, dest, src, type_user_underlying(t));
-		break;
-	}
-}
-
 static void *val_ptr_to_free(Value *v, Type *t) {
 	switch (t->kind) {
 	case TYPE_BUILTIN:
@@ -1468,7 +1424,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			arr_foreach(p->idents, Identifier, i) {
 				Type *type = p->type.kind == TYPE_TUPLE ? &p->type.tuple[idx++] : &p->type;
 				IdentDecl *id = ident_decl(*i);
-				val_copy(NULL, &id->val, &args[arg], type);
+				copy_val(NULL, &id->val, &args[arg], type);
 				id->flags |= IDECL_HAS_VAL;
 				arg++;
 			}
@@ -1480,7 +1436,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				IdentDecl *id = ident_decl(*i);
 				if (d->flags & DECL_HAS_EXPR) {
 					assert(d->expr.kind == EXPR_VAL);
-					val_copy(NULL, &id->val, &d->expr.val, type);
+					copy_val(NULL, &id->val, &d->expr.val, type);
 					id->flags |= IDECL_HAS_VAL;
 				} else {
 					id->flags |= IDECL_HAS_VAL;
@@ -1507,7 +1463,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 						return false;
 					Value *element = arr_add(&tuple);
 					Type *type = decl_type_at_index(d, i);
-					val_copy(NULL, element, &this_one, type);
+					copy_val(NULL, element, &this_one, type);
 					void *to_free = val_ptr_to_free(element, type);
 					if (to_free)
 						*(void **)arr_add(&ev->to_free) = to_free;
@@ -1608,7 +1564,7 @@ static bool eval_decl(Evaluator *ev, Declaration *d) {
 			Type *type = decl_type_at_index(d, index);
 			if (!is_const) {
 				if (has_expr) {
-					val_copy(NULL, &id->val, &val, type);
+					copy_val(NULL, &id->val, &val, type);
 				} else {
 					id->val = val_zero(type);
 				}
@@ -1634,7 +1590,7 @@ static bool eval_stmt(Evaluator *ev, Statement *stmt) {
 		Value r;
 		if (!eval_expr(ev, &stmt->ret.expr, &r))
 			return false;
-		val_copy(NULL, &ev->ret_val, &r, &stmt->ret.expr.type);
+		copy_val(NULL, &ev->ret_val, &r, &stmt->ret.expr.type);
 	} break;
 	}
 	return true;
@@ -1655,7 +1611,7 @@ static bool eval_block(Evaluator *ev, Block *b, Type *t, Value *v) {
 		if (!eval_expr(ev, b->ret_expr, &r))
 			return false;
 		/* make a copy so that r's data isn't freed when we exit the block */
-		val_copy(NULL, v, &r, &b->ret_expr->type);
+		copy_val(NULL, v, &r, &b->ret_expr->type);
 		void *free_ptr = val_ptr_to_free(v, t);
 		if (free_ptr)
 			*(void **)arr_add(&prev_to_free) = free_ptr;

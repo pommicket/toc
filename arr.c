@@ -106,6 +106,12 @@ static void arr_remove_last_(void **arr, size_t item_sz) {
 	arr_hdr(*arr)->len--; (void)item_sz;
 }
 
+static void arr_copya_(void **out, void *in, size_t item_sz, Allocator *a) {
+	size_t len = arr_len(in);
+	arr_resva_(out, len, item_sz, a);
+	memcpy(*out, in, len * item_sz);
+}
+
 #ifdef __GNUC__
 #define typeof __typeof__
 #endif
@@ -139,6 +145,7 @@ You shouldn't rely on this, though, e.g. by doing
 #define arr_last(arr) arr_last_((void *)(arr), sizeof *(arr))
 #define arr_foreach(arr, type, var) for (type *var = arr_len(arr) ? arr : NULL, *var##_foreach_end = arr_last(arr); var; var == var##_foreach_end ? var = NULL : var++)
 #define arr_remove_last(arr) arr_remove_last_((void **)(arr), sizeof **(arr))
+#define arr_copya(out, in, a) do { assert(sizeof *(in) == sizeof **(out)); arr_copya_((void **)(out), (in), sizeof **(out), (a)); } while(0)
 	
 #ifdef TOC_DEBUG
 static void arr_test(void) {

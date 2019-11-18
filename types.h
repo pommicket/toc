@@ -1,3 +1,5 @@
+/* NOTE: make sure you edit copy.c when you make a change to expression-related types or type-related types in this file! */
+
 typedef int64_t Integer;
 typedef uint64_t UInteger;
 typedef long double Floating; /* OPTIM: Switch to double, but make sure floating-point literals are right */
@@ -336,8 +338,8 @@ typedef struct Type {
 		struct {
 			struct Type *of;
 			union {
-			    U64 n; /* after typing */
-				struct Expression *n_expr; /* before typing */
+			    U64 n; /* after resolving */
+				struct Expression *n_expr; /* before resolving */
 			};
 		} arr;
 	    struct Type *ptr;
@@ -431,19 +433,12 @@ typedef enum {
 } BinaryOp;
 
 typedef struct {
-	Value val;
-	struct {
-	    U64 id;
-	} c;
-} Instance;
-
-typedef struct {
 	struct Expression *fn;
     union {
 	    struct Argument *args;
 		struct Expression *arg_exprs;
 	};
-	Instance *instance; /* NULL = ordinary function, no compile time args */
+	struct Instance *instance; /* NULL = ordinary function, no compile time args */
 	struct {
 		IdentID id;
 	} c;
@@ -481,11 +476,12 @@ typedef struct EachExpr {
 	Block body;
 	union {
 		struct {
-			struct Expression *from;
-			struct Expression *to;
+			struct Expression *from; /* can't be null */
+			struct Expression *to; /* can be null */
 			union {
-				struct Expression *step;
-				Value *stepval;
+				/* (either) can be null */
+				struct Expression *step; /* before typing */
+				Value *stepval; /* after typing */
 			};
 		} range;
 		struct Expression *of;
@@ -514,6 +510,15 @@ typedef struct FnExpr {
 	    IdentID id;
 	} c;
 } FnExpr; /* an expression such as fn(x: int) int { 2 * x } */
+
+typedef struct Instance {
+	Value val;
+	/* this holds the typed function */
+	FnExpr fn;
+	struct {
+	    U64 id;
+	} c;
+} Instance;
 
 typedef struct {
 	Type type;

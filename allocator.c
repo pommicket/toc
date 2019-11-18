@@ -39,41 +39,36 @@ static void *allocr_malloc(Allocator *a, size_t bytes) {
 
 static void *allocr_calloc(Allocator *a, size_t n, size_t sz) {
 #if NO_ALLOCATOR
-	(void)a;
-	return err_calloc(n, sz);
-#else
+	a = NULL;
+#endif
+	if (a == NULL) return err_calloc(n, sz);
 	/* OPTIM: use calloc */
 	size_t bytes = n * sz;
 	void *data = allocr_malloc(a, bytes);
 	memset(data, 0, bytes);
 	return data;
-#endif
 }
 
 /* OPTIM */
 static void *allocr_realloc(Allocator *a, void *data, size_t old_size, size_t new_size) {
 #if NO_ALLOCATOR
-	(void)a;
-	(void)old_size;
-	return err_realloc(data, new_size);
-#else
+	a = NULL;
+#endif
+	if (a == NULL) return err_realloc(data, new_size);
     void *ret = allocr_malloc(a, new_size);
 	memcpy(ret, data, old_size);
 	return ret;
-#endif
 }
 
 static void allocr_free(Allocator *a, void *data, size_t size) {
 #if NO_ALLOCATOR
-	(void)a;
-	(void)size;
-    free(data);
-#else
-	/* OPTIM */
-	(void)a;
-	(void)size;
-	(void)data;
+	a = NULL;
 #endif
+	if (a == NULL) {
+		free(data);
+	}
+	/* OPTIM */
+	(void)size;
 }
 
 static void allocr_free_all(Allocator *a) {

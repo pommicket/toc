@@ -36,6 +36,7 @@ static Type *type_inner(Type *t) {
 #include "blockarr.c"
 #include "str.c"
 #include "instance_table.c"
+#include "copy.c"
 
 #include "identifiers.c"
 #include "tokenizer.c"
