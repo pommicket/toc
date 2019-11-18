@@ -181,12 +181,14 @@ static bool expr_must_lval(Expression *e) {
 	return false;
 }
 
-static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t) {
+#define TYPE_OF_FN_NO_COPY_EVEN_IF_CONST 0x01
+
+static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags) {
 	t->kind = TYPE_FN;
 	t->fn.types = NULL;
 	t->fn.constness = NULL; /* OPTIM: constant doesn't need to be a dynamic array */
 	FnExpr *newf = NULL;
-    if (fn_has_any_const_params(f)) {
+    if (!(flags & TYPE_OF_FN_NO_COPY_EVEN_IF_CONST) && fn_has_any_const_params(f)) {
 		/* OPTIM don't copy so much */
 		newf = typer_malloc(tr, sizeof *newf);
 		copy_fn_expr(tr->allocr, newf, f, false);
@@ -324,7 +326,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 		} else {
 			if ((d->flags & DECL_HAS_EXPR) && (d->expr.kind == EXPR_FN)) {
 				/* allow using a function before declaring it */
-				if (!type_of_fn(tr, &d->expr.fn, d->expr.where, t)) return false;
+				if (!type_of_fn(tr, &d->expr.fn, d->expr.where, t, 0)) return false;
 				return true;
 			} else {
 				if (location_after(d->where, where)) {
@@ -602,14 +604,8 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where,
 					 Instance *instance) {
 	FnExpr *prev_fn = tr->fn;
 	bool success = true;
-	{
-		HashTable z = {0};
-		f->instances = z;
-	}
 
 	assert(t->kind == TYPE_FN);
-
-
 	if (instance) {
 		copy_fn_expr(tr->allocr, &instance->fn, f, true);
 		f = &instance->fn;
@@ -632,6 +628,8 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where,
 				semi_const_arg_idx++;
 			}
 		}
+		if (!type_of_fn(tr, f, where, t, TYPE_OF_FN_NO_COPY_EVEN_IF_CONST))
+			return false;
 	} else {
 		if (t->fn.constness)
 			return true; /* don't type function body yet; we need to do that for every instance */
@@ -700,7 +698,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 	e->flags |= EXPR_FOUND_TYPE; /* even if failed, pretend we found the type */
 	switch (e->kind) {
 	case EXPR_FN: {
-		if (!type_of_fn(tr, &e->fn, e->where, &e->type))
+		if (!type_of_fn(tr, &e->fn, e->where, &e->type, 0))
 			return false;
 		if (fn_has_any_const_params(&e->fn)) {
 			HashTable z = {0};

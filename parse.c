@@ -801,6 +801,12 @@ static bool parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end
 static bool parse_fn_expr(Parser *p, FnExpr *f) {
 	Tokenizer *t = p->tokr;
 	f->ret_decls = NULL;
+	
+	{
+		/* help types.c */
+		HashTable z = {0};
+		f->instances = z;
+	}
 	/* only called when token is fn */
 	assert(token_is_kw(t->token, KW_FN));
 	t->token++;

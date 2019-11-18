@@ -56,6 +56,7 @@ static void copy_type(Allocator *a, Type *out, Type *in) {
 	} break;
 	case TYPE_TUPLE: {
 		size_t ntypes = arr_len(in->tuple);
+		out->tuple = NULL;
 		arr_set_lena(&out->tuple, ntypes, a);
 		for (size_t i = 0; i < ntypes; i++) {
 			copy_type(a, &out->tuple[i], &in->tuple[i]);
@@ -75,9 +76,9 @@ static void copy_type(Allocator *a, Type *out, Type *in) {
 		out->ptr = allocr_malloc(a, sizeof *out->slice);
 		copy_type(a, out->slice, in->slice);
 		break;
-	case TYPE_STRUCT:
-		out->struc.fields = NULL;
+	case TYPE_STRUCT: {
 		size_t nfields = arr_len(in->struc.fields);
+		out->struc.fields = NULL;
 		arr_set_lena(&out->struc.fields, nfields, a);
 		for (size_t i = 0; i < nfields; i++) {
 			Field *fout = &out->struc.fields[i];
@@ -85,14 +86,14 @@ static void copy_type(Allocator *a, Type *out, Type *in) {
 			*fout = *fin;
 			copy_type(a, fout->type, fin->type);
 		}
-		break;
+	} break;
 	}
 }
 
 static void copy_fn_expr(Allocator *a, FnExpr *fout, FnExpr *fin, bool copy_body) {
 	size_t i;
-	fout->params = NULL;
 	size_t nparam_decls = arr_len(fin->params);
+	fout->params = NULL;
 	arr_set_lena(&fout->params, nparam_decls, a);
 	for (i = 0; i < nparam_decls; i++)
 		copy_decl(a, fout->params + i, fin->params + i);
@@ -249,6 +250,7 @@ static void copy_stmt(Allocator *a, Statement *out, Statement *in) {
 static void copy_block(Allocator *a, Block *out, Block *in) {
 	*out = *in;
 	size_t nstmts = arr_len(in->stmts);
+	out->stmts = NULL;
 	arr_set_lena(&out->stmts, nstmts, a);
 	for (size_t i = 0; i < nstmts; i++) {
 		copy_stmt(a, &out->stmts[i], &in->stmts[i]);
