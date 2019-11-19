@@ -1,7 +1,7 @@
 /* 
 TODO:
 deal with typing functions with type parameters (we need to type every single instance)
-do typedefs for each instance
+don't cgen decls etc. in parameter initializers
 
 struct parameters
 don't allow while {3; 5} (once break is added)

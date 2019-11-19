@@ -26,106 +26,120 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where);
 static bool cgen_defs_block(CGenerator *g, Block *b);
 static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 
+#define cgen_recurse_subexprs_fn_simple(fn, decl_f, block_f)	\
+	if (!fn_enter(fn, 0)) return false;							\
+	arr_foreach(fn->params, Declaration, param)					\
+		if (!decl_f(g, param))									\
+			return false;										\
+	arr_foreach(fn->ret_decls, Declaration, r)					\
+		if (!decl_f(g, r))										\
+			return false;										\
+	if (!block_f(g, &fn->body))									\
+		return false;											\
+	fn_exit(fn);								
+
 /* calls f on every sub-expression of e, block_f on every sub-block, and decl_f on every sub-declaration. */
-#define cgen_recurse_subexprs(g, e, f, block_f, decl_f)	\
-	switch (e->kind) {									\
-	case EXPR_TYPE:										\
-	case EXPR_VAL:										\
-	case EXPR_C:										\
-	case EXPR_DSIZEOF:									\
-	case EXPR_DALIGNOF:									\
-	case EXPR_IDENT:									\
-	case EXPR_LITERAL_BOOL:								\
-	case EXPR_LITERAL_INT:								\
-	case EXPR_LITERAL_STR:								\
-	case EXPR_LITERAL_CHAR:								\
-	case EXPR_LITERAL_FLOAT:							\
-	break;												\
-	case EXPR_UNARY_OP:									\
-	if (!f(g, e->unary.of)) return false;				\
-	break;												\
-	case EXPR_BINARY_OP:								\
-		if (!f(g, e->binary.lhs)) return false;			\
-		if (e->binary.op != BINARY_DOT)					\
-			if (!f(g, e->binary.rhs))					\
-				return false;							\
-		break;											\
-	case EXPR_CAST:										\
-		if (!f(g, e->cast.expr))						\
-			return false;								\
-		break;											\
-	case EXPR_CALL:										\
-		if (!f(g, e->call.fn))							\
-			return false;								\
-		arr_foreach(e->call.arg_exprs, Expression, arg)	\
-			if (!f(g, arg))								\
-				return false;							\
-		break;											\
-	case EXPR_BLOCK:									\
-		if (!block_f(g, &e->block))						\
-			return false;								\
-		break;											\
-	case EXPR_IF:										\
-		if (e->if_.cond)								\
-			if (!f(g, e->if_.cond))						\
-				return false;							\
-		if (!block_f(g, &e->if_.body))					\
-			return false;								\
-		if (e->if_.next_elif)							\
-			if (!f(g, e->if_.next_elif))				\
-				return false;							\
-		break;											\
-	case EXPR_WHILE:									\
-		if (e->while_.cond)								\
-			if (!f(g, e->while_.cond))					\
-				return false;							\
-		if (!block_f(g, &e->while_.body))				\
-			return false;								\
-		break;											\
-	case EXPR_EACH: {									\
-		EachExpr *ea = &e->each;						\
-		if (!each_enter(e)) return false;				\
-		if (ea->flags & EACH_IS_RANGE) {				\
-			if (!f(g, ea->range.from))					\
-				return false;							\
-			if (ea->range.to && !f(g, ea->range.to))	\
-				return false;							\
-			/* step is a value, not an expression */	\
-		} else {										\
-			if (!f(g, ea->of))							\
-				return false;							\
-		}												\
-		if (!block_f(g, &ea->body)) return false;		\
-		each_exit(e);									\
-	} break;											\
-	case EXPR_TUPLE:									\
-		arr_foreach(e->tuple, Expression, x)			\
-			if (!f(g, x))								\
-				return false;							\
-		break;											\
-	case EXPR_SLICE:									\
-		if (!f(g, e->slice.of)) return false;			\
-		if (e->slice.from && !f(g, e->slice.from))		\
-			return false;								\
-		if (e->slice.to && !f(g, e->slice.to))			\
-			return false;								\
-		break;											\
-	case EXPR_FN:										\
-		if (!fn_enter(&e->fn, 0)) return false;			\
-		arr_foreach(e->fn.params, Declaration, param)	\
-			if (!decl_f(g, param))						\
-				return false;							\
-		arr_foreach(e->fn.ret_decls, Declaration, r)	\
-			if (!decl_f(g, r))							\
-				return false;							\
-		if (!block_f(g, &e->fn.body))					\
-			return false;								\
-		fn_exit(&e->fn);								\
-		break;											\
-	case EXPR_NEW:										\
-		if (e->new.n && !f(g, e->new.n))				\
-			return false;								\
-		break;											\
+#define cgen_recurse_subexprs(g, e, f, block_f, decl_f)					\
+	switch (e->kind) {													\
+	case EXPR_TYPE:														\
+	case EXPR_VAL:														\
+	case EXPR_C:														\
+	case EXPR_DSIZEOF:													\
+	case EXPR_DALIGNOF:													\
+	case EXPR_IDENT:													\
+	case EXPR_LITERAL_BOOL:												\
+	case EXPR_LITERAL_INT:												\
+	case EXPR_LITERAL_STR:												\
+	case EXPR_LITERAL_CHAR:												\
+	case EXPR_LITERAL_FLOAT:											\
+	break;																\
+	case EXPR_UNARY_OP:													\
+	if (!f(g, e->unary.of)) return false;								\
+	break;																\
+	case EXPR_BINARY_OP:												\
+	if (!f(g, e->binary.lhs)) return false;								\
+	if (e->binary.op != BINARY_DOT)										\
+		if (!f(g, e->binary.rhs))										\
+			return false;												\
+	break;																\
+	case EXPR_CAST:														\
+	if (!f(g, e->cast.expr))											\
+		return false;													\
+	break;																\
+	case EXPR_CALL:														\
+	if (!f(g, e->call.fn))												\
+		return false;													\
+	arr_foreach(e->call.arg_exprs, Expression, arg)						\
+		if (!f(g, arg))													\
+			return false;												\
+	break;																\
+	case EXPR_BLOCK:													\
+	if (!block_f(g, &e->block))											\
+		return false;													\
+	break;																\
+	case EXPR_IF:														\
+	if (e->if_.cond)													\
+		if (!f(g, e->if_.cond))											\
+			return false;												\
+	if (!block_f(g, &e->if_.body))										\
+		return false;													\
+	if (e->if_.next_elif)												\
+		if (!f(g, e->if_.next_elif))									\
+			return false;												\
+	break;																\
+	case EXPR_WHILE:													\
+	if (e->while_.cond)													\
+		if (!f(g, e->while_.cond))										\
+			return false;												\
+	if (!block_f(g, &e->while_.body))									\
+		return false;													\
+	break;																\
+	case EXPR_EACH: {													\
+		EachExpr *ea = &e->each;										\
+		if (!each_enter(e)) return false;								\
+		if (ea->flags & EACH_IS_RANGE) {								\
+			if (!f(g, ea->range.from))									\
+				return false;											\
+			if (ea->range.to && !f(g, ea->range.to))					\
+				return false;											\
+			/* step is a value, not an expression */					\
+		} else {														\
+			if (!f(g, ea->of))											\
+				return false;											\
+		}																\
+		if (!block_f(g, &ea->body)) return false;						\
+		each_exit(e);													\
+	} break;															\
+	case EXPR_TUPLE:													\
+	arr_foreach(e->tuple, Expression, x)								\
+		if (!f(g, x))													\
+			return false;												\
+	break;																\
+	case EXPR_SLICE:													\
+	if (!f(g, e->slice.of)) return false;								\
+	if (e->slice.from && !f(g, e->slice.from))							\
+		return false;													\
+	if (e->slice.to && !f(g, e->slice.to))								\
+		return false;													\
+	break;																\
+	case EXPR_FN: {														\
+		FnExpr *fn = &e->fn;											\
+		if (e->type.fn.constness) {										\
+			Instance **data = fn->instance.data;						\
+			for (U64 i = 0; i < f->instances.cap; i++) {				\
+				if (f->instances.occupied[i]) {							\
+					cgen_recurse_subexprs_fn_simple(&(*data)->fn, decl_f, block_f);	\
+				}														\
+				data++;													\
+			}															\
+		} else {														\
+			cgen_recurse_subexprs_fn_simple(fn, decl_f, block_f);		\
+		}																\
+		break;															\
+		case EXPR_NEW:													\
+			if (e->new.n && !f(g, e->new.n))							\
+				return false;											\
+			break;														\
 	}
 
 static bool cgen_block_enter(CGenerator *g, Block *b) {
@@ -1377,7 +1391,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 	case EXPR_TUPLE:
 		/* the only time this should happen is if you're stating
 		   a tuple, e.g. 3, 5;, but we've errored about that before
-		   (the comma operator does not exist in toc!) */
+		*/
 	case EXPR_TYPE:
 		assert(0);
 		break;
@@ -1692,7 +1706,7 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 				   struct declarations are handled by typedefs_cgen,
 				   and struct definitions are handled by decls_cgen.
 				   we don't need to do anything here.
-				 */
+				*/
 				continue;
 			} else if (type->kind == TYPE_FN && (d->flags & DECL_IS_CONST)) {
 				/* don't generate function pointer declaration for constant fns */
@@ -1766,6 +1780,7 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 /* does NOT call cgen_expr_pre for ret. */
 static bool cgen_ret(CGenerator *g, Expression *ret) {
 	assert((g->fn->ret_type.kind == TYPE_VOID) == (ret == NULL));
+	if (ret) assert(type_eq(&g->fn->ret_type, &ret->type));
 	if (!ret) {
 		cgen_write(g, "return");
 	} else if (cgen_uses_ptr(&g->fn->ret_type)) {
@@ -1834,7 +1849,7 @@ static bool cgen_defs_expr(CGenerator *g, Expression *e) {
 			for (U64 i = 0; i < instances->cap; i++) {
 				if (instances->occupied[i]) {
 					/* generate this instance */
-					if (!cgen_fn(g, f, e->where, is[i]->c.id, is[i]->val.tuple))
+					if (!cgen_fn(g, &is[i]->fn, e->where, is[i]->c.id, is[i]->val.tuple))
 						return false;
 				}
 			}
@@ -1891,7 +1906,7 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 	/* 
 	   TODO: to improve compile times, don't include stdlib.h
 	   (you can even get away with not including stdio.h with posix file descriptors)
-	 */
+	*/
 	cgen_write(g, "#include <stdint.h>\n"
 			   "#include <stdlib.h>\n"
 			   "#include <stdio.h>\n"

@@ -214,7 +214,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 			case '/': /* single line comment */
 				tokr_nextchar(t);
 				for (t->s++; *t->s && *t->s != '\n'; t->s++);
-				if (t->s) tokr_nextchar(t); /* skip newline */
+				if (*t->s) tokr_nextchar(t); /* skip newline */
 				break;
 			case '*': { /* multi line comment */
 				tokr_nextchar(t);

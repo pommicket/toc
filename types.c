@@ -191,7 +191,8 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
     if (!(flags & TYPE_OF_FN_NO_COPY_EVEN_IF_CONST) && fn_has_any_const_params(f)) {
 		/* OPTIM don't copy so much */
 		newf = typer_malloc(tr, sizeof *newf);
-		copy_fn_expr(tr->allocr, newf, f, false);
+		Copier cop = {.block = f->body.parent, .allocr = tr->allocr};
+		copy_fn_expr(&cop, newf, f, false);
 		f = newf;
 	}
 	
@@ -607,7 +608,8 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where,
 
 	assert(t->kind == TYPE_FN);
 	if (instance) {
-		copy_fn_expr(tr->allocr, &instance->fn, f, true);
+		Copier cop = {.allocr = tr->allocr, .block = f->body.parent};
+		copy_fn_expr(&cop, &instance->fn, f, true);
 		f = &instance->fn;
 		Value *compile_time_args = instance->val.tuple;
 		U64 which_are_const = compile_time_args[0].u64;
@@ -1162,11 +1164,14 @@ static bool types_expr(Typer *tr, Expression *e) {
 			
 			bool instance_already_exists;
 			c->instance = instance_table_adda(tr->allocr, &fn->instances, table_index, &table_index_type, &instance_already_exists);
-			c->instance->c.id = fn->instances.n; /* let's help cgen out and assign an ID to this */
-			arr_clear(&table_index_type.tuple);
-			/* type this instance */
-			if (!types_fn(tr, fn, &f->type, e->where, c->instance))
-				return false;
+			if (!instance_already_exists) {
+				c->instance->c.id = fn->instances.n; /* let's help cgen out and assign an ID to this */
+
+				/* type this instance */
+				if (!types_fn(tr, fn, &f->type, e->where, c->instance))
+					return false;
+				arr_clear(&table_index_type.tuple);
+			}
 		}
 		*t = *ret_type;
 		c->arg_exprs = new_args;
@@ -1702,7 +1707,7 @@ static bool types_stmt(Typer *tr, Statement *s) {
 			return false;
 		}
 		if (s->expr.type.kind == TYPE_TUPLE) {
-			err_print(s->where, "Statement of a tuple is not allowed. The comma operator does not exist in toc; use a semicolon instead.");
+			err_print(s->where, "Statement of a tuple is not allowed. Use a semicolon instead of a comma here.");
 			return false;
 		}
 		break;

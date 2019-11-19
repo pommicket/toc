@@ -2,17 +2,17 @@ puti @= fn(x: int) {
 	 #C("printf(\"%ld\\n\", (long)x);
 ");
 };
-// putf @= fn(x: float) {
-	 // #C("printf(\"%f\\n\", (double)x);
-// ");
-// };
+putf @= fn(x: float) {
+	 #C("printf(\"%f\\n\", (double)x);
+");
+};
 
 
 
-// main @= fn() {
-// 	 puti(f(17));
-// };
+main @= fn() {
+	 puti(g(int));
+};
 
-// f @= fn(k @ int) int {
-// k
-// };
+g @= fn(t @ Type) int {
+  87347 as t as int
+};
