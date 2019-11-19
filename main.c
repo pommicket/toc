@@ -1,6 +1,7 @@
 /* 
 TODO:
 deal with typing functions with type parameters (we need to type every single instance)
+do typedefs for each instance
 
 struct parameters
 don't allow while {3; 5} (once break is added)

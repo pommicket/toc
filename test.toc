@@ -9,10 +9,10 @@ puti @= fn(x: int) {
 
 
 
-main @= fn() {
-	 puti(f(17));
-};
+// main @= fn() {
+// 	 puti(f(17));
+// };
 
-f @= fn(k @ int) int {
-k
-};
+// f @= fn(k @ int) int {
+// k
+// };

@@ -10,7 +10,10 @@ static bool cgen_decls_fn_instances(CGenerator *g, Expression *e) {
 	Instance **data = f->instances.data;
 	for (U64 i = 0; i < f->instances.cap; i++) {
 		if (f->instances.occupied[i]) {
-			if (!cgen_fn_header(g, f, e->where, (*data)->c.id, (*data)->val.tuple[0].u64))
+			(*data)->fn.c.name = f->c.name;
+			(*data)->fn.c.id = f->c.id;
+		
+			if (!cgen_fn_header(g, &(*data)->fn, e->where, (*data)->c.id, (*data)->val.tuple[0].u64))
 				return false;
 			cgen_write(g, ";");
 			cgen_nl(g);
