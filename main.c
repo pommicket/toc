@@ -1,6 +1,8 @@
 /* 
 TODO:
-deal with typing functions with type parameters (we need to type every single instance)
+better errors (show where instance is)
+alias type, instead of creating a new type.
+make sure fn(t @ Type, x : t = 1598, y @ t = 9832) works
 don't cgen decls etc. in parameter initializers
 
 struct parameters

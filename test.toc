@@ -11,8 +11,10 @@ putf @= fn(x: float) {
 
 main @= fn() {
 	 puti(g(int));
+	 puti(g());
 };
 
-g @= fn(t @ Type) int {
+g @= fn(t @= u8) int {
   87347 as t as int
 };
+

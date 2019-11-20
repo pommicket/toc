@@ -125,21 +125,21 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 	case EXPR_FN: {														\
 		FnExpr *fn = &e->fn;											\
 		if (e->type.fn.constness) {										\
-			Instance **data = fn->instance.data;						\
-			for (U64 i = 0; i < f->instances.cap; i++) {				\
-				if (f->instances.occupied[i]) {							\
-					cgen_recurse_subexprs_fn_simple(&(*data)->fn, decl_f, block_f);	\
+			Instance **data = fn->instances.data;						\
+			for (U64 i = 0; i < fn->instances.cap; i++) {				\
+				if (fn->instances.occupied[i]) {						\
+					cgen_recurse_subexprs_fn_simple((&(*data)->fn), decl_f, block_f); \
 				}														\
 				data++;													\
 			}															\
 		} else {														\
 			cgen_recurse_subexprs_fn_simple(fn, decl_f, block_f);		\
 		}																\
-		break;															\
-		case EXPR_NEW:													\
-			if (e->new.n && !f(g, e->new.n))							\
-				return false;											\
-			break;														\
+	} break;															\
+	case EXPR_NEW:														\
+	if (e->new.n && !f(g, e->new.n))									\
+		return false;													\
+	break;																\
 	}
 
 static bool cgen_block_enter(CGenerator *g, Block *b) {

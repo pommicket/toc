@@ -1081,7 +1081,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 				
 				arr_foreach(fn_decl->params, Declaration, param) {
 					bool is_required = !(param->flags & DECL_HAS_EXPR);
-					long ident_idx = 0;
+					int ident_idx = 0;
+					
 					arr_foreach(param->idents, Identifier, ident) {
 						if (index == i) {
 							if (is_required) {
@@ -1090,15 +1091,37 @@ static bool types_expr(Typer *tr, Expression *e) {
 								free(s);
 								return false;
 							} else {
-								assert(param->expr.kind == EXPR_VAL); /* evaluated in type_of_fn */
-								new_args[i].kind = EXPR_VAL;
-								new_args[i].flags = param->expr.flags;
-								new_args[i].type = param->type.kind == TYPE_TUPLE
-									? param->type.tuple[ident_idx]
-									: param->type;
-								new_args[i].val = param->type.kind == TYPE_TUPLE
-									? param->expr.val.tuple[ident_idx]
-									: param->expr.val;
+								Value default_val;
+								if (fn_type->constness) {
+									/* TODO: evaluate once per decl, not once per ident */
+									Expression copy;
+									/* make a copy of the default argument, and type and evaluate it. */
+									Copier cop = {.block = tr->block, .allocr = tr->allocr};
+									copy_expr(&cop, &copy, &param->expr);
+									if (!types_expr(tr, &copy))
+										return false;
+									if (!eval_expr(tr->evalr, &copy, &default_val))
+										return false;
+									new_args[i].kind = EXPR_VAL;
+									new_args[i].flags = copy.flags;
+									new_args[i].type = copy.type.kind == TYPE_TUPLE
+										? copy.type.tuple[ident_idx]
+										: copy.type;
+									new_args[i].val = copy.type.kind == TYPE_TUPLE
+										? default_val.tuple[ident_idx]
+										: default_val;
+								} else {
+									/* it's already been evaluated */
+									assert(param->expr.kind == EXPR_VAL); /* evaluated in type_of_fn */
+									new_args[i].kind = EXPR_VAL;
+									new_args[i].flags = param->expr.flags;
+									new_args[i].type = param->type.kind == TYPE_TUPLE
+										? param->type.tuple[ident_idx]
+										: param->type;
+									new_args[i].val = param->type.kind == TYPE_TUPLE
+										? param->expr.val.tuple[ident_idx]
+										: param->expr.val;
+								}
 							}
 						}
 						ident_idx++;
