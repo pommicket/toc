@@ -1606,6 +1606,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 		break;
 	}
 	case EXPR_TYPE:
+		if (!type_resolve(tr, &e->typeval, e->where))
+			return false;
 		t->kind = TYPE_TYPE;
 		break;
 	case EXPR_VAL:

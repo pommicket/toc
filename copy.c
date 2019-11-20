@@ -45,7 +45,7 @@ static void copy_val(Copier *c, Value *out, Value *in, Type *t) {
 }
 
 static void copy_type(Copier *c, Type *out, Type *in) {
-	assert(!(in->flags & TYPE_IS_RESOLVED));
+	/* needs to handle resolved and unresolved types properly */
 	*out = *in;
 	switch (in->kind) {
 	case TYPE_BUILTIN:
@@ -71,8 +71,10 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 		}
 	} break;
 	case TYPE_ARR:
-		out->arr.n_expr = allocr_malloc(c->allocr, sizeof *out->arr.n_expr);
-		copy_expr(c, out->arr.n_expr, in->arr.n_expr);
+		if (!(in->flags & TYPE_IS_RESOLVED)) {
+			out->arr.n_expr = allocr_malloc(c->allocr, sizeof *out->arr.n_expr);
+			copy_expr(c, out->arr.n_expr, in->arr.n_expr);
+		}
 		out->arr.of = allocr_malloc(c->allocr, sizeof *out->arr.of);
 		copy_type(c, out->arr.of, in->arr.of);
 		break;
