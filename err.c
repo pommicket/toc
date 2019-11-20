@@ -49,17 +49,30 @@ static void warn_print_header_(Location where) {
 	err_fprint(TEXT_WARN("warning:") " at line %lu of %s:\n", (unsigned long)where.line, where.ctx->filename);
 }
 
-static void err_print_footer_(const char *context) {
-	const char *end = strchr(context, '\n');
+static void err_print_location_text(Location where) {
+	const char *text = where.code;
+	const char *end = strchr(text, '\n');
 	int has_newline = end != NULL;
 	if (!has_newline)
-		end = strchr(context, '\0');
+		end = strchr(text, '\0');
 	assert(end);
-	err_fprint("\n\there: --> ");
-	err_fwrite(context, 1, (size_t)(end - context));
+	err_fprint("\there: --> ");
 	if (!has_newline)
 		err_fprint("<end of file>");
+	else
+		err_fwrite(text, 1, (size_t)(end - text));
 	err_fprint("\n");
+	
+}
+
+static void err_print_footer_(Location where) {
+	ErrCtx *ctx = where.ctx;
+	err_fprint("\n");
+	err_print_location_text(where);
+	arr_foreach(ctx->instance_stack, Location, inst) {
+		err_fprint("While generating the instance of a function\n");
+		err_print_location_text(*inst);
+	}
 }
 
 /* Write nicely-formatted errors to the error file */
@@ -69,7 +82,7 @@ static void err_vprint(Location where, const char *fmt, va_list args) {
 	if (!where.ctx->enabled) return;
 	err_print_header_(where);
 	err_vfprint(fmt, args);
-	err_print_footer_(where.code);
+	err_print_footer_(where);
 }
 
 static void err_print_(int line, const char *file, Location where, const char *fmt, ...) {
@@ -90,7 +103,7 @@ static void info_print(Location where, const char *fmt, ...) {
 	va_start(args, fmt);
 	info_print_header_(where);
 	err_vfprint(fmt, args);
-	err_print_footer_(where.code);
+	err_print_footer_(where);
 	va_end(args);
 }
 
@@ -100,7 +113,7 @@ static void warn_print(Location where, const char *fmt, ...) {
 	va_start(args, fmt);
 	warn_print_header_(where);
 	err_vfprint(fmt, args);
-	err_print_footer_(where.code);
+	err_print_footer_(where);
 	va_end(args);
 }
 

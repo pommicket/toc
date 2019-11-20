@@ -605,9 +605,11 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where,
 					 Instance *instance) {
 	FnExpr *prev_fn = tr->fn;
 	bool success = true;
+	ErrCtx *err_ctx = where.ctx;
 
 	assert(t->kind == TYPE_FN);
 	if (instance) {
+		*(Location *)arr_add(&err_ctx->instance_stack) = where;
 		Copier cop = {.allocr = tr->allocr, .block = f->body.parent};
 		copy_fn_expr(&cop, &instance->fn, f, true);
 		f = &instance->fn;
@@ -630,8 +632,10 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where,
 				semi_const_arg_idx++;
 			}
 		}
-		if (!type_of_fn(tr, f, where, t, TYPE_OF_FN_NO_COPY_EVEN_IF_CONST))
+		if (!type_of_fn(tr, f, where, t, TYPE_OF_FN_NO_COPY_EVEN_IF_CONST)) {
+			arr_remove_last(&err_ctx->instance_stack);
 			return false;
+		}
 	} else {
 		if (t->fn.constness)
 			return true; /* don't type function body yet; we need to do that for every instance */
@@ -688,6 +692,8 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where,
 		goto ret;
 	}
  ret:
+	if (instance)
+		arr_remove_last(&err_ctx->instance_stack);
 	tr->fn = prev_fn;
 	return success;
 }
@@ -1102,14 +1108,18 @@ static bool types_expr(Typer *tr, Expression *e) {
 										return false;
 									if (!eval_expr(tr->evalr, &copy, &default_val))
 										return false;
+									
 									new_args[i].kind = EXPR_VAL;
 									new_args[i].flags = copy.flags;
 									new_args[i].type = copy.type.kind == TYPE_TUPLE
 										? copy.type.tuple[ident_idx]
 										: copy.type;
-									new_args[i].val = copy.type.kind == TYPE_TUPLE
-										? default_val.tuple[ident_idx]
-										: default_val;
+									
+									copy_val(&cop, &new_args[i].val,
+											 copy.type.kind == TYPE_TUPLE
+											 ? &default_val.tuple[ident_idx]
+											 : &default_val, &new_args[i].type);
+									
 								} else {
 									/* it's already been evaluated */
 									assert(param->expr.kind == EXPR_VAL); /* evaluated in type_of_fn */
@@ -1149,7 +1159,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 			int semi_const_index = 0;
 			for (size_t i = 0; i < arr_len(fn_type->types)-1; i++) {
 				bool should_be_evald = arg_is_const(&new_args[i], fn_type->constness[i]);
-				
 				if (should_be_evald) {
 					Value *arg_val = typer_arr_add(tr, &table_index.tuple);
 					if (!eval_expr(tr->evalr, &new_args[i], arg_val)) {
@@ -1158,12 +1167,16 @@ static bool types_expr(Typer *tr, Expression *e) {
 						}
 						return false;
 					}
-					new_args[i].kind = EXPR_VAL;
-					new_args[i].flags = 0;
-					new_args[i].val = *arg_val;
 
 					Type *type = arr_add(&table_index_type.tuple);
 					*type = fn_type->types[i+1];
+					
+					new_args[i].kind = EXPR_VAL;
+					new_args[i].flags = EXPR_FOUND_TYPE;
+					Copier cop = {.allocr = tr->allocr, .block = tr->block};
+					copy_val(&cop, &new_args[i].val, arg_val, type);
+					new_args[i].val = *arg_val;
+					new_args[i].type = *type;
 
 					if (fn_type->constness[i] == CONSTNESS_SEMI) {
 						if (semi_const_index >= 64) {
@@ -1668,7 +1681,8 @@ static bool types_decl(Typer *tr, Declaration *d) {
 					success = false;
 					goto ret;
 				}
-				copy_val(tr->allocr, &d->val, &val, &d->type);
+				Copier cop = {.block = tr->block, .allocr = tr->allocr};
+				copy_val(&cop, &d->val, &val, &d->type);
 				d->flags |= DECL_FOUND_VAL;
 			}
 		}
@@ -1779,6 +1793,7 @@ static void typer_create(Typer *tr, Evaluator *ev, Allocator *allocr) {
 	tr->in_decls = NULL;
 	tr->in_expr_decls = NULL;
 	tr->allocr = allocr;
+	
 }
 
 static bool types_file(Typer *tr, ParsedFile *f) {

@@ -1,20 +1,20 @@
-puti @= fn(x: int) {
-	 #C("printf(\"%ld\\n\", (long)x);
-");
-};
-putf @= fn(x: float) {
-	 #C("printf(\"%f\\n\", (double)x);
-");
-};
+// puti @= fn(x: int) {
+// 	 #C("printf(\"%ld\\n\", (long)x);
+// ");
+// };
+// putf @= fn(x: float) {
+// 	 #C("printf(\"%f\\n\", (double)x);
+// ");
+// };
 
 
 
 main @= fn() {
-	 puti(g(int));
-	 puti(g());
+	 g(int);
+	 g();
 };
 
-g @= fn(t @= u8) int {
+g @= fn(t @= int) int {
   87347 as t as int
 };
 

@@ -28,11 +28,11 @@ static Type *type_inner(Type *t) {
 	return t;
 }
 
-#include "rand.c"
-#include "location.c"
-#include "err.c"
 #include "allocator.c"
 #include "arr.c"
+#include "location.c"
+#include "err.c"
+#include "rand.c"
 #include "blockarr.c"
 #include "str.c"
 #include "instance_table.c"

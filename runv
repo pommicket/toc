@@ -1,5 +1,5 @@
 #!/bin/sh
-valgrind -q --track-origins=yes --error-exitcode=1 --malloc-fill=0xcd ./toc test.toc || exit 1
+valgrind -q --track-origins=yes --error-exitcode=1 --malloc-fill=0xcd  --free-fill=0xef --num-callers=100 ./toc test.toc || exit 1
 if [ "$1" = "c" ]; then
 	gcc out.c && ./a.out
 elif [ "$1" = "pc" ]; then

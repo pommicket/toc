@@ -1955,6 +1955,10 @@ static void fprint_block(FILE *out,  Block *b) {
 }
 
 static void fprint_fn_expr(FILE *out, FnExpr *f) {
+	bool anyc = fn_has_any_const_params(f);
+	bool prev = parse_printing_after_types;
+	if (anyc)
+		parse_printing_after_types = false;
 	fprintf(out, "fn (");
 	arr_foreach(f->params, Declaration, decl) {
 		if (decl != f->params)
@@ -1964,10 +1968,6 @@ static void fprint_fn_expr(FILE *out, FnExpr *f) {
 	fprintf(out, ") ");
 	fprint_type(out, &f->ret_type);
 	fprintf(out, " ");
-	bool anyc = fn_has_any_const_params(f);
-	bool prev = parse_printing_after_types;
-	if (anyc)
-		parse_printing_after_types = false;
 	fprint_block(out, &f->body);
 	if (anyc)
 		parse_printing_after_types = prev;

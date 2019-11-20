@@ -1,9 +1,10 @@
 /* 
 TODO:
-better errors (show where instance is)
+fix
 alias type, instead of creating a new type.
 make sure fn(t @ Type, x : t = 1598, y @ t = 9832) works
 don't cgen decls etc. in parameter initializers
+check for leaks
 
 struct parameters
 don't allow while {3; 5} (once break is added)
@@ -60,7 +61,7 @@ int main(int argc, char **argv) {
 	Tokenizer t;
 	Allocator main_allocr;
 	allocr_create(&main_allocr);
-	ErrCtx err_ctx;
+	ErrCtx err_ctx = {0};
 	err_ctx.filename = in_filename;
 	err_ctx.enabled = true;
 	tokr_create(&t, &file_idents, &err_ctx, &main_allocr);

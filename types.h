@@ -49,16 +49,18 @@ typedef U32 IdentID; /* identifier ID for cgen (anonymous variables) */
 
 typedef uint32_t LineNo;
 
-typedef struct {
-	const char *filename;
-	bool enabled;
-} ErrCtx;
-
-typedef struct {
+typedef struct Location {
 	LineNo line;
 	char *code;
-	ErrCtx *ctx;
+	struct ErrCtx *ctx;
 } Location;
+
+typedef struct ErrCtx {
+	const char *filename;
+	bool enabled;
+	Location *instance_stack; /* stack of locations which generate the instances we're dealing with */
+} ErrCtx;
+
 
 typedef struct Page {
 	struct Page *next;
