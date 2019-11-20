@@ -354,7 +354,7 @@ typedef struct Type {
 				};
 				Identifier ident;
 			};
-			
+			bool is_alias; /* is this an alias for a type, rather than a new type */
 		} user;
 		struct {
 		    Field *fields;
@@ -613,6 +613,7 @@ enum {
 	  DECL_FOUND_TYPE = 0x10,
 	  DECL_ERRORED_ABOUT_SELF_REFERENCE = 0x20, /* has there been an error about this decl referencing itself? */
 	  DECL_FOUND_VAL = 0x40,
+	  DECL_IS_PARAM = 0x80
 };
 	
 /* OPTIM: Instead of using dynamic arrays, do two passes. */

@@ -12,6 +12,7 @@ puti @= fn(x: int) {
 main @= fn() {
 	 puti(g(int));
 	 puti(g());
+	 puti(g(u8));
 };
 
 g @= fn(t @= int) int {

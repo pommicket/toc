@@ -27,6 +27,13 @@ static bool type_eq(Type *a, Type *b) {
 		return true; /* allow things such as 3 + #C("5") */
 	assert(a->flags & TYPE_IS_RESOLVED);
 	assert(b->flags & TYPE_IS_RESOLVED);
+
+	if (a->kind == TYPE_USER && a->user.is_alias)
+		return type_eq(type_user_underlying(a), b);
+	if (b->kind == TYPE_USER && b->user.is_alias)
+		return type_eq(a, type_user_underlying(b));
+	
+	
 	if (a->kind != b->kind) return false;
 	if (a->flags & TYPE_IS_FLEXIBLE) {
 		if (b->flags & TYPE_IS_FLEXIBLE) return true;
@@ -464,6 +471,9 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 		/* finally, set decl and index */
 		t->user.decl = decl;
 		t->user.index = index;
+		if (decl->flags & DECL_IS_PARAM) {
+		    t->user.is_alias = true; /* type parameters are aliases */
+		}
 	} break;
 	case TYPE_STRUCT:
 		arr_foreach(t->struc.fields, Field, f) {
@@ -511,9 +521,15 @@ static Status type_cast_status(Type *from, Type *to) {
 	if (to->kind == TYPE_UNKNOWN)
 		return STATUS_NONE;
 	if (from->kind == TYPE_USER) {
-		return type_eq(to, type_user_underlying(from)) ? STATUS_NONE : STATUS_ERR;
+		if (from->user.is_alias) {
+			return type_cast_status(type_user_underlying(from), to);
+		}
+		return type_eq(type_user_underlying(from), to) ? STATUS_NONE : STATUS_ERR;
 	}
 	if (to->kind == TYPE_USER) {
+		if (to->user.is_alias) {
+			return type_cast_status(from, type_user_underlying(to));
+		}
 		return type_eq(from, type_user_underlying(to)) ? STATUS_NONE : STATUS_ERR;
 	}
 	switch (from->kind) {

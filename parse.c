@@ -822,6 +822,8 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 	} else {
 		if (!parse_decl_list(p, &f->params, DECL_END_RPAREN_COMMA))
 		    return false;
+		arr_foreach(f->params, Declaration, param)
+			param->flags |= DECL_IS_PARAM;
 	}
 	
 	if (t->token->kind == TOKEN_EOF) {
