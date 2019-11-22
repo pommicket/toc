@@ -28,6 +28,8 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 
 #define cgen_recurse_subexprs_fn_simple(fn, decl_f, block_f)	\
 	if (!fn_enter(fn, 0)) return false;							\
+	FnExpr *prev_fn = g->f##n;									\
+    g->f##n = fn;												\
 	arr_foreach(fn->params, Declaration, param)					\
 		if (!decl_f(g, param))									\
 			return false;										\
@@ -36,7 +38,8 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 			return false;										\
 	if (!block_f(g, &fn->body))									\
 		return false;											\
-	fn_exit(fn);								
+	fn_exit(fn);												\
+	g->f##n = prev_fn;
 
 /* calls f on every sub-expression of e, block_f on every sub-block, and decl_f on every sub-declaration. */
 #define cgen_recurse_subexprs(g, e, f, block_f, decl_f)					\
@@ -306,7 +309,7 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
 	case TYPE_STRUCT:
 		cgen_write(g, "struct {");
 		g->indent_lvl++;
-		cgen_nl(g);
+ 		cgen_nl(g);
 		arr_foreach(t->struc.fields, Field, f) {
 			if (!cgen_type_pre(g, f->type, where)) return false;
 			cgen_write(g, " ");
@@ -1370,8 +1373,8 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 	case EXPR_CAST: {
 		Type *from = &e->cast.expr->type;
 		Type *to = &e->cast.type;
-		if (from->kind == TYPE_USER || to->kind == TYPE_USER) {
-			/* don't need to cast; they're the same type in C */
+		if (to->kind == TYPE_ARR) {
+			/* can't cast to array type */
 			if (!cgen_expr(g, e->cast.expr))
 				return false;
 		} else {
@@ -1503,13 +1506,7 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where, U64 instance, Valu
 						: &param->type;
 					Value arg = compile_time_args[carg_idx];
 					if (type->kind == TYPE_TYPE) {
-						cgen_write(g, "typedef ");
-						if (!cgen_type_pre(g, arg.type, where))
-							return false;
-						cgen_write(g, " ");
-						cgen_ident(g, *ident);
-						if (!cgen_type_post(g, arg.type, where))
-							return false;
+						/* don't need to do anything; we'll just use the type's id */
 					} else {
 						if (!cgen_val_pre(g, arg, type, where))
 							return false;

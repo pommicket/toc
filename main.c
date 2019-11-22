@@ -1,10 +1,9 @@
 /* 
 TODO:
-fix
-alias type, instead of creating a new type.
-make sure fn(t @ Type, x : t = 1598, y @ t = 9832) works
-don't cgen decls etc. in parameter initializers
+get fn(t @ Type, x : t = 1598, y @ t = 9832) t  to work
+don't cgen decls etc. in parameter initializers (hey we have a parameter flag now)
 check for leaks
+switch to enums for flags
 
 struct parameters
 don't allow while {3; 5} (once break is added)
