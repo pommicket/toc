@@ -615,13 +615,15 @@ enum {
 	  DECL_FOUND_VAL = 0x40,
 	  DECL_IS_PARAM = 0x80
 };
-	
+
+typedef U16 DeclFlags;
+
 /* OPTIM: Instead of using dynamic arrays, do two passes. */
 typedef struct Declaration {
 	Location where;
 	Identifier *idents;
 	Type type;
-    U16 flags;
+    DeclFlags flags;
 	Expression expr;
 	Value val; /* only for constant decls. */
 	

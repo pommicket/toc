@@ -15,6 +15,7 @@
 
 static Type *type_user_underlying(Type *t) {
 	assert(t->kind == TYPE_USER);
+	assert(t->flags & TYPE_IS_RESOLVED);
 	Declaration *d = t->user.decl;
 	assert(d->flags & DECL_FOUND_VAL);
 	return (d->type.kind == TYPE_TUPLE ? d->val.tuple[t->user.index] : d->val).type;

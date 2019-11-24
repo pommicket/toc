@@ -1,6 +1,12 @@
 /* 
 TODO:
 get fn(t @ Type, x : t = 1598, y @ t = 9832) t  to work
+remove declarations , exit fn even on failure
+get fn(x, y@ int) to work, you'll need to add back in tuple parameters (one decl multiple values)
+
+can we get the instance before calling type_of_fn?
+
+get fn(x: int) y := x {} to work
 don't cgen decls etc. in parameter initializers (hey we have a parameter flag now)
 check for leaks
 switch to enums for flags

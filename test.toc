@@ -1,24 +1,19 @@
-puti @= fn(x: int) {
-	 #C("printf(\"%ld\\n\", (long)x);
-");
-};
+// puti @= fn(x: int) {
+// 	 #C("printf(\"%ld\\n\", (long)x);
+// ");
+// };
 // putf @= fn(x: float) {
 // 	 #C("printf(\"%f\\n\", (double)x);
 // ");
 // };
 
 
-
-main @= fn() {
-	 puti(g(int));
-	 puti(g());
-	 puti(g(i8));
-	 puti(g(u8));
-	 puti(g(i16));
-	 puti(g(u16));
+f @= fn(t @ Type, x: t) t {
+  x + 1
 };
 
-g @= fn(t @= int) int {
-  87347 as t as int
+
+main @= fn() {
+	 f(int, 10);
 };
 
