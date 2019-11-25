@@ -8,10 +8,11 @@ puti @= fn(x: int) {
 // };
 
 
-f @= fn(x: int) y := x {
-  puti(x);
+f @= fn(x: int, r := x) y := x {
 };
 
 main @= fn() {
-	 puti(f(1238));
+R @= f(2837);
+puti(R);
+	 puti(f(3218));
 };

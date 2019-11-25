@@ -1691,7 +1691,7 @@ static bool cgen_val(CGenerator *g, Value v, Type *t, Location where) {
 static bool cgen_decl(CGenerator *g, Declaration *d) {
 	int has_expr = d->flags & DECL_HAS_EXPR;
 	bool is_tuple = d->type.kind == TYPE_TUPLE;
-	if ((d->flags & DECL_IS_CONST) || g->block == NULL) {
+	if ((d->flags & DECL_IS_CONST) || (g->block == NULL && g->fn == NULL)) {
 		/* declarations where we use a value */
 		for (size_t idx = 0; idx < arr_len(d->idents); idx++) {
 		    Identifier i = d->idents[idx];

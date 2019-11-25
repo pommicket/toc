@@ -198,6 +198,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	bool success = true;
 	bool entered_fn = false;
 	bool added_param_decls = false;
+	FnExpr *prev_fn = tr->fn;
 	
 	FnExpr fn_copy;
 	if (!(flags & TYPE_OF_FN_NO_COPY_EVEN_IF_CONST) && fn_has_any_const_params(f)) {
@@ -211,9 +212,16 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	Type *ret_type = typer_arr_add(tr, &t->fn.types);
 	if (!fn_enter(f, SCOPE_CHECK_REDECL))
 		return false;
+	tr->fn = f;
+	
 	entered_fn = true;
 	arr_foreach(f->params, Declaration, decl) {
 		if (!types_decl(tr, decl)) return false;
+		if (decl->type.kind == TYPE_TUPLE) {
+			err_print(decl->where, "Functions can't have tuple parameters.");
+			return false;
+		}
+			
 		if (!type_resolve(tr, &decl->type, where))
 			return false;
 		U32 is_at_all_const = decl->flags & (DECL_IS_CONST | DECL_SEMI_CONST);
@@ -230,13 +238,13 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 				Value val;
 				if (!eval_expr(tr->evalr, &decl->expr, &val)) {
 					info_print(decl->where, "Was trying to evaluate default arguments (which must be constants!)");
-					fn_exit(f);
 					for (Declaration *p = f->params; p != decl; p++) {
 						if (p->flags & DECL_IS_CONST)
 							arr_foreach(p->idents, Identifier, ident)
 								arr_remove_last(&(*ident)->decls);
 					}
-					return false;
+					success = false;
+					goto ret;
 				}
 				decl->expr.kind = EXPR_VAL;
 				decl->expr.val = val;
@@ -274,16 +282,6 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 		arr_foreach(f->ret_decls, Declaration, d) {
 			if (!types_decl(tr, d))
 				return false;
-			/* evaluate ret decl initializer */
-			if (d->flags & DECL_HAS_EXPR) {
-				Value val;
-				if (!eval_expr(tr->evalr, &d->expr, &val)) {
-					success = false;
-					goto ret;
-				}
-				d->expr.kind = EXPR_VAL;
-				d->expr.val = val;
-			}
 		}
 		if (arr_len(f->ret_decls) == 1 && arr_len(f->ret_decls[0].idents) == 1) {
 			f->ret_type = f->ret_decls[0].type;
@@ -313,17 +311,21 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	}
  ret:
 	/* cleanup */
-	if (added_param_decls) {
-		/* remove constant parameter ident decls */
-		arr_foreach(f->params, Declaration, param) {
-			if (param->flags & DECL_IS_CONST) {
-				arr_foreach(param->idents, Identifier, ident)
-					arr_remove_last(&(*ident)->decls);
+	
+	if (entered_fn) {
+		fn_exit(f);
+		tr->fn = prev_fn;
+		
+		if (added_param_decls) {
+			/* remove constant parameter ident decls */
+			arr_foreach(f->params, Declaration, param) {
+				if (param->flags & DECL_IS_CONST) {
+					arr_foreach(param->idents, Identifier, ident)
+						arr_remove_last(&(*ident)->decls);
+				}
 			}
 		}
 	}
-	
-	if (entered_fn) fn_exit(f);
     return success;
 }
 
@@ -341,7 +343,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 		Declaration *d = decl->decl;
 		bool captured = false;
 		if (decl->scope != NULL)
-			for (Block *block = tr->block; block != decl->scope; block = block->parent) {
+			for (Block *block = tr->block; block && block != decl->scope; block = block->parent) {
 				if (block->flags & BLOCK_IS_FN) {
 					captured = true;
 					break;

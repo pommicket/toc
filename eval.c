@@ -1431,17 +1431,22 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		}
 		arr_foreach(fn->ret_decls, Declaration, d) {
 			int idx = 0;
+			Value val;
+			if (d->flags & DECL_HAS_EXPR)
+				if (!eval_expr(ev, &d->expr, &val))
+					return false;
+			
 			arr_foreach(d->idents, Identifier, i) {
-				Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx++] : &d->type;
+				Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx] : &d->type;
 				IdentDecl *id = ident_decl(*i);
 				if (d->flags & DECL_HAS_EXPR) {
-					assert(d->expr.kind == EXPR_VAL);
-					copy_val(NULL, &id->val, &d->expr.val, type);
+					id->val = d->type.kind == TYPE_TUPLE ? val.tuple[idx] : val;
 					id->flags |= IDECL_HAS_VAL;
 				} else {
 					id->flags |= IDECL_HAS_VAL;
 					id->val = val_zero(type);
 				}
+				idx++;
 			}
 		}
 		arr_clear(&args);

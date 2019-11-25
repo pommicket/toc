@@ -1,7 +1,5 @@
 /* 
 TODO:
-get fn(x: int) y := x {} to work
-don't cgen decls etc. in parameter initializers (hey we have a parameter flag now)
 check for leaks
 clean up
 

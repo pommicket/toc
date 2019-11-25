@@ -824,10 +824,6 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 		    return false;
 		Declaration *new_params = NULL;
 		arr_foreach(f->params, Declaration, param) {
-			if (param->type.kind == TYPE_TUPLE) {
-				err_print(param->where, "Functions can't have tuple parameters.");
-				return false;
-			}
 			/* whenever there's (x, y: int), turn it into (x: int, y: int) */
 			arr_foreach(param->idents, Identifier, ident) {
 				Declaration *new_param = parser_arr_add(p, &new_params);
