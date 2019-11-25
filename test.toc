@@ -9,11 +9,11 @@ puti @= fn(x: int) {
 
 
 f @= fn(t @ Type, x: t) t {
-  x + 1 as t
+  x + 1
 };
 
 
 main @= fn() {
 	 puti(f(int, 3));
-	 puti(f(u8, 255 as u8) as int);
+	 puti(f(u8, 255) as int);
 };

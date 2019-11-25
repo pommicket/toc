@@ -1,7 +1,5 @@
 /* 
 TODO:
-remove declarations , exit fn even on failure
-fix flexible types (example program should not need those casts)
 get fn(x, y@ int) to work, you'll need to add back in tuple parameters (one decl multiple values)
 
 can we get the instance before calling type_of_fn?
@@ -9,6 +7,9 @@ can we get the instance before calling type_of_fn?
 get fn(x: int) y := x {} to work
 don't cgen decls etc. in parameter initializers (hey we have a parameter flag now)
 check for leaks
+clean up
+
+
 switch to enums for flags
 
 struct parameters

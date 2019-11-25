@@ -35,6 +35,12 @@ static bool type_eq(Type *a, Type *b) {
 	
 	
 	if (a->kind != b->kind) return false;
+	if (b->flags & TYPE_IS_FLEXIBLE) {
+		Type *tmp = a;
+		a = b;
+		b = tmp;
+	}
+
 	if (a->flags & TYPE_IS_FLEXIBLE) {
 		if (b->flags & TYPE_IS_FLEXIBLE) return true;
 		assert(a->kind == TYPE_BUILTIN);
@@ -44,11 +50,6 @@ static bool type_eq(Type *a, Type *b) {
 		}
 		assert(a->builtin == BUILTIN_I64);
 		return type_builtin_is_numerical(b->builtin);
-	}
-	if (b->flags & TYPE_IS_FLEXIBLE) {
-		Type *tmp = a;
-		a = b;
-		b = tmp;
 	}
 	switch (a->kind) {
 	case TYPE_VOID: return true;
@@ -194,7 +195,10 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	t->kind = TYPE_FN;
 	t->fn.types = NULL;
 	t->fn.constness = NULL; /* OPTIM: constness doesn't need to be a dynamic array */
-
+	bool success = true;
+	bool entered_fn = false;
+	bool added_param_decls = false;
+	
 	FnExpr fn_copy;
 	if (!(flags & TYPE_OF_FN_NO_COPY_EVEN_IF_CONST) && fn_has_any_const_params(f)) {
 		Copier cop = {.allocr = tr->allocr, .block = tr->block};
@@ -207,6 +211,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	Type *ret_type = typer_arr_add(tr, &t->fn.types);
 	if (!fn_enter(f, SCOPE_CHECK_REDECL))
 		return false;
+	entered_fn = true;
 	arr_foreach(f->params, Declaration, decl) {
 		if (!types_decl(tr, decl)) return false;
 		if (!type_resolve(tr, &decl->type, where))
@@ -225,6 +230,12 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 				Value val;
 				if (!eval_expr(tr->evalr, &decl->expr, &val)) {
 					info_print(decl->where, "Was trying to evaluate default arguments (which must be constants!)");
+					fn_exit(f);
+					for (Declaration *p = f->params; p != decl; p++) {
+						if (p->flags & DECL_IS_CONST)
+							arr_foreach(p->idents, Identifier, ident)
+								arr_remove_last(&(*ident)->decls);
+					}
 					return false;
 				}
 				decl->expr.kind = EXPR_VAL;
@@ -255,6 +266,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 			}
 		}
 	}
+	added_param_decls = true;
 
 	
 	if (f->ret_decls && f->ret_type.kind == TYPE_VOID /* haven't found return type yet */) {
@@ -265,8 +277,10 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 			/* evaluate ret decl initializer */
 			if (d->flags & DECL_HAS_EXPR) {
 				Value val;
-				if (!eval_expr(tr->evalr, &d->expr, &val))
-					return false;
+				if (!eval_expr(tr->evalr, &d->expr, &val)) {
+					success = false;
+					goto ret;
+				}
 				d->expr.kind = EXPR_VAL;
 				d->expr.val = val;
 			}
@@ -284,24 +298,33 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 			}
 		}
 	}
-	if (!type_resolve(tr, &f->ret_type, where))
-		return false;
-	*ret_type = f->ret_type;
-	
-	/* TODO: IMPORTANT: remove declarations even on failure */
-
-	arr_foreach(f->params, Declaration, param) {
-		if (param->flags & DECL_IS_CONST) {
-			arr_foreach(param->idents, Identifier, ident)
-				arr_remove_last(&(*ident)->decls);
-		}
+	if (!type_resolve(tr, &f->ret_type, where)) {
+		success = false;
+		goto ret;
 	}
-	fn_exit(f);
+	*ret_type = f->ret_type;
+    
 	
 	arr_foreach(f->ret_decls, Declaration, decl) {
-		if (!types_decl(tr, decl)) return false;
+		if (!types_decl(tr, decl)) {
+			success = false;
+			goto ret;
+		}
 	}
-    return true;
+ ret:
+	/* cleanup */
+	if (added_param_decls) {
+		/* remove constant parameter ident decls */
+		arr_foreach(f->params, Declaration, param) {
+			if (param->flags & DECL_IS_CONST) {
+				arr_foreach(param->idents, Identifier, ident)
+					arr_remove_last(&(*ident)->decls);
+			}
+		}
+	}
+	
+	if (entered_fn) fn_exit(f);
+    return success;
 }
 
 static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
@@ -878,7 +901,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 	} break;
 	case EXPR_IDENT: {
 		if (!type_of_ident(tr, e->where, e->ident, t)) return false;
-		assert(t->flags & TYPE_IS_RESOLVED);
 	} break;
 	case EXPR_CAST: {
 		CastExpr *c = &e->cast;
@@ -1415,8 +1437,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 				}
 				
 				/* numerical binary ops */
-				if (lhs_type->kind == rhs_type->kind && lhs_type->kind == TYPE_BUILTIN
-					&& type_builtin_is_numerical(lhs_type->builtin) && lhs_type->builtin == rhs_type->builtin) {
+				if (lhs_type->kind == TYPE_BUILTIN && type_eq(lhs_type, rhs_type)) {
+					/* int + int, etc. */
 					valid = true;
 				}
 				if (o == BINARY_ADD || o == BINARY_SUB || o == BINARY_SET_ADD || o == BINARY_SET_SUB) {
