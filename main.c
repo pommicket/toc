@@ -1,9 +1,5 @@
 /* 
 TODO:
-check for leaks
-clean up
-
-
 switch to enums for flags
 
 struct parameters

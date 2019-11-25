@@ -666,7 +666,7 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where,
 	bool entered_fn = false;
 	assert(t->kind == TYPE_FN);
 	if (instance) {
-		*(Location *)arr_add(&err_ctx->instance_stack) = where;
+		*(Location *)typer_arr_add(tr, &err_ctx->instance_stack) = where;
 		f = &instance->fn;
 	} else {
 		if (t->fn.constness)

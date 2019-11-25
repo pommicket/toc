@@ -8,11 +8,16 @@ puti @= fn(x: int) {
 // };
 
 
-f @= fn(x: int, r := x) y := x {
+f @= fn(t @ Type, x: t) t {
+  x + 1
+};
+
+g @= fn(x, y @ Type) int {
+(3 as x) + (5 as y)
 };
 
 main @= fn() {
-R @= f(2837);
-puti(R);
-	 puti(f(3218));
+	 puti(f(int, 3));
+	 puti(f(u8, 255) as int);
+	 puti(g(int, int));
 };
