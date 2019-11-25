@@ -8,12 +8,10 @@ puti @= fn(x: int) {
 // };
 
 
-f @= fn(t @ Type, x: t) t {
-  x + 1
+f @= fn(x: int) y := x {
+  puti(x);
 };
 
-
 main @= fn() {
-	 puti(f(int, 3));
-	 puti(f(u8, 255) as int);
+	 puti(f(1238));
 };

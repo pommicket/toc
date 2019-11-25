@@ -822,12 +822,21 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 	} else {
 		if (!parse_decl_list(p, &f->params, DECL_END_RPAREN_COMMA))
 		    return false;
+		Declaration *new_params = NULL;
 		arr_foreach(f->params, Declaration, param) {
 			if (param->type.kind == TYPE_TUPLE) {
 				err_print(param->where, "Functions can't have tuple parameters.");
 				return false;
 			}
+			/* whenever there's (x, y: int), turn it into (x: int, y: int) */
+			arr_foreach(param->idents, Identifier, ident) {
+				Declaration *new_param = parser_arr_add(p, &new_params);
+				*new_param = *param;
+				new_param->idents = NULL;
+				*(Identifier *)parser_arr_add(p, &new_param->idents) = *ident;
+			}	
 		}
+		f->params = new_params;
 		arr_foreach(f->params, Declaration, param)
 			param->flags |= DECL_IS_PARAM;
 	}

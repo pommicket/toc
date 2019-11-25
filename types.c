@@ -689,7 +689,10 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where,
 			char *got = type_to_str(&ret_expr->type);
 			char *expected = type_to_str(ret_type);
 			err_print(ret_expr->where, "Returning type %s, but function returns type %s.", got, expected);
-			info_print(where, "Function declaration is here.");
+			if (!instance) /* where will only actually be at the function declaration if it isn't
+							  an instance. otherwise, where will be at the calling site, which will already be
+							  printed */
+				info_print(where, "Function declaration is here.");
 			free(got); free(expected);
 			success = false;
 			goto ret;
@@ -1191,6 +1194,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				bool should_be_evald = arg_is_const(&new_args[i], fn_type->constness[i]);
 				if (should_be_evald) {
 					Value *arg_val = typer_arr_add(tr, &table_index.tuple);
+
 					if (!eval_expr(tr->evalr, &new_args[i], arg_val)) {
 						if (tr->evalr->enabled) {
 							info_print(new_args[i].where, "(error occured while trying to evaluate compile-time argument, argument #%lu)", 1+(unsigned long)i);
@@ -1200,7 +1204,16 @@ static bool types_expr(Typer *tr, Expression *e) {
 
 					Type *type = arr_add(&table_index_type.tuple);
 					*type = fn_type->types[i+1];
-					
+					/* we need to check the type here so copy_val doesn't mess up */
+					Type *expected = type;
+					Type *got = &new_args[i].type;
+					if (!type_eq(type, &new_args[i].type)) {
+						char *estr = type_to_str(expected);
+						char *gstr = type_to_str(got);
+						err_print(new_args[i].where, "Expected type %s as %lu%s argument to function, but got %s.", estr, 1+(unsigned long)i, ordinals(1+i), gstr);
+						return false;
+					}
+				
 					new_args[i].kind = EXPR_VAL;
 					new_args[i].flags = EXPR_FOUND_TYPE;
 					copy_val(&cop, &new_args[i].val, arg_val, type);
