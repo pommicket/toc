@@ -1,7 +1,7 @@
 /* 
 TODO:
-get fn(t @ Type, x : t = 1598, y @ t = 9832) t  to work
 remove declarations , exit fn even on failure
+fix flexible types (example program should not need those casts)
 get fn(x, y@ int) to work, you'll need to add back in tuple parameters (one decl multiple values)
 
 can we get the instance before calling type_of_fn?

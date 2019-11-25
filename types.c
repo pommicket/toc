@@ -193,7 +193,7 @@ static bool expr_must_lval(Expression *e) {
 static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags) {
 	t->kind = TYPE_FN;
 	t->fn.types = NULL;
-	t->fn.constness = NULL; /* OPTIM: constant doesn't need to be a dynamic array */
+	t->fn.constness = NULL; /* OPTIM: constness doesn't need to be a dynamic array */
 
 	FnExpr fn_copy;
 	if (!(flags & TYPE_OF_FN_NO_COPY_EVEN_IF_CONST) && fn_has_any_const_params(f)) {
@@ -1139,7 +1139,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 				return false;
 
 			FnExpr *fn = fn_val.fn;
-
+			/* fn is the instance, original_fn is not */
+			FnExpr *original_fn = fn;
 			FnExpr fn_copy;
 			Copier cop = {.allocr = tr->allocr, .block = tr->block};
 			/* TODO: somehow don't do all of this if we've already generated this instance */
@@ -1170,7 +1171,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 					Value *arg_val = typer_arr_add(tr, &table_index.tuple);
 					if (!eval_expr(tr->evalr, &new_args[i], arg_val)) {
 						if (tr->evalr->enabled) {
-							info_print(new_args[i].where, "(error occured while trying to evaluate compile-time argument, argument #%lu)", (unsigned long)i);
+							info_print(new_args[i].where, "(error occured while trying to evaluate compile-time argument, argument #%lu)", 1+(unsigned long)i);
 						}
 						return false;
 					}
@@ -1205,7 +1206,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			}
 
 			bool instance_already_exists;
-			c->instance = instance_table_adda(tr->allocr, &fn->instances, table_index, &table_index_type, &instance_already_exists);
+			c->instance = instance_table_adda(tr->allocr, &original_fn->instances, table_index, &table_index_type, &instance_already_exists);
 			if (!instance_already_exists) {
 				c->instance->fn = fn_copy;
 				/* type param declarations, etc */
@@ -1214,7 +1215,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				/* fix parameter and return types (they were kind of problematic before, because we didn't know about the instance) */
 				ret_type = f->type.fn.types;
 				param_types = ret_type + 1;
-				c->instance->c.id = fn->instances.n; /* let's help cgen out and assign an ID to this */
+				c->instance->c.id = original_fn->instances.n; /* let's help cgen out and assign an ID to this */
 
 				/* type this instance */
 				if (!types_fn(tr, fn, &f->type, e->where, c->instance))

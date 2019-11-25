@@ -1,7 +1,7 @@
-// puti @= fn(x: int) {
-// 	 #C("printf(\"%ld\\n\", (long)x);
-// ");
-// };
+puti @= fn(x: int) {
+	 #C("printf(\"%ld\\n\", (long)x);
+");
+};
 // putf @= fn(x: float) {
 // 	 #C("printf(\"%f\\n\", (double)x);
 // ");
@@ -9,11 +9,11 @@
 
 
 f @= fn(t @ Type, x: t) t {
-  x + 1
+  x + 1 as t
 };
 
 
 main @= fn() {
-	 f(int, 10);
+	 puti(f(int, 3));
+	 puti(f(u8, 255 as u8) as int);
 };
-
