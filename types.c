@@ -287,7 +287,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 			f->ret_type = f->ret_decls[0].type;
 		} else {
 			f->ret_type.kind = TYPE_TUPLE;
-			f->ret_type.flags = 0;
+			f->ret_type.flags = TYPE_IS_RESOLVED;
 			f->ret_type.tuple = NULL;
 			arr_foreach(f->ret_decls, Declaration, d) {
 				arr_foreach(d->idents, Identifier, i) {
@@ -899,10 +899,12 @@ static bool types_expr(Typer *tr, Expression *e) {
 		if (!types_block(tr, &ea->body)) return false;
 		each_exit(e);
 		
-		if (ea->body.ret_expr)
+		if (ea->body.ret_expr) {
 			*t = ea->body.ret_expr->type;
-		else
+		} else {
 			t->kind = TYPE_VOID;
+			t->flags |= TYPE_IS_RESOLVED;
+		}
 	} break;
 	case EXPR_IDENT: {
 		if (!type_of_ident(tr, e->where, e->ident, t)) return false;
@@ -954,10 +956,12 @@ static bool types_expr(Typer *tr, Expression *e) {
 		bool has_else = false;
 		if (!types_block(tr, &curr->body))
 			return false;
-		if (curr->body.ret_expr)
+		if (curr->body.ret_expr) {
 			*t = curr->body.ret_expr->type;
-		else
+		} else {
 			t->kind = TYPE_VOID;
+			t->flags |= TYPE_IS_RESOLVED;
+		}
 		while (1) {
 			if (curr->cond) {
 				if (!types_expr(tr, curr->cond))
@@ -981,7 +985,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 					*next_type = nexti->body.ret_expr->type;
 				} else {
 					next_type->kind = TYPE_VOID;
-					next_type->flags = 0;
+					next_type->flags = TYPE_IS_RESOLVED;
 				}
 				if (!type_eq(curr_type, next_type)) {
 					char *currstr = type_to_str(curr_type);
@@ -1383,7 +1387,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 			t->builtin = BUILTIN_BOOL;
 			break;
 		case UNARY_LEN:
-			/* in theory, this shouldn't happen right now, because typing generates len operators */
 			t->kind = TYPE_BUILTIN;
 			t->builtin = BUILTIN_I64;
 			if (of_type->kind != TYPE_SLICE || of_type->kind != TYPE_ARR) {
@@ -1526,7 +1529,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 				o == BINARY_SET_MUL ||
 				o == BINARY_SET_DIV) {
 				t->kind = TYPE_VOID; /* actually, it's just void */
-				t->flags = 0;
 			}
 				
 			break;
@@ -1693,7 +1695,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		assert(0);
 		return false;
 	}
-    e->type.flags |= TYPE_IS_RESOLVED;
+    t->flags |= TYPE_IS_RESOLVED;
 	return true;
 }
 
@@ -1810,7 +1812,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 	d->flags |= DECL_FOUND_TYPE;
 	if (!success) {
 		/* use unknown type if we didn't get the type */
-		d->type.flags = 0;
+		d->type.flags = TYPE_IS_RESOLVED;
 	    d->type.kind = TYPE_UNKNOWN;
 		tr->evalr->enabled = false; /* disable evaluator completely so that it doesn't accidentally try to access this declaration */
 	}
