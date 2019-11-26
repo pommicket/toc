@@ -113,7 +113,9 @@ typedef union Value {
 	struct Type *type;
 } Value;
 
-#define IDECL_HAS_VAL 0x01
+enum {
+	  IDECL_HAS_VAL = 0x01,
+};
 
 typedef enum {
 			  IDECL_DECL,
@@ -314,9 +316,11 @@ typedef struct {
 	size_t offset; /* offset during compile time */
 } Field;
 
-#define TYPE_IS_FLEXIBLE 0x01
-#define TYPE_IS_RESOLVED 0x02
-#define TYPE_STRUCT_FOUND_OFFSETS 0x04
+enum {
+	  TYPE_IS_FLEXIBLE = 0x01,
+	  TYPE_IS_RESOLVED = 0x02,
+	  TYPE_STRUCT_FOUND_OFFSETS = 0x04,
+};
 
 typedef U8 Constness;
 
@@ -363,8 +367,10 @@ typedef struct Type {
 	};
 } Type;
 
-#define BLOCK_IS_FN 0x01
-#define BLOCK_FOUND_TYPES 0x02
+enum {
+	  BLOCK_IS_FN = 0x01,
+	  BLOCK_FOUND_TYPES = 0x02,
+};
 typedef struct Block {
 	U16 flags;
 	Location start;
@@ -464,8 +470,10 @@ typedef struct {
 } WhileExpr;
 
 
-#define EACH_IS_RANGE 0x01
-#define EACH_ANNOTATED_TYPE 0x02
+enum {
+	  EACH_IS_RANGE = 0x01,
+	  EACH_ANNOTATED_TYPE = 0x02,
+};
 
 typedef struct EachExpr {
 	U16 flags;
@@ -541,7 +549,9 @@ typedef struct {
 	} c;
 } SliceExpr;
 
-#define EXPR_FOUND_TYPE 0x01
+enum {
+	  EXPR_FOUND_TYPE = 0x01
+};
 
 typedef struct Expression {
 	Type type;
@@ -638,13 +648,18 @@ typedef enum {
 			  STMT_RET
 } StatementKind;
 
-#define RET_HAS_EXPR 0x01
+enum {
+	  RET_HAS_EXPR = 0x01,
+};
 typedef struct {
 	uint16_t flags;
 	Expression expr;
 } Return;
 
-#define STMT_VOIDED_EXPR 0x01 /* the "4;" in fn () { 4; } is a voided expression, but the "4" in fn () int { 4 } is not */
+enum {
+	  STMT_VOIDED_EXPR = 0x01, /* the "4;" in fn () { 4; } is a voided expression, but the "4" in fn () int { 4 } is not */
+};
+
 typedef struct Statement {
 	Location where;
 	StatementKind kind;

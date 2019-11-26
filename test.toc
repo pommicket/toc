@@ -7,17 +7,11 @@ puti @= fn(x: int) {
 // ");
 // };
 
-
-f @= fn(t @ Type, x: t) t {
-  x + 1
-};
-
-g @= fn(x, y @ Type) int {
-(3 as x) + (5 as y)
+Foo @= struct(x @ int) {
+	a: [x]float;
 };
 
 main @= fn() {
-	 puti(f(int, 3));
-	 puti(f(u8, 255) as int);
-	 puti(g(int, int));
+	 f : Foo(13);
+	 puti(f.a[12]);
 };

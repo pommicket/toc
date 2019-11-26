@@ -1,7 +1,9 @@
 static bool parse_expr(Parser *p, Expression *e, Token *end);
 static bool parse_stmt(Parser *p, Statement *s);
-#define PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR 0x01
-#define PARSE_DECL_ALLOW_SEMI_CONST 0x02
+enum {
+	  PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR = 0x01,
+	  PARSE_DECL_ALLOW_SEMI_CONST = 0x02,
+};
 static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_t flags);
 
 static bool is_decl(Tokenizer *t);
@@ -378,7 +380,9 @@ static Token *expr_find_end(Parser *p, ExprEndFlags flags, bool *is_vbs)  {
 	}
 }
 
-#define PARSE_TYPE_EXPR 0x01 /* this might actually be an expression */
+enum {
+	  PARSE_TYPE_EXPR = 0x01, /* this might actually be an expression */
+};
 static bool parse_type(Parser *p, Type *type) {
 	Tokenizer *t = p->tokr;
 	type->where = t->token->where;

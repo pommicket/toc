@@ -9,12 +9,12 @@ fi
 echo $$
 
 compile() {
-	$TOC $DIR/$1/$1.toc -o $DIR/$1/$1.c > /dev/null || exit 1
 	$CC $EXTRA_CFLAGS $CFLAGS -o $DIR/$1/$1.bin $DIR/$1/$1.c || exit 1
 }
 
 STARTPWD="$(pwd)"
 
+valgrind -q $TOC $DIR/bf/bf.toc -o $DIR/bf/bf.c > /dev/null || exit 1
 for CC in $COMPILERS; do
 
 	for EXTRA_CFLAGS in "-O0 -g" "-O3 -s"; do

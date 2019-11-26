@@ -1,11 +1,9 @@
 /* 
 TODO:
-switch to enums for flags
-
 struct parameters
+packages
 don't allow while {3; 5} (once break is added)
 any odd number of "s for a string
-modifiable string literals
 make sure futurely/currently-declared types are only used by pointer/slice
 allow omission of trailing ; in foo @= fn() {}?
  */

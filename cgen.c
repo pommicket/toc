@@ -10,8 +10,10 @@ static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *e
 }
 
 static bool cgen_stmt(CGenerator *g, Statement *s);
-#define CGEN_BLOCK_NOENTER 0x01 /* should cgen_block actually enter and exit the block? */
-#define CGEN_BLOCK_NOBRACES 0x02 /* should it use braces? */
+enum {
+	  CGEN_BLOCK_NOENTER = 0x01, /* should cgen_block actually enter and exit the block? */
+	  CGEN_BLOCK_NOBRACES = 0x02, /* should it use braces? */
+};
 static bool cgen_block(CGenerator *g, Block *b, const char *ret_name, uint16_t flags);
 static bool cgen_expr_pre(CGenerator *g, Expression *e);
 static bool cgen_expr(CGenerator *g, Expression *e);

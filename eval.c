@@ -4,7 +4,7 @@ static bool type_resolve(Typer *tr, Type *t, Location where);
 static size_t compiler_sizeof(Type *t);
 static bool eval_block(Evaluator *ev, Block *b, Type *t, Value *v);
 static bool eval_expr(Evaluator *ev, Expression *e, Value *v);
-static bool block_enter(Block *b, Statement *stmts, U32 flags);
+static bool block_enter(Block *b, Statement *stmts, U16 flags);
 static void block_exit(Block *b, Statement *stmts);
 
 static void evalr_create(Evaluator *ev, Typer *tr, Allocator *allocr) {

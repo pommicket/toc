@@ -1,9 +1,11 @@
-#define SCOPE_CHECK_REDECL 0x0001
+enum {
+	  SCOPE_CHECK_REDECL = 0x01,
+};
 
 
 static void val_free(Value *v, Type *t);
 
-static bool add_ident_decls(Block *b, Declaration *d, U32 flags) {
+static bool add_ident_decls(Block *b, Declaration *d, U16 flags) {
 	bool ret = true;
 	arr_foreach(d->idents, Identifier, ident) {
 		IdentDecl *decls = (*ident)->decls;
@@ -41,7 +43,7 @@ static void remove_ident_decls(Block *b, Declaration *d) {
 }
 
 /* pass NULL for block for global scope */
-static bool block_enter(Block *b, Statement *stmts, uint32_t flags) {
+static bool block_enter(Block *b, Statement *stmts, U16 flags) {
 	bool ret = true;
 	arr_foreach(stmts, Statement, stmt) {
 		if (stmt->kind == STMT_DECL) {
@@ -63,7 +65,7 @@ static void block_exit(Block *b, Statement *stmts) {
 }
 
 /* does NOT enter function's block body */
-static bool fn_enter(FnExpr *f, U32 flags) {
+static bool fn_enter(FnExpr *f, U16 flags) {
 	arr_foreach(f->params, Declaration, decl)
 		if (!add_ident_decls(&f->body, decl, flags))
 			return false;

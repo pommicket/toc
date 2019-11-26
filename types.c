@@ -189,7 +189,9 @@ static bool expr_must_lval(Expression *e) {
 	return false;
 }
 
-#define TYPE_OF_FN_NO_COPY_EVEN_IF_CONST 0x01
+enum {
+	  TYPE_OF_FN_NO_COPY_EVEN_IF_CONST = 0x01,
+};
 
 static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags) {
 	t->kind = TYPE_FN;
