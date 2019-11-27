@@ -1145,7 +1145,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 									new_args[i].flags = copy.flags;
 									new_args[i].type = copy.type;
 									
-									copy_val(&cop, &new_args[i].val,
+									copy_val(tr->allocr, &new_args[i].val,
 											 &default_val, &new_args[i].type);
 								} else {
 									/* it's already been evaluated */
@@ -1224,10 +1224,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 				
 					new_args[i].kind = EXPR_VAL;
 					new_args[i].flags = EXPR_FOUND_TYPE;
-					copy_val(&cop, &new_args[i].val, arg_val, type);
+					copy_val(tr->allocr, &new_args[i].val, arg_val, type);
 					new_args[i].val = *arg_val;
 					new_args[i].type = *type;
-					copy_val(&cop, &param_decl->val, arg_val, type);
+					copy_val(tr->allocr, &param_decl->val, arg_val, type);
 					param_decl->flags |= DECL_FOUND_VAL;
 
 					if (fn_type->constness[i] == CONSTNESS_SEMI) {
@@ -1766,8 +1766,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 					success = false;
 					goto ret;
 				}
-				Copier cop = {.block = tr->block, .allocr = tr->allocr};
-				copy_val(&cop, &d->val, &val, &d->type);
+				copy_val(tr->allocr, &d->val, &val, &d->type);
 				d->flags |= DECL_FOUND_VAL;
 			}
 		}

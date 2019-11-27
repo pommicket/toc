@@ -1,17 +1,24 @@
-puti @= fn(x: int) {
-	 #C("printf(\"%ld\\n\", (long)x);
-");
-};
+// puti @= fn(x: int) {
+// 	 #C("printf(\"%ld\\n\", (long)x);
+// ");
+// };
 // putf @= fn(x: float) {
 // 	 #C("printf(\"%f\\n\", (double)x);
 // ");
 // };
 
-Foo @= struct(x @ int) {
-	a: [x]float;
+// Foo @= struct(x @ int) {
+// 	a: [x]float;
+// };
+
+q @= fn() (int,int) {3,5};
+r @= fn(x, y @=q()) int {
+x*y
 };
 
-main @= fn() {
-	 f : Foo(13);
-	 puti(f.a[12]);
-};
+// main @= fn() {
+// // 	 f : Foo(13);
+// // 	 puti(f.a[12]);
+// 	 puti(r(10,10));
+// 	 puti(r(10,5+5));
+// };

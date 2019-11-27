@@ -363,6 +363,8 @@ typedef struct Type {
 		struct {
 		    Field *fields;
 			size_t size; /* size of this struct during compile time */
+			struct Declaration *params; /* parameters to struct, NULL if this struct has no parameters */
+			struct Instance *instance; /* instance of struct, NULL if this is not an instance. set during resolution. */
 		} struc;
 	};
 } Type;
@@ -523,8 +525,10 @@ typedef struct FnExpr {
 
 typedef struct Instance {
 	Value val;
-	/* this holds the typed function */
-	FnExpr fn;
+	union {
+		FnExpr fn; /* the typed function */
+		Type struc; /* the structure, resolved */
+	};
 	struct {
 	    U64 id;
 	} c;

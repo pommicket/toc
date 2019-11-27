@@ -10,7 +10,7 @@ static void copy_decl(Copier *c, Declaration *out, Declaration *in);
 static void copy_block(Copier *c, Block *out, Block *in);
 static void copy_type(Copier *c, Type *out, Type *in);
 
-static void copy_val(Copier *c, Value *out, Value *in, Type *t) {
+static void copy_val(Allocator *a, Value *out, Value *in, Type *t) {
 	switch (t->kind) {
 	case TYPE_BUILTIN:
 	case TYPE_FN:
@@ -22,25 +22,34 @@ static void copy_val(Copier *c, Value *out, Value *in, Type *t) {
 		break;
 	case TYPE_ARR: {
 		size_t bytes = t->arr.n * compiler_sizeof(t->arr.of);
-		out->arr = allocr_malloc(c->allocr, bytes);
+		out->arr = allocr_malloc(a, bytes);
 		memcpy(out->arr, in->arr, bytes);
 	} break;
 	case TYPE_TUPLE: {
 		size_t bytes = arr_len(t->tuple) * sizeof(*out->tuple);
-		out->tuple = allocr_malloc(c->allocr, bytes);
+		out->tuple = allocr_malloc(a, bytes);
 		memcpy(out->tuple, in->tuple, bytes);
 	} break;
 	case TYPE_STRUCT: {
 		size_t bytes = compiler_sizeof(t);
-		out->struc = allocr_malloc(c->allocr, bytes);
+		out->struc = allocr_malloc(a, bytes);
 		memcpy(out->struc, in->struc, bytes);
 	} break;
 	case TYPE_USER:
-		copy_val(c, out, in, type_user_underlying(t));
+		copy_val(a, out, in, type_user_underlying(t));
 		break;
 	case TYPE_TYPE:
-		copy_type(c, out->type = allocr_malloc(c->allocr, sizeof *out->type), in->type);
-	    break;
+		/* copy_type(c, out->type = allocr_malloc(c->allocr, sizeof *out->type), in->type); */
+		/* 
+		   i don't think this can be a problem right now,
+		   but might eventually be,
+		   if a function returns a type and
+		   the old type doesn't work when the stuff on the stack
+		   is freed. if you switch back to using a copier, make sure you check where
+		   copy_val(NULL, ...) is used!!!
+		*/
+		*out = *in;
+		break;
 	}
 }
 
@@ -227,7 +236,7 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		copy_type(c, &out->typeval, &in->typeval);
 		break;
 	case EXPR_VAL:
-		copy_val(c, &out->val, &in->val, &in->type);
+		copy_val(a, &out->val, &in->val, &in->type);
 		break;
 	}
 }
@@ -239,7 +248,7 @@ static void copy_decl(Copier *c, Declaration *out, Declaration *in) {
 	if (in->flags & DECL_HAS_EXPR)
 		copy_expr(c, &out->expr, &in->expr);
 	if (in->flags & DECL_FOUND_VAL) {
-		copy_val(c, &out->val, &in->val, &in->type);
+		copy_val(c->allocr, &out->val, &in->val, &in->type);
 	}
 	if (in->flags & DECL_ANNOTATES_TYPE)
 		copy_type(c, &out->type, &in->type);

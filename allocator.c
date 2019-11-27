@@ -16,6 +16,8 @@ static void *allocr_malloc(Allocator *a, size_t bytes) {
 	(void)a;
 	return err_malloc(bytes);
 #else
+	if (a == NULL)
+		return err_malloc(bytes);
 	/* position in this page to return */
 	size_t pos = PAGE_MAX_ALIGNS;
 	if (a->last)
