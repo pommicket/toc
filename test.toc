@@ -7,18 +7,11 @@
 // ");
 // };
 
-// Foo @= struct(x @ int) {
-// 	a: [x]float;
-// };
-
-q @= fn() (int,int) {3,5};
-r @= fn(x, y @=q()) int {
-x*y
+Foo @= struct(x @ int) {
+	a: [x]float;
 };
 
-// main @= fn() {
-// // 	 f : Foo(13);
-// // 	 puti(f.a[12]);
-// 	 puti(r(10,10));
-// 	 puti(r(10,5+5));
-// };
+main @= fn() {
+	 f : Foo(13);
+// 	 puti(f.a[12]);
+};

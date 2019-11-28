@@ -5,6 +5,7 @@ enum {
 	  PARSE_DECL_ALLOW_SEMI_CONST = 0x02,
 };
 static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_t flags);
+static bool parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end);
 
 static bool is_decl(Tokenizer *t);
 static inline bool ends_decl(Token *t, DeclEndKind ends_with);
@@ -380,9 +381,6 @@ static Token *expr_find_end(Parser *p, ExprEndFlags flags, bool *is_vbs)  {
 	}
 }
 
-enum {
-	  PARSE_TYPE_EXPR = 0x01, /* this might actually be an expression */
-};
 static bool parse_type(Parser *p, Type *type) {
 	Tokenizer *t = p->tokr;
 	type->where = t->token->where;
@@ -520,8 +518,19 @@ static bool parse_type(Parser *p, Type *type) {
 			type->kind = TYPE_STRUCT;
 			type->struc.fields = NULL;
 			t->token++;
-			if (!token_is_kw(t->token, KW_LBRACE)) {
-				err_print(t->token->where, "Expected { to follow struct.");
+			if (token_is_kw(t->token, KW_LPAREN)) {
+				/* struct parameters */
+				t->token++;
+				if (token_is_kw(t->token, KW_RPAREN)) {
+					t->token--;
+					err_print(t->token->where, "Expected parameters to struct, but found none.");
+					return false;
+				}
+				
+				if (!parse_decl_list(p, &type->struc.params, DECL_END_RPAREN_COMMA))
+					return false;
+			} else  if (!token_is_kw(t->token, KW_LBRACE)) {
+				err_print(t->token->where, "Expected { or ( to follow struct.");
 				return false;
 			}
 			t->token++;
@@ -781,10 +790,12 @@ static bool parse_block(Parser *p, Block *b) {
 	return ret;
 }
 
+/* does NOT handle empty declaration lists */
 static bool parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end) {
 	Tokenizer *t = p->tokr;
 	bool ret = true;
 	bool first = true;
+	*decls = NULL;
 	while (t->token->kind != TOKEN_EOF &&
 		   (first || (
 			!token_is_kw(t->token - 1, KW_RPAREN) &&
@@ -840,7 +851,6 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 		f->ret_type.kind = TYPE_VOID;
 		f->ret_type.flags = 0;
 	} else if (is_decl(t)) {
-	    f->ret_decls = NULL;
 		if (!parse_decl_list(p, &f->ret_decls, DECL_END_LBRACE_COMMA))
 			return false;
 		arr_foreach(f->ret_decls, Declaration, d) {

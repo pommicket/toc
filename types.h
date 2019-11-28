@@ -364,8 +364,13 @@ typedef struct Type {
 		    Field *fields;
 			size_t size; /* size of this struct during compile time */
 			struct Declaration *params; /* parameters to struct, NULL if this struct has no parameters */
-			struct Instance *instance; /* instance of struct, NULL if this is not an instance. set during resolution. */
+			
 		} struc;
+		struct {
+			Type *calling;
+			Expression *arguments;
+			struct Instance *instance; /* instance of struct, NULL if this is not an instance. set during resolution. */
+		} call; /* "calling" a function returning a type */
 	};
 } Type;
 
