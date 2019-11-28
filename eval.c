@@ -71,6 +71,7 @@ static size_t compiler_alignof(Type *t) {
 	case TYPE_TYPE:
 		return sizeof(Type *);
 	case TYPE_USER:
+	case TYPE_CALL:
 		return compiler_alignof(type_user_underlying(t));
 	case TYPE_STRUCT: {
 		/* assume the align of a struct is (at most) the greatest align out of its children's */
@@ -129,6 +130,7 @@ static size_t compiler_sizeof(Type *t) {
 	case TYPE_TYPE:
 		return sizeof(Type *);
 	case TYPE_USER:
+	case TYPE_CALL:
 		return compiler_sizeof(type_user_underlying(t));
 	case TYPE_STRUCT: {
 		eval_struct_find_offsets(t);
@@ -169,6 +171,7 @@ static bool val_truthiness(Value *v, Type *t) {
 	case TYPE_FN: return v->fn != NULL;
 	case TYPE_ARR: return t->arr.n > 0;
 	case TYPE_SLICE: return v->slice.n > 0;
+	case TYPE_CALL:
 	case TYPE_USER:
 	case TYPE_TYPE:
 	case TYPE_TUPLE:
@@ -246,6 +249,7 @@ static void *val_get_ptr(Value *v, Type *t) {
 	case TYPE_TYPE:
 		return v;
 	case TYPE_USER:
+	case TYPE_CALL:
 		return val_get_ptr(v, type_user_underlying(t));
 	case TYPE_ARR:
 		return v->arr;
@@ -320,6 +324,7 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		fprint_type(f, *(Type **)p);
 		break;
 	case TYPE_USER:
+	case TYPE_CALL:
 		fprint_val_ptr(f, p, type_user_underlying(t));
 		break;
 	case TYPE_STRUCT:
@@ -365,6 +370,7 @@ static void *val_ptr_to_free(Value *v, Type *t) {
 	case TYPE_STRUCT:
 		return v->struc;
 	case TYPE_USER:
+	case TYPE_CALL:
 		return val_ptr_to_free(v, type_user_underlying(t));
 	}
 	assert(0); return NULL;
@@ -452,7 +458,8 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		vout->boolv = val_truthiness(vin, from);
 		return;
 	}
-	if (from->kind == TYPE_USER || to->kind == TYPE_USER) {
+	if (from->kind == TYPE_USER || to->kind == TYPE_USER
+		|| from->kind == TYPE_CALL || to->kind == TYPE_CALL) {
 		*vout = *vin;
 		return;
 	}
@@ -462,6 +469,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 	case TYPE_UNKNOWN:
 	case TYPE_TUPLE:
 	case TYPE_USER:
+	case TYPE_CALL:
 	case TYPE_TYPE:
 	case TYPE_STRUCT:
 		assert(0); break;
@@ -484,6 +492,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 			}
 			break;
 		case TYPE_USER:
+		case TYPE_CALL:
 		case TYPE_STRUCT:
 		case TYPE_SLICE:
 		case TYPE_VOID:
@@ -506,8 +515,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 			vout->fn = vin->fn;
 			break;
 		case TYPE_USER:
-			*vout = *vin;
-			break;
+		case TYPE_CALL:
 		case TYPE_SLICE:
 		case TYPE_UNKNOWN:
 		case TYPE_TUPLE:
@@ -542,8 +550,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 			vout->fn = vin->ptr;
 			break;
 		case TYPE_USER:
-			*vout = *vin;
-			break;
+		case TYPE_CALL:
 		case TYPE_SLICE:
 		case TYPE_UNKNOWN:
 		case TYPE_TUPLE:
@@ -564,8 +571,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 			vout->arr = vin->arr;
 			break;
 		case TYPE_USER:
-			*vout = *vin;
-			break;
+		case TYPE_CALL:
 		case TYPE_SLICE:
 		case TYPE_FN:
 		case TYPE_UNKNOWN:
@@ -589,8 +595,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 			vout->slice = vin->slice;
 			break;
 		case TYPE_USER:
-			*vout = *vin;
-			break;
+		case TYPE_CALL:
 		case TYPE_FN:
 		case TYPE_UNKNOWN:
 		case TYPE_TUPLE:
@@ -635,6 +640,7 @@ static void eval_deref(Value *v, void *ptr, Type *type) {
 		v->type = *(Type **)ptr;
 		break;
 	case TYPE_USER:
+	case TYPE_CALL:
 		eval_deref(v, ptr, type_user_underlying(type));
 		break;
 	case TYPE_VOID:
@@ -674,6 +680,7 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 		*(Type **)set = to->type;
 		break;
 	case TYPE_USER:
+	case TYPE_CALL:
 		eval_deref_set(set, to, type_user_underlying(type));
 		break;
 	case TYPE_VOID:

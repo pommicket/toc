@@ -28,9 +28,9 @@ static bool type_eq(Type *a, Type *b) {
 	assert(a->flags & TYPE_IS_RESOLVED);
 	assert(b->flags & TYPE_IS_RESOLVED);
 
-	if (a->kind == TYPE_USER && a->user.is_alias)
+	if ((a->kind == TYPE_USER || a->kind == TYPE_CALL) && a->user.is_alias)
 		return type_eq(type_user_underlying(a), b);
-	if (b->kind == TYPE_USER && b->user.is_alias)
+	if ((b->kind == TYPE_USER || a->kind == TYPE_CALL) && b->user.is_alias)
 		return type_eq(a, type_user_underlying(b));
 	
 	
@@ -57,6 +57,8 @@ static bool type_eq(Type *a, Type *b) {
 	case TYPE_TYPE: return true;
 	case TYPE_USER:
 		return a->user.decl == b->user.decl && a->user.index == b->user.index;
+	case TYPE_CALL:
+		return a->call.instance == b->call.instance;	
 	case TYPE_BUILTIN:
 		return a->builtin == b->builtin;
 	case TYPE_STRUCT: return false;
@@ -541,6 +543,7 @@ static bool type_can_be_truthy(Type *t) {
 	case TYPE_ARR:
 	case TYPE_TYPE:
 	case TYPE_USER:
+	case TYPE_CALL:
 	case TYPE_STRUCT:
 		return false;
 	case TYPE_FN:
@@ -563,13 +566,13 @@ typedef enum {
 static Status type_cast_status(Type *from, Type *to) {
 	if (to->kind == TYPE_UNKNOWN)
 		return STATUS_NONE;
-	if (from->kind == TYPE_USER) {
+	if (from->kind == TYPE_USER || from->kind == TYPE_CALL) {
 		if (from->user.is_alias) {
 			return type_cast_status(type_user_underlying(from), to);
 		}
 		return type_eq(type_user_underlying(from), to) ? STATUS_NONE : STATUS_ERR;
 	}
-	if (to->kind == TYPE_USER) {
+	if (to->kind == TYPE_USER || to->kind == TYPE_CALL) {
 		if (to->user.is_alias) {
 			return type_cast_status(from, type_user_underlying(to));
 		}
@@ -604,7 +607,7 @@ static Status type_cast_status(Type *from, Type *to) {
 			case TYPE_STRUCT:
 			case TYPE_ARR:
 			case TYPE_VOID:
-			case TYPE_USER: /* handled above */
+			case TYPE_USER: case TYPE_CALL: /* handled above */
 				return STATUS_ERR;
 			}
 			break;
@@ -642,6 +645,7 @@ static Status type_cast_status(Type *from, Type *to) {
 			return STATUS_NONE;
 	    return STATUS_ERR;
 	case TYPE_USER:
+	case TYPE_CALL:
 		break;
 	}
 	assert(0);

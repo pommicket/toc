@@ -36,6 +36,7 @@ static void copy_val(Allocator *a, Value *out, Value *in, Type *t) {
 		memcpy(out->struc, in->struc, bytes);
 	} break;
 	case TYPE_USER:
+	case TYPE_CALL:
 		copy_val(a, out, in, type_user_underlying(t));
 		break;
 	case TYPE_TYPE:
@@ -53,8 +54,10 @@ static void copy_val(Allocator *a, Value *out, Value *in, Type *t) {
 	}
 }
 
+/* does not work on resolved types */
 static void copy_type(Copier *c, Type *out, Type *in) {
-	/* needs to handle resolved and unresolved types properly */
+	assert(!(in->flags & TYPE_IS_RESOLVED));
+
 	*out = *in;
 	switch (in->kind) {
 	case TYPE_BUILTIN:
@@ -63,6 +66,14 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 	case TYPE_UNKNOWN:
 	case TYPE_USER:
 		break;
+	case TYPE_CALL: {
+		copy_type(c, out->call.calling = allocr_malloc(c->allocr, sizeof *out->call.calling),
+				  in->call.calling);
+		out->call.args = NULL;
+		arr_foreach(in->call.args, Expression, arg) {
+			copy_expr(c, arr_add(&out->call.args), arg);
+		}
+	} break;
 	case TYPE_FN: {
 		size_t ntypes = arr_len(in->fn.types);
 		out->fn.types = NULL;
@@ -80,10 +91,10 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 		}
 	} break;
 	case TYPE_ARR:
-		if (!(in->flags & TYPE_IS_RESOLVED)) {
-			out->arr.n_expr = allocr_malloc(c->allocr, sizeof *out->arr.n_expr);
-			copy_expr(c, out->arr.n_expr, in->arr.n_expr);
-		}
+		/* if (!(in->flags & TYPE_IS_RESOLVED)) { */
+		out->arr.n_expr = allocr_malloc(c->allocr, sizeof *out->arr.n_expr);
+		copy_expr(c, out->arr.n_expr, in->arr.n_expr);
+		/* } */
 		out->arr.of = allocr_malloc(c->allocr, sizeof *out->arr.of);
 		copy_type(c, out->arr.of, in->arr.of);
 		break;

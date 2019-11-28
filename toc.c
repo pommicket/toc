@@ -13,12 +13,19 @@
 
 #include "types.h"
 
+/* can be used on TYPE_USERs and TYPE_CALLs */
 static Type *type_user_underlying(Type *t) {
-	assert(t->kind == TYPE_USER);
 	assert(t->flags & TYPE_IS_RESOLVED);
-	Declaration *d = t->user.decl;
-	assert(d->flags & DECL_FOUND_VAL);
-	return (d->type.kind == TYPE_TUPLE ? d->val.tuple[t->user.index] : d->val).type;
+	switch (t->kind) {
+	case TYPE_USER: {
+		Declaration *d = t->user.decl;
+		assert(d->flags & DECL_FOUND_VAL);
+		return (d->type.kind == TYPE_TUPLE ? d->val.tuple[t->user.index] : d->val).type;
+	}
+	case TYPE_CALL:
+		return &t->call.instance->type;
+	default: assert(0);
+	}
 }
 
 static Type *type_inner(Type *t) {

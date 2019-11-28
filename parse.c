@@ -256,6 +256,15 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 		free(ident_str);
 		return ret;
 	}
+	case TYPE_CALL: {
+		size_t written = 0;
+		written += type_to_str_(t->call.calling, buffer + written, bufsize - written);
+		written += str_copy(buffer + written, bufsize - written, "(");
+		/* TODO: show values if resolved */
+		written += str_copy(buffer + written, bufsize - written, "...");
+		written += str_copy(buffer + written, bufsize - written, ")");		
+		return written;
+	}
 	}
 
 	assert(0);

@@ -231,6 +231,7 @@ static bool cgen_uses_ptr(Type *t) {
 	case TYPE_TYPE:
 		return false;
 	case TYPE_USER:
+	case TYPE_CALL:
 		return cgen_uses_ptr(type_user_underlying(t));
 	}
 	assert(0);

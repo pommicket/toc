@@ -291,7 +291,8 @@ typedef enum {
 			  TYPE_SLICE,
 			  TYPE_TYPE,
 			  TYPE_USER, /* user-defined type */
-			  TYPE_STRUCT
+			  TYPE_STRUCT,
+			  TYPE_CALL /* "calling" a type function, e.g. Arr(int) */
 } TypeKind;
 
 typedef enum {
@@ -367,9 +368,9 @@ typedef struct Type {
 			
 		} struc;
 		struct {
-			Type *calling;
-			Expression *arguments;
-			struct Instance *instance; /* instance of struct, NULL if this is not an instance. set during resolution. */
+			struct Type *calling;
+			struct Expression *args;
+			struct Instance *instance; /* instance of struct. set during type resolution. */
 		} call; /* "calling" a function returning a type */
 	};
 } Type;
@@ -529,10 +530,10 @@ typedef struct FnExpr {
 } FnExpr; /* an expression such as fn(x: int) int { 2 * x } */
 
 typedef struct Instance {
-	Value val;
+	Value val; /* key into hash table */
 	union {
 		FnExpr fn; /* the typed function */
-		Type struc; /* the structure, resolved */
+		Type type; /* the type, resolved */
 	};
 	struct {
 	    U64 id;

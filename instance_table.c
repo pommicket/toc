@@ -97,7 +97,9 @@ static U64 val_ptr_hash(void *v, Type *t) {
 	}
 	case TYPE_PTR: return (U64)*(void **)v;
 	case TYPE_TYPE: return (U64)*(Type **)v;
-	case TYPE_USER: return val_ptr_hash(v, type_inner(t));
+	case TYPE_USER:
+	case TYPE_CALL:
+		return val_ptr_hash(v, type_inner(t));
 	case TYPE_ARR: {
 		U32 x = 1;
 		U64 hash = 0;
@@ -162,6 +164,7 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 	case TYPE_FN:
 		return *(FnExpr **)u == *(FnExpr **)v;
 	case TYPE_USER:
+	case TYPE_CALL:
 		return val_ptr_eq(u, v, type_inner(t));
 	case TYPE_PTR:
 		return *(void **)u == *(void **)v;
