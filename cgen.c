@@ -429,10 +429,60 @@ static inline void cgen_fn_instance_number(CGenerator *g, U64 instance) {
 	cgen_write(g, "%"PRIu64"_", instance);
 }
 
+/* does this type have a type type in it? (e.g. [5]Type, &&Type) */
+static bool type_contains_type(Type *t) {
+	assert(t->flags & TYPE_IS_RESOLVED);
+	switch (t->kind) {
+	case TYPE_BUILTIN:
+	case TYPE_VOID:
+	case TYPE_UNKNOWN:
+		return false;
+	case TYPE_TYPE:
+		return true;
+	case TYPE_PTR:
+		return type_contains_type(t->ptr);
+	case TYPE_SLICE:
+		return type_contains_type(t->slice);
+	case TYPE_ARR:
+		return type_contains_type(t->arr.of);
+	case TYPE_FN:
+		arr_foreach(t->fn.types, Type, sub)
+			if (type_contains_type(sub))
+				return true;
+		return false;
+	case TYPE_TUPLE:
+		arr_foreach(t->tuple, Type, sub)
+			if (type_contains_type(sub))
+				return true;
+		return false;
+	case TYPE_STRUCT:
+		arr_foreach(t->struc->fields, Field, f)
+			if (type_contains_type(f->type))
+				return true;
+		return false;
+	case TYPE_EXPR: break;
+	}
+	assert(0);
+	return false;
+}
+
+/* should we generate this function? (or is it just meant for compile time) */
+static bool cgen_should_gen_fn(FnExpr *f) {
+	if (f->ret_decls) {
+		arr_foreach(f->ret_decls, Declaration, decl)
+			if (type_contains_type(&decl->type))
+				return false;
+		return true;
+	} else {
+		return !type_contains_type(&f->ret_type);
+	}
+}
+
 /* unless f has const/semi-const args, instance and which_are_const can be set to 0 */
 static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where, U64 instance, U64 which_are_const) {
 	bool out_param = cgen_uses_ptr(&f->ret_type);
 	bool any_params = false;
+	assert(cgen_should_gen_fn(f));
 	if (!f->c.name) /* anonymous fn */
 		cgen_write(g, "static ");
 	if (out_param) {
@@ -1478,6 +1528,8 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where, U64 instance, Valu
 	FnExpr *prev_fn = g->fn;
 	Block *prev_block = g->block;
 	U64 which_are_const = compile_time_args ? compile_time_args->u64 : 0;
+	if (!cgen_should_gen_fn(f))
+		return true;
 	fn_enter(f, 0);
 	if (!cgen_fn_header(g, f, where, instance, which_are_const))
 		return false;

@@ -15,16 +15,11 @@
 
 
 
-t @= struct {
-  A: int;
-  b: int;
+f @= fn() Type {
+int
 };
 
-f @= fn() {};
 main @= fn() {
-
-u @= t;
-x : t;
-	 y : u = x;
+x : f();
 
 };

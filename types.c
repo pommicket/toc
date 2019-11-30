@@ -27,8 +27,6 @@ static bool type_eq(Type *a, Type *b) {
 		return true; /* allow things such as 3 + #C("5") */
 	assert(a->flags & TYPE_IS_RESOLVED);
 	assert(b->flags & TYPE_IS_RESOLVED);
-
-	/* TODO: deal with was_expr */
 	
 	if (a->kind != b->kind) return false;
 	if (b->flags & TYPE_IS_FLEXIBLE) {

@@ -5,6 +5,8 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d);
 static bool cgen_decls_fn_instances(CGenerator *g, Expression *e) {
 	assert(e->kind == EXPR_FN);
 	FnExpr *f = &e->fn;
+	if (!cgen_should_gen_fn(f))
+		return true;
 	FnType *type = &e->type.fn;
 	assert(type->constness);
 	Instance **data = f->instances.data;
@@ -36,12 +38,14 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 			if (!cgen_decls_fn_instances(g, e))
 				return false;
 		} else {
-			fn_enter(&e->fn, 0);
-			if (!cgen_fn_header(g, &e->fn, e->where, 0, 0))
-				return false;
-			cgen_write(g, ";");
-			cgen_nl(g);
-			fn_exit(&e->fn);
+			if (cgen_should_gen_fn(&e->fn)) {
+				fn_enter(&e->fn, 0);
+				if (!cgen_fn_header(g, &e->fn, e->where, 0, 0))
+					return false;
+				cgen_write(g, ";");
+				cgen_nl(g);
+				fn_exit(&e->fn);
+			}
 		}
 	} break;	
 	default:
@@ -69,12 +73,14 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 			if (!cgen_decls_fn_instances(g, &d->expr))
 				return false;
 		} else {
-			fn_enter(&d->expr.fn, 0);
-			if (!cgen_fn_header(g, &d->expr.fn, d->where, 0, 0))
-				return false;
-			cgen_write(g, ";");
-			cgen_nl(g);
-			fn_exit(&d->expr.fn);
+			if (cgen_should_gen_fn(&d->expr.fn)) {
+				fn_enter(&d->expr.fn, 0);
+				if (!cgen_fn_header(g, &d->expr.fn, d->where, 0, 0))
+					return false;
+				cgen_write(g, ";");
+				cgen_nl(g);
+				fn_exit(&d->expr.fn);
+			}
 		}
 		cgen_recurse_subexprs(g, (&d->expr), cgen_decls_expr, cgen_decls_block, cgen_decls_decl);
 	} else if (d->flags & DECL_HAS_EXPR) {

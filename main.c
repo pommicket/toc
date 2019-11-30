@@ -1,12 +1,10 @@
 /* 
 TODO:
-get rid of TYPE_USER
-- don't do automatic type conversion
-
 functions returning Types
 test ArrInt @= Arr(int);
 
 packages
+X @= newtype(int); or something
 don't allow while {3; 5} (once break is added)
 any odd number of "s for a string
 make sure futurely/currently-declared types are only used by pointer/slice
