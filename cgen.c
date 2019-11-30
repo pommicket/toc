@@ -217,6 +217,7 @@ static bool cgen_fn_is_direct(CGenerator *g, Declaration *d) {
 }
 
 static bool cgen_uses_ptr(Type *t) {
+	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_TUPLE:
 	case TYPE_STRUCT:
@@ -230,9 +231,8 @@ static bool cgen_uses_ptr(Type *t) {
 	case TYPE_UNKNOWN:
 	case TYPE_TYPE:
 		return false;
-	case TYPE_USER:
-	case TYPE_CALL:
-		return cgen_uses_ptr(type_user_underlying(t));
+	case TYPE_EXPR:
+		break;
 	}
 	assert(0);
 	return false;
@@ -310,50 +310,43 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
 		err_print(where, "Can't determine type.");
 		return false;
 	case TYPE_STRUCT:
-		cgen_write(g, "struct {");
-		g->indent_lvl++;
- 		cgen_nl(g);
-		arr_foreach(t->struc.fields, Field, f) {
-			if (!cgen_type_pre(g, f->type, where)) return false;
-			cgen_write(g, " ");
-			cgen_ident(g, f->name);
-			if (!cgen_type_post(g, f->type, where)) return false;
-			cgen_write(g, ";");
+		cgen_write(g, "struct ");
+		if (t->struc->c.name) {
+			cgen_ident(g, t->struc->c.name);
+		} else if (t->struc->c.id) {
+			cgen_ident_id(g, t->struc->c.id);
+		} else {
+			#if 0
+			/* TODO: DELME */
+			cgen_write(g, "struct {");
+			g->indent_lvl++;
 			cgen_nl(g);
+			arr_foreach(t->struc.fields, Field, f) {
+				if (!cgen_type_pre(g, f->type, where)) return false;
+				cgen_write(g, " ");
+				cgen_ident(g, f->name);
+				if (!cgen_type_post(g, f->type, where)) return false;
+				cgen_write(g, ";");
+				cgen_nl(g);
+			}
+			g->indent_lvl--;
+			cgen_write(g, "}");
+			#endif
+			assert(0);
 		}
-		g->indent_lvl--;
-		cgen_write(g, "}");
 		break;
 	case TYPE_TUPLE:
 	case TYPE_TYPE:
+	case TYPE_EXPR:
 		/* We should never try to generate this type */
 		assert(0);
 		return false;
-	case TYPE_USER: {
-		Type *this = t;
-		do {
-			Type *next = type_user_underlying(this);
-			if (next->kind == TYPE_STRUCT) {
-				/* use struct tag */
-				cgen_write(g, "struct ");
-				t = this;
-				break;
-			}
-			this = next;
-		} while (this->kind == TYPE_USER);
-
-		Declaration *d = t->user.decl;
-		int idx = t->user.index;
-		if (d->c.ids[idx])
-			cgen_ident_id(g, d->c.ids[idx]);
-		else
-			cgen_ident(g, d->idents[idx]);
-	} break;
 	}
 	return true;
 }
 
 static bool cgen_type_post(CGenerator *g, Type *t, Location where) {
+	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_PTR:
 		cgen_write(g, ")");
@@ -415,8 +408,10 @@ static bool cgen_type_post(CGenerator *g, Type *t, Location where) {
 	case TYPE_TUPLE:
 	case TYPE_TYPE:
 	case TYPE_SLICE:
-	case TYPE_USER:
 	case TYPE_STRUCT:
+		break;
+	case TYPE_EXPR:
+		assert(0);
 		break;
 	}
 	return true;
@@ -521,7 +516,6 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 		type = &to_expr->type;
 		where = to_expr->where;
 	}
-	type = type_inner(type);
 	switch (type->kind) {
 	case TYPE_BUILTIN:
 	case TYPE_FN:
@@ -578,9 +572,9 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 		if (!cgen_set_tuple(g, set_expr->tuple, NULL, NULL, to_expr))
 			return false;
 		break;
-	case TYPE_USER:
 	case TYPE_VOID:
 	case TYPE_TYPE:
+	case TYPE_EXPR:
 		assert(0);
 		return false;
 	}
@@ -1227,7 +1221,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		case BINARY_DOT: {
 			cgen_write(g, "(");
 			cgen_expr(g, e->binary.lhs);
-			bool is_ptr = type_inner(&e->binary.lhs->type)->kind == TYPE_PTR;
+			bool is_ptr = e->binary.lhs->type.kind == TYPE_PTR;
 			cgen_write(g, is_ptr ? "->" :".");
 			cgen_ident(g, e->binary.field->name);
 			cgen_write(g, ")");
@@ -1452,6 +1446,7 @@ static bool cgen_block(CGenerator *g, Block *b, const char *ret_name, U16 flags)
 }
 
 static void cgen_zero_value(CGenerator *g, Type *t) {
+	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_BUILTIN:
 		cgen_write(g, "0");
@@ -1467,13 +1462,11 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 	case TYPE_STRUCT:
 		cgen_write(g, "{0}");
 		break;
-	case TYPE_USER:
-		cgen_zero_value(g, type_inner(t));
-		break;
 	case TYPE_TYPE:
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 	case TYPE_TUPLE:
+	case TYPE_EXPR:
 		assert(0);
 		break;
 	}
@@ -1578,6 +1571,7 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where, U64 instance, Valu
 }
 
 static bool cgen_val_ptr_pre(CGenerator *g, void *v, Type *t, Location where) {
+	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_SLICE: {
 		Slice *s = (Slice *)v;
@@ -1603,10 +1597,6 @@ static bool cgen_val_ptr_pre(CGenerator *g, void *v, Type *t, Location where) {
 				return false;
 		}
 		break;
-	case TYPE_USER:
-		if (!cgen_val_ptr_pre(g, v, type_inner(t), where))
-			return false;
-		break;
 	case TYPE_FN:
 	case TYPE_TYPE:
 	case TYPE_UNKNOWN:
@@ -1616,12 +1606,16 @@ static bool cgen_val_ptr_pre(CGenerator *g, void *v, Type *t, Location where) {
 	case TYPE_PTR:
 	case TYPE_STRUCT:
 		break;
+	case TYPE_EXPR:
+		assert(0);
+	    return false;
 	}
 	return true;
 }
 
 /* generate a value from a pointer */
 static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
+	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_TUPLE:
 	case TYPE_VOID:
@@ -1645,8 +1639,8 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 		break;
 	case TYPE_STRUCT:
 		cgen_write(g, "{");
-		arr_foreach(t->struc.fields, Field, f) {
-			if (f != t->struc.fields)
+		arr_foreach(t->struc->fields, Field, f) {
+			if (f != t->struc->fields)
 				cgen_write(g, ", ");
 			cgen_val_ptr(g, (char *)v + f->offset, f->type, where);
 		}
@@ -1674,10 +1668,9 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 		case BUILTIN_BOOL: cgen_write(g, "%s", *(bool *)v ? "true" : "false"); break;
 		}
 		break;
-	case TYPE_USER:
-		if (!cgen_val_ptr(g, v, type_inner(t), where))
-			return false;
-		break;
+	case TYPE_EXPR:
+		assert(0);
+		return false;
 	}
 	return true;
 }
@@ -1902,6 +1895,7 @@ static bool cgen_defs_block(CGenerator *g, Block *b) {
 
 static bool cgen_file(CGenerator *g, ParsedFile *f) {
 	g->block = NULL;
+	g->fn = NULL;
 	g->file = f;
 	/* 
 	   TODO: to improve compile times, don't include stdlib.h

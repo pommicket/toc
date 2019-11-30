@@ -11,6 +11,7 @@ static void copy_block(Copier *c, Block *out, Block *in);
 static void copy_type(Copier *c, Type *out, Type *in);
 
 static void copy_val(Allocator *a, Value *out, Value *in, Type *t) {
+	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_BUILTIN:
 	case TYPE_FN:
@@ -35,10 +36,6 @@ static void copy_val(Allocator *a, Value *out, Value *in, Type *t) {
 		out->struc = allocr_malloc(a, bytes);
 		memcpy(out->struc, in->struc, bytes);
 	} break;
-	case TYPE_USER:
-	case TYPE_CALL:
-		copy_val(a, out, in, type_user_underlying(t));
-		break;
 	case TYPE_TYPE:
 		/* copy_type(c, out->type = allocr_malloc(c->allocr, sizeof *out->type), in->type); */
 		/* 
@@ -51,6 +48,8 @@ static void copy_val(Allocator *a, Value *out, Value *in, Type *t) {
 		*/
 		*out = *in;
 		break;
+	case TYPE_EXPR:
+		assert(0);
 	}
 }
 
@@ -64,16 +63,10 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 	case TYPE_TYPE:
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
-	case TYPE_USER:
 		break;
-	case TYPE_CALL: {
-		copy_type(c, out->call.calling = allocr_malloc(c->allocr, sizeof *out->call.calling),
-				  in->call.calling);
-		out->call.args = NULL;
-		arr_foreach(in->call.args, Expression, arg) {
-			copy_expr(c, arr_add(&out->call.args), arg);
-		}
-	} break;
+	case TYPE_EXPR:
+		copy_expr(c, out->expr = allocr_malloc(c->allocr, sizeof *out->expr), in->expr);
+		break;
 	case TYPE_FN: {
 		size_t ntypes = arr_len(in->fn.types);
 		out->fn.types = NULL;
@@ -107,12 +100,14 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 		copy_type(c, out->slice, in->slice);
 		break;
 	case TYPE_STRUCT: {
-		size_t nfields = arr_len(in->struc.fields);
-		out->struc.fields = NULL;
-		arr_set_lena(&out->struc.fields, nfields, c->allocr);
+		out->struc = allocr_malloc(c->allocr, sizeof *out->struc);
+		*out->struc = *in->struc;
+		size_t nfields = arr_len(in->struc->fields);
+		out->struc->fields = NULL;
+		arr_set_lena(&out->struc->fields, nfields, c->allocr);
 		for (size_t i = 0; i < nfields; i++) {
-			Field *fout = &out->struc.fields[i];
-			Field *fin = &in->struc.fields[i];
+			Field *fout = &out->struc->fields[i];
+			Field *fin = &in->struc->fields[i];
 			*fout = *fin;
 			copy_type(c, fout->type, fin->type);
 		}

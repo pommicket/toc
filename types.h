@@ -68,25 +68,32 @@ typedef struct Page {
     MaxAlign data[];
 } Page;
 
-typedef struct {
+typedef struct Allocator {
 	Page *first;
 	Page *last;
 } Allocator;
 
-typedef struct {
+typedef struct ArrBlock {
 	void *data;
 	size_t n; /* number of things in this block so far */
     void *last; /* last one of them */
 } ArrBlock;
 
-typedef struct {
+typedef struct BlockArr {
 	size_t item_sz;
 	int lg_block_sz;
 	/* NOTE: dynamic array tends to over-allocate, so we're using our own */
     ArrBlock *blocks;
 } BlockArr;
 
-typedef struct {
+typedef struct HashTable {
+	void *data;
+	bool *occupied;
+	U64 n;
+	U64 cap;
+} HashTable;
+
+typedef struct Slice {
     I64 n;
 	void *data;
 } Slice;
@@ -122,7 +129,7 @@ typedef enum {
 			  IDECL_EXPR
 } IdentDeclKind;
 
-typedef struct {
+typedef struct IdentDecl {
 	union {
 		struct Declaration *decl;
 		struct Expression *expr; /* for example, this identifier is declared in an each expression */
@@ -152,7 +159,7 @@ typedef struct IdentTree {
 
 typedef IdentTree *Identifier;
 
-typedef struct {
+typedef struct Identifiers {
 	BlockArr trees;
 	IdentTree *root;
 } Identifiers;
@@ -242,7 +249,7 @@ typedef enum {
 			  NUM_LITERAL_FLOAT
 } NumLiteralKind;
 
-typedef struct {
+typedef struct NumLiteral {
 	NumLiteralKind kind;
 	union {
 		UInteger intval;
@@ -250,13 +257,13 @@ typedef struct {
 	};
 } NumLiteral;
 
-typedef struct {
+typedef struct StrLiteral {
 	char *str;
 	size_t len;
 } StrLiteral;
 
 /* NOTE: Location is typedef'd in util/err.c */
-typedef struct {
+typedef struct Token {
 	TokenKind kind;
 	Location where;
 	union {
@@ -269,7 +276,7 @@ typedef struct {
 	};
 } Token;
 
-typedef struct {
+typedef struct Tokenizer {
 	Allocator *allocr;
 	Token *tokens;
 	char *s; /* string being parsed */
@@ -290,9 +297,8 @@ typedef enum {
 			  TYPE_PTR,
 			  TYPE_SLICE,
 			  TYPE_TYPE,
-			  TYPE_USER, /* user-defined type */
-			  TYPE_STRUCT,
-			  TYPE_CALL /* "calling" a type function, e.g. Arr(int) */
+			  TYPE_EXPR, /* just use this expression as the type. this kind of type doesn't exist after resolving. */
+			  TYPE_STRUCT
 } TypeKind;
 
 typedef enum {
@@ -311,17 +317,12 @@ typedef enum {
 } BuiltinType;
 
 /* field of a struct */
-typedef struct {
+typedef struct Field {
 	Identifier name;
 	struct Type *type;
 	size_t offset; /* offset during compile time */
 } Field;
 
-enum {
-	  TYPE_IS_FLEXIBLE = 0x01,
-	  TYPE_IS_RESOLVED = 0x02,
-	  TYPE_STRUCT_FOUND_OFFSETS = 0x04,
-};
 
 typedef U8 Constness;
 
@@ -329,15 +330,34 @@ typedef U8 Constness;
 #define CONSTNESS_SEMI ((Constness)1)
 #define CONSTNESS_YES ((Constness)2)
 
-typedef struct {
+typedef struct FnType {
 	struct Type *types; /* dynamic array [0] = ret_type, [1:] = param_types  */
 	Constness *constness; /* [i] = constness of param #i. iff no parameters are constant, this is NULL. don't use it as a dynamic array, because eventually it might not be. */
 } FnType;
 
+enum {
+	  STRUCT_DEF_FOUND_OFFSETS = 0x00,
+};
+
+typedef struct {
+	Field *fields;
+	U16 flags;
+	size_t size; /* size of this struct during compile time */
+	struct {
+		Identifier name;
+		IdentID id;
+	} c;
+} StructDef;
+
+enum {
+	  TYPE_IS_FLEXIBLE = 0x01,
+	  TYPE_IS_RESOLVED = 0x02,
+};
 typedef struct Type {
 	Location where;
 	TypeKind kind;
 	uint16_t flags;
+	struct Expression *was_expr; /* if non-NULL, indicates that this type used to be an expression (TYPE_EXPR) */
 	union {
 	    BuiltinType builtin;
 		FnType fn;
@@ -351,27 +371,8 @@ typedef struct Type {
 		} arr;
 	    struct Type *ptr;
 		struct Type *slice;
-		struct {
-			union {
-				struct {
-					struct Declaration *decl;
-					int index; /* index in decl */
-				};
-				Identifier ident;
-			};
-			bool is_alias; /* is this an alias for a type, rather than a new type */
-		} user;
-		struct {
-		    Field *fields;
-			size_t size; /* size of this struct during compile time */
-			struct Declaration *params; /* parameters to struct, NULL if this struct has no parameters */
-			
-		} struc;
-		struct {
-			struct Type *calling;
-			struct Expression *args;
-			struct Instance *instance; /* instance of struct. set during type resolution. */
-		} call; /* "calling" a function returning a type */
+		StructDef *struc; /* it's a pointer so that multiple Types can reference the same struct definition */
+		struct Expression *expr;
 	};
 } Type;
 
@@ -448,7 +449,7 @@ typedef enum {
 			  BINARY_DOT
 } BinaryOp;
 
-typedef struct {
+typedef struct CallExpr {
 	struct Expression *fn;
     union {
 	    struct Argument *args;
@@ -460,7 +461,7 @@ typedef struct {
 	} c;
 } CallExpr;
 
-typedef struct {
+typedef struct IfExpr {
 	struct Expression *cond; /* NULL = this is an else */
 	struct Expression *next_elif; /* next elif/else of this statement */
 	struct {
@@ -469,7 +470,7 @@ typedef struct {
 	Block body;
 } IfExpr;
 
-typedef struct {
+typedef struct WhileExpr {
 	struct Expression *cond;
 	struct {
 		IdentID id;
@@ -506,13 +507,6 @@ typedef struct EachExpr {
 	};
 } EachExpr;
 
-typedef struct {
-	void *data;
-	bool *occupied; /* OPTIM: use bits instead of bytes for bools */
-	U64 n;
-	U64 cap;
-} HashTable;
-
 typedef struct FnExpr {
     struct Declaration *params; /* declarations of the parameters to this function */
     struct Declaration *ret_decls; /* array of decls, if this has named return values. otherwise, NULL */
@@ -540,17 +534,17 @@ typedef struct Instance {
 	} c;
 } Instance;
 
-typedef struct {
+typedef struct CastExpr {
 	Type type;
 	struct Expression *expr;
 } CastExpr;
 
-typedef struct {
+typedef struct NewExpr {
 	Type type;
 	struct Expression *n; /* e.g. for new(int, 5) */
 } NewExpr;
 
-typedef struct {
+typedef struct SliceExpr {
 	struct Expression *of;
 	struct Expression *from;
 	struct Expression *to;
@@ -661,7 +655,7 @@ typedef enum {
 enum {
 	  RET_HAS_EXPR = 0x01,
 };
-typedef struct {
+typedef struct Return {
 	uint16_t flags;
 	Expression expr;
 } Return;
@@ -681,11 +675,11 @@ typedef struct Statement {
 	};
 } Statement;
 
-typedef struct {
+typedef struct ParsedFile {
 	Statement *stmts;
 } ParsedFile;
 
-typedef struct {
+typedef struct Parser {
 	Tokenizer *tokr;
 	Allocator *allocr;
 	Block *block; /* which block are we in? NULL = file scope */
@@ -697,7 +691,7 @@ typedef enum {
 			  DECL_END_LBRACE_COMMA
 } DeclEndKind;
 
-typedef struct {
+typedef struct Evaluator {
 	Allocator *allocr;
 	struct Typer *typer;
 	bool returning;
@@ -715,7 +709,7 @@ typedef struct Typer {
 	FnExpr *fn; /* the function we're currently parsing. */
 } Typer;
 
-typedef struct {
+typedef struct CGenerator {
 	Allocator *allocr;
 	FILE *outc;
 	IdentID ident_counter;

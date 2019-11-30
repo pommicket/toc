@@ -50,6 +50,7 @@ static size_t compiler_sizeof_builtin(BuiltinType b) {
 }
 
 static size_t compiler_alignof(Type *t) {
+	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_BUILTIN:
 		return compiler_sizeof_builtin(t->builtin);
@@ -70,19 +71,17 @@ static size_t compiler_alignof(Type *t) {
 			return sizeof(size_t);
 	case TYPE_TYPE:
 		return sizeof(Type *);
-	case TYPE_USER:
-	case TYPE_CALL:
-		return compiler_alignof(type_user_underlying(t));
 	case TYPE_STRUCT: {
 		/* assume the align of a struct is (at most) the greatest align out of its children's */
 		size_t align = 1;
-		arr_foreach(t->struc.fields, Field, f) {
+		arr_foreach(t->struc->fields, Field, f) {
 			size_t falign = compiler_alignof(f->type);
 			if (falign > align) align = falign;
 		}
 		return align;
 	}
 	case TYPE_UNKNOWN:
+	case TYPE_EXPR:
 		break;
 	}
 	assert(0);
@@ -90,12 +89,11 @@ static size_t compiler_alignof(Type *t) {
 }
 
 /* finds offsets and size */
-/* OPTIM: don't do this once per Type, but once per struct */
 static void eval_struct_find_offsets(Type *t) {
 	assert(t->kind == TYPE_STRUCT);
-	if (!(t->flags & TYPE_STRUCT_FOUND_OFFSETS)) {
+	if (!(t->struc->flags & STRUCT_DEF_FOUND_OFFSETS)) {
 		size_t bytes = 0;
-		arr_foreach(t->struc.fields, Field, f) {
+		arr_foreach(t->struc->fields, Field, f) {
 			size_t falign = compiler_alignof(f->type);
 			/* align */
 			bytes += ((falign - bytes) % falign + falign) % falign; /* = -bytes mod falign */
@@ -107,13 +105,14 @@ static void eval_struct_find_offsets(Type *t) {
 		/* final align */
 		size_t align = compiler_alignof(t);
 		bytes += ((align - bytes) % align + align) % align; /* = -bytes mod align */
-		t->struc.size = bytes;
-		t->flags |= TYPE_STRUCT_FOUND_OFFSETS;
+		t->struc->size = bytes;
+		t->struc->flags |= STRUCT_DEF_FOUND_OFFSETS;
 	}
 }
 
 /* size of a type at compile time */
 static size_t compiler_sizeof(Type *t) {
+	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_BUILTIN:
 		return compiler_sizeof_builtin(t->builtin);
@@ -129,16 +128,15 @@ static size_t compiler_sizeof(Type *t) {
 		return sizeof(Slice);
 	case TYPE_TYPE:
 		return sizeof(Type *);
-	case TYPE_USER:
-	case TYPE_CALL:
-		return compiler_sizeof(type_user_underlying(t));
 	case TYPE_STRUCT: {
 		eval_struct_find_offsets(t);
-		return t->struc.size;
+		return t->struc->size;
 	} break;
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 		return 0;
+	case TYPE_EXPR:
+		break;
 	}
 	assert(0);
 	return 0;
@@ -163,6 +161,7 @@ static bool builtin_truthiness(Value *v, BuiltinType b) {
 }
 
 static bool val_truthiness(Value *v, Type *t) {
+	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_VOID: return false;
 	case TYPE_UNKNOWN: assert(0); return false;
@@ -171,11 +170,10 @@ static bool val_truthiness(Value *v, Type *t) {
 	case TYPE_FN: return v->fn != NULL;
 	case TYPE_ARR: return t->arr.n > 0;
 	case TYPE_SLICE: return v->slice.n > 0;
-	case TYPE_CALL:
-	case TYPE_USER:
 	case TYPE_TYPE:
 	case TYPE_TUPLE:
 	case TYPE_STRUCT:
+	case TYPE_EXPR:
 		break;
 	}
 	assert(0);
@@ -238,6 +236,7 @@ static void u64_to_val(Value *v, BuiltinType v_type, U64 x) {
 
 /* rerturns a pointer to the underlying data of v, e.g. an I64 * if t is the builtin BUILTIN_I64 */
 static void *val_get_ptr(Value *v, Type *t) {
+	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_PTR:
 	case TYPE_BUILTIN:
@@ -248,19 +247,18 @@ static void *val_get_ptr(Value *v, Type *t) {
 	case TYPE_SLICE:
 	case TYPE_TYPE:
 		return v;
-	case TYPE_USER:
-	case TYPE_CALL:
-		return val_get_ptr(v, type_user_underlying(t));
 	case TYPE_ARR:
 		return v->arr;
 	case TYPE_STRUCT:
 		return v->struc;
+	case TYPE_EXPR: break;
 	}
 	assert(0);
 	return NULL;
 }
 
 static void fprint_val_ptr(FILE *f, void *p, Type *t) {
+	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_VOID:
 		fprintf(f, "(void)");
@@ -323,14 +321,10 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 	case TYPE_TYPE:
 		fprint_type(f, *(Type **)p);
 		break;
-	case TYPE_USER:
-	case TYPE_CALL:
-		fprint_val_ptr(f, p, type_user_underlying(t));
-		break;
 	case TYPE_STRUCT:
 		fprintf(f, "["); /* TODO: change? when struct initializers are added */
-		arr_foreach(t->struc.fields, Field, fi) {
-			if (fi != t->struc.fields)
+		arr_foreach(t->struc->fields, Field, fi) {
+			if (fi != t->struc->fields)
 				fprintf(f, ", ");
 			fprint_ident(f, fi->name);
 			fprintf(f, ": ");
@@ -338,7 +332,9 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		}
 		fprintf(f, "]");
 		break;
+	case TYPE_EXPR: break;
 	}
+	assert(0);
 }
 
 static void fprint_val(FILE *f, Value v, Type *t) {
@@ -354,6 +350,7 @@ static void fprint_val(FILE *f, Value v, Type *t) {
 }
 
 static void *val_ptr_to_free(Value *v, Type *t) {
+	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_BUILTIN:
 	case TYPE_FN:
@@ -361,17 +358,17 @@ static void *val_ptr_to_free(Value *v, Type *t) {
 	case TYPE_SLICE:
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
-	case TYPE_TYPE:
 		return NULL;
+	case TYPE_TYPE:
+		return v->type->was_expr;
 	case TYPE_ARR:
 		return v->arr;
 	case TYPE_TUPLE:
 		return v->tuple;
 	case TYPE_STRUCT:
 		return v->struc;
-	case TYPE_USER:
-	case TYPE_CALL:
-		return val_ptr_to_free(v, type_user_underlying(t));
+	case TYPE_EXPR:
+		break;
 	}
 	assert(0); return NULL;
 }
@@ -454,13 +451,11 @@ static void val_builtin_cast(Value *vin, BuiltinType from, Value *vout, BuiltinT
 }
 
 static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
+	assert(from->flags & TYPE_IS_RESOLVED);
+	assert(to->flags & TYPE_IS_RESOLVED);
+	
 	if (to->kind == TYPE_BUILTIN && to->builtin == BUILTIN_BOOL) {
 		vout->boolv = val_truthiness(vin, from);
-		return;
-	}
-	if (from->kind == TYPE_USER || to->kind == TYPE_USER
-		|| from->kind == TYPE_CALL || to->kind == TYPE_CALL) {
-		*vout = *vin;
 		return;
 	}
 	
@@ -468,10 +463,9 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 	case TYPE_TUPLE:
-	case TYPE_USER:
-	case TYPE_CALL:
 	case TYPE_TYPE:
 	case TYPE_STRUCT:
+	case TYPE_EXPR:
 		assert(0); break;
 	case TYPE_BUILTIN:
 		switch (to->kind) {
@@ -491,8 +485,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 			default: assert(0); break;
 			}
 			break;
-		case TYPE_USER:
-		case TYPE_CALL:
+		case TYPE_EXPR:
 		case TYPE_STRUCT:
 		case TYPE_SLICE:
 		case TYPE_VOID:
@@ -514,8 +507,6 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_FN:
 			vout->fn = vin->fn;
 			break;
-		case TYPE_USER:
-		case TYPE_CALL:
 		case TYPE_SLICE:
 		case TYPE_UNKNOWN:
 		case TYPE_TUPLE:
@@ -524,6 +515,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_BUILTIN:
 		case TYPE_TYPE:
 		case TYPE_STRUCT:
+		case TYPE_EXPR:
 			assert(0); break;
 		}
 		break;
@@ -549,12 +541,11 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_FN:
 			vout->fn = vin->ptr;
 			break;
-		case TYPE_USER:
-		case TYPE_CALL:
 		case TYPE_SLICE:
 		case TYPE_UNKNOWN:
 		case TYPE_TUPLE:
 		case TYPE_VOID:
+		case TYPE_EXPR:
 		case TYPE_TYPE:
 		case TYPE_STRUCT:
 			assert(0);
@@ -570,8 +561,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_ARR:
 			vout->arr = vin->arr;
 			break;
-		case TYPE_USER:
-		case TYPE_CALL:
+		case TYPE_EXPR:
 		case TYPE_SLICE:
 		case TYPE_FN:
 		case TYPE_UNKNOWN:
@@ -594,13 +584,12 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_SLICE:
 			vout->slice = vin->slice;
 			break;
-		case TYPE_USER:
-		case TYPE_CALL:
 		case TYPE_FN:
 		case TYPE_UNKNOWN:
 		case TYPE_TUPLE:
 		case TYPE_VOID:
 		case TYPE_BUILTIN:
+		case TYPE_EXPR:
 		case TYPE_TYPE:
 		case TYPE_STRUCT:
 			assert(0); break;
@@ -611,6 +600,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 
 /* type is the underlying type, not the pointer type. */
 static void eval_deref(Value *v, void *ptr, Type *type) {
+	assert(type->flags & TYPE_IS_RESOLVED);
 	switch (type->kind) {
 	case TYPE_PTR: v->ptr = *(void **)ptr; break;
 	case TYPE_ARR: v->arr = ptr; break; /* when we have a pointer to an array, it points directly to the data in that array. */
@@ -639,18 +629,16 @@ static void eval_deref(Value *v, void *ptr, Type *type) {
 	case TYPE_TYPE:
 		v->type = *(Type **)ptr;
 		break;
-	case TYPE_USER:
-	case TYPE_CALL:
-		eval_deref(v, ptr, type_user_underlying(type));
-		break;
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
+	case TYPE_EXPR:
 		assert(0);
 		break;
 	}
 }
 /* inverse of eval_deref */
 static void eval_deref_set(void *set, Value *to, Type *type) {
+	assert(type->flags & TYPE_IS_RESOLVED);
 	switch (type->kind) {
 	case TYPE_PTR: *(void **)set = to->ptr; break;
 	case TYPE_ARR: memcpy(set, to->arr, compiler_sizeof(type)); break; /* TODO: test this */
@@ -679,12 +667,9 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 	case TYPE_TYPE:
 		*(Type **)set = to->type;
 		break;
-	case TYPE_USER:
-	case TYPE_CALL:
-		eval_deref_set(set, to, type_user_underlying(type));
-		break;
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
+	case TYPE_EXPR:
 		assert(0);
 		break;
 	}
@@ -738,10 +723,10 @@ static bool eval_expr_ptr_at_index(Evaluator *ev, Expression *e, void **ptr, Typ
 }
 
 static void *eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr) {
-	Type *struct_type = type_inner(&dot_expr->binary.lhs->type);
+	Type *struct_type = &dot_expr->binary.lhs->type;
 	bool is_ptr = struct_type->kind == TYPE_PTR;
 	if (is_ptr) {
-		struct_type = type_inner(struct_type->ptr);
+		struct_type = struct_type->ptr;
 	}
 	eval_struct_find_offsets(struct_type);
 			
@@ -991,7 +976,6 @@ static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value 
 
 static Value val_zero(Type *t) {
 	Value val = {0};
-	t = type_inner(t);
 	switch (t->kind) {
 	case TYPE_STRUCT:
 		val.struc = err_calloc(1, compiler_sizeof(t));
@@ -1194,7 +1178,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			Value from, to;
 			Value stepval;
 			stepval.i64 = 1;
-			Type i64t;
+			Type i64t = {0};
 			i64t.flags = TYPE_IS_RESOLVED;
 			i64t.kind = TYPE_BUILTIN;
 			i64t.builtin = BUILTIN_I64;
@@ -1228,7 +1212,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 					Value lhs = x;
 					Value rhs = to;
 					assert(ea->type.kind == TYPE_BUILTIN);
-					Type boolt;
+					Type boolt = {0};
 					boolt.flags = TYPE_IS_RESOLVED;
 					boolt.kind = TYPE_BUILTIN;
 					boolt.builtin = BUILTIN_BOOL;
@@ -1345,15 +1329,11 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			}
 			int index = ident_index_in_decl(e->ident, d);
 			assert(index != -1);
+			*v = *decl_val_at_index(d, index); 
 			if (e->type.kind == TYPE_TYPE) {
-				/* set v to a user type, not the underlying type */
-				v->type = evalr_malloc(ev, sizeof *v->type); /* TODO: fix this (free eventually) */
-				v->type->flags = TYPE_IS_RESOLVED;
-				v->type->kind = TYPE_USER;
-				v->type->user.decl = d;
-				v->type->user.index = index;
-			} else {
-				*v = *decl_val_at_index(d, index); 
+				/* make sure was_expr is set */
+				/* NOTE: this will be freed (see val_ptr_to_free) */
+				v->type->was_expr = err_malloc(sizeof *v->type->was_expr);
 			}
 		} else {
 			char *s = ident_to_str(e->ident);

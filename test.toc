@@ -7,11 +7,21 @@
 // ");
 // };
 
-Foo @= struct(x @ int) {
-	a: [x]float;
-};
+// f @= fn(x @ int) Type {
+// struct {
+// a: [x]float;
+// }
+// };
+
+
 
 main @= fn() {
-	 f : Foo(13);
-// 	 puti(f.a[12]);
+
+t @= struct {
+  A: int;
+  b: int;
+};
+x : t;
+	 y := x;
+
 };

@@ -12,30 +12,6 @@
 #include <float.h>
 
 #include "types.h"
-
-/* can be used on TYPE_USERs and TYPE_CALLs */
-static Type *type_user_underlying(Type *t) {
-	assert(t->flags & TYPE_IS_RESOLVED);
-	switch (t->kind) {
-	case TYPE_USER: {
-		Declaration *d = t->user.decl;
-		assert(d->flags & DECL_FOUND_VAL);
-		return (d->type.kind == TYPE_TUPLE ? d->val.tuple[t->user.index] : d->val).type;
-	}
-	case TYPE_CALL:
-		return &t->call.instance->type;
-	default: assert(0);
-	}
-}
-
-static Type *type_inner(Type *t) {
-	assert(t->flags & TYPE_IS_RESOLVED);
-	while (t->kind == TYPE_USER) {
-		t = type_user_underlying(t);
-	}
-	return t;
-}
-
 #include "allocator.c"
 #include "arr.c"
 #include "location.c"

@@ -28,11 +28,7 @@ static bool type_eq(Type *a, Type *b) {
 	assert(a->flags & TYPE_IS_RESOLVED);
 	assert(b->flags & TYPE_IS_RESOLVED);
 
-	if ((a->kind == TYPE_USER || a->kind == TYPE_CALL) && a->user.is_alias)
-		return type_eq(type_user_underlying(a), b);
-	if ((b->kind == TYPE_USER || a->kind == TYPE_CALL) && b->user.is_alias)
-		return type_eq(a, type_user_underlying(b));
-	
+	/* TODO: deal with was_expr */
 	
 	if (a->kind != b->kind) return false;
 	if (b->flags & TYPE_IS_FLEXIBLE) {
@@ -55,10 +51,6 @@ static bool type_eq(Type *a, Type *b) {
 	case TYPE_VOID: return true;
 	case TYPE_UNKNOWN: assert(0); return false;
 	case TYPE_TYPE: return true;
-	case TYPE_USER:
-		return a->user.decl == b->user.decl && a->user.index == b->user.index;
-	case TYPE_CALL:
-		return a->call.instance == b->call.instance;	
 	case TYPE_BUILTIN:
 		return a->builtin == b->builtin;
 	case TYPE_STRUCT: return false;
@@ -97,6 +89,8 @@ static bool type_eq(Type *a, Type *b) {
 		return type_eq(a->slice, b->slice);
 	case TYPE_PTR:
 		return type_eq(a->ptr, b->ptr);
+	case TYPE_EXPR:
+		break;
 	}
 	assert(0);
 	return false;
@@ -433,6 +427,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 static bool type_resolve(Typer *tr, Type *t, Location where) {
 	Evaluator *ev = tr->evalr;
 	if (t->flags & TYPE_IS_RESOLVED) return true;
+	t->was_expr = NULL;
 	switch (t->kind) {
 	case TYPE_ARR: {
 		/* it's an array */
@@ -488,62 +483,39 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 		if (!type_resolve(tr, t->slice, where))
 			return false;
 		break;
-	case TYPE_USER: {
-		t->flags |= TYPE_IS_RESOLVED; /* pre-resolve type to avoid infinite recursion */
-		/* find declaration */
-		Identifier ident = t->user.ident;
-		IdentDecl *idecl = ident_decl(ident);
-		if (!idecl) {
-			char *s = ident_to_str(ident);
-			err_print(where, "Use of undeclared type %s.", s);
-			free(s);
-			return false;
-		}
-		assert(idecl->kind == IDECL_DECL);
-		Declaration *decl = idecl->decl;
-		/* now, type the declaration (in case we are using it before its declaration) */
-		if (!types_decl(tr, decl))
-			return false;
-		int index = ident_index_in_decl(ident, idecl->decl);
-		/* make sure it's actually a type */
-		if (decl_type_at_index(decl, index)->kind != TYPE_TYPE) {
-			char *s = ident_to_str(ident);
-			err_print(where, "Use of non-type identifier %s as type.", s);
-			info_print(decl->where, "%s is declared here.", s);
-			free(s);
-			return false;
-		}
-		/* finally, set decl and index */
-		t->user.decl = decl;
-		t->user.index = index;
-		if (decl->flags & DECL_IS_PARAM) {
-		    t->user.is_alias = true; /* type parameters are aliases */
-		}
-	} break;
 	case TYPE_STRUCT:
-		arr_foreach(t->struc.fields, Field, f) {
+		arr_foreach(t->struc->fields, Field, f) {
 			if (!type_resolve(tr, f->type, where))
 				return false;
 		}
 		break;
+	case TYPE_EXPR: {
+		Value typeval;
+		if (!types_expr(tr, t->expr))
+			return false;
+		t->was_expr = t->expr;
+		if (!eval_expr(tr->evalr, t->expr, &typeval))
+			return false;
+		*t = *typeval.type;
+	} break;
 	case TYPE_UNKNOWN:
 	case TYPE_VOID:
 	case TYPE_TYPE:
 	case TYPE_BUILTIN:
 		break;
 	}
+	assert(t->kind != TYPE_EXPR);
 	t->flags |= TYPE_IS_RESOLVED;
 	return true;
 }
 
 static bool type_can_be_truthy(Type *t) {
+	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_VOID:
 	case TYPE_TUPLE:
 	case TYPE_ARR:
 	case TYPE_TYPE:
-	case TYPE_USER:
-	case TYPE_CALL:
 	case TYPE_STRUCT:
 		return false;
 	case TYPE_FN:
@@ -552,6 +524,8 @@ static bool type_can_be_truthy(Type *t) {
 	case TYPE_PTR:
 	case TYPE_SLICE:
 		return true;
+	case TYPE_EXPR:
+		break;
 	}
 	assert(0);
 	return false;
@@ -564,20 +538,11 @@ typedef enum {
 } Status;
 
 static Status type_cast_status(Type *from, Type *to) {
+	assert(from->flags & TYPE_IS_RESOLVED);
+	assert(to->flags & TYPE_IS_RESOLVED);
+	
 	if (to->kind == TYPE_UNKNOWN)
 		return STATUS_NONE;
-	if (from->kind == TYPE_USER || from->kind == TYPE_CALL) {
-		if (from->user.is_alias) {
-			return type_cast_status(type_user_underlying(from), to);
-		}
-		return type_eq(type_user_underlying(from), to) ? STATUS_NONE : STATUS_ERR;
-	}
-	if (to->kind == TYPE_USER || to->kind == TYPE_CALL) {
-		if (to->user.is_alias) {
-			return type_cast_status(from, type_user_underlying(to));
-		}
-		return type_eq(from, type_user_underlying(to)) ? STATUS_NONE : STATUS_ERR;
-	}
 	switch (from->kind) {
 	case TYPE_UNKNOWN: return STATUS_NONE;
 	case TYPE_STRUCT:
@@ -607,8 +572,9 @@ static Status type_cast_status(Type *from, Type *to) {
 			case TYPE_STRUCT:
 			case TYPE_ARR:
 			case TYPE_VOID:
-			case TYPE_USER: case TYPE_CALL: /* handled above */
 				return STATUS_ERR;
+			case TYPE_EXPR:
+				assert(0);
 			}
 			break;
 		case BUILTIN_F32:
@@ -644,8 +610,7 @@ static Status type_cast_status(Type *from, Type *to) {
 		if (to->kind == TYPE_PTR && type_eq(from->slice, to->ptr))
 			return STATUS_NONE;
 	    return STATUS_ERR;
-	case TYPE_USER:
-	case TYPE_CALL:
+	case TYPE_EXPR:
 		break;
 	}
 	assert(0);
@@ -739,6 +704,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 	if (e->flags & EXPR_FOUND_TYPE) return true;
 	Type *t = &e->type;
 	t->flags = 0;
+	t->was_expr = NULL;
 	t->kind = TYPE_UNKNOWN; /* default to unknown type (in the case of an error) */
 	e->flags |= EXPR_FOUND_TYPE; /* even if failed, pretend we found the type */
 	switch (e->kind) {
@@ -873,7 +839,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				return false;
 			}
 			}
-			Type ptr_type;
+			Type ptr_type = {0};
 			if (uses_ptr) {
 				ptr_type.flags = TYPE_IS_RESOLVED;
 				ptr_type.kind = TYPE_PTR;
@@ -992,6 +958,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				} else {
 					next_type->kind = TYPE_VOID;
 					next_type->flags = TYPE_IS_RESOLVED;
+					next_type->was_expr = NULL;
 				}
 				if (!type_eq(curr_type, next_type)) {
 					char *currstr = type_to_str(curr_type);
@@ -1184,11 +1151,12 @@ static bool types_expr(Typer *tr, Expression *e) {
 			copy_fn_expr(&cop, &fn_copy, fn, true);
 			fn = &fn_copy;
 			
-			Type table_index_type;
+			Type table_index_type = {0};
 			table_index_type.flags = TYPE_IS_RESOLVED;
 			table_index_type.kind = TYPE_TUPLE;
 			table_index_type.tuple = NULL;
 			Type *u64t = arr_add(&table_index_type.tuple);
+			u64t->was_expr = NULL;
 			u64t->flags = TYPE_IS_RESOLVED;
 			u64t->kind = TYPE_BUILTIN;
 			u64t->builtin = BUILTIN_U64;
@@ -1447,19 +1415,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 					return false;
 				}
 			} else {
-				while (rhs_type->kind == TYPE_USER) {
-					if (rhs_type->user.is_alias)
-						rhs_type = type_user_underlying(rhs_type);
-					else
-						break;
-				}
-				while (lhs_type->kind == TYPE_USER) {
-					if (lhs_type->user.is_alias)
-						lhs_type = type_user_underlying(lhs_type);
-					else
-						break;
-				}
-				
 				/* numerical binary ops */
 				if (lhs_type->kind == TYPE_BUILTIN && type_eq(lhs_type, rhs_type)) {
 					/* int + int, etc. */
@@ -1562,16 +1517,15 @@ static bool types_expr(Typer *tr, Expression *e) {
 			break;
 		case BINARY_DOT: {
 			if (!types_expr(tr, lhs)) return false;
-			Type *struct_type = type_inner(lhs_type);
+			Type *struct_type = lhs_type;
 			if (struct_type->kind == TYPE_PTR)
 				struct_type = struct_type->ptr;
-			struct_type = type_inner(struct_type);
 			
 			if (struct_type->kind == TYPE_STRUCT) {
 				bool is_field = false;
 				if (rhs->kind == EXPR_IDENT) {
 					/* maybe accessing a field? */
-					arr_foreach(struct_type->struc.fields, Field, f) {
+					arr_foreach(struct_type->struc->fields, Field, f) {
 						if (f->name == rhs->ident) {
 							is_field = true;
 							*t = *f->type;
@@ -1600,7 +1554,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 						
 					}
 					if (!eval_expr(tr->evalr, rhs, &field_name)) return false;
-					arr_foreach(struct_type->struc.fields, Field, f) {
+					arr_foreach(struct_type->struc->fields, Field, f) {
 						if (ident_eq_str(f->name, field_name.slice.data)) {
 							is_field = true;
 							*t = *f->type;
@@ -1818,6 +1772,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 	if (!success) {
 		/* use unknown type if we didn't get the type */
 		d->type.flags = TYPE_IS_RESOLVED;
+		d->type.was_expr = NULL;
 	    d->type.kind = TYPE_UNKNOWN;
 		tr->evalr->enabled = false; /* disable evaluator completely so that it doesn't accidentally try to access this declaration */
 	}

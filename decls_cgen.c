@@ -93,7 +93,7 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 						cgen_write(g, "{");
 						cgen_nl(g);
 						g->indent_lvl++;
-						arr_foreach(val->type->struc.fields, Field, f) {
+						arr_foreach(val->type->struc->fields, Field, f) {
 							if (!cgen_type_pre(g, f->type, d->where)) return false;
 							cgen_write(g, " ");
 							cgen_ident(g, f->name);

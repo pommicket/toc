@@ -64,6 +64,7 @@ static void fprint_val(FILE *f, Value v, Type *t); /* DELME */
 static void fprint_type(FILE *out, Type *t);		   /* !! */
 /* Note that for these value hashing functions, values of different types may collide */
 static U64 val_ptr_hash(void *v, Type *t) {
+	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_VOID: return 0;
 	case TYPE_UNKNOWN: return 0;
@@ -97,9 +98,6 @@ static U64 val_ptr_hash(void *v, Type *t) {
 	}
 	case TYPE_PTR: return (U64)*(void **)v;
 	case TYPE_TYPE: return (U64)*(Type **)v;
-	case TYPE_USER:
-	case TYPE_CALL:
-		return val_ptr_hash(v, type_inner(t));
 	case TYPE_ARR: {
 		U32 x = 1;
 		U64 hash = 0;
@@ -124,12 +122,13 @@ static U64 val_ptr_hash(void *v, Type *t) {
 	case TYPE_STRUCT: {
 		U32 x = 1;
 		U64 hash = 0;
-		arr_foreach(t->struc.fields, Field, f) {
+		arr_foreach(t->struc->fields, Field, f) {
 			hash += (U64)x * val_ptr_hash((char *)v + f->offset, f->type);
 			x = rand_u32(x);
 		}
 		return hash;
 	}
+	case TYPE_EXPR: break;
 	}
 	assert(0);
 	return 0;
@@ -140,6 +139,7 @@ static U64 val_hash(Value v, Type *t) {
 }
 
 static bool val_ptr_eq(void *u, void *v, Type *t) {
+	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_BUILTIN:
 		switch (t->builtin) {
@@ -163,9 +163,6 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 		return false;
 	case TYPE_FN:
 		return *(FnExpr **)u == *(FnExpr **)v;
-	case TYPE_USER:
-	case TYPE_CALL:
-		return val_ptr_eq(u, v, type_inner(t));
 	case TYPE_PTR:
 		return *(void **)u == *(void **)v;
 	case TYPE_TYPE:
@@ -205,11 +202,12 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 		return true;
 	}
 	case TYPE_STRUCT:
-		arr_foreach(t->struc.fields, Field, f) {
+		arr_foreach(t->struc->fields, Field, f) {
 			if (!val_ptr_eq((char *)u + f->offset, (char *)v + f->offset, f->type))
 				return false;
 		}
 	    return true;
+	case TYPE_EXPR: break;
 	}
 	assert(0);
 	return false;

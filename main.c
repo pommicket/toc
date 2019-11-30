@@ -1,7 +1,9 @@
 /* 
 TODO:
-struct parameters
-- struct type parameters
+get rid of TYPE_USER
+- don't do automatic type conversion
+
+functions returning Types
 test ArrInt @= Arr(int);
 
 packages

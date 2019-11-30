@@ -167,6 +167,10 @@ static Keyword builtin_type_to_kw(BuiltinType t) {
 
 /* returns the number of characters written, not including the null character */
 static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
+	if ((t->flags & TYPE_IS_RESOLVED) && t->was_expr) {
+		/* TODO: improve this (see also: case TYPE_EXPR) */
+		return str_copy(buffer, bufsize, "<type expression>");
+	}
 	switch (t->kind) {
 	case TYPE_VOID:
 		return str_copy(buffer, bufsize, "void");
@@ -206,7 +210,7 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 	}
 	case TYPE_STRUCT: {
 		size_t written = str_copy(buffer, bufsize, "struct { ");
-		arr_foreach(t->struc.fields, Field, f) {
+		arr_foreach(t->struc->fields, Field, f) {
 			written += type_to_str_(f->type, buffer + written, bufsize - written);
 			written += str_copy(buffer + written, bufsize - written, "; ");
 		}
@@ -248,23 +252,9 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 	}
 	case TYPE_TYPE:
 		return str_copy(buffer, bufsize, "<type>");
-	case TYPE_USER: {
-		char *ident_str = ident_to_str((t->flags & TYPE_IS_RESOLVED)
-									   ? t->user.decl->idents[t->user.index]
-									   : t->user.ident);
-		size_t ret = str_copy(buffer, bufsize, ident_str);
-		free(ident_str);
-		return ret;
-	}
-	case TYPE_CALL: {
-		size_t written = 0;
-		written += type_to_str_(t->call.calling, buffer + written, bufsize - written);
-		written += str_copy(buffer + written, bufsize - written, "(");
-		/* TODO: show values if resolved */
-		written += str_copy(buffer + written, bufsize - written, "...");
-		written += str_copy(buffer + written, bufsize - written, ")");		
-		return written;
-	}
+	case TYPE_EXPR:
+		/* TODO: improve this... we're gonna need expr_to_str ): */
+		return str_copy(buffer, bufsize, "<type expression>");
 	}
 
 	assert(0);
@@ -388,6 +378,43 @@ static Token *expr_find_end(Parser *p, ExprEndFlags flags, bool *is_vbs)  {
 		}
 		token++;
 	}
+}
+
+/* parses, e.g. "(3, 5, foo)" */
+static bool parse_args(Parser *p, Argument **args) {
+	Tokenizer *t = p->tokr;
+	Token *start = t->token;
+	assert(token_is_kw(start, KW_LPAREN));
+	*args = NULL;
+	t->token++; /* move past ( */
+	if (!token_is_kw(t->token, KW_RPAREN)) {
+		/* non-empty arg list */
+		while (1) {
+			if (t->token->kind == TOKEN_EOF) {
+				tokr_err(t, "Expected argument list to continue.");
+				info_print(start->where, "This is where the argument list starts.");
+				return false;
+			}
+			Argument *arg = parser_arr_add(p, args);
+			arg->where = t->token->where;
+			/* named arguments */
+			if (t->token->kind == TOKEN_IDENT && token_is_kw(t->token + 1, KW_EQ)) {
+			    arg->name = t->token->ident;
+				t->token += 2;
+			} else {
+				arg->name = NULL;
+			}
+			if (!parse_expr(p, &arg->val, expr_find_end(p, EXPR_CAN_END_WITH_COMMA, NULL))) {
+				return false;
+			}
+			if (token_is_kw(t->token, KW_RPAREN))
+				break;
+			assert(token_is_kw(t->token, KW_COMMA));
+			t->token++;	/* move past , */
+		}
+	}
+	t->token++;	/* move past ) */
+	return true;
 }
 
 static bool parse_type(Parser *p, Type *type) {
@@ -525,20 +552,14 @@ static bool parse_type(Parser *p, Type *type) {
 		case KW_STRUCT:
 			/* struct */
 			type->kind = TYPE_STRUCT;
-			type->struc.fields = NULL;
+			type->struc = parser_malloc(p, sizeof *type->struc);
+			type->struc->flags = 0;
+			/* help cgen out */
+			type->struc->c.name = NULL;
+			type->struc->c.id = 0;
+			type->struc->fields = NULL;
 			t->token++;
-			if (token_is_kw(t->token, KW_LPAREN)) {
-				/* struct parameters */
-				t->token++;
-				if (token_is_kw(t->token, KW_RPAREN)) {
-					t->token--;
-					err_print(t->token->where, "Expected parameters to struct, but found none.");
-					return false;
-				}
-				
-				if (!parse_decl_list(p, &type->struc.params, DECL_END_RPAREN_COMMA))
-					return false;
-			} else  if (!token_is_kw(t->token, KW_LBRACE)) {
+			if (!token_is_kw(t->token, KW_LBRACE)) {
 				err_print(t->token->where, "Expected { or ( to follow struct.");
 				return false;
 			}
@@ -561,7 +582,7 @@ static bool parse_type(Parser *p, Type *type) {
 					long idx = 0;
 					arr_foreach(field_decl.idents, Identifier, fident) {
 						Type *ftype = field_decl.type.kind == TYPE_TUPLE ? &field_decl.type.tuple[idx] : &field_decl.type;
-						Field *f = parser_arr_add(p, &type->struc.fields);
+						Field *f = parser_arr_add(p, &type->struc->fields);
 						f->name = *fident;
 						f->type = parser_malloc(p, sizeof *f->type);
 						*f->type = *ftype;
@@ -576,15 +597,14 @@ static bool parse_type(Parser *p, Type *type) {
 			return false;
 		}
 		break;
-	case TOKEN_IDENT:
-		/* user-defined type */
-		type->kind = TYPE_USER;
-		type->user.ident = t->token->ident;
-		t->token++;
-		break;
 	default:
-		tokr_err(t, "Unrecognized type.");
-		return false;
+		/* TYPE_EXPR */
+		if (parse_expr(p, type->expr = parser_new_expr(p), expr_find_end(p, 0, NULL))) {
+			type->kind = TYPE_EXPR;
+		} else {
+			tokr_err(t, "Unrecognized type.");
+			return false;
+		}
 	}
 	return true;
 	
@@ -880,43 +900,6 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 		ret = false;
 	f->body.flags |= BLOCK_IS_FN;
 	return ret;
-}
-
-/* parses, e.g. "(3, 5, foo)" */
-static bool parse_args(Parser *p, Argument **args) {
-	Tokenizer *t = p->tokr;
-	Token *start = t->token;
-	assert(token_is_kw(start, KW_LPAREN));
-	*args = NULL;
-	t->token++; /* move past ( */
-	if (!token_is_kw(t->token, KW_RPAREN)) {
-		/* non-empty arg list */
-		while (1) {
-			if (t->token->kind == TOKEN_EOF) {
-				tokr_err(t, "Expected argument list to continue.");
-				info_print(start->where, "This is where the argument list starts.");
-				return false;
-			}
-			Argument *arg = parser_arr_add(p, args);
-			arg->where = t->token->where;
-			/* named arguments */
-			if (t->token->kind == TOKEN_IDENT && token_is_kw(t->token + 1, KW_EQ)) {
-			    arg->name = t->token->ident;
-				t->token += 2;
-			} else {
-				arg->name = NULL;
-			}
-			if (!parse_expr(p, &arg->val, expr_find_end(p, EXPR_CAN_END_WITH_COMMA, NULL))) {
-				return false;
-			}
-			if (token_is_kw(t->token, KW_RPAREN))
-				break;
-			assert(token_is_kw(t->token, KW_COMMA));
-			t->token++;	/* move past , */
-		}
-	}
-	t->token++;	/* move past ) */
-	return true;
 }
 
 static void fprint_expr(FILE *out, Expression *e);

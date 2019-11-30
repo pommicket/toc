@@ -36,35 +36,33 @@ static bool typedefs_decl(CGenerator *g, Declaration *d) {
 				d->c.ids = allocr_calloc(g->allocr, arr_len(d->idents), sizeof *d->c.ids);
 			/* generate typedef */
 			IdentID id = 0;
-			if (g->block != NULL || g->fn != NULL) id = d->c.ids[idx] = g->ident_counter++;
+			if (g->block != NULL || g->fn != NULL)
+				id = d->c.ids[idx] = g->ident_counter++;
 			if (val->type->kind == TYPE_STRUCT) {
 				/* we'll actually define the struct later; here we can just declare it */
 				cgen_write(g, "struct ");
-				if (g->block == NULL) {
-					/* we can refer to this by its name */
-					cgen_ident(g, i);
-				} else {
-					/* we need to use an ID ): */
+				if (id) {
 					cgen_ident_id(g, id);
+					val->type->struc->c.id = id;
+				} else {
+					cgen_ident(g, i);
+					val->type->struc->c.name = i;
 				}
 				cgen_write(g, ";");
-				cgen_nl(g);
-				continue;
-			}
-			cgen_write(g, "typedef ");
-			if (!cgen_type_pre(g, val->type, d->where)) return false;
-			cgen_write(g, " ");
-			if (g->block == NULL && g->fn == NULL) {
-				/* we can refer to this by its name */
-				cgen_ident(g, i);
 			} else {
-				/* we need to use an ID ): */
-				cgen_ident_id(g, id);
+				cgen_write(g, "typedef ");
+				if (!cgen_type_pre(g, val->type, d->where)) return false;
+				cgen_write(g, " ");
+				if (id) {
+					cgen_ident_id(g, id);
+				} else {
+					cgen_ident(g, i);
+				}
+				if (val->type->kind != TYPE_STRUCT) {
+					if (!cgen_type_post(g, val->type, d->where)) return false;
+				}
+				cgen_write(g, ";");
 			}
-			if (val->type->kind != TYPE_STRUCT) {
-				if (!cgen_type_post(g, val->type, d->where)) return false;
-			}
-			cgen_write(g, ";");
 			cgen_nl(g);
 		}
 	}
