@@ -336,7 +336,8 @@ typedef struct FnType {
 } FnType;
 
 enum {
-	  STRUCT_DEF_FOUND_OFFSETS = 0x00,
+	  STRUCT_DEF_FOUND_OFFSETS = 0x01,
+	  STRUCT_DEF_CGENERATED = 0x02,
 };
 
 typedef struct {
@@ -640,10 +641,6 @@ typedef struct Declaration {
     DeclFlags flags;
 	Expression expr;
 	Value val; /* only for constant decls. */
-	
-	struct {
-		IdentID *ids; /* array of IDs used in place of ident names. unfortunately needed for user defined types. this is NOT a dynamic array, but is of length arr_len(idents). */
-	} c;
 } Declaration;
 
 typedef enum {

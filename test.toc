@@ -21,7 +21,8 @@ t @= struct {
   A: int;
   b: int;
 };
+u @= t;
 x : t;
-	 y := x;
+	 y : u = x;
 
 };

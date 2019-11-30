@@ -23,7 +23,6 @@ static bool typedefs_expr(CGenerator *g, Expression *e) {
 }
 
 static bool typedefs_decl(CGenerator *g, Declaration *d) {
-	d->c.ids = NULL;
 	if (cgen_fn_is_direct(g, d)) {
 		d->expr.fn.c.name = d->idents[0];
 	}
@@ -32,23 +31,26 @@ static bool typedefs_decl(CGenerator *g, Declaration *d) {
 		Type *type = decl_type_at_index(d, idx);
 		Value *val = decl_val_at_index(d, idx);
 		if (type->kind == TYPE_TYPE) {
-			if (d->c.ids == NULL)
-				d->c.ids = allocr_calloc(g->allocr, arr_len(d->idents), sizeof *d->c.ids);
 			/* generate typedef */
 			IdentID id = 0;
 			if (g->block != NULL || g->fn != NULL)
-				id = d->c.ids[idx] = g->ident_counter++;
+				id = g->ident_counter++;
 			if (val->type->kind == TYPE_STRUCT) {
 				/* we'll actually define the struct later; here we can just declare it */
-				cgen_write(g, "struct ");
-				if (id) {
-					cgen_ident_id(g, id);
-					val->type->struc->c.id = id;
+				StructDef *sdef = val->type->struc;
+				if (sdef->c.id || sdef->c.name) {
+					/* we've already done this */
 				} else {
-					cgen_ident(g, i);
-					val->type->struc->c.name = i;
+					cgen_write(g, "struct ");
+					if (id) {
+						cgen_ident_id(g, id);
+						sdef->c.id = id;
+					} else {
+						cgen_ident(g, i);
+						sdef->c.name = i;
+					}
+					cgen_write(g, ";");
 				}
-				cgen_write(g, ";");
 			} else {
 				cgen_write(g, "typedef ");
 				if (!cgen_type_pre(g, val->type, d->where)) return false;

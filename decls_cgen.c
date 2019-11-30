@@ -79,31 +79,34 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 	} else if (d->flags & DECL_HAS_EXPR) {
 		if (d->flags & DECL_IS_CONST) {
 			for (size_t idx = 0; idx < arr_len(d->idents); idx++) {
-				Identifier i = d->idents[idx];
 				Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx] : &d->type;
 				if (type->kind == TYPE_TYPE) {
 					Value *val = d->type.kind == TYPE_TUPLE ? &d->val.tuple[idx] : &d->val;
 					if (val->type->kind == TYPE_STRUCT) {
-						/* generate struct definition */
-						cgen_write(g, "struct ");
-						if (g->block == NULL)
-							cgen_ident(g, i);
-						else
-							cgen_ident_id(g, d->c.ids[idx]);
-						cgen_write(g, "{");
-						cgen_nl(g);
-						g->indent_lvl++;
-						arr_foreach(val->type->struc->fields, Field, f) {
-							if (!cgen_type_pre(g, f->type, d->where)) return false;
-							cgen_write(g, " ");
-							cgen_ident(g, f->name);
-							if (!cgen_type_post(g, f->type, d->where)) return false;
-							cgen_write(g, ";");
+						StructDef *sdef = val->type->struc;
+						if (!(sdef->flags & STRUCT_DEF_CGENERATED)) {
+							/* generate struct definition */
+							cgen_write(g, "struct ");
+							if (sdef->c.name)
+								cgen_ident(g, sdef->c.name);
+							else
+								cgen_ident_id(g, sdef->c.id);
+							cgen_write(g, "{");
 							cgen_nl(g);
+							g->indent_lvl++;
+							arr_foreach(sdef->fields, Field, f) {
+								if (!cgen_type_pre(g, f->type, d->where)) return false;
+								cgen_write(g, " ");
+								cgen_ident(g, f->name);
+								if (!cgen_type_post(g, f->type, d->where)) return false;
+								cgen_write(g, ";");
+								cgen_nl(g);
+							}
+							g->indent_lvl--;
+							cgen_write(g, "};");
+							cgen_nl(g);
+							sdef->flags |= STRUCT_DEF_CGENERATED;
 						}
-						g->indent_lvl--;
-						cgen_write(g, "};");
-						cgen_nl(g);
 					}
 				}
 			}
