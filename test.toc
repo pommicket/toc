@@ -15,12 +15,14 @@
 
 
 
-main @= fn() {
-
 t @= struct {
   A: int;
   b: int;
 };
+
+f @= fn() {};
+main @= fn() {
+
 u @= t;
 x : t;
 	 y : u = x;

@@ -290,7 +290,9 @@ typedef enum {
 	  EXPR_CAN_END_WITH_COMMA = 0x01, /* a comma could end the expression */
 	  EXPR_CAN_END_WITH_LBRACE = 0x02,
 	  EXPR_CAN_END_WITH_COLON = 0x04,
-	  EXPR_CAN_END_WITH_DOTDOT = 0x08
+	  EXPR_CAN_END_WITH_DOTDOT = 0x08,
+	  EXPR_CAN_END_WITH_EQ = 0x10,
+	  /* note that parse_type uses -1 for this */
 } ExprEndFlags;
 /* is_vbs can be NULL */
 static Token *expr_find_end(Parser *p, ExprEndFlags flags, bool *is_vbs)  {
@@ -349,6 +351,10 @@ static Token *expr_find_end(Parser *p, ExprEndFlags flags, bool *is_vbs)  {
 				break;
 			case KW_DOTDOT:
 				if (brace_level == 0 && square_level == 0 && paren_level == 0 && (flags & EXPR_CAN_END_WITH_DOTDOT))
+					return token;
+				break;
+			case KW_EQ:
+				if (brace_level == 0 && square_level == 0 && paren_level == 0 && (flags & EXPR_CAN_END_WITH_EQ))
 					return token;
 				break;
 			case KW_COLON:
@@ -599,7 +605,8 @@ static bool parse_type(Parser *p, Type *type) {
 		break;
 	default:
 		/* TYPE_EXPR */
-		if (parse_expr(p, type->expr = parser_new_expr(p), expr_find_end(p, 0, NULL))) {
+		if (parse_expr(p, type->expr = parser_new_expr(p),
+					   expr_find_end(p, -1 /* end as soon as possible */, NULL))) {
 			type->kind = TYPE_EXPR;
 		} else {
 			tokr_err(t, "Unrecognized type.");

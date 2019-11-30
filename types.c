@@ -53,7 +53,7 @@ static bool type_eq(Type *a, Type *b) {
 	case TYPE_TYPE: return true;
 	case TYPE_BUILTIN:
 		return a->builtin == b->builtin;
-	case TYPE_STRUCT: return false;
+	case TYPE_STRUCT: return a->struc == b->struc;
 	case TYPE_FN: {
 		if (arr_len(a->fn.types) != arr_len(b->fn.types)) return false;
 		Type *a_types = a->fn.types, *b_types = b->fn.types;

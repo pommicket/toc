@@ -73,6 +73,7 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 			if (!cgen_fn_header(g, &d->expr.fn, d->where, 0, 0))
 				return false;
 			cgen_write(g, ";");
+			cgen_nl(g);
 			fn_exit(&d->expr.fn);
 		}
 		cgen_recurse_subexprs(g, (&d->expr), cgen_decls_expr, cgen_decls_block, cgen_decls_decl);
