@@ -17,12 +17,18 @@ int main(int argc, char **argv) {
 #ifdef TOC_DEBUG
 	test_all();
 #endif
+
+	const char *in_filename;
 	if (argc < 2) {
+#ifdef TOC_DEBUG
+		in_filename = "test.toc";
+#else
 		fprintf(stderr, "Please specify an input file.\n");
 		return EXIT_FAILURE;
+#endif
+	} else {
+		in_filename = argv[1];
 	}
-
-	const char *in_filename = argv[1];
 	const char *out_filename = "out.c";
 
 	for (int i = 2; i < argc-1; i++) {

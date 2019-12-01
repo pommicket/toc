@@ -526,10 +526,7 @@ typedef struct FnExpr {
 
 typedef struct Instance {
 	Value val; /* key into hash table */
-	union {
-		FnExpr fn; /* the typed function */
-		Type type; /* the type, resolved */
-	};
+	FnExpr fn; /* the typed function */
 	struct {
 	    U64 id;
 	} c;

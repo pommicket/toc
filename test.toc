@@ -15,11 +15,13 @@
 
 
 
-f @= fn() Type {
-int
+f @= fn(s @ Type) Type {
+t @= int;
+t
 };
 
 main @= fn() {
-x : f();
-
+x : f(int);
+y : f(int);
+z : f(float);
 };

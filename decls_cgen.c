@@ -5,20 +5,20 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d);
 static bool cgen_decls_fn_instances(CGenerator *g, Expression *e) {
 	assert(e->kind == EXPR_FN);
 	FnExpr *f = &e->fn;
-	if (!cgen_should_gen_fn(f))
-		return true;
 	FnType *type = &e->type.fn;
 	assert(type->constness);
 	Instance **data = f->instances.data;
 	for (U64 i = 0; i < f->instances.cap; i++) {
 		if (f->instances.occupied[i]) {
-			(*data)->fn.c.name = f->c.name;
-			(*data)->fn.c.id = f->c.id;
-		
-			if (!cgen_fn_header(g, &(*data)->fn, e->where, (*data)->c.id, (*data)->val.tuple[0].u64))
-				return false;
-			cgen_write(g, ";");
-			cgen_nl(g);
+			if (cgen_should_gen_fn(&(*data)->fn)) {
+				(*data)->fn.c.name = f->c.name;
+				(*data)->fn.c.id = f->c.id;
+			
+				if (!cgen_fn_header(g, &(*data)->fn, e->where, (*data)->c.id, (*data)->val.tuple[0].u64))
+					return false;
+				cgen_write(g, ";");
+				cgen_nl(g);
+			}
 		}
 		data++;
 	}

@@ -1229,7 +1229,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 				ret_type = f->type.fn.types;
 				param_types = ret_type + 1;
 				c->instance->c.id = original_fn->instances.n; /* let's help cgen out and assign an ID to this */
-
 				/* type this instance */
 				if (!types_fn(tr, fn, &f->type, e->where, c->instance))
 					return false;

@@ -1388,10 +1388,15 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		}
 		break;
 	case EXPR_CALL: {
-		Value fnv;
-		if (!eval_expr(ev, e->call.fn, &fnv))
-			return false;
-		FnExpr *fn = fnv.fn;
+		FnExpr *fn;
+		if (e->call.instance) {
+			fn = &e->call.instance->fn;
+		} else {
+			Value fnv;
+			if (!eval_expr(ev, e->call.fn, &fnv))
+				return false;
+			fn = fnv.fn;
+		}
 		/* make sure function body is typed before calling it */
 		if (!types_block(ev->typer, &fn->body))
 			return false;
