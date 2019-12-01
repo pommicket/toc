@@ -495,6 +495,7 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 		if (!eval_expr(tr->evalr, t->expr, &typeval))
 			return false;
 		*t = *typeval.type;
+		assert(t->flags & TYPE_IS_RESOLVED);
 	} break;
 	case TYPE_UNKNOWN:
 	case TYPE_VOID:
@@ -726,6 +727,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		t->kind = TYPE_SLICE;
 		t->slice = typer_malloc(tr, sizeof *t->slice);
 		t->slice->flags = TYPE_IS_RESOLVED;
+		t->slice->was_expr = NULL;
 		t->slice->kind = TYPE_BUILTIN;
 		t->slice->builtin = BUILTIN_CHAR;
 		t->flags |= TYPE_IS_RESOLVED;

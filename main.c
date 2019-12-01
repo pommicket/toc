@@ -1,6 +1,6 @@
 /* 
 TODO:
-functions returning Types
+fix VBS with structs
 test ArrInt @= Arr(int);
 
 packages

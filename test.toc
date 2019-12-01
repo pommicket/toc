@@ -1,11 +1,11 @@
-// puti @= fn(x: int) {
-// 	 #C("printf(\"%ld\\n\", (long)x);
-// ");
-// };
-// putf @= fn(x: float) {
-// 	 #C("printf(\"%f\\n\", (double)x);
-// ");
-// };
+puti @= fn(x: int) {
+	 #C("printf(\"%ld\\n\", (long)x);
+");
+};
+putf @= fn(x: float) {
+	 #C("printf(\"%f\\n\", (double)x);
+");
+};
 
 // f @= fn(x @ int) Type {
 // struct {
@@ -15,13 +15,16 @@
 
 
 
-f @= fn(s @ Type) Type {
-t @= int;
-t
+pair @= fn(s @ Type) Type {
+	 [2]s
 };
 
 main @= fn() {
-x : f(int);
-y : f(int);
-z : f(float);
+x : pair(int);
+y : pair(int);
+z : pair(float);
+x[0] = 7;
+puti(x[0]);
+z[0] = 3.3;
+putf(z[0]);
 };

@@ -945,6 +945,7 @@ static int op_precedence(Keyword op) {
 static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	Tokenizer *t = p->tokr;
 	e->flags = 0;
+	e->type.flags = 0;
 	if (end == NULL) return false;
 	e->where = t->token->where;
 	if (end <= t->token) {
