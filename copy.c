@@ -10,6 +10,13 @@ static void copy_decl(Copier *c, Declaration *out, Declaration *in);
 static void copy_block(Copier *c, Block *out, Block *in);
 static void copy_type(Copier *c, Type *out, Type *in);
 
+static Copier copier_create(Allocator *a, Block *b) {
+	Copier c;
+	c.allocr = a;
+	c.block = b;
+	return c;
+}
+
 static void copy_val(Allocator *a, Value *out, Value *in, Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {

@@ -18,7 +18,7 @@ static const char *directives[DIRECT_COUNT] =
 /* Returns KW_COUNT if it's not a keyword */
 /* OPTIM: don't use strncmp so much */
 static Keyword tokenize_kw(char **s) {
-	for (Keyword k = 0; k < KW_COUNT; k++) {
+	for (Keyword k = 0; k < KW_COUNT; k = k + 1) {
 		size_t len = strlen(keywords[k]);
 		if (strncmp(*s, keywords[k], len) == 0) {
 			if (k > KW_LAST_SYMBOL) {
@@ -40,7 +40,7 @@ static Keyword tokenize_kw(char **s) {
 
 /* Returns DIRECT_COUNT if it's not a directive */
 static Directive tokenize_direct(char **s) {
-	for (Directive d = 0; d < DIRECT_COUNT; d++) {
+	for (Directive d = 0; d < DIRECT_COUNT; d = d + 1) {
 		size_t len = strlen(directives[d]);
 		if (strncmp(*s, directives[d], len) == 0) {
 			if (isident((*s)[len])) {

@@ -198,7 +198,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	
 	FnExpr fn_copy;
 	if (!(flags & TYPE_OF_FN_NO_COPY_EVEN_IF_CONST) && fn_has_any_const_params(f)) {
-		Copier cop = {.allocr = tr->allocr, .block = tr->block};
+		Copier cop = copier_create(tr->allocr, tr->block);
 		copy_fn_expr(&cop, &fn_copy, f, false);
 		f = &fn_copy;
 	}
@@ -1105,7 +1105,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 									/* TODO: evaluate once per decl, not once per ident */
 									Expression copy;
 									/* make a copy of the default argument, and type and evaluate it. */
-									Copier cop = {.block = tr->block, .allocr = tr->allocr};
+									Copier cop = copier_create(tr->allocr, tr->block);
 									copy_expr(&cop, &copy, &param->expr);
 									if (!types_expr(tr, &copy))
 										return false;
@@ -1146,7 +1146,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			/* fn is the instance, original_fn is not */
 			FnExpr *original_fn = fn;
 			FnExpr fn_copy;
-			Copier cop = {.allocr = tr->allocr, .block = tr->block};
+			Copier cop = copier_create(tr->allocr, tr->block);
 			/* TODO: somehow don't do all of this if we've already generated this instance */
 			copy_fn_expr(&cop, &fn_copy, fn, true);
 			fn = &fn_copy;

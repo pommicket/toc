@@ -732,7 +732,7 @@ static void *eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr) {
 			
 	Value struc;
 	if (!eval_expr(ev, dot_expr->binary.lhs, &struc))
-		return false;
+		return NULL;
 	void *struc_data;
 	if (is_ptr) {
 		struc_data = *(void **)struc.ptr;

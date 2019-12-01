@@ -3,6 +3,7 @@ TODO:
 fix VBS with structs
 test ArrInt @= Arr(int);
 
+there are probably places where we enter a function and never exit (in typing?) if there's an error
 packages
 X @= newtype(int); or something
 don't allow while {3; 5} (once break is added)
@@ -10,6 +11,11 @@ any odd number of "s for a string
 make sure futurely/currently-declared types are only used by pointer/slice
 allow omission of trailing ; in foo @= fn() {}?
  */
+
+#ifdef __cplusplus
+#define new new_
+#define this this_
+#endif
 
 #include "toc.c"
 
