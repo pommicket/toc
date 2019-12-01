@@ -16,7 +16,10 @@ putf @= fn(x: float) {
 
 
 pair @= fn(s @ Type) Type {
-	 [2]s
+struct {
+x:s;
+y:s;
+}
 };
 
 main @= fn() {

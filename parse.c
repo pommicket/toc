@@ -294,21 +294,20 @@ typedef enum {
 	  EXPR_CAN_END_WITH_EQ = 0x10,
 	  /* note that parse_type uses -1 for this */
 } ExprEndFlags;
-/* is_vbs can be NULL */
-static Token *expr_find_end(Parser *p, ExprEndFlags flags, bool *is_vbs)  {
+
+static Token *expr_find_end(Parser *p, ExprEndFlags flags)  {
 	Tokenizer *t = p->tokr;
 	int paren_level = 0;
 	int brace_level = 0;
 	int square_level = 0;
 	Token *token = t->token;
 	bool could_be_vbs = false; /* could this be a void block statement (whose semicolons can be omitted)? e.g. {x := 5;} */
-	if (is_vbs) *is_vbs = false;
 	while (1) {
 		if (token->kind == TOKEN_KW) {
+			bool all_levels_0 = paren_level == 0 && brace_level == 0 && square_level == 0;
 			switch (token->kw) {
 			case KW_COMMA:
-				if ((flags & EXPR_CAN_END_WITH_COMMA) &&
-					paren_level == 0 && brace_level == 0 && square_level == 0)
+				if ((flags & EXPR_CAN_END_WITH_COMMA) && all_levels_0)
 					return token;
 				break;
 			case KW_LPAREN:
@@ -335,8 +334,8 @@ static Token *expr_find_end(Parser *p, ExprEndFlags flags, bool *is_vbs)  {
 				break;
 			case KW_RBRACE:
 				brace_level--;
-				if (brace_level == 0 && could_be_vbs && !token_is_kw(token + 1, KW_RPAREN)) {
-					if (is_vbs) *is_vbs = true;
+				if (paren_level == 0 && brace_level == 0 && square_level == 0
+					&& could_be_vbs && !token_is_kw(token + 1, KW_RPAREN)) {
 					/* if there's an else/elif, the expr must continue */
 					if (!(token_is_kw(token + 1, KW_ELSE) || token_is_kw(token + 1, KW_ELIF)))
 						return token + 1; /* token afer } is end */
@@ -350,16 +349,15 @@ static Token *expr_find_end(Parser *p, ExprEndFlags flags, bool *is_vbs)  {
 				could_be_vbs = true;
 				break;
 			case KW_DOTDOT:
-				if (brace_level == 0 && square_level == 0 && paren_level == 0 && (flags & EXPR_CAN_END_WITH_DOTDOT))
+				if (all_levels_0 && (flags & EXPR_CAN_END_WITH_DOTDOT))
 					return token;
 				break;
 			case KW_EQ:
-				if (brace_level == 0 && square_level == 0 && paren_level == 0 && (flags & EXPR_CAN_END_WITH_EQ))
+				if (all_levels_0 && (flags & EXPR_CAN_END_WITH_EQ))
 					return token;
 				break;
 			case KW_COLON:
-				if ((flags & EXPR_CAN_END_WITH_COLON)
-					&& brace_level == 0 && square_level == 0 && paren_level == 0)
+				if ((flags & EXPR_CAN_END_WITH_COLON) && all_levels_0)
 					return token;
 			default: break;
 			}
@@ -410,7 +408,7 @@ static bool parse_args(Parser *p, Argument **args) {
 			} else {
 				arg->name = NULL;
 			}
-			if (!parse_expr(p, &arg->val, expr_find_end(p, EXPR_CAN_END_WITH_COMMA, NULL))) {
+			if (!parse_expr(p, &arg->val, expr_find_end(p, EXPR_CAN_END_WITH_COMMA))) {
 				return false;
 			}
 			if (token_is_kw(t->token, KW_RPAREN))
@@ -508,7 +506,7 @@ static bool parse_type(Parser *p, Type *type) {
 				}
 				break;
 			}
-			Token *end = expr_find_end(p, 0, NULL);
+			Token *end = expr_find_end(p, 0);
 			type->arr.n_expr = parser_new_expr(p);
 			if (!parse_expr(p, type->arr.n_expr, end)) return false;
 			t->token = end + 1;	/* go past ] */
@@ -606,7 +604,7 @@ static bool parse_type(Parser *p, Type *type) {
 	default:
 		/* TYPE_EXPR */
 		if (parse_expr(p, type->expr = parser_new_expr(p),
-					   expr_find_end(p, -1 /* end as soon as possible */, NULL))) {
+					   expr_find_end(p, -1 /* end as soon as possible */))) {
 			type->kind = TYPE_EXPR;
 		} else {
 			tokr_err(t, "Unrecognized type.");
@@ -791,34 +789,15 @@ static bool parse_block(Parser *p, Block *b) {
 			if (!success) {
 				ret = false;
 			}
-			
 			if (token_is_kw(t->token, KW_RBRACE)) {
-				if (success && stmt->kind == STMT_EXPR) {
-					if (!(stmt->flags & STMT_VOIDED_EXPR)) {
-						b->ret_expr = parser_new_expr(p);
-						*b->ret_expr = stmt->expr;
-						arr_remove_last(&b->stmts); /* only keep this expression in the return value */
-					}
-				}
 				break;
 			}
-			
-			if (success) {
-				if (stmt->kind == STMT_EXPR && !(stmt->flags & STMT_VOIDED_EXPR)) {
-					/* in theory, this should never happen right now */
-					err_print(stmt->where, "Non-voided expression is not the last statement in a block (you might want to add a ';' to the end of this statement).");
-					return false;
-				}
-			}
-			
 			if (t->token->kind == TOKEN_EOF) {
 				tokr_err(t, "Expected '}' to close function body.");
 				return false;
 			}
 			
 		}
-	} else {
-		b->ret_expr = NULL;
 	}
 	b->end = t->token->where;
 	t->token++;	/* move past } */
@@ -1037,7 +1016,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			IfExpr *i = &e->if_;
 			e->kind = EXPR_IF;
 			t->token++;
-			Token *cond_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE, NULL);
+			Token *cond_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE);
 			if (!cond_end) return false;
 			if (!token_is_kw(cond_end, KW_LBRACE)) {
 				t->token = cond_end;
@@ -1072,7 +1051,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				} else {
 					/* elif */
 					t->token++;
-					cond_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE, NULL);
+					cond_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE);
 					if (!cond_end) return false;
 					if (!token_is_kw(cond_end, KW_LBRACE)) {
 						t->token = cond_end;
@@ -1097,7 +1076,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				/* infinite loop */
 				w->cond = NULL;
 			} else {
-				Token *cond_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE, NULL);
+				Token *cond_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE);
 				if (!cond_end) return false;
 				if (!token_is_kw(cond_end, KW_LBRACE)) {
 					t->token = cond_end;
@@ -1164,7 +1143,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				}
 				t->token++;
 			}
-			Token *first_end = expr_find_end(p, EXPR_CAN_END_WITH_COMMA|EXPR_CAN_END_WITH_DOTDOT|EXPR_CAN_END_WITH_LBRACE, NULL);
+			Token *first_end = expr_find_end(p, EXPR_CAN_END_WITH_COMMA|EXPR_CAN_END_WITH_DOTDOT|EXPR_CAN_END_WITH_LBRACE);
 			Expression *first = parser_new_expr(p);
 			if (!parse_expr(p, first, first_end))
 				return false;
@@ -1177,7 +1156,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					/* step */
 					t->token++;
 				    ea->range.step = parser_new_expr(p);
-					Token *step_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE|EXPR_CAN_END_WITH_DOTDOT, NULL);
+					Token *step_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE|EXPR_CAN_END_WITH_DOTDOT);
 					if (!parse_expr(p, ea->range.step, step_end))
 						return false;
 					if (!token_is_kw(step_end, KW_DOTDOT)) {
@@ -1192,7 +1171,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					ea->range.to = NULL; /* infinite loop! */
 				} else {
 					ea->range.to = parser_new_expr(p);
-					Token *to_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE, NULL);
+					Token *to_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE);
 					if (!parse_expr(p, ea->range.to, to_end))
 						return false;
 					if (!token_is_kw(t->token, KW_LBRACE)) {
@@ -1358,7 +1337,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				if (token_is_kw(t->token, KW_COMMA)) {
 					/* new(int, 5) */
 					t->token++;
-					Token *n_end = expr_find_end(p, 0, NULL);
+					Token *n_end = expr_find_end(p, 0);
 					e->new.n = parser_new_expr(p);
 					if (!parse_expr(p, e->new.n, n_end))
 						return false;
@@ -1599,7 +1578,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					/* slice */
 					goto expr_is_slice;
 				}
-				iend = expr_find_end(p, EXPR_CAN_END_WITH_COLON, NULL);
+				iend = expr_find_end(p, EXPR_CAN_END_WITH_COLON);
 				if (iend->kind != TOKEN_KW) {
 					err_print(iend->where, "Expected ] or : after index.");
 					return false;
@@ -1635,7 +1614,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 						s->to = NULL;
 					} else {
 						s->to = parser_new_expr(p);
-						Token *to_end = expr_find_end(p, 0, NULL);
+						Token *to_end = expr_find_end(p, 0);
 						if (!token_is_kw(to_end, KW_RSQUARE)) {
 							err_print(iend->where, "Expected ] at end of slice.");
 							return false;
@@ -1683,7 +1662,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					return false;
 				}
 				t->token++;
-				Token *arg_end = expr_find_end(p, 0, NULL);
+				Token *arg_end = expr_find_end(p, 0);
 				if (!token_is_kw(arg_end, KW_RPAREN)) {
 					err_print(end->where, "Expected ) at end of #%s directive.", directives[t->token->direct]);
 					return false;
@@ -1806,7 +1785,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 			expr_flags |= EXPR_CAN_END_WITH_COMMA;
 		if (ends_with == DECL_END_LBRACE_COMMA)
 			expr_flags |= EXPR_CAN_END_WITH_LBRACE;
-		Token *end = expr_find_end(p, expr_flags, NULL);
+		Token *end = expr_find_end(p, expr_flags);
 		if (!end || !ends_decl(end, ends_with)) {
 			t->token = end;
 			tokr_err(t, "Expected %s at end of declaration.", end_str);
@@ -1859,10 +1838,12 @@ static bool is_decl(Tokenizer *t) {
 
 static bool parse_stmt(Parser *p, Statement *s) {
 	Tokenizer *t = p->tokr;
-	s->flags = 0;
-	if (t->token->kind == TOKEN_EOF)
+	if (t->token->kind == TOKEN_EOF) {
 		tokr_err(t, "Expected statement.");
+		return false;
+	}
 	s->where = t->token->where;
+	s->flags = 0;
 	if (token_is_kw(t->token, KW_RETURN)) {
 		s->kind = STMT_RET;
 		t->token++;
@@ -1873,7 +1854,7 @@ static bool parse_stmt(Parser *p, Statement *s) {
 			return true;
 		}
 		s->ret.flags |= RET_HAS_EXPR;
-		Token *end = expr_find_end(p, 0, NULL);
+		Token *end = expr_find_end(p, 0);
 		if (!end) {
 			while (t->token->kind != TOKEN_EOF) t->token++; /* move to end of file */
 			return false;
@@ -1896,23 +1877,22 @@ static bool parse_stmt(Parser *p, Statement *s) {
 		return true;
 	} else {
 		s->kind = STMT_EXPR;
-		bool is_vbs;
-		Token *end = expr_find_end(p, 0, &is_vbs);
+		Token *end = expr_find_end(p, 0);
 		if (!end) {
 			tokr_err(t, "No semicolon found at end of statement.");
 			while (t->token->kind != TOKEN_EOF) t->token++; /* move to end of file */
 			return false;
 		}
-		if (is_vbs || token_is_kw(end, KW_SEMICOLON)) {
-			s->flags |= STMT_VOIDED_EXPR;
-		}
+		
 	    bool success = parse_expr(p, &s->expr, end);
 		
 		/* go past end of expr regardless of whether successful or not */
-		if (token_is_kw(end, KW_SEMICOLON))
+		if (token_is_kw(end, KW_SEMICOLON)) {
 			t->token = end + 1;	/* skip ; */
-		else
+		} else  {
+			s->flags |= STMT_EXPR_NO_SEMICOLON;
 			t->token = end;
+		}
 		
 		return success;
 	}
@@ -1963,7 +1943,7 @@ static void fprint_block(FILE *out,  Block *b) {
 		fprint_stmt(out, stmt);
 	}
 	fprintf(out, "}");
-	if (b->ret_expr) {
+	if (parse_printing_after_types && b->ret_expr) {
 		fprintf(out, " returns ");
 		fprint_expr(out, b->ret_expr);
 	}
@@ -2200,8 +2180,6 @@ static void fprint_decl(FILE *out, Declaration *d) {
 
 static void fprint_stmt(FILE *out, Statement *s) {
 	PARSE_PRINT_LOCATION(s->where);
-	if (s->flags & STMT_VOIDED_EXPR)
-		fprintf(out, "(void)");
 	switch (s->kind) {
 	case STMT_DECL:
 		fprint_decl(out, &s->decl);

@@ -272,7 +272,7 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 	*out = *in;
 	switch (in->kind) {
 	case STMT_RET:
-		if (in->flags & RET_HAS_EXPR)
+		if (in->ret.flags & RET_HAS_EXPR)
 			copy_expr(c, &out->ret.expr, &in->ret.expr);
 		break;
 	case STMT_EXPR:

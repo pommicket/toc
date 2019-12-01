@@ -650,14 +650,13 @@ enum {
 	  RET_HAS_EXPR = 0x01,
 };
 typedef struct Return {
-	uint16_t flags;
+	U16 flags;
 	Expression expr;
 } Return;
 
 enum {
-	  STMT_VOIDED_EXPR = 0x01, /* the "4;" in fn () { 4; } is a voided expression, but the "4" in fn () int { 4 } is not */
+	  STMT_EXPR_NO_SEMICOLON = 0x01,
 };
-
 typedef struct Statement {
 	Location where;
 	StatementKind kind;

@@ -1665,16 +1665,28 @@ static bool types_block(Typer *tr, Block *b) {
 	Block *prev_block = tr->block;
 	tr->block = b;
 	if (!block_enter(b, b->stmts, SCOPE_CHECK_REDECL)) return false;
+	b->ret_expr = NULL;
 	arr_foreach(b->stmts, Statement, s) {
 		if (!types_stmt(tr, s))
 			success = false;
-	}
-	if (success && b->ret_expr) {
-		if (!types_expr(tr, b->ret_expr))
-			success = false;
-		if (b->ret_expr->type.kind == TYPE_VOID) {
-			err_print(b->ret_expr->where, "Cannot return void value.");
-		    success = false;
+		if (s->kind == STMT_EXPR && (s->flags & STMT_EXPR_NO_SEMICOLON)) {
+			/* not voided */
+			Expression *e = &s->expr;
+			if (e->type.kind == TYPE_VOID) {
+				if (!(e->kind == EXPR_BLOCK
+					  || e->kind == EXPR_IF
+					  || e->kind == EXPR_WHILE
+					  || e->kind == EXPR_EACH)) {
+					err_print(e->where, "void expression must be followed by ;");
+				}
+			} else {
+				if (s != (Statement *)arr_last(b->stmts)) {
+					err_print(e->where, "Return value must be the last statement in a block.");
+					return false;
+				}
+				b->ret_expr = e;
+				arr_remove_last(&b->stmts);
+			}
 		}
 	}
 	block_exit(b, b->stmts);
