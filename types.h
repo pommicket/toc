@@ -299,7 +299,9 @@ typedef enum {
 			  TYPE_TYPE,
 			  TYPE_EXPR, /* just use this expression as the type. this kind of type doesn't exist after resolving. */
 			  TYPE_STRUCT
+#define TYPE_COUNT (TYPE_STRUCT+1)
 } TypeKind;
+
 
 typedef enum {
 			  BUILTIN_I8,

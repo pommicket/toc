@@ -29,10 +29,9 @@ static bool cgen_defs_block(CGenerator *g, Block *b);
 static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 
 #define cgen_recurse_subexprs_fn_simple(fn, decl_f, block_f)	\
-	if (cgen_should_gen_fn(fn)) {								\
 	if (!fn_enter(fn, 0)) return false;							\
 	FnExpr *prev_fn = g->f##n;									\
-    g->f##n = fn;												\
+	g->f##n = fn;												\
 	arr_foreach(fn->params, Declaration, param)					\
 		if (!decl_f(g, param))									\
 			return false;										\
@@ -42,8 +41,7 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 	if (!block_f(g, &fn->body))									\
 		return false;											\
 	fn_exit(fn);												\
-	g->f##n = prev_fn;											\
-	}															
+	g->f##n = prev_fn;										
 
 /* calls f on every sub-expression of e, block_f on every sub-block, and decl_f on every sub-declaration. */
 #define cgen_recurse_subexprs(g, e, f, block_f, decl_f)					\
@@ -136,17 +134,17 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 			for (U64 i = 0; i < fn->instances.cap; i++) {				\
 				if (fn->instances.occupied[i]) {						\
 					cgen_recurse_subexprs_fn_simple((&(*data)->fn), decl_f, block_f); \
-				}														\
-				data++;													\
-			}															\
-		} else {														\
-			cgen_recurse_subexprs_fn_simple(fn, decl_f, block_f);		\
+				}																	\
+				data++;																\
+			}														\
+	 	} else {															\
+		   cgen_recurse_subexprs_fn_simple(fn, decl_f, block_f);		\
 		}																\
 	} break;															\
-	case EXPR_NEW:														\
-	if (e->new.n && !f(g, e->new.n))									\
-		return false;													\
-	break;																\
+	case EXPR_NEW:													\
+		if (e->new.n && !f(g, e->new.n))								\
+			return false;												\
+		break;															\
 	}
 
 static bool cgen_block_enter(CGenerator *g, Block *b) {

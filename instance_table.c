@@ -1,3 +1,12 @@
+/* 
+   TODO: better hash functions, especially for integers 
+   (right now, nearby integers are close together in hash 
+   space, which is bad with the way these hash tables
+   are designed)
+*/
+
+/* NOTE: any time you see 0x then 16 hexadecimal digits, that's probably a random number for hashing */
+
 /*
   hash tables are initialized by setting them to {0}, e.g.
   HashTable x = {0};
@@ -60,8 +69,55 @@ static U64 f64_hash(F64 f) {
 	return hash;
 }
 
-static void fprint_val(FILE *f, Value v, Type *t); /* DELME */
-static void fprint_type(FILE *out, Type *t);		   /* !! */
+static U64 type_hash(Type *t) {
+	static const U64 starters[TYPE_COUNT] = {
+											 0x40d8675d0f148df7,
+											 0xee4db91f31fdf2e1,
+											 0x94963ca71f7f0df4,
+											 0x95b9d36f45f27cf2,
+											 0x68d393d7cade0570,
+											 0x8191b5178d728e8c,
+											 0x50da97f1211b2423,
+											 0xc3977306abd0ae6c,
+											 0x87ea684427e1c521,
+											 0xcee5fd6d6cbdfe23,
+											 0xd80dd2469d6e7c1b
+	};
+	U64 hash = starters[t->kind];
+	assert(t->flags & TYPE_IS_RESOLVED);
+	switch (t->kind) {
+	case TYPE_BUILTIN:
+		return hash + (U64)t->builtin * 0x1307787dfff73417;
+	case TYPE_VOID:
+	case TYPE_UNKNOWN:
+	case TYPE_TYPE:
+		return hash;
+	case TYPE_TUPLE:
+		arr_foreach(t->tuple, Type, sub)
+			hash = hash * type_hash(sub) + 0x16225b0aa9993299;
+		return hash;
+	case TYPE_FN:
+		arr_foreach(t->fn.types, Type, sub)
+			hash = hash * type_hash(sub) + 0x2092d851ab2008de;
+		return hash;
+	case TYPE_PTR:
+		hash += type_hash(t->ptr) * 0x277caae472151119 + 0xf5c6ae7b4dae3bcf;
+		return hash;
+	case TYPE_SLICE:
+		hash += type_hash(t->slice) * 0x67a571620f9a5d6a + 0xc3f91e92c844ab1f;
+		return hash;
+	case TYPE_STRUCT:
+		hash += (U64)t->struc;
+		return hash;
+	case TYPE_ARR:
+		hash += type_hash(t->arr.of) * 0x3b6256104800a414 + 0xa901e68bbd8968a1
+			+ 0xbf79c81a3e68e504 * t->arr.n;
+		return hash;
+	case TYPE_EXPR: break;
+	}
+	assert(0); return 0;
+}
+
 /* Note that for these value hashing functions, values of different types may collide */
 static U64 val_ptr_hash(void *v, Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
@@ -97,7 +153,8 @@ static U64 val_ptr_hash(void *v, Type *t) {
 		return hash;
 	}
 	case TYPE_PTR: return (U64)*(void **)v;
-	case TYPE_TYPE: return (U64)*(Type **)v;
+	case TYPE_TYPE:
+		return type_hash(*(Type **)v);
 	case TYPE_ARR: {
 		U32 x = 1;
 		U64 hash = 0;
@@ -165,8 +222,10 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 		return *(FnExpr **)u == *(FnExpr **)v;
 	case TYPE_PTR:
 		return *(void **)u == *(void **)v;
-	case TYPE_TYPE:
-		return type_eq(*(Type **)u, *(Type **)v);
+	case TYPE_TYPE: {
+		bool ret = type_eq(*(Type **)u, *(Type **)v);
+		return ret;
+	}
 	case TYPE_TUPLE: {
 		Value *us = *(Value **)u;
 		Value *vs = *(Value **)v;

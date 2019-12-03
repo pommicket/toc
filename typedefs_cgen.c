@@ -4,7 +4,6 @@ static bool typedefs_expr(CGenerator *g, Expression *e);
 
 static bool typedefs_block(CGenerator *g, Block *b) {
 	Block *prev = g->block;
-	printf("%s\n",b->stmts[0].where.code);
 	if (!cgen_block_enter(g, b))
 		return false;
 	arr_foreach(b->stmts, Statement, s)
@@ -85,10 +84,8 @@ static bool typedefs_decl(CGenerator *g, Declaration *d) {
 		}
 	}
 	if (d->flags & DECL_HAS_EXPR) {
-		if (!(d->flags & DECL_IS_CONST) || d->expr.kind == EXPR_FN) {
-			if (!typedefs_expr(g, &d->expr))
-				return false;
-		}
+		if (!typedefs_expr(g, &d->expr))
+			return false;
 	}
 	return true;
 }
