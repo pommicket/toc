@@ -167,10 +167,10 @@ static Keyword builtin_type_to_kw(BuiltinType t) {
 
 /* returns the number of characters written, not including the null character */
 static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
-	if ((t->flags & TYPE_IS_RESOLVED) && t->was_expr) {
-		/* TODO: improve this (see also: case TYPE_EXPR) */
-		return str_copy(buffer, bufsize, "<type expression>");
-	}
+	/* if ((t->flags & TYPE_IS_RESOLVED) && t->was_expr) { */
+	/* 	/\* TODO: improve this (see also: case TYPE_EXPR) *\/ */
+	/* 	return str_copy(buffer, bufsize, "<type expression>"); */
+	/* } */
 	switch (t->kind) {
 	case TYPE_VOID:
 		return str_copy(buffer, bufsize, "void");

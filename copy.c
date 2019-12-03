@@ -60,10 +60,9 @@ static void copy_val(Allocator *a, Value *out, Value *in, Type *t) {
 	}
 }
 
-/* does not work on resolved types */
+/* only works on unresolved types */
 static void copy_type(Copier *c, Type *out, Type *in) {
 	assert(!(in->flags & TYPE_IS_RESOLVED));
-
 	*out = *in;
 	switch (in->kind) {
 	case TYPE_BUILTIN:
@@ -91,7 +90,9 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 		}
 	} break;
 	case TYPE_ARR:
-		/* if (!(in->flags & TYPE_IS_RESOLVED)) { */
+		/* if (in->flags & TYPE_IS_RESOLVED) { */
+		/* 	out->arr.n = in->arr.n; */
+		/* } else { */
 		out->arr.n_expr = allocr_malloc(c->allocr, sizeof *out->arr.n_expr);
 		copy_expr(c, out->arr.n_expr, in->arr.n_expr);
 		/* } */
@@ -111,12 +112,13 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 		*out->struc = *in->struc;
 		size_t nfields = arr_len(in->struc->fields);
 		out->struc->fields = NULL;
+
 		arr_set_lena(&out->struc->fields, nfields, c->allocr);
 		for (size_t i = 0; i < nfields; i++) {
 			Field *fout = &out->struc->fields[i];
 			Field *fin = &in->struc->fields[i];
 			*fout = *fin;
-			copy_type(c, fout->type, fin->type);
+			copy_type(c, fout->type = allocr_malloc(c->allocr, sizeof *fout->type), fin->type);
 		}
 	} break;
 	}

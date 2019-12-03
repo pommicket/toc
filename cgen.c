@@ -318,22 +318,6 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
 		} else if (t->struc->c.id) {
 			cgen_ident_id(g, t->struc->c.id);
 		} else {
-			#if 0
-			/* TODO: DELME */
-			cgen_write(g, "struct {");
-			g->indent_lvl++;
-			cgen_nl(g);
-			arr_foreach(t->struc.fields, Field, f) {
-				if (!cgen_type_pre(g, f->type, where)) return false;
-				cgen_write(g, " ");
-				cgen_ident(g, f->name);
-				if (!cgen_type_post(g, f->type, where)) return false;
-				cgen_write(g, ";");
-				cgen_nl(g);
-			}
-			g->indent_lvl--;
-			cgen_write(g, "}");
-			#endif
 			assert(0);
 		}
 		break;
@@ -1944,6 +1928,8 @@ static bool cgen_defs_block(CGenerator *g, Block *b) {
 		if (!cgen_defs_stmt(g, s))
 			return false;
 	}
+	if (b->ret_expr && !cgen_defs_expr(g, b->ret_expr))
+		return false;
 	return true;
 }
 

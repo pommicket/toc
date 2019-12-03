@@ -23,11 +23,11 @@ y:s;
 };
 
 main @= fn() {
-x : pair(int);
-y : pair(int);
-z : pair(float);
-x[0] = 7;
-puti(x[0]);
-z[0] = 3.3;
-putf(z[0]);
+// a : pair(int);
+b : pair(int);
+c : pair(float);
+// a.x = 5;
+// puti(a.x);
+c.x = 13.3;
+// putf(c.x);
 };

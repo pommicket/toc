@@ -1,15 +1,15 @@
 /* Includes all of toc's files */
 #include <assert.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
 #include <stdarg.h>
 #include <string.h>
-#include <ctype.h>
 #include <limits.h>
-#include <inttypes.h>
-#include <stdbool.h>
 #include <float.h>
+#include <stdbool.h>
+#include <inttypes.h>
 
 #include "types.h"
 #include "allocator.c"

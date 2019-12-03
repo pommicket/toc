@@ -1407,6 +1407,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 		case BINARY_EQ:
 		case BINARY_NE: {
 			bool valid = false;
+			assert(lhs_type->flags & TYPE_IS_RESOLVED);
+			assert(rhs_type->flags & TYPE_IS_RESOLVED);
+		    
+			
 			if (o == BINARY_SET) {
 				valid = type_eq(lhs_type, rhs_type);
 				if (lhs_type->kind == TYPE_TYPE) {

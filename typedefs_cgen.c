@@ -1,13 +1,17 @@
 static bool typedefs_stmt(CGenerator *g, Statement *s);
 static bool typedefs_decl(CGenerator *g, Declaration *d);
+static bool typedefs_expr(CGenerator *g, Expression *e);
 
 static bool typedefs_block(CGenerator *g, Block *b) {
 	Block *prev = g->block;
+	printf("%s\n",b->stmts[0].where.code);
 	if (!cgen_block_enter(g, b))
 		return false;
 	arr_foreach(b->stmts, Statement, s)
 		if (!typedefs_stmt(g, s))
 			return false;
+	if (b->ret_expr && !typedefs_expr(g, b->ret_expr))
+		return false;
 	cgen_block_exit(g, prev);
 	return true;
 }
@@ -17,6 +21,18 @@ static bool typedefs_expr(CGenerator *g, Expression *e) {
 	if (e->kind == EXPR_FN) {
 		/* needs to go before decls_cgen.c... */
 		e->fn.c.id = g->ident_counter++;
+	}
+	if (e->kind == EXPR_TYPE && e->typeval.kind == TYPE_STRUCT) {
+		StructDef *sdef = e->typeval.struc;
+		if (sdef->c.id || sdef->c.name) {
+			/* we've already done this */
+		} else {
+			cgen_write(g, "struct ");
+			IdentID id = g->ident_counter++;
+			cgen_ident_id(g, id);
+			sdef->c.id = id;
+			cgen_write(g, ";");
+		}
 	}
 	return true;
 

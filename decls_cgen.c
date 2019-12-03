@@ -62,6 +62,8 @@ static bool cgen_decls_block(CGenerator *g, Block *b) {
 	arr_foreach(b->stmts, Statement, s)
 		if (!cgen_decls_stmt(g, s))
 			return false;
+	if (b->ret_expr && !cgen_decls_expr(g, b->ret_expr))
+		return false;
 	cgen_block_exit(g, prev);
 	return true;
 }
