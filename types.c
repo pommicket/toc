@@ -1762,12 +1762,14 @@ static bool types_decl(Typer *tr, Declaration *d) {
 				success = false;
 				goto ret;
 			}
-			Value *val = d->type.kind == TYPE_TUPLE ? &d->val.tuple[i] : &d->val;
-			if (!type_resolve(tr, val->type, d->where)) return false;
-			if (val->type->kind == TYPE_TUPLE) {
-				err_print(d->where, "You can't declare a new type to be a tuple.");
-				success = false;
-				goto ret;
+			if (d->flags & DECL_HAS_EXPR) {
+				Value *val = d->type.kind == TYPE_TUPLE ? &d->val.tuple[i] : &d->val;
+				if (!type_resolve(tr, val->type, d->where)) return false;
+				if (val->type->kind == TYPE_TUPLE) {
+					err_print(d->where, "You can't declare a new type to be a tuple.");
+					success = false;
+					goto ret;
+				}
 			}
 		} else if (!(d->flags & DECL_IS_CONST) && t->kind == TYPE_FN && t->fn.constness) {
 			for (size_t p = 0; p < arr_len(t->fn.types)-1; p++) {

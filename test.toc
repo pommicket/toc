@@ -7,33 +7,30 @@
 // ");
 // };
 
-// Arr @= fn (t @ Type) Type {
-// 	struct {
-// 		   data : []t;
-// 		   len, cap : u64;
-// 	}
-// };
+Arr @= fn (t @ Type) Type {
+	struct {
+		   data : []t;
+		   len, cap : u64;
+	}
+};
 
 // todo: test that t @ type doesn't cause problems 
-// arr_add @= fn(t @ Type, a : &Arr(t), x : t) {
-// 		if a.len >= a.cap {
-// 		   a.cap = a.cap * 2 + 2;
-// 		   new_data := new(t, a.cap);
-// 		   each i := 0..a.len {
-// 		   		new_data[i] = a.data[i];
-// 		   }
-// 		   a.data = new_data;
-// 		}
-// 		a.data[a.len] = x;
-// 		a.len += 1;
-// };
+arr_add @= fn(t @ Type, a : &Arr(t), x : t) {
+		if a.len >= a.cap {
+		   a.cap = a.cap * 2 + 2;
+		   new_data := new(t, a.cap);
+		   each i := 0..a.len {
+		   		new_data[i] = a.data[i];
+		   }
+		   a.data = new_data;
+		}
+		a.data[a.len] = x;
+		a.len += 1;
+};
 
-t @= fn(t : Type) Type { t };
 
-// f @= fn(x : &t(float)){};
 
 main @= fn() {
-	 x : &t(float);
 // 	 arr : Arr(int);
 // 	 // arr_add(int, &arr, 5);
 // 	 // arr_add(int, &arr, 10);
