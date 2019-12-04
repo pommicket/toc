@@ -212,14 +212,20 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	
 	entered_fn = true;
 	arr_foreach(f->params, Declaration, decl) {
-		if (!types_decl(tr, decl)) return false;
+		if (!types_decl(tr, decl)) {
+			success = false;
+			goto ret;
+		}
 		if (decl->type.kind == TYPE_TUPLE) {
 			err_print(decl->where, "Functions can't have tuple parameters.");
-			return false;
+			success = false;
+			goto ret;
 		}
 			
-		if (!type_resolve(tr, &decl->type, where))
-			return false;
+		if (!type_resolve(tr, &decl->type, where)) {
+			success = false;
+			goto ret;
+		}
 		U32 is_at_all_const = decl->flags & (DECL_IS_CONST | DECL_SEMI_CONST);
 		if (is_at_all_const) {
 			if (!t->fn.constness) {
@@ -276,8 +282,10 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	if (f->ret_decls && f->ret_type.kind == TYPE_VOID /* haven't found return type yet */) {
 		/* find return type */
 		arr_foreach(f->ret_decls, Declaration, d) {
-			if (!types_decl(tr, d))
-				return false;
+			if (!types_decl(tr, d)) {
+			    success = false;
+				goto ret;
+			}
 		}
 		if (arr_len(f->ret_decls) == 1 && arr_len(f->ret_decls[0].idents) == 1) {
 			f->ret_type = f->ret_decls[0].type;
@@ -1743,36 +1751,37 @@ static bool types_decl(Typer *tr, Declaration *d) {
 				d->flags |= DECL_FOUND_VAL;
 			}
 		}
-		for (size_t i = 0; i < arr_len(d->idents); i++) {
-			Type *t = d->type.kind == TYPE_TUPLE ? &d->type.tuple[i] : &d->type;
-			Value *val = d->type.kind == TYPE_TUPLE ? &d->val.tuple[i] : &d->val;
-			if (t->kind == TYPE_TYPE) {
-				if (!(d->flags & DECL_IS_CONST)) {
-					err_print(d->where, "Cannot declare non-constant type.");
-					success = false;
-					goto ret;
-				}
-				if (!type_resolve(tr, val->type, d->where)) return false;
-				if (val->type->kind == TYPE_TUPLE) {
-					err_print(d->where, "You can't declare a new type to be a tuple.");
-					success = false;
-					goto ret;
-				}
-			} else if (!(d->flags & DECL_IS_CONST) && t->kind == TYPE_FN && t->fn.constness) {
-				for (size_t p = 0; p < arr_len(t->fn.types)-1; p++) {
-					if (t->fn.constness[p] == CONSTNESS_YES) {
-						err_print(d->where, "You can't have a pointer to a function with constant parameters.");
-						success = false;
-						goto ret;
-					}
-				}
-				/* make constness NULL, so that semi-constant parameters turn into non-constant arguments */
-				t->fn.constness = NULL;
-			}
-		}
-
 				
 	}
+	
+	for (size_t i = 0; i < arr_len(d->idents); i++) {
+		Type *t = d->type.kind == TYPE_TUPLE ? &d->type.tuple[i] : &d->type;
+		if (t->kind == TYPE_TYPE) {
+			if (!(d->flags & DECL_IS_CONST)) {
+				err_print(d->where, "Cannot declare non-constant type.");
+				success = false;
+				goto ret;
+			}
+			Value *val = d->type.kind == TYPE_TUPLE ? &d->val.tuple[i] : &d->val;
+			if (!type_resolve(tr, val->type, d->where)) return false;
+			if (val->type->kind == TYPE_TUPLE) {
+				err_print(d->where, "You can't declare a new type to be a tuple.");
+				success = false;
+				goto ret;
+			}
+		} else if (!(d->flags & DECL_IS_CONST) && t->kind == TYPE_FN && t->fn.constness) {
+			for (size_t p = 0; p < arr_len(t->fn.types)-1; p++) {
+				if (t->fn.constness[p] == CONSTNESS_YES) {
+					err_print(d->where, "You can't have a pointer to a function with constant parameters.");
+					success = false;
+					goto ret;
+				}
+			}
+			/* make constness NULL, so that semi-constant parameters turn into non-constant arguments */
+			t->fn.constness = NULL;
+		}
+	}
+
 	size_t n_idents = arr_len(d->idents);
 	if (d->type.kind == TYPE_TUPLE) {
 		if (n_idents != arr_len(d->type.tuple)) {

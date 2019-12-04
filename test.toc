@@ -1,34 +1,39 @@
-puti @= fn(x: int) {
-	 #C("printf(\"%ld\\n\", (long)x);
-");
-};
-putf @= fn(x: float) {
-	 #C("printf(\"%f\\n\", (double)x);
-");
-};
+// puti @= fn(x: int) {
+// 	 #C("printf(\"%ld\\n\", (long)x);
+// ");
+// };
+// putf @= fn(x: float) {
+// 	 #C("printf(\"%f\\n\", (double)x);
+// ");
+// };
 
-Arr @= fn (t @ Type) Type {
-	struct {
-		   data : []t;
-		   len, cap : u64;
-	}
-};
+// Arr @= fn (t @ Type) Type {
+// 	struct {
+// 		   data : []t;
+// 		   len, cap : u64;
+// 	}
+// };
 
 // todo: test that t @ type doesn't cause problems 
-arr_add @= fn(t @ Type, a : &Arr(t), x : t) {
-		if a.len >= a.cap {
-		   a.cap = a.cap * 2 + 2;
-		   new_data := new(t, a.cap);
-		   each i := 0..a.len {
-		   		new_data[i] = a.data[i];
-		   }
-		   a.data = new_data;
-		}
-		a.data[a.len] = x;
-		a.len += 1;
-};
+// arr_add @= fn(t @ Type, a : &Arr(t), x : t) {
+// 		if a.len >= a.cap {
+// 		   a.cap = a.cap * 2 + 2;
+// 		   new_data := new(t, a.cap);
+// 		   each i := 0..a.len {
+// 		   		new_data[i] = a.data[i];
+// 		   }
+// 		   a.data = new_data;
+// 		}
+// 		a.data[a.len] = x;
+// 		a.len += 1;
+// };
 
-// main @= fn() {
+t @= fn(t : Type) Type { t };
+
+// f @= fn(x : &t(float)){};
+
+main @= fn() {
+	 x : &t(float);
 // 	 arr : Arr(int);
 // 	 // arr_add(int, &arr, 5);
 // 	 // arr_add(int, &arr, 10);
@@ -36,7 +41,7 @@ arr_add @= fn(t @ Type, a : &Arr(t), x : t) {
 // 	 // each i := 0..arr.len - 1 {
 // 	 // 	  puti(arr.data[i]);
 // 	 // }
-// };
+};
 
 // t @= fn(x @ Type) Type { struct { t: x; } };
 // // pass the wrong thing to t, and the error is in the wrong place
