@@ -193,7 +193,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	t->fn.constness = NULL; /* OPTIM: constness doesn't need to be a dynamic array */
 	bool success = true;
 	bool entered_fn = false;
-	bool added_param_decls = false;
+	size_t param_idx;
 	FnExpr *prev_fn = tr->fn;
 	
 	FnExpr fn_copy;
@@ -202,31 +202,33 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 		copy_fn_expr(&cop, &fn_copy, f, false);
 		f = &fn_copy;
 	}
-	
 	size_t idx = 0;
 	bool has_constant_params = false;
 	Type *ret_type = typer_arr_add(tr, &t->fn.types);
+
 	if (!fn_enter(f, SCOPE_CHECK_REDECL))
 		return false;
 	tr->fn = f;
-	
+	size_t nparams = arr_len(f->params);
 	entered_fn = true;
-	arr_foreach(f->params, Declaration, decl) {
-		if (!types_decl(tr, decl)) {
+	for (param_idx = 0; param_idx < nparams; param_idx++) {
+		Declaration *param = &f->params[param_idx];
+		print_location(param->where);
+		if (!types_decl(tr, param)) {
 			success = false;
 			goto ret;
 		}
-		if (decl->type.kind == TYPE_TUPLE) {
-			err_print(decl->where, "Functions can't have tuple parameters.");
+		if (param->type.kind == TYPE_TUPLE) {
+			err_print(param->where, "Functions can't have tuple parameters.");
 			success = false;
 			goto ret;
 		}
 			
-		if (!type_resolve(tr, &decl->type, where)) {
+		if (!type_resolve(tr, &param->type, where)) {
 			success = false;
 			goto ret;
 		}
-		U32 is_at_all_const = decl->flags & (DECL_IS_CONST | DECL_SEMI_CONST);
+		U32 is_at_all_const = param->flags & (DECL_IS_CONST | DECL_SEMI_CONST);
 		if (is_at_all_const) {
 			if (!t->fn.constness) {
 				has_constant_params = true;
@@ -235,31 +237,26 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 				}
 			}
 		}
-		if (decl->flags & DECL_HAS_EXPR) {
-			if (decl->expr.kind != EXPR_VAL) {
+		if (param->flags & DECL_HAS_EXPR) {
+			if (param->expr.kind != EXPR_VAL) {
 				Value val;
-				if (!eval_expr(tr->evalr, &decl->expr, &val)) {
-					info_print(decl->where, "Was trying to evaluate default arguments (which must be constants!)");
-					for (Declaration *p = f->params; p != decl; p++) {
-						if (p->flags & DECL_IS_CONST)
-							arr_foreach(p->idents, Identifier, ident)
-								arr_remove_last(&(*ident)->decls);
-					}
+				if (!eval_expr(tr->evalr, &param->expr, &val)) {
+					info_print(param->where, "Was trying to evaluate default arguments (which must be constants!)");
 					success = false;
 					goto ret;
 				}
-				decl->expr.kind = EXPR_VAL;
-				decl->expr.val = val;
+				param->expr.kind = EXPR_VAL;
+				param->expr.val = val;
 			}
 		}
-		for (size_t i = 0; i < arr_len(decl->idents); i++) {
+		for (size_t i = 0; i < arr_len(param->idents); i++) {
 			Type *param_type = typer_arr_add(tr, &t->fn.types);
-			*param_type = decl->type;
+			*param_type = param->type;
 			if (has_constant_params) {
 				Constness constn;
-				if (decl->flags & DECL_IS_CONST) {
+				if (param->flags & DECL_IS_CONST) {
 					constn = CONSTNESS_YES;
-				} else if (decl->flags & DECL_SEMI_CONST) {
+				} else if (param->flags & DECL_SEMI_CONST) {
 					constn = CONSTNESS_SEMI;
 				} else {
 					constn = CONSTNESS_NO;
@@ -269,15 +266,13 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 			idx++;
 		}
 
-		if (decl->flags & DECL_IS_CONST) {
+		if (param->flags & DECL_IS_CONST) {
 			/* allow constant declarations to be used in other parameters, e.g. fn(x @ int, y := x) */
-			arr_foreach(decl->idents, Identifier, ident) {
-				ident_add_decl(*ident, decl, &f->body);
+			arr_foreach(param->idents, Identifier, ident) {
+				ident_add_decl(*ident, param, &f->body);
 			}
 		}
 	}
-	added_param_decls = true;
-
 	
 	if (f->ret_decls && f->ret_type.kind == TYPE_VOID /* haven't found return type yet */) {
 		/* find return type */
@@ -315,20 +310,18 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	}
  ret:
 	/* cleanup */
-	
 	if (entered_fn) {
 		fn_exit(f);
 		tr->fn = prev_fn;
-		
-		if (added_param_decls) {
-			/* remove constant parameter ident decls */
-			arr_foreach(f->params, Declaration, param) {
-				if (param->flags & DECL_IS_CONST) {
-					arr_foreach(param->idents, Identifier, ident)
-						arr_remove_last(&(*ident)->decls);
-				}
-			}
+
+		/* remove declarations from parameters we've already dealt with */
+		for (size_t i = 0; i < param_idx; i++) {
+			Declaration *p = &f->params[i];
+			if (p->flags & DECL_IS_CONST)
+				arr_foreach(p->idents, Identifier, ident)
+					arr_remove_last(&(*ident)->decls);
 		}
+	
 	}
     return success;
 }
@@ -635,6 +628,7 @@ static bool arg_is_const(Expression *arg, Constness constness) {
 }
 
 
+/* MUST be called after type_of_fn. */
 /* pass NULL for instance if this isn't an instance */
 static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where,
 					 Instance *instance) {
@@ -1182,7 +1176,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 				bool should_be_evald = arg_is_const(&new_args[i], fn_type->constness[i]);
 				if (should_be_evald) {
 					Value *arg_val = typer_arr_add(tr, &table_index.tuple);
-
 					if (!eval_expr(tr->evalr, &new_args[i], arg_val)) {
 						if (tr->evalr->enabled) {
 							info_print(new_args[i].where, "(error occured while trying to evaluate compile-time argument, argument #%lu)", 1+(unsigned long)i);

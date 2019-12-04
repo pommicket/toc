@@ -44,12 +44,25 @@ static void arr_resva_(void **arr, size_t n, size_t item_sz, Allocator *a) {
 	}		
 }
 
+static void arr_clear_(void **arr) {
+	if (*arr) {
+		free(arr_hdr(*arr));
+		*arr = NULL;
+	}
+}
 
 static void arr_set_len_(void **arr, size_t n, size_t item_sz) {
+	if (n == 0) {
+		arr_clear_(arr);
+		return;
+	}
 	arr_resv_(arr, n, item_sz);
 	arr_hdr(*arr)->len = n;
 }
 static void arr_set_lena_(void **arr, size_t n, size_t item_sz, Allocator *a) {
+	if (n == 0) {
+		/* OPTIM: arr_cleara */
+	}
 	arr_resva_(arr, n, item_sz, a);
 	arr_hdr(*arr)->len = n;
 }
@@ -83,12 +96,6 @@ static void *arr_adda_(void **arr, size_t item_sz, Allocator *a) {
 	return &(((char *)hdr->data)[(hdr->len++) * item_sz]);
 }
 
-static void arr_clear_(void **arr) {
-	if (*arr) {
-		free(arr_hdr(*arr));
-		*arr = NULL;
-	}
-}
 
 static void *arr_last_(void *arr, size_t item_sz) {
 	if (arr) {
