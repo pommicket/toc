@@ -147,6 +147,7 @@ static void copy_fn_expr(Copier *c, FnExpr *fout, FnExpr *fin, bool copy_body) {
 static void copy_expr(Copier *c, Expression *out, Expression *in) {
 	Allocator *a = c->allocr;
 	*out = *in;
+	assert(!(in->flags & EXPR_FOUND_TYPE));
 	switch (in->kind) {
 	case EXPR_LITERAL_FLOAT:
 	case EXPR_LITERAL_INT:
@@ -212,11 +213,14 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		CallExpr *cin = &in->call;
 		CallExpr *cout = &out->call;
 		copy_expr(c, cout->fn = allocr_malloc(a, sizeof *cout->fn), cin->fn);
-		size_t nargs = arr_len(cin->arg_exprs);
+		size_t nargs = arr_len(cin->args);
 		cout->arg_exprs = NULL;
-		arr_set_lena(&cout->arg_exprs, nargs, a);
+		arr_set_lena(&cout->args, nargs, a);
 		for (size_t i = 0; i < nargs; i++) {
-			copy_expr(c, cout->arg_exprs + i, cin->arg_exprs + i);
+			Argument *arg_in = &cin->args[i];
+			Argument *arg_out = &cout->args[i];
+			*arg_out = *arg_in;
+			copy_expr(c, &arg_out->val, &arg_in->val);
 		}
 	} break;
 	case EXPR_BLOCK:
