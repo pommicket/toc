@@ -197,6 +197,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	FnExpr *prev_fn = tr->fn;
 	
 	FnExpr fn_copy;
+		
 	if (!(flags & TYPE_OF_FN_NO_COPY_EVEN_IF_CONST) && fn_has_any_const_params(f)) {
 		Copier cop = copier_create(tr->allocr, tr->block);
 		copy_fn_expr(&cop, &fn_copy, f, false);
@@ -287,6 +288,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 		} else {
 			f->ret_type.kind = TYPE_TUPLE;
 			f->ret_type.flags = TYPE_IS_RESOLVED;
+			f->ret_type.was_expr = NULL;
 			f->ret_type.tuple = NULL;
 			arr_foreach(f->ret_decls, Declaration, d) {
 				arr_foreach(d->idents, Identifier, i) {
@@ -1176,6 +1178,9 @@ static bool types_expr(Typer *tr, Expression *e) {
 				bool should_be_evald = arg_is_const(&new_args[i], fn_type->constness[i]);
 				if (should_be_evald) {
 					Value *arg_val = typer_arr_add(tr, &table_index.tuple);
+				    printf("Evaluating expression: ");
+					print_location(new_args[i].where);
+					
 					if (!eval_expr(tr->evalr, &new_args[i], arg_val)) {
 						if (tr->evalr->enabled) {
 							info_print(new_args[i].where, "(error occured while trying to evaluate compile-time argument, argument #%lu)", 1+(unsigned long)i);
