@@ -2,11 +2,12 @@ puti ::= fn(x: int) {
 	 #C("printf(\"%ld\\n\", (long)x);
 ");
 };
-// putf ::= fn(x: float) {
-// 	 #C("printf(\"%f\\n\", (double)x);
-// ");
-// };
+putf ::= fn(x: float) {
+	 #C("printf(\"%f\\n\", (double)x);
+");
+};
 
+// it would be nice if Arr.data.len == Arr.len (: but this will require some C code...
 Arr ::= fn (t :: Type) Type {
 	struct {
 		   data : []t;
@@ -28,13 +29,23 @@ arr_add ::= fn(t :: Type, a : &Arr(t), x : t) {
 };
 
 
+ArrInt ::= Arr(int);
+
+inc ::= fn(t :: Type, x : t) t {
+	x + 1
+};
 
 main ::= fn() {
-	 arr : Arr(int);
+	 arr : ArrInt;
+	 farr : Arr(float);
 	 each i := 1..100 {
-	 	   arr_add(int, &arr, i*i);
+	 	   arr_add(int, &arr, inc(int, i*i));
+	 	   arr_add(float, &farr, inc(float, (i*i) as float));
 	 }
 	 each i := 0..arr.len - 1 {
 	 	  puti(arr.data[i]);
+	 }
+	 each i := 0..farr.len - 1 {
+	 	  putf(farr.data[i]);
 	 }
 };

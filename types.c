@@ -195,10 +195,12 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	bool entered_fn = false;
 	size_t param_idx;
 	FnExpr *prev_fn = tr->fn;
-	
 	FnExpr fn_copy;
 		
-	if (!(flags & TYPE_OF_FN_IS_INSTANCE) && fn_has_any_const_params(f)) {
+	/* f has compile time params, but it's not an instance! */
+	bool generic = !(flags & TYPE_OF_FN_IS_INSTANCE) && fn_has_any_const_params(f);
+
+    if (generic) {
 		Copier cop = copier_create(tr->allocr, tr->block);
 		copy_fn_expr(&cop, &fn_copy, f, false);
 		f = &fn_copy;
@@ -215,7 +217,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	for (param_idx = 0; param_idx < nparams; param_idx++) {
 		Declaration *param = &f->params[param_idx];
 		U16 types_decl_flags = 0;
-		if (!(flags & TYPE_OF_FN_IS_INSTANCE) && fn_has_any_const_params(f)) {
+		if (generic) {
 			types_decl_flags |= TYPES_DECL_DONT_RESOLVE;
 		}
 		if (!types_decl(tr, param, types_decl_flags)) {
@@ -296,9 +298,11 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 			}
 		}
 	}
-	if (!type_resolve(tr, &f->ret_type, where)) {
-		success = false;
-		goto ret;
+	if (!generic) {
+		if (!type_resolve(tr, &f->ret_type, where)) {
+			success = false;
+			goto ret;
+		}
 	}
 	*ret_type = f->ret_type;
     
