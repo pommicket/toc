@@ -1,5 +1,5 @@
 static bool types_block(Typer *tr, Block *b);
-static bool types_decl(Typer *tr, Declaration *d);
+static bool types_decl(Typer *tr, Declaration *d, TypesDeclFlags flags);
 static bool type_resolve(Typer *tr, Type *t, Location where);
 static size_t compiler_sizeof(Type *t);
 static bool eval_block(Evaluator *ev, Block *b, Type *t, Value *v);
@@ -332,9 +332,10 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		}
 		fprintf(f, "]");
 		break;
-	case TYPE_EXPR: break;
+	case TYPE_EXPR: 
+		assert(0);
+		break;
 	}
-	assert(0);
 }
 
 static void fprint_val(FILE *f, Value v, Type *t) {
@@ -1317,18 +1318,14 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		Declaration *d = NULL;
 		if (is_decl) {
 			d = idecl->decl;
-			if (!types_decl(ev->typer, d)) return false;
+			if (!types_decl(ev->typer, d, 0)) return false;
 			assert(d->type.flags & TYPE_IS_RESOLVED);
 		}
 		if (idecl->flags & IDECL_HAS_VAL) {
 			*v = idecl->val;
 		} else if (is_decl && (d->flags & DECL_IS_CONST)) {
 			if (!(d->flags & DECL_FOUND_VAL)) {
-				if (!(d->flags & DECL_HAS_EXPR)){
-					print_location(d->where);
-					abort();
-					assert(d->flags & DECL_HAS_EXPR); /* KEEP */
-				}
+				assert(d->flags & DECL_HAS_EXPR); /* KEEP */
 				if (!eval_expr(ev, &d->expr, &d->val)) return false;
 				d->flags |= DECL_FOUND_VAL;
 			}

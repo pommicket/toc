@@ -770,7 +770,6 @@ static bool parse_block(Parser *p, Block *b) {
 	b->flags = 0;
 	Tokenizer *t = p->tokr;
 	Block *prev_block = p->block;
-	b->parent = prev_block;
 	p->block = b;
 	if (!token_is_kw(t->token, KW_LBRACE)) {
 		tokr_err(t, "Expected '{' to open block.");

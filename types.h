@@ -388,7 +388,6 @@ typedef struct Block {
 	Location start;
 	Location end;
 	struct Statement *stmts;
-	struct Block *parent;
     struct Expression *ret_expr; /* the return expression of this block, e.g. {foo(); 3} => 3  NULL for no expression. */
 } Block;
 
@@ -529,6 +528,7 @@ typedef struct FnExpr {
 typedef struct Instance {
 	Value val; /* key into hash table */
 	FnExpr fn; /* the typed function */
+	Type *fn_type; /* type of fn */
 	struct {
 	    U64 id;
 	} c;
@@ -701,6 +701,7 @@ typedef struct Typer {
 	Expression **in_expr_decls; /* an array of expressions whose declarations (e.g. each **x := foo**) we are currently inside */
 	Declaration **in_decls; /* array of declarations we are currently inside */
 	Block *block;
+	Block **blocks; /* dyn array of all the block's we're in ([0] = NULL for global scope) */
 	FnExpr *fn; /* the function we're currently parsing. */
 } Typer;
 
@@ -717,3 +718,7 @@ typedef struct CGenerator {
 	Identifier main_ident;
 	Identifiers *idents;
 } CGenerator;
+
+typedef enum {
+			  TYPES_DECL_DONT_RESOLVE = 0x01 /* don't resolve the annotated type (used for parameters). */
+} TypesDeclFlags;

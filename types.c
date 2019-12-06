@@ -1,5 +1,4 @@
 static bool types_stmt(Typer *tr, Statement *s);
-static bool types_decl(Typer *tr, Declaration *d);
 static bool types_expr(Typer *tr, Expression *e);
 static bool types_block(Typer *tr, Block *b);
 static bool type_resolve(Typer *tr, Type *t, Location where);
@@ -184,7 +183,8 @@ static bool expr_must_lval(Expression *e) {
 }
 
 enum {
-	  TYPE_OF_FN_NO_COPY_EVEN_IF_CONST = 0x01,
+	  /* is f an instance? (changes behaviour a bit) */
+	  TYPE_OF_FN_IS_INSTANCE = 0x01
 };
 
 static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags) {
@@ -198,7 +198,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	
 	FnExpr fn_copy;
 		
-	if (!(flags & TYPE_OF_FN_NO_COPY_EVEN_IF_CONST) && fn_has_any_const_params(f)) {
+	if (!(flags & TYPE_OF_FN_IS_INSTANCE) && fn_has_any_const_params(f)) {
 		Copier cop = copier_create(tr->allocr, tr->block);
 		copy_fn_expr(&cop, &fn_copy, f, false);
 		f = &fn_copy;
@@ -214,8 +214,11 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	entered_fn = true;
 	for (param_idx = 0; param_idx < nparams; param_idx++) {
 		Declaration *param = &f->params[param_idx];
-		print_location(param->where);
-		if (!types_decl(tr, param)) {
+		U16 types_decl_flags = 0;
+		if (!(flags & TYPE_OF_FN_IS_INSTANCE) && fn_has_any_const_params(f)) {
+			types_decl_flags |= TYPES_DECL_DONT_RESOLVE;
+		}
+		if (!types_decl(tr, param, types_decl_flags)) {
 			success = false;
 			goto ret;
 		}
@@ -225,10 +228,6 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 			goto ret;
 		}
 			
-		if (!type_resolve(tr, &param->type, where)) {
-			success = false;
-			goto ret;
-		}
 		U32 is_at_all_const = param->flags & (DECL_IS_CONST | DECL_SEMI_CONST);
 		if (is_at_all_const) {
 			if (!t->fn.constness) {
@@ -278,7 +277,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	if (f->ret_decls && f->ret_type.kind == TYPE_VOID /* haven't found return type yet */) {
 		/* find return type */
 		arr_foreach(f->ret_decls, Declaration, d) {
-			if (!types_decl(tr, d)) {
+			if (!types_decl(tr, d, 0)) {
 			    success = false;
 				goto ret;
 			}
@@ -305,7 +304,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
     
 	
 	arr_foreach(f->ret_decls, Declaration, decl) {
-		if (!types_decl(tr, decl)) {
+		if (!types_decl(tr, decl, 0)) {
 			success = false;
 			goto ret;
 		}
@@ -341,13 +340,15 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 	case IDECL_DECL: {
 		Declaration *d = decl->decl;
 		bool captured = false;
-		if (decl->scope != NULL)
-			for (Block *block = tr->block; block && block != decl->scope; block = block->parent) {
-				if (block->flags & BLOCK_IS_FN) {
+		if (decl->scope != NULL) {
+			/* go back through scopes */
+			for (Block **block = arr_last(tr->blocks); *block && *block != decl->scope; block--) {
+				if ((*block)->flags & BLOCK_IS_FN) {
 					captured = true;
 					break;
 				}
 			}
+		}
 		if (captured && !(d->flags & DECL_IS_CONST)) {
 			err_print(where, "Variables cannot be captured into inner functions (but constants can).");
 			return false;
@@ -387,7 +388,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 					free(s);
 				} else {
 					/* let's type the declaration, and redo this (for evaling future functions) */
-					if (!types_decl(tr, d)) return false;
+					if (!types_decl(tr, d, 0)) return false;
 					return type_of_ident(tr, where, i, t);
 				}
 				return false;
@@ -510,6 +511,8 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 	t->flags |= TYPE_IS_RESOLVED;
 	return true;
 }
+
+
 
 static bool type_can_be_truthy(Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
@@ -1171,34 +1174,22 @@ static bool types_expr(Typer *tr, Expression *e) {
 			U64 *which_are_const = &which_are_const_val->u64;
 			*which_are_const = 0;
 			int semi_const_index = 0;
-			/* keep track of the declaration so we can add values */
+			/* keep track of the declaration */
 			Declaration *param_decl = fn->params;
 			size_t ident_idx = 0;
 			for (size_t i = 0; i < arr_len(fn_type->types)-1; i++) {
 				bool should_be_evald = arg_is_const(&new_args[i], fn_type->constness[i]);
 				if (should_be_evald) {
 					Value *arg_val = typer_arr_add(tr, &table_index.tuple);
-				    printf("Evaluating expression: ");
-					print_location(new_args[i].where);
-					
-					if (!eval_expr(tr->evalr, &new_args[i], arg_val)) {
+				    if (!eval_expr(tr->evalr, &new_args[i], arg_val)) {
 						if (tr->evalr->enabled) {
 							info_print(new_args[i].where, "(error occured while trying to evaluate compile-time argument, argument #%lu)", 1+(unsigned long)i);
 						}
 						return false;
 					}
-
-					Type *type = arr_add(&table_index_type.tuple);
-					*type = fn_type->types[i+1];
-					/* we need to check the type here so copy_val doesn't mess up */
-					Type *expected = type;
-					Type *got = &new_args[i].type;
-					if (!type_eq(type, &new_args[i].type)) {
-						char *estr = type_to_str(expected);
-						char *gstr = type_to_str(got);
-						err_print(new_args[i].where, "Expected type %s as %lu%s argument to function, but got %s.", estr, 1+(unsigned long)i, ordinals(1+i), gstr);
-						return false;
-					}
+					
+					Type *type = &new_args[i].type;
+					*(Type *)arr_add(&table_index_type.tuple) = *type;
 				
 					new_args[i].kind = EXPR_VAL;
 					new_args[i].flags = EXPR_FOUND_TYPE;
@@ -1231,17 +1222,21 @@ static bool types_expr(Typer *tr, Expression *e) {
 			if (!instance_already_exists) {
 				c->instance->fn = fn_copy;
 				/* type param declarations, etc */
-				if (!type_of_fn(tr, &c->instance->fn, e->where, &f->type, TYPE_OF_FN_NO_COPY_EVEN_IF_CONST))
+				if (!type_of_fn(tr, &c->instance->fn, e->where, &f->type, TYPE_OF_FN_IS_INSTANCE))
 					return false;
 				/* fix parameter and return types (they were kind of problematic before, because we didn't know about the instance) */
-				ret_type = f->type.fn.types;
-				param_types = ret_type + 1;
 				c->instance->c.id = original_fn->instances.n; /* let's help cgen out and assign an ID to this */
 				/* type this instance */
-				if (!types_fn(tr, fn, &f->type, e->where, c->instance))
+				if (!types_fn(tr, fn = &c->instance->fn, &f->type, e->where, c->instance))
 					return false;
+				c->instance->fn_type = &f->type;
 				arr_clear(&table_index_type.tuple);
+			} else {
+				fn = &c->instance->fn;
+				f->type = *c->instance->fn_type;
 			}
+			ret_type = f->type.fn.types;
+			param_types = ret_type + 1;
 		}
 
 		/* check types of arguments */
@@ -1668,18 +1663,31 @@ static bool types_expr(Typer *tr, Expression *e) {
 	return true;
 }
 
+static bool typer_block_enter(Typer *tr, Block *b) {
+	tr->block = b;
+	*(Block **)arr_adda(&tr->blocks, tr->allocr) = b;
+	if (!block_enter(b, b->stmts, SCOPE_CHECK_REDECL)) return false;
+	return true;
+}
+
+static void typer_block_exit(Typer *tr) {
+	Block *b = tr->block;
+	block_exit(b, b->stmts);
+	arr_remove_last(&tr->blocks);
+	tr->block = *(Block **)arr_last(tr->blocks);
+}
+
 static bool types_block(Typer *tr, Block *b) {
 	if (b->flags & BLOCK_FOUND_TYPES)
 		return true;
 	bool success = true;
-	Block *prev_block = tr->block;
-	tr->block = b;
-	if (!block_enter(b, b->stmts, SCOPE_CHECK_REDECL)) return false;
+	if (!typer_block_enter(tr, b))
+		return false;
 	b->ret_expr = NULL;
 	arr_foreach(b->stmts, Statement, s) {
 		if (!types_stmt(tr, s))
 			success = false;
-		if (s->kind == STMT_EXPR && (s->flags & STMT_EXPR_NO_SEMICOLON)) {
+		else if (s->kind == STMT_EXPR && (s->flags & STMT_EXPR_NO_SEMICOLON)) {
 			/* not voided */
 			Expression *e = &s->expr;
 			if (e->type.kind == TYPE_VOID) {
@@ -1688,24 +1696,27 @@ static bool types_block(Typer *tr, Block *b) {
 					  || e->kind == EXPR_WHILE
 					  || e->kind == EXPR_EACH)) {
 					err_print(e->where, "void expression must be followed by ;");
+					success = false;
+					goto ret;
 				}
 			} else {
 				if (s != (Statement *)arr_last(b->stmts)) {
 					err_print(e->where, "Return value must be the last statement in a block.");
-					return false;
+					success = false;
+					goto ret;
 				}
 				b->ret_expr = e;
 				arr_remove_last(&b->stmts);
 			}
 		}
 	}
-	block_exit(b, b->stmts);
-	tr->block = prev_block;
+ ret:
+	typer_block_exit(tr);
 	b->flags |= BLOCK_FOUND_TYPES;
 	return success;
 }
 
-static bool types_decl(Typer *tr, Declaration *d) {
+static bool types_decl(Typer *tr, Declaration *d, TypesDeclFlags flags) {
 	bool success = true;
 	if (d->flags & DECL_FOUND_TYPE) return true;
 	Declaration **dptr = typer_arr_add(tr, &tr->in_decls);
@@ -1713,7 +1724,12 @@ static bool types_decl(Typer *tr, Declaration *d) {
 	if (d->flags & DECL_ANNOTATES_TYPE) {
 		/* type supplied */
 		assert(d->type.kind != TYPE_VOID); /* there's no way to annotate void */
-		if (!type_resolve(tr, &d->type, d->where)) {
+		/* 
+		   if it's a parameter, only partially resolve the type, so that,
+		   for example, fn (x @ Type, y : x) works
+		*/
+		if (!(flags & TYPES_DECL_DONT_RESOLVE)
+			&& !type_resolve(tr, &d->type, d->where)) {
 			success = false;
 			goto ret;
 		}
@@ -1816,7 +1832,7 @@ static bool types_stmt(Typer *tr, Statement *s) {
 		}
 		break;
 	case STMT_DECL:
-		if (!types_decl(tr, &s->decl))
+		if (!types_decl(tr, &s->decl, 0))
 			return false;
 		break;
 	case STMT_RET:
@@ -1855,12 +1871,13 @@ static bool types_stmt(Typer *tr, Statement *s) {
 
 static void typer_create(Typer *tr, Evaluator *ev, Allocator *allocr) {
 	tr->block = NULL;
+	tr->blocks = NULL;
 	tr->fn = NULL;
 	tr->evalr = ev;
 	tr->in_decls = NULL;
 	tr->in_expr_decls = NULL;
 	tr->allocr = allocr;
-	
+	*(Block **)arr_adda(&tr->blocks, allocr) = NULL;
 }
 
 static bool types_file(Typer *tr, ParsedFile *f) {

@@ -1,9 +1,13 @@
 /* 
 TODO:
 test ArrInt @= Arr(int);
-new version of copy_val for copying types
+make sure fn(t @ Type, x : t) t works
+check fn(x @ int, y := x)
+new version of copy_val for copying types??
 
 there are probably places where we enter a function and never exit (in typing?) if there's an error
+switch struct."field" to struct["field"]
+
 packages
 X @= newtype(int); or something
 don't allow while {3; 5} (once break is added)
@@ -18,6 +22,7 @@ allow omission of trailing ; in foo @= fn() {}?
 #endif
 
 #include "toc.c"
+
 
 int main(int argc, char **argv) {
 #ifdef TOC_DEBUG
