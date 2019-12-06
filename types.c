@@ -1141,6 +1141,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 				}
 			}
 		}
+		FnExpr *original_fn;
+		Type table_index_type = {0};
+		Value table_index = {0};
+		FnExpr fn_copy;
 		if (fn_type->constness) {
 			/* evaluate compile-time arguments + add an instance */
 			
@@ -1151,14 +1155,13 @@ static bool types_expr(Typer *tr, Expression *e) {
 
 			FnExpr *fn = fn_val.fn;
 			/* fn is the instance, original_fn is not */
-			FnExpr *original_fn = fn;
-			FnExpr fn_copy;
+		    original_fn = fn;
+
 			Copier cop = copier_create(tr->allocr, tr->block);
 			/* TODO: somehow don't do all of this if we've already generated this instance */
 			copy_fn_expr(&cop, &fn_copy, fn, true);
 			fn = &fn_copy;
 			
-			Type table_index_type = {0};
 			table_index_type.flags = TYPE_IS_RESOLVED;
 			table_index_type.kind = TYPE_TUPLE;
 			table_index_type.tuple = NULL;
@@ -1167,7 +1170,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 			u64t->flags = TYPE_IS_RESOLVED;
 			u64t->kind = TYPE_BUILTIN;
 			u64t->builtin = BUILTIN_U64;
-			Value table_index;
 			table_index.tuple = NULL;
 			/* we need to keep table_index's memory around because instance_table_add makes a copy of it to compare against. */
 		    Value *which_are_const_val = typer_arr_add(tr, &table_index.tuple);
@@ -1216,29 +1218,15 @@ static bool types_expr(Typer *tr, Expression *e) {
 					param_decl++;
 				}
 			}
-
-			bool instance_already_exists;
-			c->instance = instance_table_adda(tr->allocr, &original_fn->instances, table_index, &table_index_type, &instance_already_exists);
-			if (!instance_already_exists) {
-				c->instance->fn = fn_copy;
-				/* type param declarations, etc */
-				if (!type_of_fn(tr, &c->instance->fn, e->where, &f->type, TYPE_OF_FN_IS_INSTANCE))
-					return false;
-				/* fix parameter and return types (they were kind of problematic before, because we didn't know about the instance) */
-				c->instance->c.id = original_fn->instances.n; /* let's help cgen out and assign an ID to this */
-				/* type this instance */
-				if (!types_fn(tr, fn = &c->instance->fn, &f->type, e->where, c->instance))
-					return false;
-				c->instance->fn_type = &f->type;
-				arr_clear(&table_index_type.tuple);
-			} else {
-				fn = &c->instance->fn;
-				f->type = *c->instance->fn_type;
-			}
+			
+			/* type param declarations, etc */
+			if (!type_of_fn(tr, &fn_copy, e->where, &f->type, TYPE_OF_FN_IS_INSTANCE))
+				return false;
+			
 			ret_type = f->type.fn.types;
 			param_types = ret_type + 1;
 		}
-
+		
 		/* check types of arguments */
 		for (size_t p = 0; p < nparams; p++) {
 			Expression *arg = &new_args[p];
@@ -1249,8 +1237,25 @@ static bool types_expr(Typer *tr, Expression *e) {
 				char *estr = type_to_str(expected);
 				char *gstr = type_to_str(got);
 				err_print(arg->where, "Expected type %s as %lu%s argument to function, but got %s.", estr, 1+(unsigned long)p, ordinals(1+p), gstr);
+				return false;
 			}
 		}
+
+		
+		if (fn_type->constness) {
+			bool instance_already_exists;
+			c->instance = instance_table_adda(tr->allocr, &original_fn->instances, table_index, &table_index_type, &instance_already_exists);
+			if (!instance_already_exists) {
+				c->instance->fn = fn_copy;
+				/* fix parameter and return types (they were kind of problematic before, because we didn't know about the instance) */
+				c->instance->c.id = original_fn->instances.n; /* let's help cgen out and assign an ID to this */
+				/* type this instance */
+				if (!types_fn(tr, &c->instance->fn, &f->type, e->where, c->instance))
+					return false;
+				arr_clear(&table_index_type.tuple);
+			}
+		}
+
 		if (!ret) return false;
 		*t = *ret_type;
 		c->arg_exprs = new_args;

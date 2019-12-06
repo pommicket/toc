@@ -14,7 +14,6 @@ Arr ::= fn (t :: Type) Type {
 	}
 };
 
-// todo: test that t :: type doesn't cause problems 
 arr_add ::= fn(t :: Type, a : &Arr(t), x : t) {
 		if a.len >= a.cap {
 		   a.cap = a.cap * 2 + 2;
@@ -33,21 +32,9 @@ arr_add ::= fn(t :: Type, a : &Arr(t), x : t) {
 main ::= fn() {
 	 arr : Arr(int);
 	 each i := 1..100 {
-	  arr_add(int, &arr,	i*i);
+	 	   arr_add(int, &arr, i*i);
 	 }
 	 each i := 0..arr.len - 1 {
 	 	  puti(arr.data[i]);
 	 }
 };
-
-// t ::= fn(x :: Type) Type { struct { t: x; } };
-// // pass the wrong thing to t, and the error is in the wrong place
-
-// f ::= fn(x: t(int)) {};
-
-// f ::= fn(t :: Type, x : t) {
-// };
-
-// main ::= fn() {
-// 	 f(int,3);
-// };
