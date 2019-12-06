@@ -1,7 +1,8 @@
 /* 
 TODO:
-check fn(x :: int, y := x)
-check fn(x :: int) y := x
+check fn(x :: int, y := x) (run + compile)
+check fn(x :: int) y := x (run + compile)
+check arr @ compile
 new version of copy_val for copying types??
 
 there are probably places where we enter a function and never exit (in typing?) if there's an error

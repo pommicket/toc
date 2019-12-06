@@ -199,6 +199,7 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 					break;
 				}
 			}
+
 			written += type_to_str_(&param_types[i], buffer + written, bufsize - written);
 		}
 		written += str_copy(buffer + written, bufsize - written, ")");

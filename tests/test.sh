@@ -17,7 +17,7 @@ do_tests() {
 	for CC in $COMPILERS; do
 
 		for EXTRA_CFLAGS in "-O0 -g" "-O3 -s"; do
-			printf "Running test $1 C compiler $CC and flags $EXTRA_CFLAGS... "
+			printf "Running test $1 with C compiler $CC and flags $EXTRA_CFLAGS... "
 			compile "$1"
 			cd "$DIR/$1"
 			./test.sh || { printf "\x1b[91mfailed!\x1b[0m\n"; exit 1; }

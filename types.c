@@ -216,20 +216,31 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	entered_fn = true;
 	for (param_idx = 0; param_idx < nparams; param_idx++) {
 		Declaration *param = &f->params[param_idx];
-		U16 types_decl_flags = 0;
-		if (generic) {
-			types_decl_flags |= TYPES_DECL_DONT_RESOLVE;
-		}
-		if (!types_decl(tr, param, types_decl_flags)) {
-			success = false;
-			goto ret;
-		}
-		if (param->type.kind == TYPE_TUPLE) {
-			err_print(param->where, "Functions can't have tuple parameters.");
-			success = false;
-			goto ret;
-		}
+		if (!generic) {
+			U16 types_decl_flags = 0;
+			if (!types_decl(tr, param, types_decl_flags)) {
+				success = false;
+				goto ret;
+			}
+			if (param->type.kind == TYPE_TUPLE) {
+				err_print(param->where, "Functions can't have tuple parameters.");
+				success = false;
+				goto ret;
+			}
 			
+			if (param->flags & DECL_HAS_EXPR) {
+				if (param->expr.kind != EXPR_VAL) {
+					Value val;
+					if (!eval_expr(tr->evalr, &param->expr, &val)) {
+						info_print(param->where, "Was trying to evaluate default arguments (which must be constants!)");
+						success = false;
+						goto ret;
+					}
+					param->expr.kind = EXPR_VAL;
+					param->expr.val = val;
+				}
+			} 
+		}
 		U32 is_at_all_const = param->flags & (DECL_IS_CONST | DECL_SEMI_CONST);
 		if (is_at_all_const) {
 			if (!t->fn.constness) {
@@ -239,21 +250,14 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 				}
 			}
 		}
-		if (param->flags & DECL_HAS_EXPR) {
-			if (param->expr.kind != EXPR_VAL) {
-				Value val;
-				if (!eval_expr(tr->evalr, &param->expr, &val)) {
-					info_print(param->where, "Was trying to evaluate default arguments (which must be constants!)");
-					success = false;
-					goto ret;
-				}
-				param->expr.kind = EXPR_VAL;
-				param->expr.val = val;
-			}
-		}
 		for (size_t i = 0; i < arr_len(param->idents); i++) {
 			Type *param_type = typer_arr_add(tr, &t->fn.types);
-			*param_type = param->type;
+			if (!generic) {
+				*param_type = param->type;
+			} else {
+				param_type->flags = 0;
+				param_type->kind = TYPE_UNKNOWN;
+			}
 			if (has_constant_params) {
 				Constness constn;
 				if (param->flags & DECL_IS_CONST) {
@@ -1101,7 +1105,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 				arr_foreach(fn_decl->params, Declaration, param) {
 					bool is_required = !(param->flags & DECL_HAS_EXPR);
 					int ident_idx = 0;
-					assert(param->type.kind != TYPE_TUPLE);
 
 					arr_foreach(param->idents, Identifier, ident) {
 						if (index == i) {
@@ -1111,26 +1114,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 								free(s);
 								return false;
 							} else {
-								Value default_val;
-								if (fn_type->constness) {
-									/* TODO: evaluate once per decl, not once per ident */
-									Expression copy;
-									/* make a copy of the default argument, and type and evaluate it. */
-									Copier cop = copier_create(tr->allocr, tr->block);
-									copy_expr(&cop, &copy, &param->expr);
-									if (!types_expr(tr, &copy))
-										return false;
-									if (!eval_expr(tr->evalr, &copy, &default_val))
-										return false;
-									assert(copy.type.kind != TYPE_TUPLE);
-									new_args[i].kind = EXPR_VAL;
-									new_args[i].flags = copy.flags;
-									new_args[i].type = copy.type;
-									
-									copy_val(tr->allocr, &new_args[i].val,
-											 &default_val, &new_args[i].type);
-								} else {
-									/* it's already been evaluated */
+								if (!fn_type->constness) {
+									/* default arg */
 									assert(param->expr.kind == EXPR_VAL); /* evaluated in type_of_fn */
 									new_args[i].kind = EXPR_VAL;
 									new_args[i].flags = param->expr.flags;
@@ -1185,6 +1170,23 @@ static bool types_expr(Typer *tr, Expression *e) {
 			size_t ident_idx = 0;
 			for (size_t i = 0; i < arr_len(fn_type->types)-1; i++) {
 				bool should_be_evald = arg_is_const(&new_args[i], fn_type->constness[i]);
+				
+				if (!params_set[i] && (param_decl->flags & DECL_HAS_EXPR)) {
+					/* create copy of default arg */
+					Value default_arg;
+					if (!types_expr(tr, &param_decl->expr))
+						return false;
+					if (!eval_expr(tr->evalr, &param_decl->expr, &default_arg)) {
+						return false;
+					}
+
+					
+					new_args[i].kind = EXPR_VAL;
+					new_args[i].flags = param_decl->expr.flags;
+					new_args[i].type = param_decl->expr.type;
+					copy_val(tr->allocr, &new_args[i].val, &default_arg, &param_decl->expr.type);					
+				} else assert(params_set[i]);
+				
 				if (should_be_evald) {
 					Value *arg_val = typer_arr_add(tr, &table_index.tuple);
 				    if (!eval_expr(tr->evalr, &new_args[i], arg_val)) {
@@ -1219,13 +1221,19 @@ static bool types_expr(Typer *tr, Expression *e) {
 				ident_idx++;
 				if (ident_idx >= arr_len(param_decl->idents)) {
 					ident_idx = 0;
+					/* TODO: remove decls on failure */
+					/* these are added for default arguments */
+					add_ident_decls(&fn->body, param_decl, SCOPE_CHECK_REDECL);
 					param_decl++;
 				}
 			}
-			
+			arr_foreach(fn->params, Declaration, param) {
+				remove_ident_decls(&fn->body, param);
+			}
 			/* type param declarations, etc */
 			if (!type_of_fn(tr, &fn_copy, e->where, &f->type, TYPE_OF_FN_IS_INSTANCE))
 				return false;
+			
 			
 			ret_type = f->type.fn.types;
 			param_types = ret_type + 1;
