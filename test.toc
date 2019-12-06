@@ -12,7 +12,6 @@ main ::= fn() {
 	 puti(f(7));
 	 puti(f(3,4));
 
-// TODO: semiconst breaks this for some reason
 	 f ::= fn(x :: int, y := x) int { y };
 
 	 r ::= f(3);

@@ -1168,24 +1168,9 @@ static bool types_expr(Typer *tr, Expression *e) {
 			/* keep track of the declaration */
 			Declaration *param_decl = fn->params;
 			size_t ident_idx = 0;
-			for (size_t i = 0; i < arr_len(fn_type->types)-1; i++) {
+			size_t i = 0;
+			for (i = 0; i < nparams; i++) {
 				bool should_be_evald = arg_is_const(&new_args[i], fn_type->constness[i]);
-				
-				if (!params_set[i] && (param_decl->flags & DECL_HAS_EXPR)) {
-					/* create copy of default arg */
-					Value default_arg;
-					if (!types_expr(tr, &param_decl->expr))
-						return false;
-					if (!eval_expr(tr->evalr, &param_decl->expr, &default_arg)) {
-						return false;
-					}
-
-					
-					new_args[i].kind = EXPR_VAL;
-					new_args[i].flags = param_decl->expr.flags;
-					new_args[i].type = param_decl->expr.type;
-					copy_val(tr->allocr, &new_args[i].val, &default_arg, &param_decl->expr.type);					
-				} else assert(params_set[i]);
 				
 				if (should_be_evald) {
 					Value *arg_val = typer_arr_add(tr, &table_index.tuple);
@@ -1221,19 +1206,27 @@ static bool types_expr(Typer *tr, Expression *e) {
 				ident_idx++;
 				if (ident_idx >= arr_len(param_decl->idents)) {
 					ident_idx = 0;
-					/* TODO: remove decls on failure */
-					/* these are added for default arguments */
-					add_ident_decls(&fn->body, param_decl, SCOPE_CHECK_REDECL);
 					param_decl++;
 				}
-			}
-			arr_foreach(fn->params, Declaration, param) {
-				remove_ident_decls(&fn->body, param);
 			}
 			/* type param declarations, etc */
 			if (!type_of_fn(tr, &fn_copy, e->where, &f->type, TYPE_OF_FN_IS_INSTANCE))
 				return false;
-			
+
+			/* deal with default arguments */
+			i = 0;
+			arr_foreach(fn->params, Declaration, param) {
+				arr_foreach(param->idents, Identifier, ident) {
+					if (!params_set[i]) {
+						assert(param->flags & DECL_HAS_EXPR);
+						assert(param->expr.kind == EXPR_VAL); /* this was done by type_of_fn */
+						new_args[i] = param->expr;
+						/* make sure value is copied */
+						copy_val(tr->allocr, &new_args[i].val, &param->expr.val, &param->expr.type);
+					}
+					i++;
+				}
+			}
 			
 			ret_type = f->type.fn.types;
 			param_types = ret_type + 1;
