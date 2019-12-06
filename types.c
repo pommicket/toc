@@ -383,7 +383,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 			} else {
 				if (location_after(d->where, where)) {
 					char *s = ident_to_str(i);
-					err_print(where, "Use of identifier %s before its declaration.\nNote that it is only possible to use a constant function before it is directly declared (e.g. x @= fn() {}).", s);
+					err_print(where, "Use of identifier %s before its declaration.\nNote that it is only possible to use a constant function before it is directly declared (e.g. x ::= fn() {}).", s);
 					info_print(d->where, "%s will be declared here.", s);
 					free(s);
 				} else {

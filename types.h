@@ -183,8 +183,8 @@ typedef enum {
 
 typedef enum {
 			  KW_SEMICOLON,
+			  KW_COLONCOLON,
 			  KW_COLON,
-			  KW_AT,
 			  KW_COMMA,
 			  KW_LPAREN,
 			  KW_RPAREN,

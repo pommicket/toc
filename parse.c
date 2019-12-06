@@ -192,10 +192,10 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 				switch (t->fn.constness[i]) {
 				case CONSTNESS_NO: break;
 				case CONSTNESS_SEMI:
-					written += str_copy(buffer + written, bufsize - written, ":@");
+					written += str_copy(buffer + written, bufsize - written, ":::");
 					break;
 				case CONSTNESS_YES:
-					written += str_copy(buffer + written, bufsize - written, "@");
+					written += str_copy(buffer + written, bufsize - written, "::");
 					break;
 				}
 			}
@@ -1122,7 +1122,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 						}
 					}
 				}
-				if (token_is_kw(t->token, KW_AT)) {
+				if (token_is_kw(t->token, KW_COLONCOLON)) {
 					tokr_err(t, "The variable(s) in a for loop cannot be constant.");
 					return false;
 				}
@@ -1735,18 +1735,19 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 		}
 		if (token_is_kw(t->token, KW_COLON)) {
 			t->token++;
-			if (token_is_kw(t->token, KW_AT) && (flags & PARSE_DECL_ALLOW_SEMI_CONST)) {
+			break;
+		}
+		if (token_is_kw(t->token, KW_COLONCOLON)) {
+			t->token++;
+			if (token_is_kw(t->token, KW_COLON) && (flags & PARSE_DECL_ALLOW_SEMI_CONST)) {
 				t->token++;
 				d->flags |= DECL_SEMI_CONST;
+			} else {
+				d->flags |= DECL_IS_CONST;
 			}
 			break;
 		}
-		if (token_is_kw(t->token, KW_AT)) {
-			d->flags |= DECL_IS_CONST;
-			t->token++;
-			break;
-		}
-		tokr_err(t, "Expected ',' to continue listing variables or ':' / '@' to indicate type.");
+		tokr_err(t, "Expected ',' to continue listing variables or ':' / '::' to indicate type.");
 	    goto ret_false;
 	}
 	
@@ -1809,7 +1810,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 	
 	if ((d->flags & DECL_IS_CONST) && !(d->flags & DECL_HAS_EXPR) && !(flags & PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR)) {
 		t->token--;
-		/* disallowed constant without an expression, e.g. x @ int; */
+		/* disallowed constant without an expression, e.g. x :: int; */
 		tokr_err(t, "You must have an expression at the end of this constant declaration.");
 	    goto ret_false;
 	}
@@ -1828,7 +1829,7 @@ static bool is_decl(Tokenizer *t) {
 		if (token->kind != TOKEN_IDENT) return false;
 		token++;
 		if (token->kind != TOKEN_KW) return false;
-		if (token->kw == KW_COLON || token->kw == KW_AT)
+		if (token->kw == KW_COLON || token->kw == KW_COLONCOLON)
 			return true;
 		if (token->kw != KW_COMMA) return false;
 		token++;
@@ -2164,7 +2165,9 @@ static void fprint_decl(FILE *out, Declaration *d) {
 		fprint_ident(out, *ident);
 	}
 	if (d->flags & DECL_IS_CONST) {
-		fprintf(out, "@");
+		fprintf(out, "::");
+	} else if (d->flags & DECL_SEMI_CONST) {
+		fprintf(out, ":::");
 	} else {
 		fprintf(out, ":");
 	}

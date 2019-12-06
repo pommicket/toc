@@ -1,19 +1,19 @@
 /* 
 TODO:
-test ArrInt @= Arr(int);
-make sure fn(t @ Type, x : t) t works
-check fn(x @ int, y := x)
+test ArrInt ::= Arr(int);
+make sure fn(t :: Type, x : t) t works
+check fn(x :: int, y := x)
 new version of copy_val for copying types??
 
 there are probably places where we enter a function and never exit (in typing?) if there's an error
 switch struct."field" to struct["field"]
 
 packages
-X @= newtype(int); or something
+X ::= newtype(int); or something
 don't allow while {3; 5} (once break is added)
 any odd number of "s for a string
 make sure futurely/currently-declared types are only used by pointer/slice
-allow omission of trailing ; in foo @= fn() {}?
+allow omission of trailing ; in foo ::= fn() {}?
  */
 
 #ifdef __cplusplus
