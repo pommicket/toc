@@ -1,6 +1,5 @@
 /* 
 TODO:
-make sure fn(t :: Type, x : t) t works
 check fn(x :: int, y := x)
 check fn(x :: int) y := x
 new version of copy_val for copying types??

@@ -1,4 +1,4 @@
-getstdin @= fn() []char {
+getstdin ::= fn() []char {
 		 contents : []char;
 		 contents_sz : int;
 		 contents_len : int;
@@ -30,11 +30,11 @@ getstdin @= fn() []char {
 		 contents
 };
 
-puti @= fn(x: int) {
+puti ::= fn(x: int) {
 	 #C("printf(\"%ld\\n\", x)");
 };
 
-main @= fn() {
+main ::= fn() {
 	 code := getstdin();
 	 tape_sz := 3;
 	 tape := new(int, tape_sz);
