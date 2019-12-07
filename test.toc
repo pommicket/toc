@@ -1,18 +1,1 @@
-puti ::= fn(x: int) {
-	 #C("printf(\"%ld\\n\", (long)x);
-");
-};
-putf ::= fn(x: float) {
-	 #C("printf(\"%f\\n\", (double)x);
-");
-};
-
-Point ::= struct {
-  x, y : int;
-};
-
-main ::= fn() {
-	 p : Point;
-	 p.x = 5;
-	 puti(p[if 5 > 6 { "x" } else { "y" }]);
-};
+x : [1]int;

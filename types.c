@@ -452,7 +452,6 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 		Value val;
 		Expression *n_expr = t->arr.n_expr;
 		if (!types_expr(tr, n_expr)) return false;
-		
 		if (n_expr->type.kind == TYPE_UNKNOWN) {
 			err_print(n_expr->where, "Cannot determine type of array size at compile time.");
 			return false;
@@ -1134,7 +1133,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				}
 			}
 		}
-		FnExpr *original_fn;
+		FnExpr *original_fn = NULL;
 		Type table_index_type = {0};
 		Value table_index = {0};
 		FnExpr fn_copy;

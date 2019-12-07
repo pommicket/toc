@@ -1747,8 +1747,10 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 				/* don't generate function pointer declaration for constant fns */
 				continue;
 			}
-			if (!cgen_val_pre(g, *val, type, d->where))
-				return false;
+			if (has_expr) {
+				if (!cgen_val_pre(g, *val, type, d->where))
+					return false;
+			}
 			if (g->block != NULL)
 				cgen_write(g, "static ");
 			if (!cgen_type_pre(g, type, d->where)) return false;

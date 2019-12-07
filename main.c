@@ -122,10 +122,10 @@ int main(int argc, char **argv) {
 	evalr_create(&ev, &tr, &main_allocr);
 	typer_create(&tr, &ev, &main_allocr);
 
-
 	if (!block_enter(NULL, f.stmts, SCOPE_CHECK_REDECL)) /* enter global scope */
 		return false;
 
+	/* fprint_parsed_file(stdout, &f); */
 	if (!types_file(&tr, &f)) {
 	    err_fprint(TEXT_IMPORTANT("Errors occured while determining types.\n"));
 		return EXIT_FAILURE;

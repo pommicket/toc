@@ -10,8 +10,7 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d);
 static bool cgen_decls_fn_instances(CGenerator *g, Expression *e) {
 	assert(e->kind == EXPR_FN);
 	FnExpr *f = &e->fn;
-	FnType *type = &e->type.fn;
-	assert(type->constness);
+	assert(e->type.fn.constness);
 	Instance **data = f->instances.data;
 	for (U64 i = 0; i < f->instances.cap; i++) {
 		if (f->instances.occupied[i]) {

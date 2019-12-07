@@ -28,3 +28,4 @@ See `docs` for more information (in progress).
 
 `tests` has some test programs written in `toc`.
 
+To compile the compiler on a Unix-y system, use

@@ -288,11 +288,12 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 			/* it's a numeric literal */
 			int base = 10;
 			Floating decimal_pow10 = 0;
-			NumLiteral n;
-			n.kind = NUM_LITERAL_INT;
-			n.intval = 0;
 			Token *token = tokr_add(t);
 			tokr_put_location(t, token);
+			NumLiteral *n = &token->num;
+			n->kind = NUM_LITERAL_INT;
+			n->intval = 0;
+			
 			if (*t->s == '0') {
 				tokr_nextchar(t);
 				/* octal/hexadecimal/binary (or zero) */
@@ -321,7 +322,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 						/* .. (not a decimal point; end the number here) */
 						break;
 					}
-					if (n.kind == NUM_LITERAL_FLOAT) {
+					if (n->kind == NUM_LITERAL_FLOAT) {
 						tokenization_err(t, "Double . in number.");
 						goto err;
 					}
@@ -329,16 +330,16 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 						tokenization_err(t, "Decimal point in non base 10 number.");
 						goto err;
 					}
-				    n.kind = NUM_LITERAL_FLOAT;
+				    n->kind = NUM_LITERAL_FLOAT;
 					decimal_pow10 = 0.1;
-					n.floatval = (Floating)n.intval;
+					n->floatval = (Floating)n->intval;
 					tokr_nextchar(t);
 					continue;
 				} else if (*t->s == 'e') {
 					tokr_nextchar(t);
-					if (n.kind == NUM_LITERAL_INT) {
-						n.kind = NUM_LITERAL_FLOAT;
-						n.floatval = (Floating)n.intval;
+					if (n->kind == NUM_LITERAL_INT) {
+						n->kind = NUM_LITERAL_FLOAT;
+						n->floatval = (Floating)n->intval;
 					}
 					/* TODO: check if exceeding maximum exponent */
 					int exponent = 0;
@@ -357,9 +358,9 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 					/* OPTIM: Slow for very large exponents (unlikely to happen) */
 					for (int i = 0; i < exponent; i++) {
 						if (negative_exponent)
-							n.floatval /= 10;
+							n->floatval /= 10;
 						else
-							n.floatval *= 10;
+							n->floatval *= 10;
 					}
 						
 					break;
@@ -384,19 +385,19 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 					/* end of numeric literal */
 					break;
 				}
-				switch (n.kind) {
+				switch (n->kind) {
 				case NUM_LITERAL_INT:
-					if ((UInteger)n.intval > (UInteger)UINTEGER_MAX / (UInteger)base ||
-						(UInteger)n.intval * (UInteger)base > (UInteger)UINTEGER_MAX - (UInteger)digit) {
+					if ((UInteger)n->intval > (UInteger)UINTEGER_MAX / (UInteger)base ||
+						(UInteger)n->intval * (UInteger)base > (UInteger)UINTEGER_MAX - (UInteger)digit) {
 						/* too big! */
 						tokenization_err(t, "Number too big to fit in a numeric literal.");
 						goto err;
 					}
-					n.intval *= (UInteger)base;
-					n.intval += (UInteger)digit;
+					n->intval *= (UInteger)base;
+					n->intval += (UInteger)digit;
 					break;
 				case NUM_LITERAL_FLOAT:
-					n.floatval += decimal_pow10 * (Floating)digit;
+					n->floatval += decimal_pow10 * (Floating)digit;
 					decimal_pow10 /= 10;
 					break;
 				}
@@ -404,7 +405,6 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 			}
 		    
 			token->kind = TOKEN_LITERAL_NUM;
-			token->num = n;
 			continue;
 		}
 

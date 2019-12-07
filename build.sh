@@ -11,8 +11,10 @@ ADDITIONAL_FLAGS="$CFLAGS -Wno-unused-function"
 
 if [ "$CC" = "clang" ]; then
 	WARNINGS='-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wimplicit-fallthrough'
-else
+elif [ "$CC" = "gcc" ]; then
 	WARNINGS='-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wno-pointer-to-int-cast'
+else
+	WARNINGS=''
 fi
 
 DEBUG_FLAGS="-O0 -g3 $WARNINGS -std=c11 -DTOC_DEBUG"

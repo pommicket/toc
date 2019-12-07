@@ -170,6 +170,10 @@ static Keyword builtin_type_to_kw(BuiltinType t) {
 	return KW_COUNT;
 }
 
+/* TODO: DELME */
+static void fprint_expr(FILE *out, Expression *expr);
+
+
 /* returns the number of characters written, not including the null character */
 static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 	/* if ((t->flags & TYPE_IS_RESOLVED) && t->was_expr) { */
@@ -610,7 +614,7 @@ static bool parse_type(Parser *p, Type *type) {
 	default:
 		/* TYPE_EXPR */
 		if (parse_expr(p, type->expr = parser_new_expr(p),
-					   expr_find_end(p, -1 /* end as soon as possible */))) {
+					   expr_find_end(p, (ExprEndFlags)-1 /* end as soon as possible */))) {
 			type->kind = TYPE_EXPR;
 		} else {
 			tokr_err(t, "Unrecognized type.");

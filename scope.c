@@ -113,4 +113,11 @@ static bool each_enter(Expression *e) {
 
 static void each_exit(Expression *e) {
 	assert(e->kind == EXPR_EACH);
+	EachExpr *ea = &e->each;
+	if (ea->index) {
+		arr_remove_last(&ea->index->decls);
+	}
+	if (ea->value) {
+		arr_remove_last(&ea->value->decls);
+	}
 }
