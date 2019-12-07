@@ -4,7 +4,7 @@
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
 static bool types_block(Typer *tr, Block *b);
-static bool types_decl(Typer *tr, Declaration *d, TypesDeclFlags flags);
+static bool types_decl(Typer *tr, Declaration *d);
 static bool type_resolve(Typer *tr, Type *t, Location where);
 static size_t compiler_sizeof(Type *t);
 static bool eval_block(Evaluator *ev, Block *b, Type *t, Value *v);
@@ -1323,7 +1323,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		Declaration *d = NULL;
 		if (is_decl) {
 			d = idecl->decl;
-			if (!types_decl(ev->typer, d, 0)) return false;
+			if (!types_decl(ev->typer, d)) return false;
 			assert(d->type.flags & TYPE_IS_RESOLVED);
 		}
 		if (idecl->flags & IDECL_HAS_VAL) {

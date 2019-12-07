@@ -229,8 +229,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	for (param_idx = 0; param_idx < nparams; param_idx++) {
 		Declaration *param = &f->params[param_idx];
 		if (!generic) {
-			U16 types_decl_flags = 0;
-			if (!types_decl(tr, param, types_decl_flags)) {
+			if (!types_decl(tr, param)) {
 				success = false;
 				goto ret;
 			}
@@ -296,7 +295,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 		/* find return type */
 		
 		arr_foreach(f->ret_decls, Declaration, d) {
-			if (!types_decl(tr, d, 0)) {
+			if (!types_decl(tr, d)) {
 			    success = false;
 				goto ret;
 			}
@@ -405,7 +404,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 					free(s);
 				} else {
 					/* let's type the declaration, and redo this (for evaling future functions) */
-					if (!types_decl(tr, d, 0)) return false;
+					if (!types_decl(tr, d)) return false;
 					return type_of_ident(tr, where, i, t);
 				}
 				return false;
@@ -1139,6 +1138,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		Type table_index_type = {0};
 		Value table_index = {0};
 		FnExpr fn_copy;
+		Copier cop = copier_create(tr->allocr, tr->block);
 		if (fn_type->constness) {
 			/* evaluate compile-time arguments + add an instance */
 			
@@ -1152,9 +1152,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			/* fn is the instance, original_fn is not */
 		    original_fn = fn;
 
-			Copier cop = copier_create(tr->allocr, tr->block);
-			/* TODO: somehow don't do all of this if we've already generated this instance */
-			copy_fn_expr(&cop, &fn_copy, fn, true);
+			copy_fn_expr(&cop, &fn_copy, fn, false);
 			fn = &fn_copy;
 			
 			table_index_type.flags = TYPE_IS_RESOLVED;
@@ -1256,7 +1254,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 		if (fn_type->constness) {
 			bool instance_already_exists;
 			c->instance = instance_table_adda(tr->allocr, &original_fn->instances, table_index, &table_index_type, &instance_already_exists);
+
+			
 			if (!instance_already_exists) {
+				copy_block(&cop, &fn_copy.body, &original_fn->body);
 				c->instance->fn = fn_copy;
 				/* fix parameter and return types (they were kind of problematic before, because we didn't know about the instance) */
 				c->instance->c.id = original_fn->instances.n; /* let's help cgen out and assign an ID to this */
@@ -1737,7 +1738,7 @@ static bool types_block(Typer *tr, Block *b) {
 	return success;
 }
 
-static bool types_decl(Typer *tr, Declaration *d, TypesDeclFlags flags) {
+static bool types_decl(Typer *tr, Declaration *d) {
 	bool success = true;
 	if (d->flags & DECL_FOUND_TYPE) return true;
 	Declaration **dptr = typer_arr_add(tr, &tr->in_decls);
@@ -1745,12 +1746,7 @@ static bool types_decl(Typer *tr, Declaration *d, TypesDeclFlags flags) {
 	if (d->flags & DECL_ANNOTATES_TYPE) {
 		/* type supplied */
 		assert(d->type.kind != TYPE_VOID); /* there's no way to annotate void */
-		/* 
-		   if it's a parameter, only partially resolve the type, so that,
-		   for example, fn (x @ Type, y : x) works
-		*/
-		if (!(flags & TYPES_DECL_DONT_RESOLVE)
-			&& !type_resolve(tr, &d->type, d->where)) {
+		if (!type_resolve(tr, &d->type, d->where)) {
 			success = false;
 			goto ret;
 		}
@@ -1853,7 +1849,7 @@ static bool types_stmt(Typer *tr, Statement *s) {
 		}
 		break;
 	case STMT_DECL:
-		if (!types_decl(tr, &s->decl, 0))
+		if (!types_decl(tr, &s->decl))
 			return false;
 		break;
 	case STMT_RET:

@@ -723,6 +723,3 @@ typedef struct CGenerator {
 	Identifiers *idents;
 } CGenerator;
 
-typedef enum {
-			  TYPES_DECL_DONT_RESOLVE = 0x01 /* don't resolve the annotated type (used for parameters). */
-} TypesDeclFlags;

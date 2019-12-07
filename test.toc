@@ -7,12 +7,16 @@ putf ::= fn(x: float) {
 ");
 };
 
+foo ::= fn(x ::= 5) (int, int) {
+x, 2*x
+};
+
 main ::= fn() {
 	 puti(f(3));
 	 puti(f(7));
 	 puti(f(4));
 
-	 f ::= fn(x :: int) y := x + 1 {  };
+	 f ::= fn(x ::= foo()) y := x + 1 {  };
 
 	 r ::= f(3);
 	 puti(r);
