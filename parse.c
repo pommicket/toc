@@ -877,6 +877,7 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 		t->token--;	/* move back to { */
 		/* just set return type to void. the actual return type will be set by types.c:type_of_fn */
 		f->ret_type.kind = TYPE_VOID;
+		f->ret_type.flags = 0;
 	} else {
 		if (!parse_type(p, &f->ret_type)) {
 			ret = false;

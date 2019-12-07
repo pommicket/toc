@@ -1,6 +1,9 @@
 /* 
 TODO:
 check fn(x :: int) y := x (run + compile)
+reduce copying (don't copy body of fn_copy unless the instance doesn't 
+exist yet)
+
 make sure you can't have a tuple parameter (check const tuple params)
 check arr.toc's Arr works @ compile time
 new version of copy_val for copying types??

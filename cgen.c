@@ -1520,10 +1520,6 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where, U64 instance, Valu
 	g->fn = f;
 	cgen_write(g, " {");
 	cgen_nl(g);
-	arr_foreach(f->ret_decls, Declaration, d) {
-		if (!cgen_decl(g, d))
-			return false;
-	}
 	if (compile_time_args) {
 		int carg_idx = 0;
 		compile_time_args++; /* move past which_are_const */
@@ -1557,6 +1553,11 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where, U64 instance, Valu
 			}
 		}
 					
+	}
+	/* retdecls need to be after compile time arguments to allow fn(x::int) y := x */
+	arr_foreach(f->ret_decls, Declaration, d) {
+		if (!cgen_decl(g, d))
+			return false;
 	}
 	if (!cgen_block_enter(g, &f->body)) return false;
 	if (!cgen_block(g, &f->body, NULL, CGEN_BLOCK_NOENTER | CGEN_BLOCK_NOBRACES))

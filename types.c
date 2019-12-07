@@ -208,7 +208,6 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	size_t idx = 0;
 	bool has_constant_params = false;
 	Type *ret_type = typer_arr_add(tr, &t->fn.types);
-
 	if (!fn_enter(f, SCOPE_CHECK_REDECL))
 		return false;
 	tr->fn = f;
@@ -280,7 +279,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 		}
 	}
 	
-	if (f->ret_decls && f->ret_type.kind == TYPE_VOID /* haven't found return type yet */) {
+	if (f->ret_decls && !generic && f->ret_type.kind == TYPE_VOID /* haven't found return type yet */) {
 		/* find return type */
 		arr_foreach(f->ret_decls, Declaration, d) {
 			if (!types_decl(tr, d, 0)) {
@@ -317,6 +316,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 			goto ret;
 		}
 	}
+	
  ret:
 	/* cleanup */
 	if (entered_fn) {

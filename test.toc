@@ -10,15 +10,15 @@ putf ::= fn(x: float) {
 main ::= fn() {
 	 puti(f(3));
 	 puti(f(7));
-	 puti(f(3,4));
+	 puti(f(4));
 
-	 f ::= fn(x :: int, y := x) int { y };
+	 f ::= fn(x : int) y := x { };
 
 	 r ::= f(3);
 	 puti(r);
 	 s ::= f(7);
 	 puti(s);
-	 t ::= f(3,4);
+	 t ::= f(4);
 	 puti(t);
 	 
 };
