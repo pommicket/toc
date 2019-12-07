@@ -5,16 +5,24 @@
 */
 
 /* 
+   NOTE:
+   
+   Structure of the toc compiler:
+   tokenizer => parser => typing (types.c) => typdefs_cgen, decls_cgen, cgen 
+   (lexing)
+
+   toc tries to continue even after the first error. 
+   It will not continue during cgen, but it will during tokenization,
+   parsing, and typing. If one stage fails, the following ones do not
+   start.
+*/
+
+/* 
 TODO:
-check arr.toc's Arr works @ compile time
-new version of copy_val for copying types??
-
-there are probably places where we enter a function and never exit (in typing?) if there's an error
-switch struct."field" to struct["field"]
-
 packages
 X ::= newtype(int); or something
 don't allow while {3; 5} (once break is added)
+better printing of types (take was_expr into account)
 any odd number of "s for a string
 make sure futurely/currently-declared types are only used by pointer/slice
 allow omission of trailing ; in foo ::= fn() {}?

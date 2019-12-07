@@ -1535,8 +1535,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 			break;
 		}
 		case BINARY_AT_INDEX:
-			/* TODO(eventually): support non-builtin numerical (or even perhaps non-numerical) indices */
-			if (rhs_type->kind != TYPE_BUILTIN || !type_builtin_is_numerical(rhs_type->builtin)) {
+			if ((lhs_type->kind == TYPE_ARR || lhs_type->kind == TYPE_SLICE) &&
+				(rhs_type->kind != TYPE_BUILTIN || !type_builtin_is_numerical(rhs_type->builtin))) {
 				err_print(e->where, "The index of an array must be a builtin numerical type.");
 				return false;
 			}
@@ -1546,6 +1546,41 @@ static bool types_expr(Typer *tr, Expression *e) {
 				break;
 			case TYPE_SLICE:
 				*t = *lhs_type->slice;
+				break;
+			case TYPE_PTR:
+				lhs_type = lhs_type->ptr;
+				if (lhs_type->kind != TYPE_STRUCT) break;
+				/* fallthrough */
+			case TYPE_STRUCT:
+				/* allow accessing struct members with a string */
+				if (rhs_type->kind != TYPE_SLICE
+					|| !type_is_builtin(rhs_type->slice, BUILTIN_CHAR)) {
+					char *s = type_to_str(rhs_type);
+					err_print(e->where, "Expected a string for struct member access with [], but got type %s.", s);
+					return false;
+				}
+				Value field_name;
+				
+				/* replace with BINARY_DOT */
+				e->binary.op = BINARY_DOT;
+				bool is_field = false;
+				if (!eval_expr(tr->evalr, rhs, &field_name)) return false;
+				arr_foreach(lhs_type->struc->fields, Field, f) {
+					if (ident_eq_str(f->name, field_name.slice.data)) {
+						is_field = true;
+						*t = *f->type;
+						e->binary.field = f;
+					}
+				}
+				if (!is_field) {
+					char *fstr = err_malloc((size_t)(field_name.slice.n + 1));
+					memcpy(fstr, field_name.slice.data, (size_t)field_name.slice.n);
+					fstr[field_name.slice.n] = 0; /* null-terminate */
+					char *typestr = type_to_str(lhs_type);
+					err_print(e->where, "%s is not a field of structure %s.", fstr, typestr);
+					free(fstr); free(typestr);
+					return false;
+				}
 				break;
 			default: {
 		    	char *s = type_to_str(lhs_type);
@@ -1560,7 +1595,11 @@ static bool types_expr(Typer *tr, Expression *e) {
 			Type *struct_type = lhs_type;
 			if (struct_type->kind == TYPE_PTR)
 				struct_type = struct_type->ptr;
-			
+			if (rhs->kind != EXPR_IDENT) {
+				err_print(rhs->where, "Expected identifier for struct member access, but got %s.",
+						  expr_kind_to_str(rhs->kind));
+				return false;
+			}
 			if (struct_type->kind == TYPE_STRUCT) {
 				bool is_field = false;
 				if (rhs->kind == EXPR_IDENT) {
@@ -1575,41 +1614,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 				}
 
 				if (!is_field) {
-					/* allow some_struct."foo" */
-					Value field_name;
-					if (!types_expr(tr, rhs)) return false;
-					if (rhs_type->kind != TYPE_SLICE || !type_is_builtin(rhs_type->slice, BUILTIN_CHAR)) {
-						char *struct_typestr = type_to_str(lhs_type);
-						if (rhs->kind == EXPR_IDENT) {
-							char *fstr = ident_to_str(rhs->ident);
-							err_print(e->where, "%s is not a field of structure %s.", fstr, struct_typestr);
-							free(fstr);
-						} else {
-							char *field_typestr = type_to_str(rhs_type);
-							err_print(e->where, "Invalid type %s for field of structure %s .", rhs_type, struct_typestr);
-							free(field_typestr);
-						}
-						free(struct_typestr);
-						return false;
-						
-					}
-					if (!eval_expr(tr->evalr, rhs, &field_name)) return false;
-					arr_foreach(struct_type->struc->fields, Field, f) {
-						if (ident_eq_str(f->name, field_name.slice.data)) {
-							is_field = true;
-							*t = *f->type;
-							e->binary.field = f;
-						}
-					}
-					if (!is_field) {
-						char *fstr = err_malloc((size_t)(field_name.slice.n + 1));
-						memcpy(fstr, field_name.slice.data, (size_t)field_name.slice.n);
-						fstr[field_name.slice.n] = 0; /* null-terminate */
-						char *typestr = type_to_str(lhs_type);
-						err_print(e->where, "%s is not a field of structure %s.", fstr, typestr);
-						free(fstr); free(typestr);
-						return false;
-					}
+					char *member = ident_to_str(rhs->ident);
+					char *struc = type_to_str(struct_type);
+					err_print(e->where, "%s is not a member of structure %s.", member, struc);
+					return false;
 				}
 			} else if (struct_type->kind == TYPE_SLICE || struct_type->kind == TYPE_ARR) {
 				if (!(rhs->kind == EXPR_IDENT && ident_eq_str(rhs->ident, "len"))) {

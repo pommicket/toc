@@ -7,22 +7,12 @@ putf ::= fn(x: float) {
 ");
 };
 
-foo ::= fn(x ::= 5) (int, int) {
-x, 2*x
+Point ::= struct {
+  x, y : int;
 };
 
 main ::= fn() {
-	 puti(f());
-	 puti(f(7));
-	 puti(f(4));
-
-	 f ::= fn(a,b::=3) z := a+b {  };
-
-	 r ::= f();
-	 puti(r);
-	 s ::= f(7);
-	 puti(s);
-	 t ::= f(4);
-	 puti(t);
-	 
+	 p : Point;
+	 p.x = 5;
+	 puti(p[if 5 > 6 { "x" } else { "y" }]);
 };
