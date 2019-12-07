@@ -1,3 +1,8 @@
+/*
+  Copyright (C) 2019 Leo Tenenbaum.
+  This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
+  You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
+*/
 static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *ev, Allocator *allocr) {
 	g->outc = out;
 	g->ident_counter = 1; /* some places use 0 to mean no id */

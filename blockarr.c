@@ -1,3 +1,8 @@
+/*
+  Copyright (C) 2019 Leo Tenenbaum.
+  This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
+  You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
+*/
 /* 
 A block array is an array of blocks of T. 
 They ensure that pointers to values in the array are not invalidated
