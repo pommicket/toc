@@ -16,7 +16,7 @@ main ::= fn() {
 	 puti(f(7));
 	 puti(f(4));
 
-	 f ::= fn(x ::= 3, y::=x) z := x + 1 {  };
+	 f ::= fn(a,b::=3) z := a+b {  };
 
 	 r ::= f();
 	 puti(r);

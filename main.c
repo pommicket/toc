@@ -6,7 +6,6 @@
 
 /* 
 TODO:
-make sure you can't have a tuple parameter (check const tuple params)
 check arr.toc's Arr works @ compile time
 new version of copy_val for copying types??
 

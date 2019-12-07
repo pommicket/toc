@@ -22,8 +22,10 @@ static void evalr_create(Evaluator *ev, Typer *tr, Allocator *allocr) {
 
 static void evalr_free(Evaluator *ev) {
 	typedef void *VoidPtr;
-	arr_foreach(ev->to_free, VoidPtr, f)
+	arr_foreach(ev->to_free, VoidPtr, f) {
+		printf("Freeing %p\n",*f);
 		free(*f);
+	}
 	arr_clear(&ev->to_free);
 }
 
@@ -363,10 +365,9 @@ static void *val_ptr_to_free(Value *v, Type *t) {
 	case TYPE_PTR:
 	case TYPE_SLICE:
 	case TYPE_VOID:
+	case TYPE_TYPE:
 	case TYPE_UNKNOWN:
 		return NULL;
-	case TYPE_TYPE:
-		return v->type->was_expr;
 	case TYPE_ARR:
 		return v->arr;
 	case TYPE_TUPLE:
@@ -1337,11 +1338,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			int index = ident_index_in_decl(e->ident, d);
 			assert(index != -1);
 			*v = *decl_val_at_index(d, index); 
-			if (e->type.kind == TYPE_TYPE) {
-				/* make sure was_expr is set */
-				/* NOTE: this will be freed (see val_ptr_to_free) */
-				v->type->was_expr = err_malloc(sizeof *v->type->was_expr);
-			}
 		} else {
 			char *s = ident_to_str(e->ident);
 			

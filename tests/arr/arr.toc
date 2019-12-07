@@ -28,6 +28,18 @@ arr_add ::= fn(t :: Type, a : &Arr(t), x : t) {
 		a.len += 1;
 };
 
+square ::= fn(t :: Type, x : t) t {
+	   a : Arr(t);
+	   each i := 1,2..2*x-1 {
+	   		arr_add(t, &a, i);
+	   };
+	   sum := 0 as t;
+	   each i := 0..a.len-1 {
+	   		sum += a.data[i];
+	   };
+	   sum
+};
+
 
 ArrInt ::= Arr(int);
 
@@ -39,8 +51,8 @@ main ::= fn() {
 	 arr : ArrInt;
 	 farr : Arr(float);
 	 each i := 1..100 {
-	 	   arr_add(int, &arr, inc(int, i*i));
-	 	   arr_add(float, &farr, inc(float, (i*i) as float));
+	 	   arr_add(int, &arr, inc(int, square(int, i)));
+	 	   arr_add(float, &farr, inc(float, square(float, i as float)));
 	 }
 	 each i := 0..arr.len - 1 {
 	 	  puti(arr.data[i]);
