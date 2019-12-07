@@ -1154,11 +1154,16 @@ static bool types_expr(Typer *tr, Expression *e) {
 
 			copy_fn_expr(&cop, &fn_copy, fn, false);
 			fn = &fn_copy;
+			/* keep track of the declaration */
+			Declaration *param_decl = fn->params;
+			size_t ident_idx = 0;
+			size_t i = 0;
+			
 			
 			table_index_type.flags = TYPE_IS_RESOLVED;
 			table_index_type.kind = TYPE_TUPLE;
 			table_index_type.tuple = NULL;
-			Type *u64t = arr_add(&table_index_type.tuple);
+			Type *u64t = typer_arr_add(tr, &table_index_type.tuple);
 			u64t->was_expr = NULL;
 			u64t->flags = TYPE_IS_RESOLVED;
 			u64t->kind = TYPE_BUILTIN;
@@ -1169,24 +1174,24 @@ static bool types_expr(Typer *tr, Expression *e) {
 			U64 *which_are_const = &which_are_const_val->u64;
 			*which_are_const = 0;
 			int semi_const_index = 0;
-			/* keep track of the declaration */
-			Declaration *param_decl = fn->params;
-			size_t ident_idx = 0;
-			size_t i = 0;
+
+			/* eval compile time arguments */
 			for (i = 0; i < nparams; i++) {
 				bool should_be_evald = arg_is_const(&new_args[i], fn_type->constness[i]);
 				
-				if (should_be_evald) {
+				if (should_be_evald && params_set[i]) {
+					Expression *expr = &new_args[i];
+
 					Value *arg_val = typer_arr_add(tr, &table_index.tuple);
-				    if (!eval_expr(tr->evalr, &new_args[i], arg_val)) {
+				    if (!eval_expr(tr->evalr, expr, arg_val)) {
 						if (tr->evalr->enabled) {
 							info_print(new_args[i].where, "(error occured while trying to evaluate compile-time argument, argument #%lu)", 1+(unsigned long)i);
 						}
 						return false;
 					}
 					
-					Type *type = &new_args[i].type;
-					*(Type *)arr_add(&table_index_type.tuple) = *type;
+					Type *type = &expr->type;
+					*(Type *)typer_arr_add(tr, &table_index_type.tuple) = *type;
 				
 					new_args[i].kind = EXPR_VAL;
 					new_args[i].flags = EXPR_FOUND_TYPE;
@@ -1196,13 +1201,18 @@ static bool types_expr(Typer *tr, Expression *e) {
 					copy_val(tr->allocr, &param_decl->val, arg_val, type);
 					param_decl->flags |= DECL_FOUND_VAL;
 
-					if (fn_type->constness[i] == CONSTNESS_SEMI) {
-						if (semi_const_index >= 64) {
-							err_print(new_args[i].where, "You can't have more than 64 semi-constant arguments to a function at the moment (sorry).");
-							return false;
-						}
-						*which_are_const |= ((U64)1) << semi_const_index;
+				} else if (should_be_evald) {
+					/* leave gap for this */
+					typer_arr_add(tr, &table_index.tuple);
+					typer_arr_add(tr, &table_index_type.tuple);
+				}
+				
+				if (fn_type->constness[i] == CONSTNESS_SEMI) {
+					if (semi_const_index >= 64) {
+						err_print(f->where, "You can't have more than 64 semi-constant arguments to a function at the moment (sorry).");
+						return false;
 					}
+					*which_are_const |= ((U64)1) << semi_const_index;
 				}
 				if (fn_type->constness[i] == CONSTNESS_SEMI) {
 					semi_const_index++;
@@ -1218,6 +1228,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				return false;
 
 			/* deal with default arguments */
+			
 			i = 0;
 			arr_foreach(fn->params, Declaration, param) {
 				arr_foreach(param->idents, Identifier, ident) {
@@ -1227,6 +1238,9 @@ static bool types_expr(Typer *tr, Expression *e) {
 						new_args[i] = param->expr;
 						/* make sure value is copied */
 						copy_val(tr->allocr, &new_args[i].val, &param->expr.val, &param->expr.type);
+						Value *arg_val = &table_index.tuple[i+1];
+						copy_val(tr->allocr, arg_val, &param->expr.val, &param->expr.type);
+						table_index_type.tuple[i+1] = param->expr.type;
 					}
 					i++;
 				}
@@ -1843,7 +1857,7 @@ static bool types_stmt(Typer *tr, Statement *s) {
 		if (!types_expr(tr, &s->expr)) {
 			return false;
 		}
-		if (s->expr.type.kind == TYPE_TUPLE) {
+		if (s->expr.type.kind == TYPE_TUPLE && !(s->flags & STMT_EXPR_NO_SEMICOLON)) {
 			err_print(s->where, "Statement of a tuple is not allowed. Use a semicolon instead of a comma here.");
 			return false;
 		}

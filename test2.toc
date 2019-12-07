@@ -12,13 +12,13 @@ x, 2*x
 };
 
 main ::= fn() {
-	 puti(f());
+	 puti(f(3));
 	 puti(f(7));
 	 puti(f(4));
 
-	 f ::= fn(x ::= 3, y::=x) z := x + 1 {  };
+	 f ::= fn(x ::= foo()) y := x + 1 {  };
 
-	 r ::= f();
+	 r ::= f(3);
 	 puti(r);
 	 s ::= f(7);
 	 puti(s);
