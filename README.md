@@ -24,10 +24,7 @@ x : int; x = 5; // Declare x as an integer, then set it to 5.
 `toc` is statically typed and has many of C's features, but
 it is nearly as fast in theory.
 
-See `docs` for more information.
+See `docs` for more information (in progress).
 
----
+`tests` has some test programs written in `toc`.
 
-### Help
-
-If you find a bug in `toc`, please [report an issue](https://github.com/pommicket/toc/issues) on GitHub.
