@@ -196,6 +196,14 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	size_t param_idx;
 	FnExpr *prev_fn = tr->fn;
 	FnExpr fn_copy;
+	
+	Block *prev_block = tr->block;
+	/* 
+	   fakely enter the body of the function, so that
+	   fn (x : int) y := x {} works
+	*/
+	tr->block = &f->body;
+	*(Block **)arr_adda(&tr->blocks, tr->allocr) = tr->block;
 		
 	/* f has compile time params, but it's not an instance! */
 	bool generic = !(flags & TYPE_OF_FN_IS_INSTANCE) && fn_has_any_const_params(f);
@@ -281,12 +289,14 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	
 	if (f->ret_decls && !generic && f->ret_type.kind == TYPE_VOID /* haven't found return type yet */) {
 		/* find return type */
+		
 		arr_foreach(f->ret_decls, Declaration, d) {
 			if (!types_decl(tr, d, 0)) {
 			    success = false;
 				goto ret;
 			}
 		}
+	
 		if (arr_len(f->ret_decls) == 1 && arr_len(f->ret_decls[0].idents) == 1) {
 			f->ret_type = f->ret_decls[0].type;
 		} else {
@@ -308,16 +318,10 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 		}
 	}
 	*ret_type = f->ret_type;
-    
-	
-	arr_foreach(f->ret_decls, Declaration, decl) {
-		if (!types_decl(tr, decl, 0)) {
-			success = false;
-			goto ret;
-		}
-	}
-	
+
  ret:
+	arr_remove_last(&tr->blocks);
+	tr->block = prev_block;
 	/* cleanup */
 	if (entered_fn) {
 		fn_exit(f);
@@ -647,11 +651,9 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where,
 					 Instance *instance) {
 	FnExpr *prev_fn = tr->fn;
 	bool success = true;
-	ErrCtx *err_ctx = where.ctx;
 	bool entered_fn = false;
 	assert(t->kind == TYPE_FN);
 	if (instance) {
-		*(Location *)typer_arr_add(tr, &err_ctx->instance_stack) = where;
 		f = &instance->fn;
 	} else {
 		if (t->fn.constness)
@@ -708,8 +710,6 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where,
  ret:
 	if (entered_fn)
 		fn_exit(f);
-	if (instance)
-		arr_remove_last(&err_ctx->instance_stack);
 	tr->fn = prev_fn;
 	return success;
 }
@@ -1137,6 +1137,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		if (fn_type->constness) {
 			/* evaluate compile-time arguments + add an instance */
 			
+			
 			/* the function had better be a compile time constant if it has constant params */
 			Value fn_val = {0};
 			if (!eval_expr(tr->evalr, f, &fn_val))
@@ -1255,8 +1256,13 @@ static bool types_expr(Typer *tr, Expression *e) {
 				/* fix parameter and return types (they were kind of problematic before, because we didn't know about the instance) */
 				c->instance->c.id = original_fn->instances.n; /* let's help cgen out and assign an ID to this */
 				/* type this instance */
-				if (!types_fn(tr, &c->instance->fn, &f->type, e->where, c->instance))
-					return false;
+				
+				/* if anything happens, make sure we let the user know that this happened while generating a fn */
+				ErrCtx *err_ctx = e->where.ctx;
+				*(Location *)typer_arr_add(tr, &err_ctx->instance_stack) = e->where;
+			    bool success = types_fn(tr, &c->instance->fn, &f->type, e->where, c->instance);
+				arr_remove_last(&err_ctx->instance_stack);
+				if (!success) return false;
 				arr_clear(&table_index_type.tuple);
 			}
 		}

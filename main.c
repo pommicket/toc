@@ -1,6 +1,5 @@
 /* 
 TODO:
-check fn(x :: int) y := x (run + compile)
 reduce copying (don't copy body of fn_copy unless the instance doesn't 
 exist yet)
 
