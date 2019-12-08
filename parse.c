@@ -1931,7 +1931,7 @@ static bool parse_file(Parser *p, ParsedFile *f) {
 	return ret;
 }
 
-#define PARSE_PRINT_LOCATION(l) //fprintf(out, "[l%lu]", (unsigned long)(l).line);
+#define PARSE_PRINT_LOCATION(l) /* fprintf(out, "[l%lu]", (unsigned long)(l).line); */
 
 /* in theory, this shouldn't be global, but these functions are mostly for debugging anyways */
 static bool parse_printing_after_types;

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 markdown README.md > README.html
 for x in docs/*.md; do
 	echo $x

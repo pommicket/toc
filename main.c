@@ -31,6 +31,8 @@ allow omission of trailing ; in foo ::= fn() {}?
 #ifdef __cplusplus
 #define new new_
 #define this this_
+#elif __STDC_VERSION__ < 199901
+#define inline
 #endif
 
 #include "toc.c"
