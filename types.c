@@ -249,6 +249,13 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 					}
 					param->expr.kind = EXPR_VAL;
 					param->expr.val = val;
+					if (param->expr.type.flags & TYPE_IS_FLEXIBLE) {
+						/* cast to the annotated type, if one exists */
+						if (param->flags & DECL_ANNOTATES_TYPE) {
+							val_cast(&param->expr.val, &param->expr.type, &param->expr.val, &param->type);
+							param->expr.type = param->type;
+						}
+					}
 				}
 			} 
 		}
@@ -1189,7 +1196,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 				
 				if (should_be_evald && params_set[i]) {
 					Expression *expr = &arg_exprs[i];
-
 					Value *arg_val = typer_arr_add(tr, &table_index.tuple);
 				    if (!eval_expr(tr->evalr, expr, arg_val)) {
 						if (tr->evalr->enabled) {
@@ -1205,7 +1211,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 					arg_exprs[i].flags = EXPR_FOUND_TYPE;
 					copy_val(tr->allocr, &arg_exprs[i].val, arg_val, type);
 					arg_exprs[i].val = *arg_val;
-					arg_exprs[i].type = *type;
 					copy_val(tr->allocr, &param_decl->val, arg_val, type);
 					param_decl->flags |= DECL_FOUND_VAL;
 
