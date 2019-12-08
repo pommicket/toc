@@ -1,0 +1,22 @@
+puti ::= fn(x: int) {
+	 #C("printf(\"%ld\\n\", (long)x);
+");
+};
+putf ::= fn(x: float) {
+	 #C("printf(\"%f\\n\", (double)x);
+");
+};
+
+// f ::= fn(t ::= int, x : t) t {
+//   x + 1
+// };
+
+f ::= fn(x : t, t ::= float) t {
+  x+1
+};
+
+main ::= fn() {
+	 putf(f(3.321));
+	 puti(f(3, int));
+	 putf(f(3.3421, float));
+};

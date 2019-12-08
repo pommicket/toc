@@ -1550,9 +1550,9 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where, U64 instance, Valu
 						cgen_write(g, " = ");
 						if (!cgen_val(g, arg, type, where))
 							return false;
+						cgen_write(g, ";");
+						cgen_nl(g);
 					}
-					cgen_write(g, ";");
-					cgen_nl(g);
 					carg_idx++;
 				}
 			}

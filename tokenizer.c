@@ -158,15 +158,26 @@ static void tokenization_err(Tokenizer *t, const char *fmt, ...) {
 }
 
 /* to be used after tokenization */
-static void tokr_err_(const char *src_file, int src_line, Tokenizer *t, const char *fmt, ...) {
+static void tokr_err_(
+#if ERR_SHOW_SOURCE_LOCATION
+					  const char *src_file, int src_line,
+#endif
+					  Tokenizer *t, const char *fmt, ...) {
 	if (!t->token->where.ctx->enabled) return;
-	err_fprint("At line %d of %s:\n", src_line, src_file); /* RELEASE: Remove this */
+#if ERR_SHOW_SOURCE_LOCATION
+	err_fprint("At line %d of %s:\n", src_line, src_file);
+#endif
 	va_list args;
 	va_start(args, fmt);
 	err_vprint(t->token->where, fmt, args);
 	va_end(args);
 }
+
+#if ERR_SHOW_SOURCE_LOCATION
 #define tokr_err(...) tokr_err_(__FILE__, __LINE__, __VA_ARGS__)
+#else
+#define tokr_err tokr_err_
+#endif
 
 static void tokr_put_location(Tokenizer *tokr, Token *t) {
 	t->where.line = tokr->line;
