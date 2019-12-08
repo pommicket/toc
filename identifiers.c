@@ -99,6 +99,11 @@ static void fprint_ident(FILE *out, Identifier id) {
 	fputc(c, out);
 }
 
+static void print_ident(Identifier id) {
+	fprint_ident(stdout, id);
+	printf("\n");
+}
+
 /* reduced charset = a-z, A-Z, 0-9, _ */
 static void fprint_ident_reduced_charset(FILE *out, Identifier id) {
 	assert(id);

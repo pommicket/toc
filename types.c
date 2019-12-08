@@ -1073,14 +1073,13 @@ static bool types_expr(Typer *tr, Expression *e) {
 						bool found = false;
 						arr_foreach(fn_decl->params, Declaration, pa) {
 							arr_foreach(pa->idents, Identifier, id) {
-								if (*id == args[index].name) {
+								if (*id == arg->name) {
 									found = true;
 									break;
 								}
 								index++;
 							}
 							if (found) break;
-							index++;
 						}
 						if (!found) {
 							char *s = ident_to_str(arg->name);

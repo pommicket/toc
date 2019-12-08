@@ -19,6 +19,9 @@
 
 /* 
 TODO:
+params with default values before params without them
+check for duplicate params
+inferred const params
 packages
 X ::= newtype(int); or something
 don't allow while {3; 5} (once break is added)
@@ -98,13 +101,16 @@ int main(int argc, char **argv) {
 		err_fprint(TEXT_IMPORTANT("Errors occured while preprocessing.\n"));
 		return EXIT_FAILURE;
 	}
+
+#if 0
+	arr_foreach(t.tokens, Token, token) {
+		if (token != t.tokens)
+			printf("    ");
+		fprint_token(stdout, token);
+	}
+	printf("\n");
+#endif
 	
-	/* arr_foreach(t.tokens, Token, token) { */
-	/* 	if (token != t.tokens) */
-	/* 		printf("    "); */
-	/* 	fprint_token(stdout, token); */
-	/* } */
-	/* printf("\n"); */
 	Parser p;
 	parser_create(&p, &t, &main_allocr);
    	ParsedFile f;
@@ -113,9 +119,10 @@ int main(int argc, char **argv) {
 		err_fprint(TEXT_IMPORTANT("Errors occured while parsing.\n"));
 		return EXIT_FAILURE;
 	}
-	/* fprint_parsed_file(stdout, &f); */
-    
-	/* printf("\n\n-----\n\n"); */
+#if 0
+	fprint_parsed_file(stdout, &f);
+	printf("\n\n-----\n\n");
+#endif
 	
 	tokr_free(&t);
 	
@@ -127,7 +134,6 @@ int main(int argc, char **argv) {
 	if (!block_enter(NULL, f.stmts, SCOPE_CHECK_REDECL)) /* enter global scope */
 		return false;
 
-	/* fprint_parsed_file(stdout, &f); */
 	if (!types_file(&tr, &f)) {
 	    err_fprint(TEXT_IMPORTANT("Errors occured while determining types.\n"));
 		return EXIT_FAILURE;
@@ -155,7 +161,6 @@ int main(int argc, char **argv) {
 	evalr_free(&ev);
 	
 	fclose(out);
-	/* fclose(h_out); */
 	idents_free(&file_idents);
 }
 
