@@ -1039,9 +1039,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 		Argument *args = c->args;
 		size_t nparams = arr_len(f->type.fn.types) - 1;
 		size_t nargs = arr_len(c->args);
-		bool ret = true;
-		Expression *new_args = NULL;
-		arr_set_lena(&new_args, nparams, tr->allocr);
+		Expression *arg_exprs = NULL;
+		arr_set_lena(&arg_exprs, nparams, tr->allocr);
 		bool *params_set = nparams ? typer_calloc(tr, nparams, sizeof *params_set) : NULL;
 		if (f->kind == EXPR_IDENT) {
 			IdentDecl *decl = ident_decl(f->ident);
@@ -1054,50 +1053,60 @@ static bool types_expr(Typer *tr, Expression *e) {
 				}
 			}
 		}
-		if (!fn_decl && nargs != nparams) {
-			err_print(e->where, "Expected %lu arguments to function call, but got %lu.", (unsigned long)nparams, (unsigned long)nargs);
-			return false;
-		}
-		bool had_named_arg = false;
-		for (size_t p = 0; p < nargs; p++) {
-			if (args[p].name) {
-				if (!fn_decl) {
-					err_print(args[p].where, "You must call a function directly by its name to use named arguments.");
-					return false;
-				}
-				had_named_arg = true;
-				long index = 0;
-				long arg_index = -1;
-				arr_foreach(fn_decl->params, Declaration, param) {
-					arr_foreach(param->idents, Identifier, ident) {
-						if (*ident == args[p].name) {
-							arg_index = index;
-							break;
+
+		if (fn_decl) {
+			Argument *arg = args;
+			Argument *arg_end = args + nargs;
+			size_t p = 0;
+			if (args) arr_foreach(fn_decl->params, Declaration, param) {
+				arr_foreach(param->idents, Identifier, ident) {
+					if (arg->name) {
+						/* named argument */
+						long index = 0;
+						bool found = false;
+						arr_foreach(fn_decl->params, Declaration, pa) {
+							arr_foreach(pa->idents, Identifier, id) {
+								if (*id == args[index].name) {
+									found = true;
+									break;
+								}
+								index++;
+							}
+							if (found) break;
+							index++;
 						}
-						index++;
+						if (!found) {
+							char *s = ident_to_str(arg->name);
+							err_print(arg->where, "Argument '%s' does not appear in declaration of function.", s);
+							free(s);
+							info_print(idecl_where(ident_decl(f->ident)), "Declaration is here.");
+							return false;
+						}
+						params_set[index] = true;
+						arg_exprs[index] = arg->val;
+					} else {
+						params_set[p] = true;
+						arg_exprs[p] = arg->val;
+						p++;
 					}
-					if (arg_index != -1) break;
+					arg++;
+					if (arg == arg_end) break;
 				}
-				if (arg_index == -1) {
-					char *s = ident_to_str(args[p].name);
-					err_print(args[p].where, "Argument '%s' does not appear in declaration of function.", s);
-					free(s);
-					info_print(idecl_where(ident_decl(f->ident)), "Declaration is here.");
-					return false;
-				}
-				new_args[arg_index] = args[p].val;
-				params_set[arg_index] = true;
-				continue;
+				if (arg == arg_end) break;
 			}
-			if (had_named_arg) {
-				err_print(args[p].where, "Unnamed argument after named argument.");
+		} else {
+			if (nargs != nparams) {
+				err_print(e->where, "Expected %lu arguments to function call, but got %lu.", (unsigned long)nparams, (unsigned long)nargs);
 				return false;
 			}
-			new_args[p] = args[p].val;
-			/* we will check the type of the argument later */
-			params_set[p] = true;
+			for (size_t p = 0; p < nargs; p++) {
+				if (args[p].name) {
+					err_print(args[p].where, "You can only use named arguments if you directly call a function.");
+				}
+				arg_exprs[p] = args[p].val;
+				params_set[p] = true;
+			}
 		}
-		if (!ret) return false;
 
 		FnType *fn_type = &f->type.fn;
 		for (size_t i = 0; i < nparams; i++) {
@@ -1120,10 +1129,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 								if (!fn_type->constness) {
 									/* default arg */
 									assert(param->expr.kind == EXPR_VAL); /* evaluated in type_of_fn */
-									new_args[i].kind = EXPR_VAL;
-									new_args[i].flags = param->expr.flags;
-									new_args[i].type = param->type;
-									new_args[i].val = param->expr.val;
+									arg_exprs[i].kind = EXPR_VAL;
+									arg_exprs[i].flags = param->expr.flags;
+									arg_exprs[i].type = param->type;
+									arg_exprs[i].val = param->expr.val;
 								}
 							}
 						}
@@ -1176,15 +1185,15 @@ static bool types_expr(Typer *tr, Expression *e) {
 
 			/* eval compile time arguments */
 			for (i = 0; i < nparams; i++) {
-				bool should_be_evald = arg_is_const(&new_args[i], fn_type->constness[i]);
+				bool should_be_evald = arg_is_const(&arg_exprs[i], fn_type->constness[i]);
 				
 				if (should_be_evald && params_set[i]) {
-					Expression *expr = &new_args[i];
+					Expression *expr = &arg_exprs[i];
 
 					Value *arg_val = typer_arr_add(tr, &table_index.tuple);
 				    if (!eval_expr(tr->evalr, expr, arg_val)) {
 						if (tr->evalr->enabled) {
-							info_print(new_args[i].where, "(error occured while trying to evaluate compile-time argument, argument #%lu)", 1+(unsigned long)i);
+							info_print(arg_exprs[i].where, "(error occured while trying to evaluate compile-time argument, argument #%lu)", 1+(unsigned long)i);
 						}
 						return false;
 					}
@@ -1192,11 +1201,11 @@ static bool types_expr(Typer *tr, Expression *e) {
 					Type *type = &expr->type;
 					*(Type *)typer_arr_add(tr, &table_index_type.tuple) = *type;
 				
-					new_args[i].kind = EXPR_VAL;
-					new_args[i].flags = EXPR_FOUND_TYPE;
-					copy_val(tr->allocr, &new_args[i].val, arg_val, type);
-					new_args[i].val = *arg_val;
-					new_args[i].type = *type;
+					arg_exprs[i].kind = EXPR_VAL;
+					arg_exprs[i].flags = EXPR_FOUND_TYPE;
+					copy_val(tr->allocr, &arg_exprs[i].val, arg_val, type);
+					arg_exprs[i].val = *arg_val;
+					arg_exprs[i].type = *type;
 					copy_val(tr->allocr, &param_decl->val, arg_val, type);
 					param_decl->flags |= DECL_FOUND_VAL;
 
@@ -1234,9 +1243,9 @@ static bool types_expr(Typer *tr, Expression *e) {
 					if (!params_set[i]) {
 						assert(param->flags & DECL_HAS_EXPR);
 						assert(param->expr.kind == EXPR_VAL); /* this was done by type_of_fn */
-						new_args[i] = param->expr;
+						arg_exprs[i] = param->expr;
 						/* make sure value is copied */
-						copy_val(tr->allocr, &new_args[i].val, &param->expr.val, &param->expr.type);
+						copy_val(tr->allocr, &arg_exprs[i].val, &param->expr.val, &param->expr.type);
 						Value *arg_val = &table_index.tuple[i+1];
 						copy_val(tr->allocr, arg_val, &param->expr.val, &param->expr.type);
 						table_index_type.tuple[i+1] = param->expr.type;
@@ -1251,11 +1260,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 		
 		/* check types of arguments */
 		for (size_t p = 0; p < nparams; p++) {
-			Expression *arg = &new_args[p];
+			Expression *arg = &arg_exprs[p];
 			Type *expected = &param_types[p];
 			Type *got = &arg->type;
 			if (!type_eq(expected, got)) {
-				ret = false;
 				char *estr = type_to_str(expected);
 				char *gstr = type_to_str(got);
 				err_print(arg->where, "Expected type %s as %lu%s argument to function, but got %s.", estr, 1+(unsigned long)p, ordinals(1+p), gstr);
@@ -1286,9 +1294,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 			}
 		}
 
-		if (!ret) return false;
 		*t = *ret_type;
-		c->arg_exprs = new_args;
+		c->arg_exprs = arg_exprs;
 		break;
 	}
 	case EXPR_BLOCK: {

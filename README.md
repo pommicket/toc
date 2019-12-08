@@ -46,9 +46,8 @@ On other systems, you can just compile main.c with a C compiler. toc uses severa
 Here are all the C99 features which `toc` depends on (I might have forgotten some...):
 
 - Declare anywhere
-- `stdint.h`
+- `inttypes.h`
 - Non-constant struct literal initializers (e.g. `int x[2] = {y, z};`)
-- Variadic macros and `__VA_ARGS__`
 - Flexible array members
 
 The last three of those could all be removed fairly easily.
