@@ -156,6 +156,7 @@ You shouldn't rely on this, though, e.g. by doing
 #define arr_set_lena(arr, n, a) arr_set_lena_((void **)(arr), n, sizeof **(arr), a)
 #define arr_clear(arr) arr_clear_((void **)(arr)), (void)sizeof **arr /* second part makes sure most of the time that you don't accidentally call it without taking the address */
 #define arr_last(arr) arr_last_((void *)(arr), sizeof *(arr))
+/* OPTIM: maybe replace with less standard-compliant version */
 #define arr_foreach(arr, type, var) for (type *var = arr_len(arr) ? arr : NULL, *var##_foreach_end = arr_last(arr); var; var == var##_foreach_end ? var = NULL : var++)
 #define arr_remove_last(arr) arr_remove_last_((void **)(arr), sizeof **(arr))
 #define arr_copya(out, in, a) do { assert(sizeof *(in) == sizeof **(out)); arr_copya_((void **)(out), (in), sizeof **(out), (a)); } while(0)

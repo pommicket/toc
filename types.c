@@ -1062,50 +1062,66 @@ static bool types_expr(Typer *tr, Expression *e) {
 		}
 
 		if (fn_decl) {
-			Argument *arg = args;
-			Argument *arg_end = args + nargs;
+			/* TODO: make sure # of arguments isn't MORE than # of params */
 			size_t p = 0;
-			if (args) arr_foreach(fn_decl->params, Declaration, param) {
-				arr_foreach(param->idents, Identifier, ident) {
-					if (arg->name) {
-						/* named argument */
-						long index = 0;
-						bool found = false;
-						arr_foreach(fn_decl->params, Declaration, pa) {
-							arr_foreach(pa->idents, Identifier, id) {
-								if (*id == arg->name) {
-									found = true;
-									break;
-								}
-								index++;
-							}
-							if (found) break;
-						}
-						if (!found) {
-							char *s = ident_to_str(arg->name);
-							err_print(arg->where, "Argument '%s' does not appear in declaration of function.", s);
-							free(s);
-							info_print(idecl_where(ident_decl(f->ident)), "Declaration is here.");
-							return false;
-						}
-						params_set[index] = true;
-						arg_exprs[index] = arg->val;
-					} else {
-						params_set[p] = true;
-						arg_exprs[p] = arg->val;
-						p++;
-					}
-					arg++;
-					if (arg == arg_end) break;
+
+			Declaration *last_param_without_default_value = NULL;
+			arr_foreach(fn_decl->params, Declaration, param) {
+				if (!(param->flags & DECL_HAS_EXPR)) {
+				    last_param_without_default_value = param;
 				}
-				if (arg == arg_end) break;
+			}
+			Declaration *param = fn_decl->params;
+			size_t ident_idx = 0;
+			
+			arr_foreach(args, Argument, arg) {
+				bool named = arg->name != NULL;
+				if (named) {
+					/* named argument */
+					long index = 0;
+					bool found = false;
+					arr_foreach(fn_decl->params, Declaration, pa) {
+						arr_foreach(pa->idents, Identifier, id) {
+							if (*id == arg->name) {
+								found = true;
+								break;
+							}
+							++index;
+						}
+						if (found) break;
+					}
+					if (!found) {
+						char *s = ident_to_str(arg->name);
+						err_print(arg->where, "Argument '%s' does not appear in declaration of function.", s);
+						free(s);
+						info_print(idecl_where(ident_decl(f->ident)), "Declaration is here.");
+						return false;
+					}
+					params_set[index] = true;
+					arg_exprs[index] = arg->val;
+				} else if ((param->flags & DECL_HAS_EXPR) && param < last_param_without_default_value) {
+					/* this param must be named; so this is referring to a later parameter */
+					--arg;
+				} else {
+					params_set[p] = true;
+					arg_exprs[p] = arg->val;
+				}
+				if (!named) {
+					/* sequential order of parameters */
+					++p;
+					++ident_idx;
+					if (ident_idx == arr_len(param->idents)) {
+						++param;
+						ident_idx = 0;
+					}
+				}
 			}
 		} else {
 			if (nargs != nparams) {
 				err_print(e->where, "Expected %lu arguments to function call, but got %lu.", (unsigned long)nparams, (unsigned long)nargs);
 				return false;
 			}
-			for (size_t p = 0; p < nargs; p++) {
+			for (size_t p = 0; p < nargs; ++p) {
 				if (args[p].name) {
 					err_print(args[p].where, "You can only use named arguments if you directly call a function.");
 				}
