@@ -19,7 +19,6 @@
 
 /* 
 TODO:
-params with default values before params without them
 check for duplicate params
 inferred const params
 packages
@@ -59,7 +58,7 @@ int main(int argc, char **argv) {
 	}
 	const char *out_filename = "out.c";
 
-	for (int i = 2; i < argc-1; i++) {
+	for (int i = 2; i < argc-1; ++i) {
 		if (strcmp(argv[i], "-o") == 0)
 			out_filename = argv[i+1];
 	}

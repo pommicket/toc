@@ -12,7 +12,7 @@ static bool cgen_decls_fn_instances(CGenerator *g, Expression *e) {
 	FnExpr *f = &e->fn;
 	assert(e->type.fn.constness);
 	Instance **data = f->instances.data;
-	for (U64 i = 0; i < f->instances.cap; i++) {
+	for (U64 i = 0; i < f->instances.cap; ++i) {
 		if (f->instances.occupied[i]) {
 			if (cgen_should_gen_fn(&(*data)->fn)) {
 				(*data)->fn.c.name = f->c.name;

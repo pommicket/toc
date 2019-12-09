@@ -194,7 +194,7 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 		Type *ret_type = t->fn.types;
 		Type *param_types = ret_type + 1;
 		size_t nparams = arr_len(t->fn.types) - 1;
-		for (size_t i = 0; i < nparams; i++) {
+		for (size_t i = 0; i < nparams; ++i) {
 			if (i > 0)
 				written += str_copy(buffer + written, bufsize - written, ", ");
 			if (t->fn.constness) {

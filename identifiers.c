@@ -33,7 +33,7 @@ static Identifier ident_new(Identifiers *ids, Identifier parent, unsigned char i
 	memset(tree, 0, sizeof *tree); /* use zero value of IdentTree */
 #ifdef NONZERO_NULL_PTRS
 	tree->parent = NULL;
-	for (size_t i = 0; i < TREE_NCHILDREN; i++)
+	for (size_t i = 0; i < TREE_NCHILDREN; ++i)
 		tree->children[i] = NULL;
 	tree->decls = NULL;
 #endif
@@ -170,7 +170,7 @@ static IdentDecl *ident_decl(Identifier i) {
 static void ident_tree_free(IdentTree *id) {
 	if (!id) return;
 	arr_clear(&id->decls);
-	for (int i = 0; i < TREE_NCHILDREN; i++)
+	for (int i = 0; i < TREE_NCHILDREN; ++i)
 		ident_tree_free(id->children[i]);
 }
 

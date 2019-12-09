@@ -15,7 +15,7 @@ size_t str_copy(char *dest, size_t destsz, const char *src) {
 		*dest = 0;
 		return 0;
 	}
-	for (size_t i = 0; i < destsz-1; i++) {
+	for (size_t i = 0; i < destsz-1; ++i) {
 		*dest = *src;
 		if (!*src) {
 			*dest = 0;

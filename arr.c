@@ -164,10 +164,10 @@ You shouldn't rely on this, though, e.g. by doing
 #ifdef TOC_DEBUG
 static void arr_test(void) {
 	int *foos = NULL;
-	for (int i = 0; i < 1000; i++) {
+	for (int i = 0; i < 1000; ++i) {
 		*(int *)arr_add(&foos) = i;
 	}
-	for (int i = 0; i < (int)arr_len(foos); i++) {
+	for (int i = 0; i < (int)arr_len(foos); ++i) {
 		assert(foos[i] == i);
 	}
 	int lastx = -1;

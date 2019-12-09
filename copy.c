@@ -82,7 +82,7 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 		size_t ntypes = arr_len(in->fn.types);
 		out->fn.types = NULL;
 		arr_set_lena(&out->fn.types, ntypes, c->allocr);
-		for (size_t i = 0; i < ntypes; i++) {
+		for (size_t i = 0; i < ntypes; ++i) {
 			copy_type(c, &out->fn.types[i], &in->fn.types[i]);
 		}
 	} break;
@@ -90,7 +90,7 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 		size_t ntypes = arr_len(in->tuple);
 		out->tuple = NULL;
 		arr_set_lena(&out->tuple, ntypes, c->allocr);
-		for (size_t i = 0; i < ntypes; i++) {
+		for (size_t i = 0; i < ntypes; ++i) {
 			copy_type(c, &out->tuple[i], &in->tuple[i]);
 		}
 	} break;
@@ -119,7 +119,7 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 		out->struc->fields = NULL;
 
 		arr_set_lena(&out->struc->fields, nfields, c->allocr);
-		for (size_t i = 0; i < nfields; i++) {
+		for (size_t i = 0; i < nfields; ++i) {
 			Field *fout = &out->struc->fields[i];
 			Field *fin = &in->struc->fields[i];
 			*fout = *fin;
@@ -135,13 +135,13 @@ static void copy_fn_expr(Copier *c, FnExpr *fout, FnExpr *fin, bool copy_body) {
 	size_t nparam_decls = arr_len(fin->params);
 	fout->params = NULL;
 	arr_set_lena(&fout->params, nparam_decls, c->allocr);
-	for (i = 0; i < nparam_decls; i++)
+	for (i = 0; i < nparam_decls; ++i)
 		copy_decl(c, fout->params + i, fin->params + i);
 	size_t nret_decls = arr_len(fin->ret_decls);
 	if (fin->ret_decls) {
 		fout->ret_decls = NULL;
 		arr_set_lena(&fout->ret_decls, nret_decls, c->allocr);
-		for (i = 0; i < nret_decls; i++)
+		for (i = 0; i < nret_decls; ++i)
 			copy_decl(c, fout->ret_decls + i, fin->ret_decls + i);
 	}
 	copy_type(c, &fout->ret_type, &fin->ret_type);
@@ -222,7 +222,7 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		size_t nargs = arr_len(cin->args);
 		cout->arg_exprs = NULL;
 		arr_set_lena(&cout->args, nargs, a);
-		for (size_t i = 0; i < nargs; i++) {
+		for (size_t i = 0; i < nargs; ++i) {
 			Argument *arg_in = &cin->args[i];
 			Argument *arg_out = &cout->args[i];
 			*arg_out = *arg_in;
@@ -236,7 +236,7 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		size_t nexprs = arr_len(in->tuple);
 		out->tuple = NULL;
 		arr_set_lena(&out->tuple, nexprs, a);
-		for (size_t i = 0; i < nexprs; i++)
+		for (size_t i = 0; i < nexprs; ++i)
 			copy_expr(c, out->tuple + i, in->tuple + i);
 	} break;
 	case EXPR_C:
@@ -306,7 +306,7 @@ static void copy_block(Copier *c, Block *out, Block *in) {
 		copy_expr(c, out->ret_expr = allocr_malloc(c->allocr, sizeof *out->ret_expr), in->ret_expr);
 	
 	arr_set_lena(&out->stmts, nstmts, c->allocr);
-	for (size_t i = 0; i < nstmts; i++) {
+	for (size_t i = 0; i < nstmts; ++i) {
 		copy_stmt(c, &out->stmts[i], &in->stmts[i]);
 	}
 	c->block = prev;

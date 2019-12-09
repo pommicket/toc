@@ -114,9 +114,9 @@ static void fprint_token(FILE *out, Token *t) {
 
 static inline void tokr_nextchar(Tokenizer *t) {
 	if (*(t->s) == '\n') {
-		t->line++;
+		++t->line;
 	}
-	t->s++;
+	++t->s;
 }
 
 static char tokr_esc_seq(Tokenizer *t) {
@@ -367,7 +367,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 						exponent += *t->s - '0';
 					}
 					/* OPTIM: Slow for very large exponents (unlikely to happen) */
-					for (int i = 0; i < exponent; i++) {
+					for (int i = 0; i < exponent; ++i) {
 						if (negative_exponent)
 							n->floatval /= 10;
 						else

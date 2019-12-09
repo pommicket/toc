@@ -57,12 +57,12 @@ static void block_arr_test(void) {
 	BlockArr a;
 	int *ps[100];
 	block_arr_create(&a, 3, sizeof(int));
-	for (int i = 0; i < 100; i++) {
+	for (int i = 0; i < 100; ++i) {
 		int *p = block_arr_add(&a);
 		*p = i;
 		ps[i] = p;
 	}
-	for (int i = 0; i < 100; i++) {
+	for (int i = 0; i < 100; ++i) {
 	    assert(*ps[i] == i);
 	}
 	block_arr_free(&a);

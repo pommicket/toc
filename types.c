@@ -60,7 +60,7 @@ static bool type_eq(Type *a, Type *b) {
 		if (arr_len(a->fn.types) != arr_len(b->fn.types)) return false;
 		Type *a_types = a->fn.types, *b_types = b->fn.types;
 		Constness *a_constness = a->fn.constness, *b_constness = b->fn.constness;
-		for (size_t i = 0; i < arr_len(a->fn.types); i++) {
+		for (size_t i = 0; i < arr_len(a->fn.types); ++i) {
 			Constness const_a = CONSTNESS_NO, const_b = CONSTNESS_NO;
 			if (a_constness)
 				const_a = a_constness[i];
@@ -78,7 +78,7 @@ static bool type_eq(Type *a, Type *b) {
 	case TYPE_TUPLE: {
 		if (arr_len(a->tuple) != arr_len(b->tuple)) return false;
 		Type *a_types = a->tuple, *b_types = b->tuple;
-		for (size_t i = 0; i < arr_len(a->tuple); i++) {
+		for (size_t i = 0; i < arr_len(a->tuple); ++i) {
 			if (!type_eq(&a_types[i], &b_types[i]))
 				return false;
 		}
@@ -263,12 +263,12 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 		if (is_at_all_const) {
 			if (!t->fn.constness) {
 				has_constant_params = true;
-				for (size_t i = 0; i < idx; i++) {
+				for (size_t i = 0; i < idx; ++i) {
 					*(Constness *)typer_arr_add(tr, &t->fn.constness) = CONSTNESS_NO;
 				}
 			}
 		}
-		for (size_t i = 0; i < arr_len(param->idents); i++) {
+		for (size_t i = 0; i < arr_len(param->idents); ++i) {
 			Type *param_type = typer_arr_add(tr, &t->fn.types);
 			if (!generic) {
 				*param_type = param->type;
@@ -339,7 +339,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 		tr->fn = prev_fn;
 
 		/* remove declarations from parameters we've already dealt with */
-		for (size_t i = 0; i < param_idx; i++) {
+		for (size_t i = 0; i < param_idx; ++i) {
 			Declaration *p = &f->params[i];
 			if (p->flags & DECL_IS_CONST)
 				arr_foreach(p->idents, Identifier, ident)
@@ -1062,8 +1062,12 @@ static bool types_expr(Typer *tr, Expression *e) {
 		}
 
 		if (fn_decl) {
-			/* TODO: make sure # of arguments isn't MORE than # of params */
-			size_t p = 0;
+			if (nargs > nparams) {
+				err_print(e->where, "Expected at most %lu arguments to function, but got %lu.",
+						  nparams, nargs);
+				return false;
+			}
+		    int p = 0; /* counter for sequential parameters */
 
 			Declaration *last_param_without_default_value = NULL;
 			arr_foreach(fn_decl->params, Declaration, param) {
@@ -1076,9 +1080,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 			
 			arr_foreach(args, Argument, arg) {
 				bool named = arg->name != NULL;
+				int param_idx = -1;
 				if (named) {
 					/* named argument */
-					long index = 0;
+					int index = 0;
 					bool found = false;
 					arr_foreach(fn_decl->params, Declaration, pa) {
 						arr_foreach(pa->idents, Identifier, id) {
@@ -1097,15 +1102,25 @@ static bool types_expr(Typer *tr, Expression *e) {
 						info_print(idecl_where(ident_decl(f->ident)), "Declaration is here.");
 						return false;
 					}
-					params_set[index] = true;
-					arg_exprs[index] = arg->val;
+					param_idx = index;
 				} else if ((param->flags & DECL_HAS_EXPR) && param < last_param_without_default_value) {
 					/* this param must be named; so this is referring to a later parameter */
 					--arg;
 				} else {
-					params_set[p] = true;
-					arg_exprs[p] = arg->val;
+					param_idx = p;
 				}
+
+				if (param_idx != -1) {
+					if (params_set[param_idx]) {
+						char *s = ident_to_str(param->idents[ident_idx]);
+						err_print(arg->where, "Argument #%lu (%s) set twice in function call.", param_idx+1, s);
+						free(s);
+						return false;
+					}
+					params_set[param_idx] = true;
+					arg_exprs[param_idx] = arg->val;
+				}
+
 				if (!named) {
 					/* sequential order of parameters */
 					++p;
@@ -1131,7 +1146,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		}
 
 		FnType *fn_type = &f->type.fn;
-		for (size_t i = 0; i < nparams; i++) {
+		for (size_t i = 0; i < nparams; ++i) {
 			if (!params_set[i]) {
 				size_t index = 0;
 				assert(fn_decl); /* we can only miss an arg if we're using named/optional args */
@@ -1206,7 +1221,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			int semi_const_index = 0;
 
 			/* eval compile time arguments */
-			for (i = 0; i < nparams; i++) {
+			for (i = 0; i < nparams; ++i) {
 				bool should_be_evald = arg_is_const(&arg_exprs[i], fn_type->constness[i]);
 				
 				if (should_be_evald && params_set[i]) {
@@ -1833,7 +1848,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 				
 	}
 	
-	for (size_t i = 0; i < arr_len(d->idents); i++) {
+	for (size_t i = 0; i < arr_len(d->idents); ++i) {
 		Type *t = d->type.kind == TYPE_TUPLE ? &d->type.tuple[i] : &d->type;
 		if (t->kind == TYPE_TYPE) {
 			if (!(d->flags & DECL_IS_CONST)) {

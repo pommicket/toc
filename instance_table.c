@@ -41,7 +41,7 @@ static U64 f32_hash(F32 f) {
 		}
 		last = f;
 	}
-	for (int i = 0; i < F32_MANT_DIG; i++) {
+	for (int i = 0; i < F32_MANT_DIG; ++i) {
 		f *= 10;
 	}
 	hash ^= (U64)exponent + (U64)F32_DIG * (U64)f;
@@ -67,7 +67,7 @@ static U64 f64_hash(F64 f) {
 		}
 		last = f;
 	}
-	for (int i = 0; i < F64_MANT_DIG; i++) {
+	for (int i = 0; i < F64_MANT_DIG; ++i) {
 		f *= 10;
 	}
 	hash ^= (U64)exponent + (U64)F64_DIG * (U64)f;
@@ -151,7 +151,7 @@ static U64 val_ptr_hash(void *v, Type *t) {
 		U64 hash = 0;
 		Value *elems = *(Value **)v;
 		U32 x = 1;
-		for (U64 i = 0; i < (U64)arr_len(t->tuple); i++) {
+		for (U64 i = 0; i < (U64)arr_len(t->tuple); ++i) {
 			hash += (U64)x * val_hash(elems[i], &t->tuple[i]);
 			x = rand_u32(x);
 		}
@@ -164,7 +164,7 @@ static U64 val_ptr_hash(void *v, Type *t) {
 		U32 x = 1;
 		U64 hash = 0;
 		U64 size = (U64)compiler_sizeof(t->arr.of);
-		for (U64 i = 0; i < (U64)t->arr.n; i++) {
+		for (U64 i = 0; i < (U64)t->arr.n; ++i) {
 			hash += (U64)x * val_ptr_hash((char *)v + i * size, t->arr.of);
 			x = rand_u32(x);
 		}
@@ -175,7 +175,7 @@ static U64 val_ptr_hash(void *v, Type *t) {
 		U64 hash = 0;
 		Slice *s = v;
 		U64 size = (U64)compiler_sizeof(t->slice);
-		for (U64 i = 0; i < (U64)s->n; i++) {
+		for (U64 i = 0; i < (U64)s->n; ++i) {
 			hash += (U64)x * val_ptr_hash((char *)s->data + i * size, t->slice);
 			x = rand_u32(x);
 		}
@@ -234,7 +234,7 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 	case TYPE_TUPLE: {
 		Value *us = *(Value **)u;
 		Value *vs = *(Value **)v;
-	    for (size_t i = 0; i < arr_len(t->tuple); i++) {
+	    for (size_t i = 0; i < arr_len(t->tuple); ++i) {
 			if (!val_eq(us[i], vs[i], &t->tuple[i]))
 				return false;
 		}
@@ -243,7 +243,7 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 	case TYPE_ARR: {
 		U64 size = (U64)compiler_sizeof(t->arr.of);
 		char *uptr = u, *vptr = v;
-		for (U64 i = 0; i < t->arr.n; i++) {
+		for (U64 i = 0; i < t->arr.n; ++i) {
 			if (!val_ptr_eq(uptr, vptr, t->arr.of))
 				return false;
 			uptr += size;
@@ -257,7 +257,7 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 		Slice *s = v;
 		if (r->n != s->n) return false;
 		char *sptr = r->data, *tptr = s->data;
-		for (U64 i = 0; i < (U64)s->n; i++) {
+		for (U64 i = 0; i < (U64)s->n; ++i) {
 			if (!val_ptr_eq(sptr, tptr, t->slice))
 				return false;
 			sptr += size;
@@ -294,7 +294,7 @@ static Instance *instance_table_adda(Allocator *a, HashTable *h, Value v, Type *
 		bool *new_occupied = allocr_calloc(a, (size_t)new_cap, sizeof *new_occupied);
 		Instance **old_data = h->data;
 		bool *old_occupied = h->occupied;
-		for (U64 i = 0; i < h->cap; i++) {
+		for (U64 i = 0; i < h->cap; ++i) {
 			/* re-hash */
 			if (old_occupied[i]) {
 				U64 index = val_hash(old_data[i]->val, t) % new_cap;

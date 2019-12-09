@@ -136,7 +136,7 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 		FnExpr *fn = &e->fn;											\
 		if (e->type.fn.constness) {										\
 			Instance **data = fn->instances.data;						\
-			for (U64 i = 0; i < fn->instances.cap; i++) {				\
+			for (U64 i = 0; i < fn->instances.cap; ++i) {				\
 				if (fn->instances.occupied[i]) {						\
 					cgen_recurse_subexprs_fn_simple((&(*data)->fn), decl_f, block_f); \
 				}																	\
@@ -184,7 +184,7 @@ static inline FILE *cgen_writing_to(CGenerator *g) {
 /* indent iff needed */
 static inline void cgen_indent(CGenerator *g) {
 	if (g->will_indent) {
-		for (int i = 0; i < g->indent_lvl; i++)
+		for (int i = 0; i < g->indent_lvl; ++i)
 			fprintf(cgen_writing_to(g), "\t");
 		g->will_indent = false;
 	}
@@ -351,7 +351,7 @@ static bool cgen_type_post(CGenerator *g, Type *t, Location where) {
 	case TYPE_FN: {
 		bool out_param = cgen_uses_ptr(&t->fn.types[0]);
 		cgen_write(g, ")(");
-		for (size_t i = 1; i < arr_len(t->fn.types); i++) {
+		for (size_t i = 1; i < arr_len(t->fn.types); ++i) {
 			if (i != 1)
 				cgen_write(g, ", ");
 			if (!cgen_type_pre(g, &t->fn.types[i], where))
@@ -513,7 +513,7 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where, U64 instanc
 		any_args = true;
 		if (f->ret_type.kind == TYPE_TUPLE) {
 			/* multiple return variables */
-			for (size_t i = 0; i < arr_len(f->ret_type.tuple); i++) {
+			for (size_t i = 0; i < arr_len(f->ret_type.tuple); ++i) {
 				Type *x = &f->ret_type.tuple[i];
 				if (any_params || i > 0)
 					cgen_write(g, ", ");
@@ -600,7 +600,7 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 		}
 		cgen_write(g, ";");
 		cgen_nl(g);
-		cgen_write(g, "for (i = 0; i < %lu; i++) arr__out[i] = arr__in[i];", (unsigned long)type->arr.n);
+		cgen_write(g, "for (i = 0; i < %lu; ++i) arr__out[i] = arr__in[i];", (unsigned long)type->arr.n);
 		cgen_nl(g);
 		cgen_write(g, "}");
 		break;
@@ -629,7 +629,7 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 		break;
 	case EXPR_TUPLE:
 		/* e.g. a, b = 3, 5; */
-		for (size_t i = 0; i < arr_len(to->tuple); i++) {
+		for (size_t i = 0; i < arr_len(to->tuple); ++i) {
 			char *s = NULL, buf[64];
 			Expression *e = NULL;
 			if (idents)
@@ -661,12 +661,12 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 				if (!cgen_expr(g, arg))
 					return false;
 			}
-			i++;
+			++i;
 		}
 		/* out params */
 		size_t len = exprs ? arr_len(exprs) : arr_len(idents);
 
-		for (i = 0; i < (int)len; i++) {
+		for (i = 0; i < (int)len; ++i) {
 			if (any_args || i > 0)
 				cgen_write(g, ", ");
 			if (exprs) {
@@ -695,7 +695,7 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 		prefix_id = to->each.c.id;
 		goto prefixed;
 	prefixed:
-		for (unsigned long i = 0; i < (unsigned long)arr_len(to->type.tuple); i++) {
+		for (unsigned long i = 0; i < (unsigned long)arr_len(to->type.tuple); ++i) {
 			cgen_write(g, "(");
 			if (exprs) {
 				if (!cgen_expr(g, &exprs[i]))
@@ -747,7 +747,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		char *p = ret_name + strlen(ret_name);
 		if (e->type.kind != TYPE_VOID) {
 			if (e->type.kind == TYPE_TUPLE) {
-				for (unsigned long i = 0; i < arr_len(e->type.tuple); i++) {
+				for (unsigned long i = 0; i < arr_len(e->type.tuple); ++i) {
 					sprintf(p, "%lu_", i);
 					if (!cgen_type_pre(g, &e->type.tuple[i], e->where)) return false;
 					cgen_write(g, " %s", ret_name);
@@ -1003,7 +1003,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			if (!constness || !arg_is_const(arg, constness[i])) {
 				if (!cgen_expr_pre(g, arg)) return false;
 			}
-			i++;
+			++i;
 		}
 		if (cgen_uses_ptr(&e->type)
 			&& e->type.kind != TYPE_TUPLE) {
@@ -1027,7 +1027,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 					if (!cgen_expr(g, arg))
 						return false;
 				}
-				i++;
+				++i;
 			}
 			if (any_args) {
 				cgen_write(g, ", ");
@@ -1387,7 +1387,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 					if (!cgen_expr(g, arg))
 						return false;
 				}
-				i++;
+				++i;
 			}
 			cgen_write(g, "))");
 		}
@@ -1589,7 +1589,7 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where, U64 instance, Valu
 					element->kind = EXPR_IDENT;
 					element->type = f->ret_type.tuple[i];
 					element->ident = *ident;
-					i++;
+					++i;
 				}
 			}
 		}
@@ -1617,7 +1617,7 @@ static bool cgen_val_ptr_pre(CGenerator *g, void *v, Type *t, Location where) {
 	switch (t->kind) {
 	case TYPE_SLICE: {
 		Slice *s = (Slice *)v;
-		for (I64 i = 0; i < s->n; i++) {
+		for (I64 i = 0; i < s->n; ++i) {
 			if (!cgen_val_ptr_pre(g, (char *)s->data + (U64)i * compiler_sizeof(t->slice), t->slice, where))
 				return false;
 		}
@@ -1625,7 +1625,7 @@ static bool cgen_val_ptr_pre(CGenerator *g, void *v, Type *t, Location where) {
 		cgen_write(g, "(d%p_[])", v); /* TODO: improve this somehow? */
 		if (!cgen_type_post(g, t->slice, where)) return false;
 		cgen_write(g, " = {");
-		for (I64 i = 0; i < s->n; i++) {
+		for (I64 i = 0; i < s->n; ++i) {
 			if (i) cgen_write(g, ", ");
 			if (!cgen_val_ptr(g, (char *)s->data + (U64)i * compiler_sizeof(t->slice), t->slice, where))
 				return false;
@@ -1634,7 +1634,7 @@ static bool cgen_val_ptr_pre(CGenerator *g, void *v, Type *t, Location where) {
 		cgen_nl(g);
 	} break;
 	case TYPE_ARR:
-		for (size_t i = 0; i < t->arr.n; i++) {
+		for (size_t i = 0; i < t->arr.n; ++i) {
 			if (!cgen_val_ptr_pre(g, (char *)*(void **)v + i * compiler_sizeof(t->arr.of), t->arr.of, where))
 				return false;
 		}
@@ -1669,7 +1669,7 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 		return false;
 	case TYPE_ARR:
 		cgen_write(g, "{");
-		for (size_t i = 0; i < t->arr.n; i++) {
+		for (size_t i = 0; i < t->arr.n; ++i) {
 			if (i) cgen_write(g, ", ");
 			if (!cgen_val_ptr(g, (char *)v + i * compiler_sizeof(t->arr.of), t->arr.of, where))
 				return false;
@@ -1874,7 +1874,7 @@ static bool cgen_defs_expr(CGenerator *g, Expression *e) {
 		FnType *fn_type = &e->type.fn;
 		bool any_const = false;
 		if (fn_type->constness) {
-			for (size_t i = 0; i < arr_len(fn_type->types)-1; i++) {
+			for (size_t i = 0; i < arr_len(fn_type->types)-1; ++i) {
 				if (fn_type->constness[i] == CONSTNESS_YES)
 					any_const = true;
 			}
@@ -1883,7 +1883,7 @@ static bool cgen_defs_expr(CGenerator *g, Expression *e) {
 			HashTable *instances = &f->instances;
 			/* generate each instance */
 			Instance **is = instances->data;
-			for (U64 i = 0; i < instances->cap; i++) {
+			for (U64 i = 0; i < instances->cap; ++i) {
 				if (instances->occupied[i]) {
 					/* generate this instance */
 					if (!cgen_fn(g, &is[i]->fn, e->where, is[i]->c.id, is[i]->val.tuple))

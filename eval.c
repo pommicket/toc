@@ -299,7 +299,7 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		fprintf(f, "["); /* TODO: change? when array initializers are added */
 		size_t n = t->arr.n;
 		if (n > 5) n = 5;
-		for (size_t i = 0; i < n; i++) {
+		for (size_t i = 0; i < n; ++i) {
 			if (i) fprintf(f, ", ");
 			fprint_val_ptr(f, (char *)p + i * compiler_sizeof(t->arr.of), t->arr.of);
 		}
@@ -316,7 +316,7 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		Slice slice = *(Slice *)p;
 		I64 n = slice.n;
 		if (n > 5) n = 5;
-		for (I64 i = 0; i < n; i++) {
+		for (I64 i = 0; i < n; ++i) {
 			if (i) fprintf(f, ", ");
 			fprint_val_ptr(f, (char *)slice.data + i * (I64)compiler_sizeof(t->arr.of), t->arr.of);
 		}
@@ -348,7 +348,7 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 static void fprint_val(FILE *f, Value v, Type *t) {
 	if (t->kind == TYPE_TUPLE) {
 		fprintf(f, "(");
-		for (size_t i = 0; i < arr_len(t->tuple); i++) {
+		for (size_t i = 0; i < arr_len(t->tuple); ++i) {
 			fprint_val(f, v.tuple[i], &t->tuple[i]);
 		}
 		fprintf(f, ")");
@@ -859,7 +859,7 @@ static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 		}
 		break;
 	case EXPR_TUPLE:
-		for (size_t i = 0; i < arr_len(set->tuple); i++) {
+		for (size_t i = 0; i < arr_len(set->tuple); ++i) {
 			if (!eval_set(ev, &set->tuple[i], &to->tuple[i]))
 				return false;
 		}
@@ -1350,7 +1350,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		size_t i, n = arr_len(e->tuple);
 		v->tuple = err_malloc(n * sizeof *v->tuple);
 		*(void **)arr_add(&ev->to_free) = v->tuple;
-		for (i = 0; i < n; i++) {
+		for (i = 0; i < n; ++i) {
 			if (!eval_expr(ev, &e->tuple[i], &v->tuple[i]))
 				return false;
 		}
@@ -1408,7 +1408,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		/* OPTIM (NOTE: currently needed for recursion) */
 		Value *args = NULL;
 		arr_resv(&args, arr_len(e->call.arg_exprs));
-		for (size_t i = 0; i < arr_len(e->call.arg_exprs); i++) {
+		for (size_t i = 0; i < arr_len(e->call.arg_exprs); ++i) {
 			if (!eval_expr(ev, &e->call.arg_exprs[i], &args[i]))
 				return false;
 		}
