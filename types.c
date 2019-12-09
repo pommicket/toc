@@ -289,18 +289,11 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 			}
 			++idx;
 		}
-
-		if (param->flags & DECL_IS_CONST) {
-			/* allow constant declarations to be used in other parameters, e.g. fn(x @ int, y := x) */
-			arr_foreach(param->idents, Identifier, ident) {
-				ident_add_decl(*ident, param, &f->body);
-			}
-		}
 	}
 	
 	if (f->ret_decls && !generic && f->ret_type.kind == TYPE_VOID /* haven't found return type yet */) {
 		/* find return type */
-		
+
 		arr_foreach(f->ret_decls, Declaration, d) {
 			if (!types_decl(tr, d)) {
 			    success = false;
@@ -337,15 +330,6 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	if (entered_fn) {
 		fn_exit(f);
 		tr->fn = prev_fn;
-
-		/* remove declarations from parameters we've already dealt with */
-		for (size_t i = 0; i < param_idx; ++i) {
-			Declaration *p = &f->params[i];
-			if (p->flags & DECL_IS_CONST)
-				arr_foreach(p->idents, Identifier, ident)
-					arr_remove_last(&(*ident)->decls);
-		}
-	
 	}
     return success;
 }
@@ -1103,7 +1087,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 						return false;
 					}
 					param_idx = index;
-				} else if ((param->flags & DECL_HAS_EXPR) && param < last_param_without_default_value) {
+				} else if ((param->flags & (DECL_HAS_EXPR | DECL_INFER)) && param < last_param_without_default_value) {
 					/* this param must be named; so this is referring to a later parameter */
 					--arg;
 				} else {
@@ -1152,7 +1136,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				assert(fn_decl); /* we can only miss an arg if we're using named/optional args */
 				
 				arr_foreach(fn_decl->params, Declaration, param) {
-					bool is_required = !(param->flags & DECL_HAS_EXPR);
+					bool is_required = !(param->flags & (DECL_HAS_EXPR|DECL_INFER));
 					int ident_idx = 0;
 
 					arr_foreach(param->idents, Identifier, ident) {
@@ -1223,31 +1207,73 @@ static bool types_expr(Typer *tr, Expression *e) {
 			/* eval compile time arguments */
 			for (i = 0; i < nparams; ++i) {
 				bool should_be_evald = arg_is_const(&arg_exprs[i], fn_type->constness[i]);
-				
-				if (should_be_evald && params_set[i]) {
-					Expression *expr = &arg_exprs[i];
-					Value *arg_val = typer_arr_add(tr, &table_index.tuple);
-				    if (!eval_expr(tr->evalr, expr, arg_val)) {
-						if (tr->evalr->enabled) {
-							info_print(arg_exprs[i].where, "(error occured while trying to evaluate compile-time argument, argument #%lu)", 1+(unsigned long)i);
+				if (should_be_evald) {
+					if (params_set[i]) {
+						Expression *expr = &arg_exprs[i];
+						Value *arg_val = typer_arr_add(tr, &table_index.tuple);
+						if (!eval_expr(tr->evalr, expr, arg_val)) {
+							if (tr->evalr->enabled) {
+								info_print(arg_exprs[i].where, "(error occured while trying to evaluate compile-time argument, argument #%lu)", 1+(unsigned long)i);
+							}
+							return false;
 						}
-						return false;
-					}
 					
-					Type *type = &expr->type;
-					*(Type *)typer_arr_add(tr, &table_index_type.tuple) = *type;
+						Type *type = &expr->type;
+						*(Type *)typer_arr_add(tr, &table_index_type.tuple) = *type;
 				
-					arg_exprs[i].kind = EXPR_VAL;
-					arg_exprs[i].flags = EXPR_FOUND_TYPE;
-					copy_val(tr->allocr, &arg_exprs[i].val, arg_val, type);
-					arg_exprs[i].val = *arg_val;
-					copy_val(tr->allocr, &param_decl->val, arg_val, type);
-					param_decl->flags |= DECL_FOUND_VAL;
-
-				} else if (should_be_evald) {
-					/* leave gap for this */
-					typer_arr_add(tr, &table_index.tuple);
-					typer_arr_add(tr, &table_index_type.tuple);
+						arg_exprs[i].kind = EXPR_VAL;
+						arg_exprs[i].flags = EXPR_FOUND_TYPE;
+						copy_val(tr->allocr, &arg_exprs[i].val, arg_val, type);
+						arg_exprs[i].val = *arg_val;
+						copy_val(tr->allocr, &param_decl->val, arg_val, type);
+						param_decl->flags |= DECL_FOUND_VAL;
+						if (!(param_decl->flags & DECL_ANNOTATES_TYPE)) {
+							param_decl->type = *type;
+						}
+					} else if (param_decl->flags & DECL_INFER) {
+						arg_exprs[i].kind = EXPR_VAL;
+						arg_exprs[i].flags = EXPR_FOUND_TYPE;
+						{
+							for (Declaration *p = fn->params; p < param_decl; ++p) {
+								if (p->flags & DECL_FOUND_VAL)
+									if (!add_ident_decls(&fn->body, p, SCOPE_CHECK_REDECL)) {
+										for (Declaration *q = fn->params; q < p; ++q)
+											if (q->flags & DECL_FOUND_VAL)
+												remove_ident_decls(&fn->body, q);
+										return false;
+									}
+							}
+						}
+						bool success = infer_expr(tr, &arg_exprs[i], fn->params, arg_exprs);
+						for (Declaration *p = fn->params; p < param_decl; ++p) {
+							if (p->flags & DECL_FOUND_VAL)
+								remove_ident_decls(&fn->body, p);
+						}
+						if (!success) return false;
+						copy_val(tr->allocr, &param_decl->val, &arg_exprs[i].val, &arg_exprs[i].type);
+						
+						
+						if (param_decl->flags & DECL_ANNOTATES_TYPE) {
+							if (!type_resolve(tr, &param_decl->type, param_decl->where))
+								return false;
+							Type *expected = &arg_exprs[i].type;
+							Type *got = &param_decl->type;
+							if (!type_eq(expected, got)) {
+								char *estr = type_to_str(expected);
+								char *gstr = type_to_str(got);
+								err_print(param_decl->where, "Expected annotated type %s for this argument, but it was annotated as %s.", estr, gstr);
+								free(estr); free(gstr);
+								return false;
+							}
+						}
+						param_decl->type = arg_exprs[i].type;
+						param_decl->flags |= DECL_FOUND_VAL|DECL_FOUND_TYPE;
+						params_set[i] = true;
+					} else {
+						/* leave gap for this (default argument) */
+						typer_arr_add(tr, &table_index.tuple);
+						typer_arr_add(tr, &table_index_type.tuple);
+					}
 				}
 				
 				if (fn_type->constness[i] == CONSTNESS_SEMI) {
@@ -1284,9 +1310,11 @@ static bool types_expr(Typer *tr, Expression *e) {
 						Value *arg_val = &table_index.tuple[i+1];
 						copy_val(tr->allocr, arg_val, &param->expr.val, &param->expr.type);
 						table_index_type.tuple[i+1] = param->expr.type;
+						params_set[i] = true;
 					}
 					++i;
 				}
+				
 			}
 			
 			ret_type = f->type.fn.types;
@@ -1296,6 +1324,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		/* check types of arguments */
 		for (size_t p = 0; p < nparams; ++p) {
 			Expression *arg = &arg_exprs[p];
+			
 			Type *expected = &param_types[p];
 			Type *got = &arg->type;
 			if (!type_eq(expected, got)) {
@@ -1305,7 +1334,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 				return false;
 			}
 		}
-
 		
 		if (fn_type->constness) {
 			bool instance_already_exists;
@@ -1322,7 +1350,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				/* if anything happens, make sure we let the user know that this happened while generating a fn */
 				ErrCtx *err_ctx = e->where.ctx;
 				*(Location *)typer_arr_add(tr, &err_ctx->instance_stack) = e->where;
-			    bool success = types_fn(tr, &c->instance->fn, &f->type, e->where, c->instance);
+				bool success = types_fn(tr, &c->instance->fn, &f->type, e->where, c->instance);
 				arr_remove_last(&err_ctx->instance_stack);
 				if (!success) return false;
 				arr_clear(&table_index_type.tuple);
@@ -1371,7 +1399,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 	case EXPR_UNARY_OP: {
 		Expression *of = e->unary.of;
 		Type *of_type = &of->type;
-	    if (!types_expr(tr, e->unary.of)) return false;
+		if (!types_expr(tr, e->unary.of)) return false;
 		if (of_type->kind == TYPE_UNKNOWN) {
 			return true;
 		}
@@ -1624,7 +1652,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				}
 				break;
 			default: {
-		    	char *s = type_to_str(lhs_type);
+				char *s = type_to_str(lhs_type);
 				err_print(e->where, "Trying to take index of non-array type %s.", s);
 				free(s);
 				return false;
@@ -1744,7 +1772,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		assert(0);
 		return false;
 	}
-    t->flags |= TYPE_IS_RESOLVED;
+	t->flags |= TYPE_IS_RESOLVED;
 	return true;
 }
 
@@ -1804,6 +1832,11 @@ static bool types_block(Typer *tr, Block *b) {
 static bool types_decl(Typer *tr, Declaration *d) {
 	bool success = true;
 	if (d->flags & DECL_FOUND_TYPE) return true;
+	if (d->flags & DECL_INFER) {
+		d->type.kind = TYPE_UNKNOWN;
+		d->type.flags = 0;
+		return true;
+	}
 	Declaration **dptr = typer_arr_add(tr, &tr->in_decls);
 	*dptr = d;
 	if (d->flags & DECL_ANNOTATES_TYPE) {
@@ -1832,7 +1865,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 				goto ret;
 			}
 			d->type = d->expr.type;
-			d->type.flags &= (DeclFlags)~(DeclFlags)TYPE_IS_FLEXIBLE; /* x := 5; => x is not flexible */
+			d->type.flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE; /* x := 5; => x is not flexible */
 		}
 		if ((d->flags & DECL_IS_CONST) || (tr->block == NULL && tr->fn == NULL)) {
 			if (!(d->flags & DECL_FOUND_VAL)) {
@@ -1847,7 +1880,6 @@ static bool types_decl(Typer *tr, Declaration *d) {
 		}
 				
 	}
-	
 	for (size_t i = 0; i < arr_len(d->idents); ++i) {
 		Type *t = d->type.kind == TYPE_TUPLE ? &d->type.tuple[i] : &d->type;
 		if (t->kind == TYPE_TYPE) {
@@ -1893,7 +1925,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 		/* use unknown type if we didn't get the type */
 		d->type.flags = TYPE_IS_RESOLVED;
 		d->type.was_expr = NULL;
-	    d->type.kind = TYPE_UNKNOWN;
+		d->type.kind = TYPE_UNKNOWN;
 		tr->evalr->enabled = false; /* disable evaluator completely so that it doesn't accidentally try to access this declaration */
 	}
 	arr_remove_last(&tr->in_decls);

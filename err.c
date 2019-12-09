@@ -66,7 +66,7 @@ static void info_print_header_(Location where) {
 #if ERR_EMACS
 	err_fprint("%s:%lu: " TEXT_INFO("info") ":\n", where.ctx->filename, (unsigned long)where.line);
 #else
-	err_fprint(TEXT_ERROR("info") " at line %lu of %s:\n", (unsigned long)where.line, where.ctx->filename);
+	err_fprint(TEXT_INFO("info") " at line %lu of %s:\n", (unsigned long)where.line, where.ctx->filename);
 #endif
 }
 

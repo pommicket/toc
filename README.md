@@ -28,7 +28,7 @@ See `docs` for more information (in progress).
 
 `tests` has some test programs written in `toc`.
 
-To compile the compiler on a Unix-y system, just run `build.sh`. You can supply a compiler by running `CC=tcc build.sh`, or built it in release mode with `./build.sh release` (which will help speed up compiling large programs). 
+To compile the compiler on a Unix-y system, just run `./build.sh release`. You can supply a compiler by running `CC=tcc ./build.sh release`, or built it in debug mode without the `release`.
 
 On other systems, you can just compile main.c with a C compiler. toc uses several C99 and a couple of C11 features, so it might not work on all compilers. But it does compile on quite a few, including `clang`, `gcc`, and `tcc`. It can also be compiled as if it were C++, but it does break the standard in a few places\*. So, MSVC can also compile it. The *outputted* code should be C99-compliant.
 

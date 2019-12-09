@@ -19,7 +19,6 @@
 
 /* 
 TODO:
-check for duplicate params
 inferred const params
 packages
 X ::= newtype(int); or something

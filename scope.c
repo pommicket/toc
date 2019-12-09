@@ -10,7 +10,7 @@ enum {
 
 static void val_free(Value *v, Type *t);
 
-static bool add_ident_decls(Block *b, Declaration *d, U16 flags) {
+static bool DEBUG_UNDERSCORE(add_ident_decls)(SOURCE_LOCATION_PARAMS Block *b, Declaration *d, U16 flags) {
 	bool ret = true;
 	arr_foreach(d->idents, Identifier, ident) {
 		IdentDecl *decls = (*ident)->decls;
@@ -20,11 +20,20 @@ static bool add_ident_decls(Block *b, Declaration *d, U16 flags) {
 			if (prev->scope == b) {
 				err_print(d->where, "Re-declaration of identifier in the same block.");
 				info_print(prev->decl->where, "Previous declaration was here.");
+#ifdef TOC_DEBUG
+				info_print(d->where, "First declaration was done by %s:%d, second was done by %s:%d.", prev->src_file, prev->src_line, src_file, src_line);
+#endif				
 				ret = false;
 				continue;
 			}
 		}
-		ident_add_decl(*ident, d, b);
+		IdentDecl *idecl = ident_add_decl(*ident, d, b);
+#ifdef TOC_DEBUG
+		idecl->src_file = src_file;
+		idecl->src_line = src_line;
+#else
+		(void)idecl;
+#endif
 	}
 	return ret;
 }

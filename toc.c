@@ -34,6 +34,7 @@
 
 
 #include "eval.c"
+#include "infer.c"
 #include "types.c"
 static bool cgen_decls_file(CGenerator *g, ParsedFile *f);
 static bool typedefs_file(CGenerator *g, ParsedFile *f);

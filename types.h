@@ -52,7 +52,18 @@ typedef double F64;
 
 typedef U32 IdentID; /* identifier ID for cgen (anonymous variables) */
 
-typedef uint32_t LineNo;
+typedef U32 LineNo;
+
+/* for keeping track of whence something came */
+#ifdef TOC_DEBUG
+#define SOURCE_LOCATION char *src_file; int src_line;
+#define SOURCE_LOCATION_PARAMS char *src_file, int src_line,
+#define DEBUG_UNDERSCORE(x) x##_
+#else
+#define SOURCE_LOCATION
+#define SOURCE_LOCATION_PARAMS
+#define DEBUG_UNDERSCORE(x) x
+#endif
 
 typedef struct Location {
 	LineNo line;
@@ -141,6 +152,7 @@ typedef struct IdentDecl {
 	};
 	struct Block *scope; /* NULL for file scope */
 	Value val;
+	SOURCE_LOCATION
 	IdentDeclKind kind;
     U16 flags;
 } IdentDecl;
@@ -361,10 +373,11 @@ enum {
 	  TYPE_IS_FLEXIBLE = 0x01,
 	  TYPE_IS_RESOLVED = 0x02,
 };
+typedef U16 TypeFlags;
 typedef struct Type {
 	Location where;
 	TypeKind kind;
-	uint16_t flags;
+	TypeFlags flags;
 	struct Expression *was_expr; /* if non-NULL, indicates that this type used to be an expression (TYPE_EXPR) */
 	union {
 	    BuiltinType builtin;
@@ -624,17 +637,18 @@ typedef struct Argument {
 } Argument;
 
 enum {
-	  DECL_ANNOTATES_TYPE = 0x01,
-	  DECL_IS_CONST = 0x02,
-	  DECL_SEMI_CONST = 0x04,
-	  DECL_HAS_EXPR = 0x08,
-	  DECL_FOUND_TYPE = 0x10,
-	  DECL_ERRORED_ABOUT_SELF_REFERENCE = 0x20, /* has there been an error about this decl referencing itself? */
-	  DECL_FOUND_VAL = 0x40,
-	  DECL_IS_PARAM = 0x80
+	  DECL_ANNOTATES_TYPE = 0x0001,
+	  DECL_IS_CONST = 0x0002,
+	  DECL_SEMI_CONST = 0x0004,
+	  DECL_HAS_EXPR = 0x0008,
+	  DECL_FOUND_TYPE = 0x0010,
+	  DECL_ERRORED_ABOUT_SELF_REFERENCE = 0x0020, /* has there been an error about this decl referencing itself? */
+	  DECL_FOUND_VAL = 0x0040,
+	  DECL_IS_PARAM = 0x0080,
+	  DECL_INFER = 0x0100, /* infer the value (e.g. fn(t::Type=, x:t)) */
 };
 
-typedef U16 DeclFlags;
+typedef U32 DeclFlags;
 
 /* OPTIM: Instead of using dynamic arrays, do two passes. */
 typedef struct Declaration {
@@ -723,3 +737,6 @@ typedef struct CGenerator {
 	Identifiers *idents;
 } CGenerator;
 
+#ifdef TOC_DEBUG
+#define add_ident_decls(b, d, flags) add_ident_decls_(__FILE__, __LINE__, b, d, flags)
+#endif

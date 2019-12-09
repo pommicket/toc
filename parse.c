@@ -8,6 +8,7 @@ static bool parse_stmt(Parser *p, Statement *s);
 enum {
 	  PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR = 0x01,
 	  PARSE_DECL_ALLOW_SEMI_CONST = 0x02,
+	  PARSE_DECL_ALLOW_INFER
 };
 static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_t flags);
 static bool parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end);
@@ -826,7 +827,7 @@ static bool parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end
 			!token_is_kw(t->token - 1, KW_LBRACE)))) {
 		first = false;
 		Declaration *decl = parser_arr_add(p, decls);
-		if (!parse_decl(p, decl, decl_end, PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR | PARSE_DECL_ALLOW_SEMI_CONST)) {
+		if (!parse_decl(p, decl, decl_end, PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR | PARSE_DECL_ALLOW_SEMI_CONST | PARSE_DECL_ALLOW_INFER)) {
 			ret = false;
 			/* skip to end of list */
 			while (t->token->kind != TOKEN_EOF && !ends_decl(t->token, decl_end))
@@ -880,6 +881,10 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 		arr_foreach(f->ret_decls, Declaration, d) {
 			if ((d->flags & DECL_IS_CONST) || (d->flags & DECL_SEMI_CONST)) {
 				err_print(d->where, "Named return values cannot be constant.");
+				return false;
+			}
+			if (d->flags & DECL_INFER) {
+				err_print(d->where, "Can't infer the value of a return declaration!");
 				return false;
 			}
 		}
@@ -1790,27 +1795,37 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 			
 	if (token_is_kw(t->token, KW_EQ)) {
 		++t->token;
-		d->flags |= DECL_HAS_EXPR;
-		uint16_t expr_flags = 0;
-		if (ends_with == DECL_END_RPAREN_COMMA)
-			expr_flags |= EXPR_CAN_END_WITH_COMMA;
-		if (ends_with == DECL_END_LBRACE_COMMA)
-			expr_flags |= EXPR_CAN_END_WITH_LBRACE;
-		Token *end = expr_find_end(p, expr_flags);
-		if (!end || !ends_decl(end, ends_with)) {
-			t->token = end;
-			tokr_err(t, "Expected %s at end of declaration.", end_str);
-		    goto ret_false;
-		}
-		if (!parse_expr(p, &d->expr, end)) {
-			t->token = end; /* move to ; */
-		    goto ret_false;
-		}
-		if (ends_decl(t->token, ends_with)) {
+		if ((flags & PARSE_DECL_ALLOW_INFER) && ends_decl(t->token, ends_with)) {
+			/* inferred expression */
+			d->flags |= DECL_INFER;
+			if (!(d->flags & DECL_IS_CONST)) {
+				tokr_err(t, "Inferred parameters must be constant.");
+				goto ret_false;
+			}
 			++t->token;
 		} else {
-			tokr_err(t, "Expected %s at end of declaration.", end_str);
-		    goto ret_false;
+			d->flags |= DECL_HAS_EXPR;
+			uint16_t expr_flags = 0;
+			if (ends_with == DECL_END_RPAREN_COMMA)
+				expr_flags |= EXPR_CAN_END_WITH_COMMA;
+			if (ends_with == DECL_END_LBRACE_COMMA)
+				expr_flags |= EXPR_CAN_END_WITH_LBRACE;
+			Token *end = expr_find_end(p, expr_flags);
+			if (!end || !ends_decl(end, ends_with)) {
+				t->token = end;
+				tokr_err(t, "Expected %s at end of declaration.", end_str);
+				goto ret_false;
+			}
+			if (!parse_expr(p, &d->expr, end)) {
+				t->token = end; /* move to ; */
+				goto ret_false;
+			}
+			if (ends_decl(t->token, ends_with)) {
+				++t->token;
+			} else {
+				tokr_err(t, "Expected %s at end of declaration.", end_str);
+				goto ret_false;
+			}
 		}
 	} else if (ends_decl(t->token, ends_with)) {
 		++t->token;
