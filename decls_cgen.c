@@ -24,7 +24,7 @@ static bool cgen_decls_fn_instances(CGenerator *g, Expression *e) {
 				cgen_nl(g);
 			}
 		}
-		data++;
+		++data;
 	}
 	return true;
 }
@@ -65,7 +65,7 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 					cgen_ident_id(g, sdef->c.id);
 				cgen_write(g, "{");
 				cgen_nl(g);
-				g->indent_lvl++;
+				++g->indent_lvl;
 				arr_foreach(sdef->fields, Field, f) {
 					if (!cgen_type_pre(g, f->type, e->where)) return false;
 					cgen_write(g, " ");
@@ -74,7 +74,7 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 					cgen_write(g, ";");
 					cgen_nl(g);
 				}
-				g->indent_lvl--;
+				--g->indent_lvl;
 				cgen_write(g, "};");
 				cgen_nl(g);
 				sdef->flags |= STRUCT_DEF_CGENERATED;

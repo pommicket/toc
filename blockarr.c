@@ -34,7 +34,7 @@ static void *block_arr_add(BlockArr *arr) {
 		return block->data;
 	} else {
 		last_block->last = (char*)last_block->last + arr->item_sz;
-		last_block->n++;
+		++last_block->n;
 		return last_block->last;
 	}
 }

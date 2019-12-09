@@ -139,14 +139,14 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 			for (U64 i = 0; i < fn->instances.cap; ++i) {				\
 				if (fn->instances.occupied[i]) {						\
 					cgen_recurse_subexprs_fn_simple((&(*data)->fn), decl_f, block_f); \
-				}																	\
-				data++;																\
-			}														\
-	 	} else {															\
-		   cgen_recurse_subexprs_fn_simple(fn, decl_f, block_f);		\
+				}														\
+				++data;													\
+			}															\
+	 	} else {														\
+			cgen_recurse_subexprs_fn_simple(fn, decl_f, block_f);		\
 		}																\
 	} break;															\
-	case EXPR_NEW:													\
+	case EXPR_NEW:														\
 		if (e->new.n && !f(g, e->new.n))								\
 			return false;												\
 		break;															\
@@ -160,7 +160,7 @@ static bool cgen_block_enter(CGenerator *g, Block *b) {
 	} else {
 		stmts = b->stmts;
 	}
-	if (b) g->indent_lvl++;
+	if (b) ++g->indent_lvl;
 	return block_enter(b, stmts, 0);
 }
 
@@ -173,7 +173,7 @@ static void cgen_block_exit(CGenerator *g, Block *into) {
 		stmts = b->stmts;
 	}
 	block_exit(b, stmts);
-	if (b) g->indent_lvl--;
+	if (b) --g->indent_lvl;
 	g->block = into;
 }
 
@@ -1149,7 +1149,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 	case EXPR_LITERAL_STR: {
 		size_t c;
 		cgen_write(g, "mkslice_(\"");
-		for (c = 0; c < e->strl.len; c++) {
+		for (c = 0; c < e->strl.len; ++c) {
 			cgen_write(g, "\\x%x", e->strl.str[c]);
 		}
 		cgen_write(g, "\", %lu)", (unsigned long)e->strl.len);
@@ -1527,7 +1527,7 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where, U64 instance, Valu
 	cgen_nl(g);
 	if (compile_time_args) {
 		int carg_idx = 0;
-		compile_time_args++; /* move past which_are_const */
+		++compile_time_args; /* move past which_are_const */
 		int semi_const_idx = 0;
 		arr_foreach(f->params, Declaration, param) {
 			if ((param->flags & DECL_IS_CONST)
@@ -1553,7 +1553,7 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where, U64 instance, Valu
 						cgen_write(g, ";");
 						cgen_nl(g);
 					}
-					carg_idx++;
+					++carg_idx;
 				}
 			}
 		}
@@ -1731,7 +1731,7 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 	bool is_tuple = d->type.kind == TYPE_TUPLE;
 	if ((d->flags & DECL_IS_CONST) || (g->block == NULL && g->fn == NULL)) {
 		/* declarations where we use a value */
-		for (size_t idx = 0; idx < arr_len(d->idents); idx++) {
+		for (size_t idx = 0; idx < arr_len(d->idents); ++idx) {
 		    Identifier i = d->idents[idx];
 			Type *type = is_tuple ? &d->type.tuple[idx] : &d->type;
 			Value *val = is_tuple ? &d->val.tuple[idx] : &d->val;
@@ -1770,7 +1770,7 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 		}
 	} else {
 		/* declarations where we use an expression */
-		for (size_t idx = 0; idx < arr_len(d->idents); idx++) {
+		for (size_t idx = 0; idx < arr_len(d->idents); ++idx) {
 			Identifier i = d->idents[idx];
 			Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx] : &d->type;
 			if (!cgen_type_pre(g, type, d->where)) return false;

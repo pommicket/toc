@@ -46,7 +46,7 @@ static bool typedefs_decl(CGenerator *g, Declaration *d) {
 	if (cgen_fn_is_direct(g, d)) {
 		d->expr.fn.c.name = d->idents[0];
 	}
-	for (int idx = 0; idx < (int)arr_len(d->idents); idx++) {
+	for (int idx = 0; idx < (int)arr_len(d->idents); ++idx) {
 		Identifier i = d->idents[idx];
 		Type *type = decl_type_at_index(d, idx);
 		Value *val = decl_val_at_index(d, idx);

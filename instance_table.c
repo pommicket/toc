@@ -31,8 +31,8 @@ static U64 f32_hash(F32 f) {
 	}
 	F32 last = f;
 	int exponent = 0;
-	while (f > 1) {
-		exponent++;
+	while (f > 1.0f) {
+		++exponent;
 		f /= 10;
 		if (f == last) {
 			/* +/- infinity probably */
@@ -57,8 +57,8 @@ static U64 f64_hash(F64 f) {
 	}
 	F64 last = f;
 	int exponent = 0;
-	while (f > 1) {
-		exponent++;
+	while (f > 1.0) {
+		++exponent;
 		f /= 10;
 		if (f == last) {
 			/* +/- infinity probably */
@@ -299,7 +299,7 @@ static Instance *instance_table_adda(Allocator *a, HashTable *h, Value v, Type *
 			if (old_occupied[i]) {
 				U64 index = val_hash(old_data[i]->val, t) % new_cap;
 				while (new_occupied[index]) {
-					index++;
+					++index;
 					if (index >= new_cap)
 						index -= new_cap;
 				}
@@ -322,7 +322,7 @@ static Instance *instance_table_adda(Allocator *a, HashTable *h, Value v, Type *
 				return data[index];
 			}
 		} else break;
-		index++;
+		++index;
 		if (index >= h->cap)
 			index -= h->cap;
 	}
@@ -332,7 +332,7 @@ static Instance *instance_table_adda(Allocator *a, HashTable *h, Value v, Type *
 		data[index] = allocr_malloc(a, sizeof *data[index]);
 		data[index]->val = v;
 		h->occupied[index] = true;
-		h->n++;
+		++h->n;
 		return data[index];
 	}
 	return NULL;

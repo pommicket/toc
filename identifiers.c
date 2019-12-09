@@ -132,7 +132,7 @@ static Identifier ident_get(Identifiers *ids, const char *s) {
 		if (!tree) return NULL;
 		tree = tree->children[c_high];
 		if (!tree) return NULL;
-		s++;
+		++s;
 	}
 	return tree;
 }
@@ -143,7 +143,7 @@ static char *ident_to_str(Identifier i) {
 	str += i_len;
 	*str = 0;
 	while (i->parent) {
-		str--;
+		--str;
 		unsigned char c_high = i->index_in_parent;
 		unsigned char c_low = i->parent->index_in_parent;
 		char c = (char)ident_uchar_to_char((int)c_low + ((int)c_high << 4));
@@ -194,7 +194,7 @@ static int ident_index_in_decl(Identifier i, Declaration *d) {
 	arr_foreach(d->idents, Identifier, j) {
 		if (i == *j)
 			return index;
-		index++;
+		++index;
 	}
 	return -1;
 }
@@ -210,7 +210,7 @@ static bool ident_eq_str(Identifier i, const char *s) {
 		int c = ident_uchar_to_char(c_low + (c_high << 4));
 		if (c != *t) return false;
 		i = i->parent->parent;
-		if (t > s) t--;
+		if (t > s) --t;
 		else break;
 	}
 	if (i->parent) return false; /* not at root */

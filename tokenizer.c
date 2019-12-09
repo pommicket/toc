@@ -150,11 +150,11 @@ static void tokenization_err(Tokenizer *t, const char *fmt, ...) {
 	char *end_of_line = strchr(t->s, '\n');
 	if (end_of_line) {
 		t->s = end_of_line;
-		t->s++; /* move past newline */
+		++t->s; /* move past newline */
 	} else {
 		t->s = strchr(t->s, '\0');
 	}
-	t->line++;
+	++t->line;
 }
 
 /* to be used after tokenization */
@@ -229,7 +229,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 			switch (t->s[1]) {
 			case '/': /* single line comment */
 				tokr_nextchar(t);
-				for (t->s++; *t->s && *t->s != '\n'; t->s++);
+				while (*t->s && *t->s != '\n') ++t->s;
 				if (*t->s) tokr_nextchar(t); /* skip newline */
 				break;
 			case '*': { /* multi line comment */
@@ -238,13 +238,13 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 			    while (*t->s) {
 					if (t->s[0] == '*' && t->s[1] == '/') {
 						t->s += 2;
-						comment_level--;
+						--comment_level;
 						if (comment_level == 0) {
 							break;
 						}
 					} else if (t->s[0] == '/' && t->s[1] == '*') {
 						t->s += 2;
-						comment_level++;
+						++comment_level;
 					} else {
 						tokr_nextchar(t);
 					}
@@ -264,7 +264,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 		if (*t->s == '#') {
 			/* it's a directive */
 			char *start_s = t->s;
-			t->s++;	/* move past # */
+			++t->s; /* move past # */
 		    Directive direct = tokenize_direct(&t->s);
 			if (direct != DIRECT_COUNT) {
 				/* it's a directive */
@@ -275,7 +275,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 				token->direct = direct;
 				continue;
 			}
-			t->s--;	/* go back to # */
+			--t->s; /* go back to # */
 			tokenization_err(t, "Unrecognized directive.");
 			goto err;
 		}
@@ -456,7 +456,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 			size_t backslashes = 0;
 			while (*t->s != '"' || backslashes % 2 == 1) {
 				if (*t->s == '\\') {
-					backslashes++;
+					++backslashes;
 				} else if (*t->s == 0) {
 					/* return t to opening " so that we go to the next line */
 					tokr_get_location(t, token);
@@ -465,7 +465,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 				} else {
 					backslashes = 0;
 				}
-				len++;
+				++len;
 				tokr_nextchar(t);
 			}
 			char *strlit = tokr_malloc(t, len + 1);
@@ -522,17 +522,17 @@ static void tokr_skip_semicolon(Tokenizer *t) {
 	int brace_level = 0;
 	while (t->token->kind != TOKEN_EOF) {
 		if (t->token->kind == TOKEN_KW) switch (t->token->kw) {
-			case KW_LBRACE: brace_level++; break;
-			case KW_RBRACE: brace_level--; break;
+			case KW_LBRACE: ++brace_level; break;
+			case KW_RBRACE: --brace_level; break;
 			case KW_SEMICOLON:
 				if (brace_level == 0) {
-					t->token++;
+					++t->token;
 					return;
 				}
 				break;
 			default: break;
 			}
-		t->token++;
+		++t->token;
 	}
 }
 

@@ -226,7 +226,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	tr->fn = f;
 	size_t nparams = arr_len(f->params);
 	entered_fn = true;
-	for (param_idx = 0; param_idx < nparams; param_idx++) {
+	for (param_idx = 0; param_idx < nparams; ++param_idx) {
 		Declaration *param = &f->params[param_idx];
 		if (!generic) {
 			if (!types_decl(tr, param)) {
@@ -287,7 +287,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 				}
 				*(Constness *)typer_arr_add(tr, &t->fn.constness) = constn;
 			}
-			idx++;
+			++idx;
 		}
 
 		if (param->flags & DECL_IS_CONST) {
@@ -365,7 +365,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 		bool captured = false;
 		if (decl->scope != NULL) {
 			/* go back through scopes */
-			for (Block **block = arr_last(tr->blocks); *block && *block != decl->scope; block--) {
+			for (Block **block = arr_last(tr->blocks); *block && *block != decl->scope; --block) {
 				if ((*block)->flags & BLOCK_IS_FN) {
 					captured = true;
 					break;
@@ -1173,8 +1173,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 								}
 							}
 						}
-						ident_idx++;
-						index++;
+						++ident_idx;
+						++index;
 					}
 				}
 			}
@@ -1258,12 +1258,12 @@ static bool types_expr(Typer *tr, Expression *e) {
 					*which_are_const |= ((U64)1) << semi_const_index;
 				}
 				if (fn_type->constness[i] == CONSTNESS_SEMI) {
-					semi_const_index++;
+					++semi_const_index;
 				}
-				ident_idx++;
+				++ident_idx;
 				if (ident_idx >= arr_len(param_decl->idents)) {
 					ident_idx = 0;
-					param_decl++;
+					++param_decl;
 				}
 			}
 			/* type param declarations, etc */
@@ -1285,7 +1285,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 						copy_val(tr->allocr, arg_val, &param->expr.val, &param->expr.type);
 						table_index_type.tuple[i+1] = param->expr.type;
 					}
-					i++;
+					++i;
 				}
 			}
 			
@@ -1294,7 +1294,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		}
 		
 		/* check types of arguments */
-		for (size_t p = 0; p < nparams; p++) {
+		for (size_t p = 0; p < nparams; ++p) {
 			Expression *arg = &arg_exprs[p];
 			Type *expected = &param_types[p];
 			Type *got = &arg->type;
@@ -1866,7 +1866,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 				}
 			}
 		} else if (!(d->flags & DECL_IS_CONST) && t->kind == TYPE_FN && t->fn.constness) {
-			for (size_t p = 0; p < arr_len(t->fn.types)-1; p++) {
+			for (size_t p = 0; p < arr_len(t->fn.types)-1; ++p) {
 				if (t->fn.constness[p] == CONSTNESS_YES) {
 					err_print(d->where, "You can't have a pointer to a function with constant parameters.");
 					success = false;

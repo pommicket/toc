@@ -21,7 +21,7 @@ size_t str_copy(char *dest, size_t destsz, const char *src) {
 			*dest = 0;
 			return i;
 		}
-		src++; dest++;
+		++src; ++dest;
 	}
 	dest[destsz-1] = 0;
 	return destsz-1;

@@ -1232,7 +1232,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 
 				if (!eval_block(ev, &ea->body, &e->type, v)) return false;
 				if (index_val) {
-					index_val->i64++;
+					++index_val->i64;
 				}
 				eval_numerical_bin_op(x, &ea->type, BINARY_ADD, stepval, ea->range.stepval ? &ea->type : &i64t, &x, &ea->type);
 			}
@@ -1292,7 +1292,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 					eval_deref(value_val, ptr, &ea->type);
 				if (!eval_block(ev, &ea->body, &e->type, v))
 					return false;
-				index_val->i64++;
+				++index_val->i64;
 			}
 		}
 		each_exit(e);
@@ -1421,7 +1421,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				IdentDecl *id = ident_decl(*i);
 				copy_val(NULL, &id->val, &args[arg], type);
 				id->flags |= IDECL_HAS_VAL;
-				arg++;
+				++arg;
 			}
 		}
 		arr_foreach(fn->ret_decls, Declaration, d) {
@@ -1441,7 +1441,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 					id->flags |= IDECL_HAS_VAL;
 					id->val = val_zero(type);
 				}
-				idx++;
+				++idx;
 			}
 		}
 		arr_clear(&args);
@@ -1467,7 +1467,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 					void *to_free = val_ptr_to_free(element, type);
 					if (to_free)
 						*(void **)arr_add(&ev->to_free) = to_free;
-					i++;
+					++i;
 				}
 			}
 			if (arr_len(tuple) == 1) {
@@ -1569,7 +1569,7 @@ static bool eval_decl(Evaluator *ev, Declaration *d) {
 					id->val = val_zero(type);
 				}
 			}
-			index++;
+			++index;
 			id->flags |= IDECL_HAS_VAL;
 		}
 	}
