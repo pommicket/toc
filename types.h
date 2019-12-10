@@ -615,8 +615,8 @@ typedef struct Expression {
 		} del;
 		IfExpr if_;
 		WhileExpr while_;
-	    EachExpr each;
-		FnExpr fn;
+	    EachExpr *each;
+		FnExpr *fn;
 		CastExpr cast;
 		SliceExpr slice;
 		struct {

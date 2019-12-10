@@ -24,7 +24,7 @@ static bool typedefs_expr(CGenerator *g, Expression *e) {
 	cgen_recurse_subexprs(g, e, typedefs_expr, typedefs_block, typedefs_decl);
 	if (e->kind == EXPR_FN) {
 		/* needs to go before decls_cgen.c... */
-		e->fn.c.id = g->ident_counter++;
+		e->fn->c.id = g->ident_counter++;
 	}
 	if (e->kind == EXPR_TYPE && e->typeval.kind == TYPE_STRUCT) {
 		StructDef *sdef = e->typeval.struc;
@@ -44,7 +44,7 @@ static bool typedefs_expr(CGenerator *g, Expression *e) {
 
 static bool typedefs_decl(CGenerator *g, Declaration *d) {
 	if (cgen_fn_is_direct(g, d)) {
-		d->expr.fn.c.name = d->idents[0];
+		d->expr.fn->c.name = d->idents[0];
 	}
 	for (int idx = 0; idx < (int)arr_len(d->idents); ++idx) {
 		Identifier i = d->idents[idx];

@@ -9,7 +9,7 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d);
 
 static bool cgen_decls_fn_instances(CGenerator *g, Expression *e) {
 	assert(e->kind == EXPR_FN);
-	FnExpr *f = &e->fn;
+	FnExpr *f = e->fn;
 	assert(e->type.fn.constness);
 	Instance **data = f->instances.data;
 	for (U64 i = 0; i < f->instances.cap; ++i) {
@@ -33,7 +33,7 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 	cgen_recurse_subexprs(g, e, cgen_decls_expr, cgen_decls_block, cgen_decls_decl);
 	switch (e->kind) {
 	case EXPR_FN: {
-		FnExpr *f = &e->fn;
+		FnExpr *f = e->fn;
 		f->c.name = NULL;
 		if (!f->c.id)
 			f->c.id = g->ident_counter++;
@@ -42,13 +42,13 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 			if (!cgen_decls_fn_instances(g, e))
 				return false;
 		} else {
-			if (cgen_should_gen_fn(&e->fn)) {
-				fn_enter(&e->fn, 0);
-				if (!cgen_fn_header(g, &e->fn, e->where, 0, 0))
+			if (cgen_should_gen_fn(e->fn)) {
+				fn_enter(e->fn, 0);
+				if (!cgen_fn_header(g, e->fn, e->where, 0, 0))
 					return false;
 				cgen_write(g, ";");
 				cgen_nl(g);
-				fn_exit(&e->fn);
+				fn_exit(e->fn);
 			}
 		}
 	} break;
@@ -103,18 +103,18 @@ static bool cgen_decls_block(CGenerator *g, Block *b) {
 
 static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 	if (cgen_fn_is_direct(g, d)) {
-		d->expr.fn.c.name = d->idents[0];
+		d->expr.fn->c.name = d->idents[0];
 		if (d->expr.type.fn.constness) {
 			if (!cgen_decls_fn_instances(g, &d->expr))
 				return false;
 		} else {
-			if (cgen_should_gen_fn(&d->expr.fn)) {
-				fn_enter(&d->expr.fn, 0);
-				if (!cgen_fn_header(g, &d->expr.fn, d->where, 0, 0))
+			if (cgen_should_gen_fn(d->expr.fn)) {
+				fn_enter(d->expr.fn, 0);
+				if (!cgen_fn_header(g, d->expr.fn, d->where, 0, 0))
 					return false;
 				cgen_write(g, ";");
 				cgen_nl(g);
-				fn_exit(&d->expr.fn);
+				fn_exit(d->expr.fn);
 			}
 		}
 		cgen_recurse_subexprs(g, (&d->expr), cgen_decls_expr, cgen_decls_block, cgen_decls_decl);

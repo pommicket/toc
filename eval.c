@@ -1180,7 +1180,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		}
 	} break;
 	case EXPR_EACH: {
-		EachExpr *ea = &e->each;
+		EachExpr *ea = e->each;
 		if (ea->flags & EACH_IS_RANGE) {
 			Value from, to;
 			Value stepval;
@@ -1316,7 +1316,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		val_cast(&casted, &e->cast.expr->type, v, &e->cast.type);
 	} break;
 	case EXPR_FN:
-		v->fn = &e->fn;
+		v->fn = e->fn;
 		break;
 	case EXPR_IDENT: {
 		IdentDecl *idecl = ident_decl(e->ident);

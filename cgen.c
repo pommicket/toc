@@ -105,7 +105,7 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 		return false;													\
 	break;																\
 	case EXPR_EACH: {													\
-		EachExpr *ea = &e->each;										\
+		EachExpr *ea = e->each;											\
 		if (!each_enter(e)) return false;								\
 		if (ea->flags & EACH_IS_RANGE) {								\
 			if (!f(g, ea->range.from))									\
@@ -133,7 +133,7 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 		return false;													\
 	break;																\
 	case EXPR_FN: {														\
-		FnExpr *fn = &e->fn;											\
+		FnExpr *fn = e->fn;												\
 		if (e->type.fn.constness) {										\
 			Instance **data = fn->instances.data;						\
 			for (U64 i = 0; i < fn->instances.cap; ++i) {				\
@@ -692,7 +692,7 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 		prefix_id = to->while_.c.id;
 		goto prefixed;
 	case EXPR_EACH:
-		prefix_id = to->each.c.id;
+		prefix_id = to->each->c.id;
 		goto prefixed;
 	prefixed:
 		for (unsigned long i = 0; i < (unsigned long)arr_len(to->type.tuple); ++i) {
@@ -803,7 +803,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			return false;
 	} break;
 	case EXPR_EACH: {
-		EachExpr *ea = &e->each;
+		EachExpr *ea = e->each;
 		int is_range = ea->flags & EACH_IS_RANGE;
 		if (is_range) {
 			if (!cgen_expr_pre(g, ea->range.from)) return false;
@@ -1174,7 +1174,8 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 					Expression fn_expr;
 					
 					fn_expr.kind = EXPR_FN;
-					fn_expr.fn = *fn;
+					fn_expr.fn = allocr_malloc(g->allocr, sizeof *fn_expr.fn);
+					*fn_expr.fn = *fn;
 					fn_expr.flags = EXPR_FOUND_TYPE;
 					fn_expr.type = *decl_type_at_index(d, index);
 					
@@ -1363,7 +1364,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		break;
 	case EXPR_EACH:
 		if (e->type.kind != TYPE_VOID)
-			cgen_ident_id(g, e->each.c.id);
+			cgen_ident_id(g, e->each->c.id);
 		break;
 	case EXPR_CALL:
 		if (cgen_uses_ptr(&e->type)) {
@@ -1435,7 +1436,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		assert(0);
 		break;
 	case EXPR_FN: {
-		FnExpr *f = &e->fn;
+		FnExpr *f = e->fn;
 		cgen_fn_name(g, f);
 	} break;
 	case EXPR_SLICE:
@@ -1870,7 +1871,7 @@ static bool cgen_stmt(CGenerator *g, Statement *s) {
 
 static bool cgen_defs_expr(CGenerator *g, Expression *e) {
 	if (e->kind == EXPR_FN) {
-		FnExpr *f = &e->fn;
+		FnExpr *f = e->fn;
 		FnType *fn_type = &e->type.fn;
 		bool any_const = false;
 		if (fn_type->constness) {
@@ -1892,7 +1893,7 @@ static bool cgen_defs_expr(CGenerator *g, Expression *e) {
 			}
 		}
 		if (!any_const) {
-			if (!cgen_fn(g, &e->fn, e->where, 0, NULL))
+			if (!cgen_fn(g, e->fn, e->where, 0, NULL))
 				return false;
 		}
 		

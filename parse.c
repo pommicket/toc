@@ -1015,7 +1015,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		case KW_FN: {
 			/* this is a function */
 			e->kind = EXPR_FN;
-			if (!parse_fn_expr(p, &e->fn))
+			if (!parse_fn_expr(p, e->fn = parser_malloc(p, sizeof *e->fn)))
 				return false;
 			
 			if (t->token != end) {
@@ -1109,7 +1109,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		}
 		case KW_EACH: {
 			e->kind = EXPR_EACH;
-			EachExpr *ea = &e->each;
+			EachExpr *ea = e->each = parser_malloc(p, sizeof *ea);
 			ea->flags = 0;
 			ea->value = NULL;
 			ea->index = NULL;
@@ -2061,7 +2061,7 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprintf(out, ")");
 		break;
 	case EXPR_FN:
-		fprint_fn_expr(out, &e->fn);
+		fprint_fn_expr(out, e->fn);
 		break;
 	case EXPR_CAST:
 		fprintf(out, "cast(");
@@ -2091,7 +2091,7 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprint_block(out, &e->while_.body);
 		break;
 	case EXPR_EACH: {
-		EachExpr *ea = &e->each;
+		EachExpr *ea = e->each;
 		fprintf(out, "each ");
 		if (ea->index) {
 			fprint_ident(out, ea->index);

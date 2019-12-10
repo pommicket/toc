@@ -218,6 +218,7 @@ static Token *tokr_add(Tokenizer *t) {
 static bool tokenize_string(Tokenizer *t, char *str) {
 	int has_err = 0;
 	t->s = str;
+	t->err_ctx->str = str;
 	t->line = 1;
 	while (1) {
 		if (*t->s == 0) break;

@@ -98,7 +98,7 @@ static void fn_exit(FnExpr *f) {
 
 static bool each_enter(Expression *e) {
 	assert(e->kind == EXPR_EACH);
-	EachExpr *ea = &e->each;
+	EachExpr *ea = e->each;
     if (ea->index && ea->index == ea->value) {
 		err_print(e->where, "The identifier for the index of an each loop must be different from the identifier for the value.");
 		return false;
@@ -122,7 +122,7 @@ static bool each_enter(Expression *e) {
 
 static void each_exit(Expression *e) {
 	assert(e->kind == EXPR_EACH);
-	EachExpr *ea = &e->each;
+	EachExpr *ea = e->each;
 	if (ea->index) {
 		arr_remove_last(&ea->index->decls);
 	}

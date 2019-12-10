@@ -385,7 +385,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 		} else {
 			if ((d->flags & DECL_HAS_EXPR) && (d->expr.kind == EXPR_FN)) {
 				/* allow using a function before declaring it */
-				if (!type_of_fn(tr, &d->expr.fn, d->expr.where, t, 0)) return false;
+				if (!type_of_fn(tr, d->expr.fn, d->expr.where, t, 0)) return false;
 				return true;
 			} else {
 				if (location_after(d->where, where)) {
@@ -417,12 +417,12 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 		
 		switch (e->kind) {
 		case EXPR_EACH:
-			if (i == e->each.index) {
+			if (i == e->each->index) {
 				t->kind = TYPE_BUILTIN;
 				t->builtin = BUILTIN_I64;
 			} else {
-				assert(i == e->each.value);
-				*t = e->each.type;
+				assert(i == e->each->value);
+				*t = e->each->type;
 			}
 			break;
 		default: assert(0); return false;
@@ -717,13 +717,13 @@ static bool types_expr(Typer *tr, Expression *e) {
 	e->flags |= EXPR_FOUND_TYPE; /* even if failed, pretend we found the type */
 	switch (e->kind) {
 	case EXPR_FN: {
-		if (!type_of_fn(tr, &e->fn, e->where, &e->type, 0))
+		if (!type_of_fn(tr, e->fn, e->where, &e->type, 0))
 			return false;
-		if (fn_has_any_const_params(&e->fn)) {
+		if (fn_has_any_const_params(e->fn)) {
 			HashTable z = {0};
-			e->fn.instances = z;
+			e->fn->instances = z;
 		} else {
-			if (!types_fn(tr, &e->fn, &e->type, e->where, NULL))
+			if (!types_fn(tr, e->fn, &e->type, e->where, NULL))
 				return false;
 		}
 	} break;
@@ -757,7 +757,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		t->flags |= TYPE_IS_RESOLVED;
 		break;
 	case EXPR_EACH: {
-		EachExpr *ea = &e->each;
+		EachExpr *ea = e->each;
 		*(Expression **)arr_add(&tr->in_expr_decls) = e;
 		if (!each_enter(e)) return false;
 		if (ea->flags & EACH_IS_RANGE) {
@@ -1040,7 +1040,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				if (decl->decl->flags & DECL_HAS_EXPR) {
 					Expression *expr = &decl->decl->expr;
 					if (expr->kind == EXPR_FN)
-						fn_decl = &decl->decl->expr.fn;
+						fn_decl = decl->decl->expr.fn;
 				}
 			}
 		}

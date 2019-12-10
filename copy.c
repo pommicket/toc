@@ -185,8 +185,10 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		copy_block(c, &wout->body, &win->body);
 	} break;
 	case EXPR_EACH: {
-		EachExpr *ein = &in->each;
-		EachExpr *eout = &out->each;
+		EachExpr *ein = in->each;
+		EachExpr *eout = allocr_malloc(a, sizeof *eout);
+		out->each = eout;
+		*eout = *ein;
 		if (ein->flags & EACH_ANNOTATED_TYPE)
 			copy_type(c, &eout->type, &ein->type);
 		if (ein->flags & EACH_IS_RANGE) {
@@ -201,7 +203,7 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		copy_block(c, &eout->body, &ein->body);
 	} break;
 	case EXPR_FN:
-		copy_fn_expr(c, &out->fn, &in->fn, true);
+		copy_fn_expr(c, out->fn = allocr_malloc(a, sizeof *out->fn), in->fn, true);
 		break;
 	case EXPR_CAST: {
 		CastExpr *cin = &in->cast;
