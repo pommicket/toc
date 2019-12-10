@@ -5,14 +5,15 @@
 */
 static bool location_after(Location a, Location b) { /* a is after b? */
 	assert(a.ctx == b.ctx);
-	return a.code > b.code;
+	return a.pos > b.pos;
 }
 
 /* for debugging */
 static void fprint_location(FILE *out, Location location) {
-	char *newline = strchr(location.code, '\n');
+	char *str = location.ctx->str + location.pos;
+	char *newline = strchr(str, '\n');
 	if (newline) *newline = 0;
-	fprintf(out, "Line %ld: %s\n", (long)location.line, location.code);
+	fprintf(out, "Line %ld: %s\n", (long)location.line, str);
 	if (newline) *newline = '\n';
 }
 

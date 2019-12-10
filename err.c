@@ -79,7 +79,7 @@ static void warn_print_header_(Location where) {
 }
 
 static void err_print_location_text(Location where) {
-	const char *text = where.code;
+	const char *text = where.ctx->str + where.pos;
 	const char *end = strchr(text, '\n');
 	int has_newline = end != NULL;
 	if (!has_newline)

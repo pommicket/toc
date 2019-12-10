@@ -53,6 +53,7 @@ typedef double F64;
 typedef U32 IdentID; /* identifier ID for cgen (anonymous variables) */
 
 typedef U32 LineNo;
+typedef U32 CodePos;
 
 /* for keeping track of whence something came */
 #ifdef TOC_DEBUG
@@ -67,12 +68,13 @@ typedef U32 LineNo;
 
 typedef struct Location {
 	LineNo line;
-	char *code;
+    CodePos pos; /* position in ctx->str */
 	struct ErrCtx *ctx;
 } Location;
 
 typedef struct ErrCtx {
 	const char *filename;
+	char *str; /* file contents */
 	bool enabled;
 	Location *instance_stack; /* stack of locations which generate the instances we're dealing with */
 } ErrCtx;
