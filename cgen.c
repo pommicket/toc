@@ -1707,7 +1707,7 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 		case BUILTIN_U64: cgen_write(g, "%"PRIu64, *(U64 *)v); break;
 		case BUILTIN_F32: cgen_write(g, F32_FMT"f", *(F32 *)v); break;
 		case BUILTIN_F64: cgen_write(g, F64_FMT, *(F64 *)v); break;
-		case BUILTIN_CHAR: cgen_write(g, "\\x%02x", *(char *)v); break;
+		case BUILTIN_CHAR: cgen_write(g, "'\\x%02x'", *(char *)v); break;
 		case BUILTIN_BOOL: cgen_write(g, "%s", *(bool *)v ? "true" : "false"); break;
 		}
 		break;
@@ -1752,8 +1752,6 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 				if (!cgen_val_pre(g, *val, type, d->where))
 					return false;
 			}
-			if (g->block != NULL)
-				cgen_write(g, "static ");
 			if (!cgen_type_pre(g, type, d->where)) return false;
 			cgen_write(g, " ");
 			cgen_ident(g, i);
