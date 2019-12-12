@@ -1,29 +1,16 @@
-/* infers the expression of decls[idx], according to the types of the other decls */
-static bool infer_expr(Typer *tr, size_t idx, Declaration *decls) {
-	Declaration *decl = decls + idx;
-	if (decl->flags & DECL_HAS_EXPR) return true; /* already did it */
-
-	decl->expr.kind = EXPR_VAL;
-	decl->expr.type.flags = TYPE_IS_RESOLVED;
-	decl->expr.type.kind = TYPE_TYPE;
-	
-	decl->expr.val.type = calloc(1,sizeof (Type));
-	decl->expr.val.type->kind = TYPE_BUILTIN;	
-	decl->expr.val.type->builtin = BUILTIN_I64;
-	decl->expr.val.type->flags = TYPE_IS_RESOLVED;
-	
-	decl->type = decl->expr.type;
-	decl->flags |= DECL_FOUND_TYPE;
-	decl->flags |= DECL_HAS_EXPR;
+/* 
+match and to are dynamic arrays of equal size
+find the value (and put it into val) of ident by matching match[i] to to[i], i = 0..arr_len(match)-1
+all the types in match must be resolved, and all the types in to must be unresolved
+*/
+static bool infer(Type **match, Type **to, Identifier ident, Value *val, Type *type) {
+	val->type = calloc(1,sizeof(Type));
+	val->type->flags = TYPE_IS_RESOLVED;
+	val->type->kind = TYPE_BUILTIN;
+	val->type->builtin = BUILTIN_I64;
+	type->flags = TYPE_IS_RESOLVED;
+	type->kind = TYPE_TYPE;
+	type->was_expr = NULL;
 	return true;
 }
 
-/* infers ALL of the expressions in  the declarations */
-static bool infer_exprs_in_decls(Typer *tr, Declaration *decls) {
-	for (size_t idx = 0; idx < arr_len(decls); ++idx) {
-		if (decls[idx].flags & DECL_INFER)
-			if (!infer_expr(tr, idx, decls))
-				return false;
-	}
-	return true;
-}

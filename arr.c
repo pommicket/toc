@@ -57,6 +57,14 @@ static void arr_clear_(void **arr) {
 	}
 }
 
+static void arr_cleara_(void **arr, size_t size, Allocator *allocr) {
+	if (*arr) {
+		ArrHeader *header = arr_hdr(*arr);
+		allocr_free(allocr, header, header->cap * size);
+		*arr = NULL;
+	}
+}
+
 static void arr_set_len_(void **arr, size_t n, size_t item_sz) {
 	if (n == 0) {
 		arr_clear_(arr);
@@ -149,12 +157,13 @@ You shouldn't rely on this, though, e.g. by doing
 #endif
 
 #define arr_add(arr) (arr_ptr_type(arr))arr_add_((void **)(arr), sizeof **(arr))
-#define arr_adda(arr, allocr) (arr_ptr_type(arr))arr_adda_((void **)(arr), sizeof **(arr), allocr)
+#define arr_adda(arr, allocr) (arr_ptr_type(arr))arr_adda_((void **)(arr), sizeof **(arr), (allocr))
 #define arr_resv(arr, n) arr_resv_((void **)(arr), n, sizeof **(arr))
-#define arr_resva(arr, n, allocr) arr_resva_((void **)(arr), n, sizeof **(arr), allocr)
+#define arr_resva(arr, n, allocr) arr_resva_((void **)(arr), n, sizeof **(arr), (allocr))
 #define arr_set_len(arr, n) arr_set_len_((void **)(arr), n, sizeof **(arr))
-#define arr_set_lena(arr, n, a) arr_set_lena_((void **)(arr), n, sizeof **(arr), a)
+#define arr_set_lena(arr, n, a) arr_set_lena_((void **)(arr), n, sizeof **(arr), (a))
 #define arr_clear(arr) arr_clear_((void **)(arr)), (void)sizeof **arr /* second part makes sure most of the time that you don't accidentally call it without taking the address */
+#define arr_cleara(arr, allocr) arr_cleara_((void **)(arr), sizeof **(arr), (allocr))
 #define arr_last(arr) arr_last_((void *)(arr), sizeof *(arr))
 /* OPTIM: maybe replace with less standard-compliant version */
 #define arr_foreach(arr, type, var) for (type *var = arr_len(arr) ? arr : NULL, *var##_foreach_end = arr_last(arr); var; var == var##_foreach_end ? var = NULL : ++var)

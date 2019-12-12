@@ -233,6 +233,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 				success = false;
 				goto ret;
 			}
+			
 			if (param->type.kind == TYPE_TUPLE) {
 				err_print(param->where, "Functions can't have tuple parameters.");
 				success = false;
@@ -1203,8 +1204,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 			U64 *which_are_const = &which_are_const_val->u64;
 			*which_are_const = 0;
 			int semi_const_index = 0;
-			if (!infer_exprs_in_decls(tr, fn->params))
-				return false;
 			/* eval compile time arguments */
 			for (i = 0; i < nparams; ++i) {
 				bool should_be_evald = arg_is_const(&arg_exprs[i], fn_type->constness[i]);
@@ -1254,10 +1253,44 @@ static bool types_expr(Typer *tr, Expression *e) {
 					++param_decl;
 				}
 			}
-			/* type param declarations, etc */
+
+			i = 0;
+			Type **arg_types = NULL;
+			Type **decl_types = NULL;
+			arr_foreach(fn->params, Declaration, param) {
+				arr_foreach(param->idents, Identifier, ident) {
+					if (param->flags & DECL_INFER) {
+						Value val;
+						Type type;
+						if (!infer(arg_types, decl_types, *ident, &val, &type))
+							return false;
+						param->expr.kind = EXPR_VAL;
+						param->expr.flags = 0;
+						param->expr.val = val;
+						param->expr.type = type;
+						param->expr.flags |= EXPR_FOUND_TYPE;
+						param->type = param->expr.type;
+						param->flags |= DECL_HAS_EXPR|DECL_FOUND_TYPE;
+					} else if ((param->flags & DECL_ANNOTATES_TYPE)
+							   && !(param->flags & DECL_HAS_EXPR)) {
+						
+						if (param->type.kind == TYPE_TUPLE)
+							err_print(param->where, "Parameters cannot have tuple types.");
+						
+						Type **p = typer_arr_add(tr, &decl_types);
+						*p = &param->type;
+						Type **q = typer_arr_add(tr, &arg_types);
+						*q = &arg_exprs[i].type;
+					}
+					++i;
+				}
+			}
+				
+
+			/* type return declarations, etc */
 			if (!type_of_fn(tr, &fn_copy, e->where, &f->type, TYPE_OF_FN_IS_INSTANCE))
 				return false;
-
+			
 			/* deal with default arguments */
 			
 			i = 0;
