@@ -1,8 +1,7 @@
-P ::= struct {
-  x, y:int;
+f ::= fn(t::=, x :t) t {
+  	  x + 1
 };
+
 main ::= fn() {
-	 p:P;
-	 x::="y";
-	 p[x];
+	 f(13);
 };

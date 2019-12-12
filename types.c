@@ -1203,7 +1203,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 			U64 *which_are_const = &which_are_const_val->u64;
 			*which_are_const = 0;
 			int semi_const_index = 0;
-
+			if (!infer_exprs_in_decls(tr, fn->params))
+				return false;
 			/* eval compile time arguments */
 			for (i = 0; i < nparams; ++i) {
 				bool should_be_evald = arg_is_const(&arg_exprs[i], fn_type->constness[i]);
@@ -1230,45 +1231,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 						if (!(param_decl->flags & DECL_ANNOTATES_TYPE)) {
 							param_decl->type = *type;
 						}
-					} else if (param_decl->flags & DECL_INFER) {
-						arg_exprs[i].kind = EXPR_VAL;
-						arg_exprs[i].flags = EXPR_FOUND_TYPE;
-						{
-							for (Declaration *p = fn->params; p < param_decl; ++p) {
-								if (p->flags & DECL_FOUND_VAL)
-									if (!add_ident_decls(&fn->body, p, SCOPE_CHECK_REDECL)) {
-										for (Declaration *q = fn->params; q < p; ++q)
-											if (q->flags & DECL_FOUND_VAL)
-												remove_ident_decls(&fn->body, q);
-										return false;
-									}
-							}
-						}
-						bool success = infer_expr(tr, &arg_exprs[i], fn->params, arg_exprs);
-						for (Declaration *p = fn->params; p < param_decl; ++p) {
-							if (p->flags & DECL_FOUND_VAL)
-								remove_ident_decls(&fn->body, p);
-						}
-						if (!success) return false;
-						copy_val(tr->allocr, &param_decl->val, &arg_exprs[i].val, &arg_exprs[i].type);
-						
-						
-						if (param_decl->flags & DECL_ANNOTATES_TYPE) {
-							if (!type_resolve(tr, &param_decl->type, param_decl->where))
-								return false;
-							Type *expected = &arg_exprs[i].type;
-							Type *got = &param_decl->type;
-							if (!type_eq(expected, got)) {
-								char *estr = type_to_str(expected);
-								char *gstr = type_to_str(got);
-								err_print(param_decl->where, "Expected annotated type %s for this argument, but it was annotated as %s.", estr, gstr);
-								free(estr); free(gstr);
-								return false;
-							}
-						}
-						param_decl->type = arg_exprs[i].type;
-						param_decl->flags |= DECL_FOUND_VAL|DECL_FOUND_TYPE;
-						params_set[i] = true;
 					} else {
 						/* leave gap for this (default argument) */
 						typer_arr_add(tr, &table_index.tuple);
