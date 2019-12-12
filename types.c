@@ -1257,20 +1257,12 @@ static bool types_expr(Typer *tr, Expression *e) {
 			i = 0;
 			Type **arg_types = NULL;
 			Type **decl_types = NULL;
+			Identifier *infer_idents = NULL;
+			
 			arr_foreach(fn->params, Declaration, param) {
 				arr_foreach(param->idents, Identifier, ident) {
 					if (param->flags & DECL_INFER) {
-						Value val;
-						Type type;
-						if (!infer(arg_types, decl_types, *ident, &val, &type))
-							return false;
-						param->expr.kind = EXPR_VAL;
-						param->expr.flags = 0;
-						param->expr.val = val;
-						param->expr.type = type;
-						param->expr.flags |= EXPR_FOUND_TYPE;
-						param->type = param->expr.type;
-						param->flags |= DECL_HAS_EXPR|DECL_FOUND_TYPE;
+						*(Identifier *)arr_add(&infer_idents) = *ident;
 					} else if ((param->flags & DECL_ANNOTATES_TYPE)
 							   && !(param->flags & DECL_HAS_EXPR)) {
 						
@@ -1285,8 +1277,27 @@ static bool types_expr(Typer *tr, Expression *e) {
 					++i;
 				}
 			}
-				
 
+			Value *inferred_vals = typer_malloc(tr, arr_len(infer_idents) * sizeof *inferred_vals);
+			Type *inferred_types = typer_malloc(tr, arr_len(infer_idents) * sizeof *inferred_types);
+			if (!infer(arg_types, decl_types, infer_idents, inferred_vals, inferred_types))
+				return false;
+
+			i = 0;
+			arr_foreach(fn->params, Declaration, param) {
+				arr_foreach(param->idents, Identifier, ident) {
+					if (param->flags & DECL_INFER) {
+						param->expr.kind = EXPR_VAL;
+						param->expr.flags = 0;
+						param->expr.val = inferred_vals[i];
+						param->expr.type = inferred_types[i];
+						param->expr.flags |= EXPR_FOUND_TYPE;
+						param->type = param->expr.type;
+						param->flags |= DECL_HAS_EXPR|DECL_FOUND_TYPE;
+						++i;
+					}
+				}
+			}
 			/* type return declarations, etc */
 			if (!type_of_fn(tr, &fn_copy, e->where, &f->type, TYPE_OF_FN_IS_INSTANCE))
 				return false;

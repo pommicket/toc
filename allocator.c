@@ -22,6 +22,8 @@ static void *allocr_malloc(Allocator *a, size_t bytes) {
 	(void)a;
 	return err_malloc(bytes);
 #else
+	if (bytes == 0)
+		return NULL;
 	if (a == NULL)
 		return err_malloc(bytes);
 	/* position in this page to return */
@@ -52,23 +54,13 @@ static void *allocr_calloc(Allocator *a, size_t n, size_t sz) {
 #if NO_ALLOCATOR
 	a = NULL;
 #endif
+	if (n == 0 || sz == 0) return NULL;
 	if (a == NULL) return err_calloc(n, sz);
 	/* OPTIM: use calloc */
 	size_t bytes = n * sz;
 	void *data = allocr_malloc(a, bytes);
 	memset(data, 0, bytes);
 	return data;
-}
-
-/* OPTIM */
-static void *allocr_realloc(Allocator *a, void *data, size_t old_size, size_t new_size) {
-#if NO_ALLOCATOR
-	a = NULL;
-#endif
-	if (a == NULL) return err_realloc(data, new_size);
-    void *ret = allocr_malloc(a, new_size);
-	memcpy(ret, data, old_size);
-	return ret;
 }
 
 static void allocr_free(Allocator *a, void *data, size_t size) {
@@ -81,6 +73,23 @@ static void allocr_free(Allocator *a, void *data, size_t size) {
 	/* OPTIM */
 	(void)size;
 }
+
+/* OPTIM */
+static void *allocr_realloc(Allocator *a, void *data, size_t old_size, size_t new_size) {
+#if NO_ALLOCATOR
+	a = NULL;
+#endif
+	if (new_size == 0) {
+		allocr_free(a, data, old_size);
+		return NULL;
+	}
+	if (a == NULL) return err_realloc(data, new_size);
+    void *ret = allocr_malloc(a, new_size);
+	memcpy(ret, data, old_size);
+	return ret;
+}
+
+
 
 static void allocr_free_all(Allocator *a) {
 	for (Page *page = a->first; page;) {

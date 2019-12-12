@@ -158,6 +158,7 @@ static void warn_print(Location where, const char *fmt, ...) {
 }
 
 static void *err_malloc(size_t size) {
+	if (size == 0) return NULL;
 	void *ret = malloc(size);
 	if (!ret) {
 		fprintf(stderr, "Error: Out of memory.\n");
@@ -167,6 +168,7 @@ static void *err_malloc(size_t size) {
 }
 
 static void *err_calloc(size_t n, size_t size) {
+	if (n == 0 || size == 0) return NULL;
 	void *ret = calloc(n, size);
 	if (!ret) {
 		fprintf(stderr, "Error: Out of memory.\n");
@@ -176,6 +178,10 @@ static void *err_calloc(size_t n, size_t size) {
 }
 
 static void *err_realloc(void *data, size_t new_size) {
+	if (new_size == 0) {
+		free(data);
+		return NULL;
+	}
 	void *ret = realloc(data, new_size);
 	if (!ret) {
 		fprintf(stderr, "Error: Out of memory.\n");

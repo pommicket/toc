@@ -1798,6 +1798,10 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 		if ((flags & PARSE_DECL_ALLOW_INFER) && ends_decl(t->token, ends_with)) {
 			/* inferred expression */
 			d->flags |= DECL_INFER;
+			if (arr_len(d->idents) > 1) {
+				err_print(d->where, "Inferred declarations can only have one identifier. Please separate this declaration.");
+				goto ret_false;
+			}
 			if (!(d->flags & DECL_IS_CONST)) {
 				tokr_err(t, "Inferred parameters must be constant.");
 				goto ret_false;
