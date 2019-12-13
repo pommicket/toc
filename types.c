@@ -1281,7 +1281,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			size_t ninferred_idents = arr_len(inferred_idents);
 			Value *inferred_vals = typer_malloc(tr, ninferred_idents * sizeof *inferred_vals);
 			Type *inferred_types = typer_malloc(tr, ninferred_idents * sizeof *inferred_types);
-			if (!infer_ident_vals(arg_types, decl_types, inferred_idents, inferred_vals, inferred_types))
+			if (!infer_ident_vals(decl_types, arg_types, inferred_idents, inferred_vals, inferred_types))
 				return false;
 			{
 				Type *type = inferred_types;
