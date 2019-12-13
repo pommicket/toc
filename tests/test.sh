@@ -13,7 +13,7 @@ compile() {
 }
 
 do_tests() {
-	valgrind -q $TOC "$DIR/$1/$1.toc" -o "$DIR/$1/$1.c" > /dev/null || exit 1
+	valgrind -q --exit-on-first-error=yes --error-exitcode=1 $TOC "$DIR/$1/$1.toc" -o "$DIR/$1/$1.c" > /dev/null || exit 1
 	for CC in $COMPILERS; do
 
 		for EXTRA_CFLAGS in "-O0 -g" "-O3 -s"; do

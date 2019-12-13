@@ -1257,12 +1257,12 @@ static bool types_expr(Typer *tr, Expression *e) {
 			i = 0;
 			Type **arg_types = NULL;
 			Type **decl_types = NULL;
-			Identifier *infer_idents = NULL;
+			Identifier *inferred_idents = NULL;
 			
 			arr_foreach(fn->params, Declaration, param) {
 				arr_foreach(param->idents, Identifier, ident) {
 					if (param->flags & DECL_INFER) {
-						*(Identifier *)arr_add(&infer_idents) = *ident;
+						*(Identifier *)arr_add(&inferred_idents) = *ident;
 					} else if ((param->flags & DECL_ANNOTATES_TYPE)
 							   && !(param->flags & DECL_HAS_EXPR)) {
 						
@@ -1278,11 +1278,30 @@ static bool types_expr(Typer *tr, Expression *e) {
 				}
 			}
 
-			Value *inferred_vals = typer_malloc(tr, arr_len(infer_idents) * sizeof *inferred_vals);
-			Type *inferred_types = typer_malloc(tr, arr_len(infer_idents) * sizeof *inferred_types);
-			if (!infer(arg_types, decl_types, infer_idents, inferred_vals, inferred_types))
+			size_t ninferred_idents = arr_len(inferred_idents);
+			Value *inferred_vals = typer_malloc(tr, ninferred_idents * sizeof *inferred_vals);
+			Type *inferred_types = typer_malloc(tr, ninferred_idents * sizeof *inferred_types);
+			if (!infer_ident_vals(arg_types, decl_types, inferred_idents, inferred_vals, inferred_types))
 				return false;
-
+			{
+				Type *type = inferred_types;
+				for (i = 0; i < ninferred_idents; ++i) {
+					if (type->kind == TYPE_UNKNOWN) {
+						long counter = (long)i;
+						Declaration *decl = fn->params;
+					    while (1) {
+							counter -= (long)arr_len(decl->idents);
+							if (counter < 0) break;
+							++decl;
+						}
+						err_print(decl->where, "Could not infer value of declaration.");
+						info_print(e->where, "While processing this call");
+						return false;
+					}
+					++type;
+				}
+			}
+			
 			i = 0;
 			arr_foreach(fn->params, Declaration, param) {
 				arr_foreach(param->idents, Identifier, ident) {

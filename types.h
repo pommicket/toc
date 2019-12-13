@@ -55,16 +55,19 @@ typedef U32 IdentID; /* identifier ID for cgen (anonymous variables) */
 typedef U32 LineNo;
 typedef U32 CodePos;
 
+#define join(a,b) a##b
+
 /* for keeping track of whence something came */
 #ifdef TOC_DEBUG
 #define SOURCE_LOCATION char *src_file; int src_line;
 #define SOURCE_LOCATION_PARAMS char *src_file, int src_line,
-#define DEBUG_UNDERSCORE(x) x##_
+#define DEBUG_UNDERSCORE(x) join(x,_)
 #else
 #define SOURCE_LOCATION
 #define SOURCE_LOCATION_PARAMS
 #define DEBUG_UNDERSCORE(x) x
 #endif
+
 
 typedef struct Location {
 	LineNo line;

@@ -17,7 +17,6 @@ static void allocr_create(Allocator *a) {
 }
 
 static void *allocr_malloc(Allocator *a, size_t bytes) {
-	assert(bytes);
 #if NO_ALLOCATOR
 	(void)a;
 	return err_malloc(bytes);
