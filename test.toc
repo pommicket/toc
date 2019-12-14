@@ -2,6 +2,8 @@ f ::= fn(t::=, x :t) t {
   	  x + 1
 };
 
+// test: fn(t::=int,u::=t,x:u)u
+
 main ::= fn() {
 	 f(13);
 };

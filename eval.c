@@ -1331,7 +1331,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			*v = idecl->val;
 		} else if (is_decl && (d->flags & DECL_IS_CONST)) {
 			if (!(d->flags & DECL_FOUND_VAL)) {
-				assert(d->flags & DECL_HAS_EXPR); /* KEEP */
+				assert(d->flags & DECL_HAS_EXPR);
 				if (!eval_expr(ev, &d->expr, &d->val)) return false;
 				d->flags |= DECL_FOUND_VAL;
 			}

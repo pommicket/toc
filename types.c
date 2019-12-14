@@ -200,7 +200,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	bool entered_fn = false;
 	size_t param_idx;
 	FnExpr *prev_fn = tr->fn;
-	FnExpr fn_copy;
+	FnExpr fn_copy = {0};
 	
 	Block *prev_block = tr->block;
 	/* 
@@ -1279,9 +1279,9 @@ static bool types_expr(Typer *tr, Expression *e) {
 			}
 
 			size_t ninferred_idents = arr_len(inferred_idents);
-			Value *inferred_vals = typer_malloc(tr, ninferred_idents * sizeof *inferred_vals);
-			Type *inferred_types = typer_malloc(tr, ninferred_idents * sizeof *inferred_types);
-			if (!infer_ident_vals(decl_types, arg_types, inferred_idents, inferred_vals, inferred_types))
+			Value *inferred_vals = malloc(ninferred_idents * sizeof *inferred_vals);
+			Type *inferred_types = malloc(ninferred_idents * sizeof *inferred_types);
+			if (!infer_ident_vals(tr, decl_types, arg_types, inferred_idents, inferred_vals, inferred_types))
 				return false;
 			{
 				Type *type = inferred_types;
@@ -1304,17 +1304,13 @@ static bool types_expr(Typer *tr, Expression *e) {
 			
 			i = 0;
 			arr_foreach(fn->params, Declaration, param) {
-				arr_foreach(param->idents, Identifier, ident) {
-					if (param->flags & DECL_INFER) {
-						param->expr.kind = EXPR_VAL;
-						param->expr.flags = 0;
-						param->expr.val = inferred_vals[i];
-						param->expr.type = inferred_types[i];
-						param->expr.flags |= EXPR_FOUND_TYPE;
-						param->type = param->expr.type;
-						param->flags |= DECL_HAS_EXPR|DECL_FOUND_TYPE;
-						++i;
-					}
+				if (param->flags & DECL_INFER) {
+					Value *val = &inferred_vals[i];
+					Type *type = &inferred_types[i];
+					param->val = *val;
+					param->type = *type;
+					param->flags |= DECL_FOUND_VAL | DECL_FOUND_TYPE;
+					++i;
 				}
 			}
 			/* type return declarations, etc */
@@ -1322,11 +1318,18 @@ static bool types_expr(Typer *tr, Expression *e) {
 				return false;
 			
 			/* deal with default arguments */
-			
 			i = 0;
 			arr_foreach(fn->params, Declaration, param) {
 				arr_foreach(param->idents, Identifier, ident) {
 					if (!params_set[i]) {
+						if (param->flags & DECL_INFER) {
+							arg_exprs[i].kind = EXPR_VAL;
+							arg_exprs[i].flags = EXPR_FOUND_TYPE;
+							arg_exprs[i].type = table_index_type.tuple[i+1] = param_types[i] = param->type;
+							arg_exprs[i].val = table_index.tuple[i+1] = param->val;
+							params_set[i] = true;
+							continue;
+						}
 						assert(param->flags & DECL_HAS_EXPR);
 						assert(param->expr.kind == EXPR_VAL); /* this was done by type_of_fn */
 						arg_exprs[i] = param->expr;
@@ -1349,7 +1352,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 		/* check types of arguments */
 		for (size_t p = 0; p < nparams; ++p) {
 			Expression *arg = &arg_exprs[p];
-			
 			Type *expected = &param_types[p];
 			Type *got = &arg->type;
 			if (!type_eq(expected, got)) {

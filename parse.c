@@ -1966,6 +1966,11 @@ static void fprint_type(FILE *out, Type *t) {
 	free(s);
 }
 
+static void print_type(Type *t) {
+	fprint_type(stdout, t);
+	printf("\n");
+}
+
 
 static void fprint_block(FILE *out,  Block *b) {
 	fprintf(out, "{\n");

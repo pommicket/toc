@@ -7,7 +7,9 @@
 static void *err_malloc(size_t bytes);
 static void *err_calloc(size_t n, size_t sz);
 static void *err_realloc(void *prev, size_t new_size);
+#ifdef TOC_DEBUG
 #define NO_ALLOCATOR 1 /* useful for debugging; valgrind (maybe) checks writing past the end of a malloc, but that won't work with an allocator */
+#endif
 /* number of bytes a page hold, not including the header */
 #define PAGE_BYTES (16384 - sizeof(Page))
 #define PAGE_MAX_ALIGNS (PAGE_BYTES / sizeof(MaxAlign))

@@ -2,8 +2,15 @@
   Copyright (C) 2019 Leo Tenenbaum.
   This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
+
+
+  these copy functions MUST be used before typing!!!! (except for copy_val)
+
+  ----- 
+  IMPORTANT:   
+  These functions are like memcpy, in that in and out must not overlap!
+  -----  
 */
-/* these copy functions MUST be used before typing!!!! (except for copy_val) */
 
 typedef struct {
 	Allocator *allocr;
@@ -49,15 +56,6 @@ static void copy_val(Allocator *a, Value *out, Value *in, Type *t) {
 		memcpy(out->struc, in->struc, bytes);
 	} break;
 	case TYPE_TYPE:
-		/* copy_type(c, out->type = allocr_malloc(c->allocr, sizeof *out->type), in->type); */
-		/* 
-		   i don't think this can be a problem right now,
-		   but might eventually be,
-		   if a function returns a type and
-		   the old type doesn't work when the stuff on the stack
-		   is freed. if you switch back to using a copier, make sure you check where
-		   copy_val(NULL, ...) is used!!!
-		*/
 		*out = *in;
 		break;
 	case TYPE_EXPR:
@@ -65,9 +63,18 @@ static void copy_val(Allocator *a, Value *out, Value *in, Type *t) {
 	}
 }
 
-/* only works on unresolved types */
+static void copy_val_full(Copier *c, Value *out, Value *in, Type *t) {
+	if (t->kind == TYPE_TYPE) {
+		Type *new_type = allocr_malloc(c->allocr, sizeof *new_type);
+		copy_type(c, new_type, in->type);
+		out->type = new_type;
+	} else {
+		copy_val(c->allocr, out, in, t);
+	}
+}
+
+/* only works on unresolved and resolved types */
 static void copy_type(Copier *c, Type *out, Type *in) {
-	assert(!(in->flags & TYPE_IS_RESOLVED));
 	*out = *in;
 	switch (in->kind) {
 	case TYPE_BUILTIN:
@@ -95,12 +102,12 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 		}
 	} break;
 	case TYPE_ARR:
-		/* if (in->flags & TYPE_IS_RESOLVED) { */
-		/* 	out->arr.n = in->arr.n; */
-		/* } else { */
-		out->arr.n_expr = allocr_malloc(c->allocr, sizeof *out->arr.n_expr);
-		copy_expr(c, out->arr.n_expr, in->arr.n_expr);
-		/* } */
+		if (in->flags & TYPE_IS_RESOLVED) {
+			out->arr.n = in->arr.n;
+		} else {
+			out->arr.n_expr = allocr_malloc(c->allocr, sizeof *out->arr.n_expr);
+			copy_expr(c, out->arr.n_expr, in->arr.n_expr);
+		}
 		out->arr.of = allocr_malloc(c->allocr, sizeof *out->arr.of);
 		copy_type(c, out->arr.of, in->arr.of);
 		break;
