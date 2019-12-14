@@ -2021,8 +2021,6 @@ static void fprint_arg_exprs(FILE *out, Expression *args) {
 	fprintf(out, "(");
 	arr_foreach(args, Expression, arg) {
 		if (arg != args) fprintf(out, ", ");
-		Expression *last = arr_last(args);
-		assert(arg<=last);
 		fprint_expr(out, arg);
 	}
 	fprintf(out, ")");

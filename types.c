@@ -1367,7 +1367,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 			c->instance = instance_table_adda(tr->allocr, &original_fn->instances, table_index, &table_index_type, &instance_already_exists);
 
 			
-			if (!instance_already_exists) {
+			if (instance_already_exists) {
+				arr_cleara(&table_index_type.tuple, tr->allocr);
+				arr_cleara(&table_index.tuple, tr->allocr);
+			} else {
 				copy_block(&cop, &fn_copy.body, &original_fn->body);
 				c->instance->fn = fn_copy;
 				/* fix parameter and return types (they were kind of problematic before, because we didn't know about the instance) */
@@ -1380,7 +1383,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				bool success = types_fn(tr, &c->instance->fn, &f->type, e->where, c->instance);
 				arr_remove_last(&err_ctx->instance_stack);
 				if (!success) return false;
-				arr_clear(&table_index_type.tuple);
+				arr_cleara(&table_index_type.tuple, tr->allocr);
 			}
 		}
 
