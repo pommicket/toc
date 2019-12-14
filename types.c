@@ -1307,6 +1307,9 @@ static bool types_expr(Typer *tr, Expression *e) {
 				if (param->flags & DECL_INFER) {
 					Value *val = &inferred_vals[i];
 					Type *type = &inferred_types[i];
+					/* if we have an inferred type argument, it shouldn't be flexible */
+					if (type->kind == TYPE_TYPE)
+						val->type->flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE;
 					param->val = *val;
 					param->type = *type;
 					param->flags |= DECL_FOUND_VAL | DECL_FOUND_TYPE;
@@ -1365,8 +1368,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 		if (fn_type->constness) {
 			bool instance_already_exists;
 			c->instance = instance_table_adda(tr->allocr, &original_fn->instances, table_index, &table_index_type, &instance_already_exists);
-
-			
 			if (instance_already_exists) {
 				arr_cleara(&table_index_type.tuple, tr->allocr);
 				arr_cleara(&table_index.tuple, tr->allocr);

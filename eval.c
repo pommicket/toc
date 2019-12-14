@@ -247,12 +247,12 @@ static void *val_get_ptr(Value *v, Type *t) {
 	switch (t->kind) {
 	case TYPE_PTR:
 	case TYPE_BUILTIN:
-	case TYPE_TUPLE:
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 	case TYPE_FN:
 	case TYPE_SLICE:
 	case TYPE_TYPE:
+	case TYPE_TUPLE:
 		return v;
 	case TYPE_ARR:
 		return v->arr;
@@ -292,9 +292,15 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 	case TYPE_FN:
 		fprintf(f, "<function @ %p>", (void *)*(FnExpr **)p);
 		break;
-	case TYPE_TUPLE:
-		fprintf(f, "<tuple>");
-		break;
+	case TYPE_TUPLE: {
+		Value *tuple = *(Value **)p;
+		fprintf(f, "(");
+		for (size_t i = 0; i < arr_len(t->tuple); ++i) {
+			if (i) fprintf(f, ", ");
+			fprint_val(f, tuple[i], &t->tuple[i]);
+		}
+		fprintf(f, ")");
+	} break;
 	case TYPE_ARR: {
 		fprintf(f, "["); /* TODO: change? when array initializers are added */
 		size_t n = t->arr.n;
@@ -346,15 +352,12 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 }
 
 static void fprint_val(FILE *f, Value v, Type *t) {
-	if (t->kind == TYPE_TUPLE) {
-		fprintf(f, "(");
-		for (size_t i = 0; i < arr_len(t->tuple); ++i) {
-			fprint_val(f, v.tuple[i], &t->tuple[i]);
-		}
-		fprintf(f, ")");
-	} else {
-		fprint_val_ptr(f, val_get_ptr(&v, t), t);
-	}
+	fprint_val_ptr(f, val_get_ptr(&v, t), t);
+}
+
+static void print_val(Value v, Type *t) {
+	fprint_val(stdout, v, t);
+	printf("\n");
 }
 
 static void *val_ptr_to_free(Value *v, Type *t) {

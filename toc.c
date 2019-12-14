@@ -17,6 +17,10 @@
 #include <inttypes.h>
 
 #include "types.h"
+
+/* forward declarations for debugging */
+static void print_val(Value v, Type *t);
+
 #include "allocator.c"
 #include "arr.c"
 #include "location.c"

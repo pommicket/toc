@@ -1662,6 +1662,7 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 	switch (t->kind) {
 	case TYPE_TUPLE:
 	case TYPE_VOID:
+	case TYPE_EXPR:
 	case TYPE_TYPE:
 		assert(0);
 		return false;
@@ -1711,9 +1712,6 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 		case BUILTIN_BOOL: cgen_write(g, "%s", *(bool *)v ? "true" : "false"); break;
 		}
 		break;
-	case TYPE_EXPR:
-		assert(0);
-		return false;
 	}
 	return true;
 }

@@ -234,7 +234,7 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 	case TYPE_TUPLE: {
 		Value *us = *(Value **)u;
 		Value *vs = *(Value **)v;
-	    for (size_t i = 0; i < arr_len(t->tuple); ++i) {
+	    for (size_t i = 0, len = arr_len(t->tuple); i < len; ++i) {
 			if (!val_eq(us[i], vs[i], &t->tuple[i]))
 				return false;
 		}
