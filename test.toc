@@ -14,5 +14,5 @@ f ::= fn(b::=, u::=, a:t(b), x:t(u)) int{
 main ::= fn() {
 	 x : t(int) = 3;
 	 y : t(float) = 3.4;
-	 f(x,y);
+	 puti(f(x,y));
 };

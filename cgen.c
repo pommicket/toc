@@ -1767,7 +1767,8 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 		}
 	} else {
 		/* declarations where we use an expression */
-		for (size_t idx = 0; idx < arr_len(d->idents); ++idx) {
+		size_t nidents = arr_len(d->idents);
+		for (size_t idx = 0; idx < nidents; ++idx) {
 			Identifier i = d->idents[idx];
 			Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx] : &d->type;
 			if (!cgen_type_pre(g, type, d->where)) return false;
@@ -1786,24 +1787,37 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 			if (d->expr.type.kind == TYPE_TUPLE) {
 				if (!cgen_set_tuple(g, NULL, d->idents, NULL, &d->expr)) return false;
 			} else {
-				cgen_write(g, "{");
-				cgen_nl(g);
-				if (!cgen_type_pre(g, &d->type, d->expr.where)) return false;
-				cgen_write(g, " expr__");
-				if (!cgen_type_post(g, &d->type, d->expr.where)) return false;
-				cgen_write(g, "; ");
-				if (!cgen_set(g, NULL, "expr__", &d->expr, NULL))
-					return false;
-				arr_foreach(d->idents, Identifier, i) {
-					Expression e;
-					e.flags = 0;
+				if (nidents > 1) {
+					/* set expr__ first to make sure side effects don't happen twice */
+					cgen_write(g, "{");
+					cgen_nl(g);
+					if (!cgen_type_pre(g, &d->type, d->expr.where)) return false;
+					cgen_write(g, " expr__");
+					if (!cgen_type_post(g, &d->type, d->expr.where)) return false;
+					cgen_write(g, "; ");
+					if (!cgen_set(g, NULL, "expr__", &d->expr, NULL))
+						return false;
+				
+					arr_foreach(d->idents, Identifier, i) {
+						Expression e;
+						e.flags = EXPR_FOUND_TYPE;
+						e.kind = EXPR_IDENT;
+						e.type = d->type;
+						e.ident = *i;
+						if (!cgen_set(g, &e, NULL, NULL, "expr__"))
+							return false;
+					}
+					cgen_write(g, "}");
+				} else {
+					/* set it directly */
+					Expression e = {0};
 					e.kind = EXPR_IDENT;
 					e.type = d->type;
-					e.ident = *i;
-					if (!cgen_set(g, &e, NULL, NULL, "expr__"))
+					e.flags = EXPR_FOUND_TYPE;
+					e.ident = d->idents[0];
+					if (!cgen_set(g, &e, NULL, &d->expr, NULL))
 						return false;
 				}
-				cgen_write(g, "}");
 			}
 		}
 		cgen_nl(g);
