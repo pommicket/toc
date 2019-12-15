@@ -778,9 +778,10 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 }
 
 static bool parse_block(Parser *p, Block *b) {
-	b->flags = 0;
 	Tokenizer *t = p->tokr;
 	Block *prev_block = p->block;
+	b->flags = 0;
+	b->ret_expr = NULL;
 	p->block = b;
 	if (!token_is_kw(t->token, KW_LBRACE)) {
 		tokr_err(t, "Expected '{' to open block.");
@@ -1952,9 +1953,6 @@ static bool parse_file(Parser *p, ParsedFile *f) {
 
 #define PARSE_PRINT_LOCATION(l) /* fprintf(out, "[l%lu]", (unsigned long)(l).line); */
 
-/* in theory, this shouldn't be global, but these functions are mostly for debugging anyways */
-static bool parse_printing_after_types;
-
 static void fprint_expr(FILE *out, Expression *e);
 static void fprint_stmt(FILE *out, Statement *s);
 static void fprint_decl(FILE *out, Declaration *d);
@@ -1978,7 +1976,7 @@ static void fprint_block(FILE *out,  Block *b) {
 		fprint_stmt(out, stmt);
 	}
 	fprintf(out, "}");
-	if (parse_printing_after_types && b->ret_expr) {
+	if (b->ret_expr) {
 		fprintf(out, " returns ");
 		fprint_expr(out, b->ret_expr);
 	}
@@ -1986,10 +1984,6 @@ static void fprint_block(FILE *out,  Block *b) {
 }
 
 static void fprint_fn_expr(FILE *out, FnExpr *f) {
-	bool anyc = fn_has_any_const_params(f);
-	bool prev = parse_printing_after_types;
-	if (anyc)
-		parse_printing_after_types = false;
 	fprintf(out, "fn (");
 	arr_foreach(f->params, Declaration, decl) {
 		if (decl != f->params)
@@ -2000,8 +1994,6 @@ static void fprint_fn_expr(FILE *out, FnExpr *f) {
 	fprint_type(out, &f->ret_type);
 	fprintf(out, " ");
 	fprint_block(out, &f->body);
-	if (anyc)
-		parse_printing_after_types = prev;
 }
 
 static void fprint_args(FILE *out, Argument *args) {
@@ -2030,6 +2022,7 @@ static void fprint_val(FILE *f, Value v, Type *t);
 
 static void fprint_expr(FILE *out, Expression *e) {
 	PARSE_PRINT_LOCATION(e->where);
+	bool found_type = (e->flags & EXPR_FOUND_TYPE) != 0;
 	switch (e->kind) {
 	case EXPR_LITERAL_INT:
 		fprintf(out, "%lld", (long long)e->intl);
@@ -2050,17 +2043,10 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprint_ident(out, e->ident);
 		break;
 	case EXPR_BINARY_OP: {
-		bool prev = parse_printing_after_types;
 		fprintf(out, "(");
 		fprint_expr(out, e->binary.lhs);
 		fprintf(out, ")%s(", binary_op_to_str(e->binary.op));
-		if (e->binary.op == BINARY_DOT) {
-			parse_printing_after_types = false; /* don't show types for rhs of . */
-		}
 		fprint_expr(out, e->binary.rhs);
-		if (e->binary.op == BINARY_DOT) {
-			parse_printing_after_types = prev;
-		}
 		fprintf(out, ")");
 	} break;
 	case EXPR_UNARY_OP:
@@ -2115,7 +2101,7 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprintf(out, "= ");
 		if (ea->flags & EACH_IS_RANGE) {
 			fprint_expr(out, ea->range.from);
-			if (parse_printing_after_types) {
+			if (found_type) {
 				if (ea->range.stepval) {
 					fprintf(out, ",");
 					fprint_val(out, *ea->range.stepval, &ea->type);
@@ -2138,7 +2124,7 @@ static void fprint_expr(FILE *out, Expression *e) {
 	} break;
 	case EXPR_CALL:
 		fprint_expr(out, e->call.fn);
-		if (parse_printing_after_types) {
+		if (found_type) {
 			fprint_arg_exprs(out, e->call.arg_exprs);
 		} else {
 			fprint_args(out, e->call.args);
@@ -2186,12 +2172,16 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprint_val(out, e->val, &e->type);
 		break;
 	}
-	if (parse_printing_after_types) {
+	if (found_type) {
 		fprintf(out, ":");
 		fprint_type(out, &e->type);
 	}
 }
 
+static void print_expr(Expression *e) {
+	fprint_expr(stdout, e);
+	printf("\n");
+}
 
 static void fprint_decl(FILE *out, Declaration *d) {
 	PARSE_PRINT_LOCATION(d->where);

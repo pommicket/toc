@@ -23,6 +23,7 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identi
 		break;
 	case EXPR_CALL: {
 		if (to->kind != EXPR_CALL) return true; /* give up */
+		puts("wow call");
 		Argument *m_args = match->call.args;
 		Expression *t_args = to->call.arg_exprs;
 		size_t nargs = arr_len(m_args);
@@ -108,6 +109,7 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 	} break;
 	case TYPE_EXPR: {
 		Expression *to_expr = to->was_expr;
+		print_type(to);
 		Expression e = {0};
 		if (!to_expr) {
 			to_expr = &e;
@@ -144,7 +146,7 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 match and to are dynamic arrays of equal size
 idents is a dyn array of distinct identifiers
 find the value of each ident by matching match[i] to to[i], i = 0..arr_len(match)-1
-all the types in match must be resolved, and all the types in to must be unresolved
+all the types in match must be unresolved, and all the types in to must be resolved
 */
 static bool infer_ident_vals(Typer *tr, Type **match, Type **to, Identifier *idents, Value *vals, Type *types) {
 	size_t ntypes = arr_len(match);
@@ -163,20 +165,6 @@ static bool infer_ident_vals(Typer *tr, Type **match, Type **to, Identifier *ide
 			return false;
 		++match, ++to;
 	}
-
-
-
-#if 0 /* TODO DELME */
-	Value *val = vals;
-	Type *type = types;
-	val->type = calloc(1,sizeof(Type));
-	val->type->flags = TYPE_IS_RESOLVED;
-	val->type->kind = TYPE_BUILTIN;
-	val->type->builtin = BUILTIN_I64;
-	type->flags = TYPE_IS_RESOLVED;
-	type->kind = TYPE_TYPE;
-	type->was_expr = NULL;
-#endif
 	return true;
 }
 

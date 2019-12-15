@@ -136,7 +136,6 @@ int main(int argc, char **argv) {
 	    err_fprint(TEXT_IMPORTANT("Errors occured while determining types.\n"));
 		return EXIT_FAILURE;
 	}
-	parse_printing_after_types = true;
 	fprint_parsed_file(stdout, &f);
 
 	FILE *out = fopen(out_filename, "w");

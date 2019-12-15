@@ -501,6 +501,7 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 		Value typeval;
 		if (!types_expr(tr, t->expr))
 			return false;
+		print_expr(t->expr);
 		t->was_expr = t->expr;
 		if (!eval_expr(tr->evalr, t->expr, &typeval))
 			return false;
