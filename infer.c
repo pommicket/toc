@@ -23,18 +23,18 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identi
 		break;
 	case EXPR_CALL: {
 		if (to->kind != EXPR_CALL) return true; /* give up */
-		puts("wow call");
 		Argument *m_args = match->call.args;
 		Expression *t_args = to->call.arg_exprs;
 		size_t nargs = arr_len(m_args);
 		
 		U16 *order = NULL;
 		Expression *f = match->call.fn;
-		
 	    IdentDecl *idecl = ident_decl(f->ident);
 		bool is_direct_fn = idecl && idecl->kind == IDECL_DECL && (idecl->decl->flags & DECL_HAS_EXPR) && idecl->decl->expr.kind == EXPR_FN;
 		if (is_direct_fn) {
-			FnExpr *fn_decl = idecl->decl->expr.fn; 
+			if (!types_expr(tr, f))
+				return false;
+			FnExpr *fn_decl = idecl->decl->expr.fn;
 			if (!call_arg_param_order(tr->allocr, fn_decl, idecl->decl->where, &f->type, m_args, match->where, &order))
 				return false;
 		}
@@ -109,7 +109,6 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 	} break;
 	case TYPE_EXPR: {
 		Expression *to_expr = to->was_expr;
-		print_type(to);
 		Expression e = {0};
 		if (!to_expr) {
 			to_expr = &e;

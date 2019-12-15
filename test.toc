@@ -7,11 +7,12 @@ putf ::= fn(x: float) {
 
 t ::= fn(a:: Type) Type {a};
 
-f ::= fn(b::=, a:t(b)) int{
-3
+f ::= fn(b::=, u::=, a:t(b), x:t(u)) int{
+((3 as b) as u) as int
 };
 
 main ::= fn() {
 	 x : t(int) = 3;
-	 f(x);
+	 y : t(float) = 3.4;
+	 f(x,y);
 };
