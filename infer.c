@@ -1,7 +1,8 @@
 static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Location fn_where, Type *fn_type, Argument *args, Location where, U16 **param_indices);
 static bool types_expr(Typer *tr, Expression *e);
 
-static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identifier *idents, Value *vals, Type *types) {
+/* resolved_to should have the same value as to, but not consist of any identifiers which aren't in scope right now */
+static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Expression *resolved_to, Identifier *idents, Value *vals, Type *types) {
 	assert(!(match->flags & EXPR_FOUND_TYPE));
 	assert(to->flags & EXPR_FOUND_TYPE);
 	switch (match->kind) {
@@ -11,7 +12,7 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identi
 			if (*ident == match->ident) {
 				long idx = ident - idents;
 				types[idx] = to->type;
-				if (!eval_expr(tr->evalr, to, &vals[idx]))
+				if (!eval_expr(tr->evalr, resolved_to, &vals[idx]))
 					return false;
 				Copier c = copier_create(tr->allocr, tr->block);
 				Value new_val;
@@ -46,7 +47,8 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identi
 			} else {
 				t_arg = &t_args[i];
 			}
-			if (!infer_from_expr(tr, &m_arg->val, t_arg, idents, vals, types))
+			assert(t_arg->kind == EXPR_VAL); /* should have been evaluated */
+			if (!infer_from_expr(tr, &m_arg->val, t_arg, t_arg, idents, vals, types))
 				return false;
 		}
 	} break;
@@ -76,12 +78,13 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 		}
 	} break;
 	case TYPE_FN: {
+		if (match->fn.constness || to->fn.constness) {
+			return true;
+		}
 		if (to->kind != TYPE_FN) return true;
 		if (arr_len(match->fn.types) != arr_len(to->fn.types)) return true;
 	    size_t i, len = arr_len(match->fn.types);
 		for (i = 0; i < len; ++i) {
-			if (match->fn.constness[i] != to->fn.constness[i])
-				return true;
 			if (!infer_from_type(tr, &match->fn.types[i], &to->fn.types[i], idents, vals, types))
 				return false;
 		}
@@ -110,16 +113,16 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 	case TYPE_EXPR: {
 		Expression *to_expr = to->was_expr;
 		Expression e = {0};
+		e.kind = EXPR_TYPE;
+		e.typeval = *to;
+		e.flags = EXPR_FOUND_TYPE;
+		Type *type = &e.type;
+		type->flags = TYPE_IS_RESOLVED;
+		type->kind = TYPE_TYPE;
 		if (!to_expr) {
 			to_expr = &e;
-			to_expr->kind = EXPR_TYPE;
-			to_expr->typeval = *to;
-			to_expr->flags = EXPR_FOUND_TYPE;
-			Type *type = &to_expr->type;
-			type->flags = TYPE_IS_RESOLVED;
-			type->kind = TYPE_TYPE;
 		}
-		if (!infer_from_expr(tr, match->expr, to_expr, idents, vals, types))
+		if (!infer_from_expr(tr, match->expr, to_expr, &e, idents, vals, types))
 			return false;
 	} break;
 	case TYPE_ARR: {
@@ -132,7 +135,7 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 		n_type->kind = TYPE_BUILTIN;
 		n_type->builtin = BUILTIN_I64;
 		n_type->flags = TYPE_IS_RESOLVED;
-		if (!infer_from_expr(tr, match->arr.n_expr, &to_n_expr, idents, vals, types))
+		if (!infer_from_expr(tr, match->arr.n_expr, &to_n_expr, &to_n_expr, idents, vals, types))
 			return false;
 		if (!infer_from_type(tr, match->arr.of, to->arr.of, idents, vals, types))
 			return false;

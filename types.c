@@ -754,11 +754,19 @@ static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Location fn_wher
 				return false;
 			}
 			param_idx = index;
-		} else if ((param->flags & (DECL_HAS_EXPR | DECL_INFER)) && param < last_param_without_default_value) {
-			/* this param must be named; so this is referring to a later parameter */
-			--arg;
 		} else {
-			param_idx = p;
+			if (param > (Declaration *)arr_last(fn->params)) {
+				err_print(arg->where, "Too many arguments to function!");
+				info_print(fn_where, "Declaration is here.");
+				return false;
+			}
+		
+			if ((param->flags & (DECL_HAS_EXPR | DECL_INFER)) && param < last_param_without_default_value) {
+				/* this param must be named; so this is referring to a later parameter */
+				--arg;
+			} else {
+				param_idx = p;
+			}
 		}
 
 		if (param_idx != -1) {

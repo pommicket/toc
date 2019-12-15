@@ -1323,6 +1323,12 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		break;
 	case EXPR_IDENT: {
 		IdentDecl *idecl = ident_decl(e->ident);
+		if (!idecl) {
+			char *s = ident_to_str(e->ident);
+			err_print(e->where, "Undeclared identifier: %s.", s);
+			free(s);
+			return false;
+		}
 		bool is_decl = idecl->kind == IDECL_DECL;
 		Declaration *d = NULL;
 		if (is_decl) {
