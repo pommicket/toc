@@ -47,9 +47,11 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Expres
 			} else {
 				t_arg = &t_args[i];
 			}
-			assert(t_arg->kind == EXPR_VAL); /* should have been evaluated */
-			if (!infer_from_expr(tr, &m_arg->val, t_arg, t_arg, idents, vals, types))
-				return false;
+			if (t_arg->kind == EXPR_VAL) {
+				/* was evaluated, because it's const */
+				if (!infer_from_expr(tr, &m_arg->val, t_arg, t_arg, idents, vals, types))
+					return false;
+			}
 		}
 	} break;
 	default: break;

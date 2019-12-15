@@ -19,10 +19,10 @@
 
 /* 
 TODO:
-make sure all parameters to a function which returns a type are constant
----
 get ArrInt to work with inference
+---
 packages
+---
 X ::= newtype(int); or something
 don't allow while {3; 5} (once break is added)
 better printing of types (take was_expr into account)

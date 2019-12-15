@@ -323,6 +323,19 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 	}
 	*ret_type = f->ret_type;
 
+	if (ret_type->kind == TYPE_TYPE) {
+		/* 
+		   a function which returns a type but has non-constant parameters is weird...
+		   but might be useful, so let's warn
+		*/
+		arr_foreach(f->params, Declaration, param) {
+			if (!(param->flags & DECL_IS_CONST)) {
+				warn_print(param->where, "Non-constant parameter in function which returns Type. (You can't call functions which return types at run-time, y'know)");
+				break;
+			}
+		}
+	}
+
  ret:
 	arr_remove_last(&tr->blocks);
 	tr->block = prev_block;

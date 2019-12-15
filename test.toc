@@ -6,58 +6,16 @@ putf ::= fn(x: float) {
 	 #C("printf(\"%f\\n\", (double)x);
 ");
 };
-
-// it would be nice if Arr.data.len == Arr.len (: but this will require some C code...
-Arr ::= fn (t :: Type) Type {
-	struct {
-		   data : []t;
-		   len, cap : int;
-	}
+f ::= fn(x : int) Type {
+  if x == 0 { int } else { float }
 };
 
-arr_add ::= fn(t ::=, a : &Arr(t), x : t) {
-		if a.len >= a.cap {
-		   a.cap = a.cap * 2 + 2;
-		   new_data := new(t, a.cap);
-		   each i := 0..a.len-1 {
-		   		new_data[i] = a.data[i];
-		   }
-		   a.data = new_data;
-		}
-		a.data[a.len] = x;
-		a.len += 1;
-};
-
-square ::= fn(t ::=, x : t) t {
-	   a : Arr(t);
-	   each i := 1,2..2*x-1 {
-	   		arr_add(&a, i);
-	   };
-	   sum := 0 as t;
-	   each i := 0..a.len-1 {
-	   		sum += a.data[i];
-	   };
-	   sum
-};
-
-
-// ArrInt ::= Arr(int);
-
-inc ::= fn(t ::=, x : t) t {
-	x + 1
+r ::= fn(n::=, a :f(n)) int {
+n
 };
 
 main ::= fn() {
-	 arr : Arr(int);
-	 farr : Arr(float);
-	 each i := 1..100 {	
-	 	   arr_add(&arr, inc(square(i)));
-	 	   arr_add(&farr, inc(square(i as float)));
-	 }
-	 each i := 0..arr.len - 1 {
-	 	  puti(arr.data[i]);
-	 }
-	 each i := 0..farr.len - 1 {
-	 	  putf(farr.data[i]);
-	 }
+	 x :: = 3;
+	 y : f(x);
+	 puti(r(y));
 };

@@ -11,26 +11,37 @@ and there are almost definitely bugs right now.</strong>
 I would recommend against using it for anything big or important.
 Many parts of it may change in the future.</p>
 
-<p><code>toc</code> improves on C's syntax (and semantics) in many ways,
+<p><code>toc</code> improves on C&rsquo;s syntax (and semantics) in many ways,
 To declare <code>x</code> as an integer and set it to 5,
 you can do:</p>
 
 <p><code>
-x := 5; // Declare x and set x to 5 (infer type) <br />
-x : int = 5; // Explicitly make the type int. <br />
-x : int; x = 5; // Declare x as an integer, then set it to 5.
+x := 5; // Declare x and set x to 5 (infer type)  
+x : int = 5; // Explicitly make the type int.  
+x : int; x = 5; // Declare x as an integer, then set it to 5.  
 </code></p>
 
-<p><code>toc</code> is statically typed and has many of C's features, but
+<p><code>toc</code> is statically typed and has many of C&rsquo;s features, but
 it is nearly as fast in theory.</p>
 
 <p>See <code>docs</code> for more information (in progress).</p>
 
 <p><code>tests</code> has some test programs written in <code>toc</code>.</p>
 
-<p>To compile the compiler on a Unix-y system, just run <code>build.sh</code>. You can supply a compiler by running <code>CC=tcc build.sh</code>, or built it in release mode with <code>./build.sh release</code> (which will help speed up compiling large programs). </p>
+<p>To compile the compiler on a Unix-y system, just run <code>./build.sh release</code>. You can supply a compiler by running <code>CC=tcc ./build.sh release</code>, or build it in debug mode without the <code>release</code>.</p>
 
-<p>On other systems, you can just compile main.c with a C compiler. toc uses several C99 and a couple of C11 features, so it might not work on all compilers. But it does compile on quite a few, including <code>clang</code>, <code>gcc</code>, and <code>tcc</code>. It can also be compiled as if it were C++, but it does break the standard in a few places*. So, MSVC can also compile it. The <em>outputted</em> code should be C99-compliant.</p>
+<p>On other systems, you can just compile main.c with a C compiler. <code>toc</code> uses several C99 and a couple of C11 features, so it might not work on all compilers. But it does compile on quite a few, including <code>clang</code>, <code>gcc</code>, and <code>tcc</code>. It can also be compiled as if it were C++, but it does break the standard in a few places*. So, MSVC can also compile it. The <em>outputted</em> code should be C99-compliant.</p>
+
+<h4>Why it compiles to C</h4>
+
+<p><code>toc</code> compiles to C for three reasons:</p>
+
+<ul>
+<li>Speed. C is one of the most performant programming languages out there. It also has compilers which are very good at optimizing (better than anything I could write).</li>
+<li>Portability. C is probably the most portable language. It has existed for >30 years and can run on practically anything. Furthermore, all major languages nowadays can call functions written in C.</li>
+<li>Laziness. I don&rsquo;t really want to deal with writing something which outputs machine code, and it would certainly be more buggy than something which outputs C.</li>
+</ul>
+
 
 <hr />
 
@@ -40,32 +51,74 @@ it is nearly as fast in theory.</p>
 
 <h4>Build system</h4>
 
-<p><code>toc</code> is set up as a unity build, meaning that there is only one translation unit. So, <code>main.c</code> <code>#include</code>s <code>toc.c</code>, which <code>#include</code>s all of <code>toc</code>'s files. This improves (from scratch) compilation speeds, since you don't have to include headers a bunch of times for each translation unit. This is more of a problem in C++, where, for example, doing <code>#include &lt;map&gt;</code> ends up turning into 25,000 lines after preprocessing. All of toc's source code, which includes most of the C standard library, at the time of this writing (Dec 2019) is only 22,000 lines after preprocessing; imagine including all of that once for each translation unit which includes <code>map</code>. It also obviates the need for fancy build systems like CMake.</p>
+<p><code>toc</code> is set up as a unity build, meaning that there is only one translation unit. So, <code>main.c</code> <code>#include</code>s <code>toc.c</code>, which <code>#include</code>s all of <code>toc</code>&rsquo;s files.</p>
+
+<h5>Why?</h5>
+
+<p>This improves compilation speeds (especially from scratch), since you don&rsquo;t have to include headers a bunch of times for each translation unit. This is more of a problem in C++, where, for example, doing <code>#include &lt;map&gt;</code> ends up turning into 25,000 lines after preprocessing. All of toc&rsquo;s source code, which includes most of the C standard library, at the time of this writing (Dec 2019) is only 22,000 lines after preprocessing; imagine including all of that once for each translation unit which includes <code>map</code>. It also obviates the need for fancy build systems like CMake.</p>
 
 <h4>New features</h4>
 
-<p>Here are all the C99 features which <code>toc</code> depends on (I might have forgotten some...):</p>
+<p>Here are all the C99 features which <code>toc</code> depends on (I might have forgotten some&hellip;):</p>
 
 <ul>
 <li>Declare anywhere</li>
-<li><code>stdint.h</code></li>
+<li><code>inttypes.h</code></li>
 <li>Non-constant struct literal initializers (e.g. <code>int x[2] = {y, z};</code>)</li>
-<li>Variadic macros and <code>__VA_ARGS__</code></li>
 <li>Flexible array members</li>
 </ul>
 
-<p>The last three of those could all be removed fairly easily.</p>
+
+<p>The last three of those could all be removed fairly easily (assuming the system actually has 8-, 16-, 32-, and 64-bit signed and unsigned types).</p>
 
 <p>And here are all of its C11 features:</p>
 
 <ul>
 <li>Anonymous structures/unions</li>
-<li><code>max_align_t</code> and <code>alignof</code> - It can still compile without these but it won't technically be standard-compliant</li>
+<li><code>max_align_t</code> and <code>alignof</code> - It can still compile without these but it won&rsquo;t technically be standard-compliant</li>
 </ul>
+
 
 <h4>More</h4>
 
 <p>See <code>main.c</code> for a bit more information.</p>
+
+<hr />
+
+<h3>Version history</h3>
+
+<p>Here are the major versions of <code>toc</code>.</p>
+
+<table>
+<thead>
+<tr>
+<th> Version </th>
+<th> Description </th>
+<th> Date </th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td> 0.0     </td>
+<td> Initial version. </td>
+<td> 2019 Dec 6 </td>
+</tr>
+<tr>
+<td> 0.1     </td>
+<td> Constant parameter inference. </td>
+<td> 2019 Dec 15 </td>
+</tr>
+</tbody>
+</table>
+
+
+<hr />
+
+<h3>Report a bug</h3>
+
+<p>If you find a bug, you can report it through <a href="https://github.com/pommicket/toc/issues">GitHub&rsquo;s issue tracker</a>, or by emailing pommicket@gmail.com.</p>
+
+<p>Just send me the <code>toc</code> source code which results in the bug, and I&rsquo;ll try to fix it.</p>
 
 <hr />
 
@@ -80,7 +133,8 @@ int main() {
 }
 </code></pre>
 
-<p>Is completely fine. <code>x</code> will hold an unspecified value after the jump (but it isn't used so it doesn't really matter). Apparently, in C++, this is an ill-formed program. This is a bit ridiculous since</p>
+
+<p>Is completely fine. <code>x</code> will hold an unspecified value after the jump (but it isn&rsquo;t used so it doesn&rsquo;t really matter). Apparently, in C++, this is an ill-formed program. This is a bit ridiculous since</p>
 
 <pre><code>
 int main() {  
@@ -91,4 +145,5 @@ int main() {
 }
 </code></pre>
 
-<p>is fine. So that's an interesting little "fun fact": <code>int x = 5;</code> isn't always the same as <code>int x; x = 5;</code> in C++.</p>
+
+<p>is fine. So that&rsquo;s an interesting little &ldquo;fun fact&rdquo;: <code>int x = 5;</code> isn&rsquo;t always the same as <code>int x; x = 5;</code> in C++.</p>
