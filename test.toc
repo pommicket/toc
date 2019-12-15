@@ -5,18 +5,13 @@ putf ::= fn(x: float) {
 	 #C("printf(\"%f\\n\", x)");
 };
 
-f ::= fn(t::=, u ::=, x :t, y:u) t {
-  	  x + (y as t)
-};
+t ::= fn(a:: Type) Type {a};
 
-test ::= fn(t::=int,u::=t,x:u)u {
-	 x*2	 
+f ::= fn(b::=, a:t(b)) int{
+3
 };
 
 main ::= fn() {
-	 puti(f(13,15));
-	 puti(f(14,14.4));
-	 puti(f(15,13.1));
-	 putf(f(2.2,3.1));
-	 puti(test(5));
+	 x : t(int) = 3;
+	 f(x);
 };

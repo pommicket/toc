@@ -1,6 +1,8 @@
+static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Location fn_where, Type *fn_type, Argument *args, Location where, U16 **param_indices);
 static bool types_expr(Typer *tr, Expression *e);
 
 static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identifier *idents, Value *vals, Type *types) {
+	assert(!(match->flags & EXPR_FOUND_TYPE));
 	assert(to->flags & EXPR_FOUND_TYPE);
 	switch (match->kind) {
 	case EXPR_IDENT:
@@ -25,10 +27,26 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identi
 		Expression *t_args = to->call.arg_exprs;
 		size_t nargs = arr_len(m_args);
 		
-		if (nargs != arr_len(t_args)) return true;
+		U16 *order = NULL;
+		Expression *f = match->call.fn;
+		
+	    IdentDecl *idecl = ident_decl(f->ident);
+		bool is_direct_fn = idecl && idecl->kind == IDECL_DECL && (idecl->decl->flags & DECL_HAS_EXPR) && idecl->decl->expr.kind == EXPR_FN;
+		if (is_direct_fn) {
+			FnExpr *fn_decl = idecl->decl->expr.fn; 
+			if (!call_arg_param_order(tr->allocr, fn_decl, idecl->decl->where, &f->type, m_args, match->where, &order))
+				return false;
+		}
 		for (size_t i = 0; i < nargs; ++i) {
 			Argument *m_arg = &m_args[i];
-			Expression *t_arg = &t_args[i];
+			Expression *t_arg;
+			if (is_direct_fn) {
+				t_arg = &t_args[order[i]];
+			} else {
+				t_arg = &t_args[i];
+			}
+			if (!infer_from_expr(tr, &m_arg->val, t_arg, idents, vals, types))
+				return false;
 		}
 	} break;
 	default: break;

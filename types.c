@@ -708,8 +708,8 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where,
 	return success;
 }
 
-/* returns a dynamic array of the parameter indices of the arguments. */
-static U16 *call_arg_param_order(Allocator *allocr, FnExpr *fn, Location fn_where, Type *fn_type, Argument *args, Location where) {
+/* puts a dynamic array of the parameter indices of the arguments into param_indices. */
+static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Location fn_where, Type *fn_type, Argument *args, Location where, U16 **param_indices) {
 	size_t nparams = arr_len(fn_type->fn.types)-1;
 	size_t nargs = arr_len(args);
 	if (nargs > nparams) {
@@ -774,7 +774,8 @@ static U16 *call_arg_param_order(Allocator *allocr, FnExpr *fn, Location fn_wher
 			}
 		}
 	}
-	return order;
+	*param_indices = order;
+	return true;
 }
 
 static bool types_expr(Typer *tr, Expression *e) {
@@ -1115,7 +1116,9 @@ static bool types_expr(Typer *tr, Expression *e) {
 		}
 
 		if (fn_decl) {
-			U16 *order = call_arg_param_order(tr->allocr, fn_decl, ident_decl(f->ident)->decl->where, &f->type, c->args, e->where);
+			U16 *order;
+			if (!call_arg_param_order(tr->allocr, fn_decl, ident_decl(f->ident)->decl->where, &f->type, c->args, e->where, &order))
+				return false;
 			size_t arg;
 			for (arg = 0; arg < nargs; ++arg) {
 				U16 idx = order[arg];
