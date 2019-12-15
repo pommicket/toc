@@ -902,7 +902,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			
 			if ((ea->type.flags & TYPE_IS_FLEXIBLE) && ea->range.to)
 				ea->type = ea->range.to->type;
-			
+			ea->type.flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE;
 		} else {
 			if (!types_expr(tr, ea->of))
 				return false;
@@ -1405,7 +1405,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			if (!type_eq(expected, got)) {
 				char *estr = type_to_str(expected);
 				char *gstr = type_to_str(got);
-				err_print(arg->where, "Expected type %s as %lu%s argument to function, but got %s.", estr, 1+(unsigned long)p, ordinals(1+p), gstr);
+				err_print(arg->where, "Expected type %s as argument to function, but got %s.", estr, gstr);
 				return false;
 			}
 		}

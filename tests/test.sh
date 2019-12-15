@@ -32,3 +32,4 @@ STARTPWD="$(pwd)"
 
 do_tests bf
 do_tests arr
+do_tests arr2

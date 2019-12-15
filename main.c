@@ -19,9 +19,7 @@
 
 /* 
 TODO:
-inferred const params
 make sure all parameters to a function which returns a type are constant
-check that it still works when you specify the inferred param
 ---
 get ArrInt to work with inference
 packages
