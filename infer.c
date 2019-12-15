@@ -1,3 +1,5 @@
+static bool types_expr(Typer *tr, Expression *e);
+
 static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identifier *idents, Value *vals, Type *types) {
 	assert(to->flags & EXPR_FOUND_TYPE);
 	switch (match->kind) {
@@ -17,6 +19,18 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identi
 			}
 		}
 		break;
+	/* case EXPR_CALL: { */
+	/* 	if (to->kind != EXPR_CALL) return true; /\* give up *\/ */
+	/* 	Argument *m_args = match->call.args; */
+	/* 	Expression *t_args = to->call.arg_exprs; */
+	/* 	size_t nargs = arr_len(m_args); */
+		
+	/* 	if (nargs != arr_len(t_args)) return true; */
+	/* 	for (size_t i = 0; i < nargs; ++i) { */
+	/* 		Argument *m_arg = &m_args[i]; */
+	/* 		Expression *t_arg = &t_args[i]; */
+	/* 	} */
+	/* } break; */
 	default: break;
 	}
 	return true;

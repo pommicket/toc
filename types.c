@@ -4,7 +4,6 @@
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
 static bool types_stmt(Typer *tr, Statement *s);
-static bool types_expr(Typer *tr, Expression *e);
 static bool types_block(Typer *tr, Block *b);
 static bool type_resolve(Typer *tr, Type *t, Location where);
 
@@ -1279,43 +1278,46 @@ static bool types_expr(Typer *tr, Expression *e) {
 			}
 
 			size_t ninferred_idents = arr_len(inferred_idents);
-			Value *inferred_vals = malloc(ninferred_idents * sizeof *inferred_vals);
-			Type *inferred_types = malloc(ninferred_idents * sizeof *inferred_types);
-			if (!infer_ident_vals(tr, decl_types, arg_types, inferred_idents, inferred_vals, inferred_types))
-				return false;
-			{
-				Type *type = inferred_types;
-				for (i = 0; i < ninferred_idents; ++i) {
-					if (type->kind == TYPE_UNKNOWN) {
-						long counter = (long)i;
-						Declaration *decl = fn->params;
-					    while (1) {
-							counter -= (long)arr_len(decl->idents);
-							if (counter < 0) break;
-							++decl;
+			if (ninferred_idents) {
+				Value *inferred_vals = typer_malloc(tr, ninferred_idents * sizeof *inferred_vals);
+				Type *inferred_types = typer_malloc(tr, ninferred_idents * sizeof *inferred_types);
+				
+				if (!infer_ident_vals(tr, decl_types, arg_types, inferred_idents, inferred_vals, inferred_types))
+					return false;
+				{
+					Type *type = inferred_types;
+					for (i = 0; i < ninferred_idents; ++i) {
+						if (type->kind == TYPE_UNKNOWN) {
+							long counter = (long)i;
+							Declaration *decl = fn->params;
+							while (1) {
+								counter -= (long)arr_len(decl->idents);
+								if (counter < 0) break;
+								++decl;
+							}
+							err_print(decl->where, "Could not infer value of declaration.");
+							info_print(e->where, "While processing this call");
+							return false;
 						}
-						err_print(decl->where, "Could not infer value of declaration.");
-						info_print(e->where, "While processing this call");
-						return false;
+						++type;
 					}
-					++type;
+				}
+				i = 0;
+				arr_foreach(fn->params, Declaration, param) {
+					if (param->flags & DECL_INFER) {
+						Value *val = &inferred_vals[i];
+						Type *type = &inferred_types[i];
+						/* if we have an inferred type argument, it shouldn't be flexible */
+						if (type->kind == TYPE_TYPE)
+							val->type->flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE;
+						param->val = *val;
+						param->type = *type;
+						param->flags |= DECL_FOUND_VAL | DECL_FOUND_TYPE;
+						++i;
+					}
 				}
 			}
 			
-			i = 0;
-			arr_foreach(fn->params, Declaration, param) {
-				if (param->flags & DECL_INFER) {
-					Value *val = &inferred_vals[i];
-					Type *type = &inferred_types[i];
-					/* if we have an inferred type argument, it shouldn't be flexible */
-					if (type->kind == TYPE_TYPE)
-						val->type->flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE;
-					param->val = *val;
-					param->type = *type;
-					param->flags |= DECL_FOUND_VAL | DECL_FOUND_TYPE;
-					++i;
-				}
-			}
 			/* type return declarations, etc */
 			if (!type_of_fn(tr, &fn_copy, e->where, &f->type, TYPE_OF_FN_IS_INSTANCE))
 				return false;
