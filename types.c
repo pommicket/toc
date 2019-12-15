@@ -708,6 +708,75 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where,
 	return success;
 }
 
+/* returns a dynamic array of the parameter indices of the arguments. */
+static U16 *call_arg_param_order(Allocator *allocr, FnExpr *fn, Location fn_where, Type *fn_type, Argument *args, Location where) {
+	size_t nparams = arr_len(fn_type->fn.types)-1;
+	size_t nargs = arr_len(args);
+	if (nargs > nparams) {
+		err_print(where, "Expected at most %lu arguments to function, but got %lu.",
+				  nparams, nargs);
+		return false;
+	}
+	int p = 0; /* counter for sequential parameters */
+
+	Declaration *last_param_without_default_value = NULL;
+	arr_foreach(fn->params, Declaration, param) {
+		if (!(param->flags & DECL_HAS_EXPR)) {
+			last_param_without_default_value = param;
+		}
+	}
+	Declaration *param = fn->params;
+	size_t ident_idx = 0;
+	U16 *order = NULL;
+	arr_foreach(args, Argument, arg) {
+		bool named = arg->name != NULL;
+		int param_idx = -1;
+		if (named) {
+			/* named argument */
+			int index = 0;
+			bool found = false;
+			arr_foreach(fn->params, Declaration, pa) {
+				arr_foreach(pa->idents, Identifier, id) {
+					if (*id == arg->name) {
+						found = true;
+						break;
+					}
+					++index;
+				}
+				if (found) break;
+			}
+			if (!found) {
+				char *s = ident_to_str(arg->name);
+				err_print(arg->where, "Argument '%s' does not appear in declaration of function.", s);
+				free(s);
+				info_print(fn_where, "Declaration is here.");
+				return false;
+			}
+			param_idx = index;
+		} else if ((param->flags & (DECL_HAS_EXPR | DECL_INFER)) && param < last_param_without_default_value) {
+			/* this param must be named; so this is referring to a later parameter */
+			--arg;
+		} else {
+			param_idx = p;
+		}
+
+		if (param_idx != -1) {
+			*(U16 *)arr_adda(&order, allocr) = (U16)param_idx;
+		}
+
+		if (!named) {
+			/* sequential order of parameters */
+			++p;
+			++ident_idx;
+			if (ident_idx == arr_len(param->idents)) {
+				++param;
+				ident_idx = 0;
+			}
+		}
+	}
+	return order;
+}
+
 static bool types_expr(Typer *tr, Expression *e) {
 	if (e->flags & EXPR_FOUND_TYPE) return true;
 	Type *t = &e->type;
@@ -1046,75 +1115,33 @@ static bool types_expr(Typer *tr, Expression *e) {
 		}
 
 		if (fn_decl) {
-			if (nargs > nparams) {
-				err_print(e->where, "Expected at most %lu arguments to function, but got %lu.",
-						  nparams, nargs);
-				return false;
-			}
-		    int p = 0; /* counter for sequential parameters */
-
-			Declaration *last_param_without_default_value = NULL;
-			arr_foreach(fn_decl->params, Declaration, param) {
-				if (!(param->flags & DECL_HAS_EXPR)) {
-				    last_param_without_default_value = param;
-				}
-			}
-			Declaration *param = fn_decl->params;
-			size_t ident_idx = 0;
-			
-			arr_foreach(args, Argument, arg) {
-				bool named = arg->name != NULL;
-				int param_idx = -1;
-				if (named) {
-					/* named argument */
-					int index = 0;
-					bool found = false;
-					arr_foreach(fn_decl->params, Declaration, pa) {
-						arr_foreach(pa->idents, Identifier, id) {
-							if (*id == arg->name) {
-								found = true;
-								break;
-							}
-							++index;
+			U16 *order = call_arg_param_order(tr->allocr, fn_decl, ident_decl(f->ident)->decl->where, &f->type, c->args, e->where);
+			size_t arg;
+			for (arg = 0; arg < nargs; ++arg) {
+				U16 idx = order[arg];
+				Expression expr = args[arg].val;
+				arg_exprs[idx] = expr;
+				if (params_set[idx]) {
+					Declaration *param = fn_decl->params;
+					Identifier *ident;
+				    for (Declaration *end = arr_end(fn_decl->params); param < end; ++param) {
+						ident = param->idents;
+						for (Identifier *iend = arr_end(param->idents); ident != iend; ++ident) {
+							if (idx == 0)
+								goto dblbreak;
+							--idx;
 						}
-						if (found) break;
 					}
-					if (!found) {
-						char *s = ident_to_str(arg->name);
-						err_print(arg->where, "Argument '%s' does not appear in declaration of function.", s);
-						free(s);
-						info_print(idecl_where(ident_decl(f->ident)), "Declaration is here.");
-						return false;
-					}
-					param_idx = index;
-				} else if ((param->flags & (DECL_HAS_EXPR | DECL_INFER)) && param < last_param_without_default_value) {
-					/* this param must be named; so this is referring to a later parameter */
-					--arg;
-				} else {
-					param_idx = p;
+					assert(0);
+				dblbreak:;
+					char *s = ident_to_str(*ident);
+					err_print(args[arg].where, "Argument #%lu (%s) set twice in function call.", idx+1, s);
+					free(s);
+					return false;
 				}
-
-				if (param_idx != -1) {
-					if (params_set[param_idx]) {
-						char *s = ident_to_str(param->idents[ident_idx]);
-						err_print(arg->where, "Argument #%lu (%s) set twice in function call.", param_idx+1, s);
-						free(s);
-						return false;
-					}
-					params_set[param_idx] = true;
-					arg_exprs[param_idx] = arg->val;
-				}
-
-				if (!named) {
-					/* sequential order of parameters */
-					++p;
-					++ident_idx;
-					if (ident_idx == arr_len(param->idents)) {
-						++param;
-						ident_idx = 0;
-					}
-				}
+				params_set[idx] = true;
 			}
+			arr_cleara(&order, tr->allocr);
 		} else {
 			if (nargs != nparams) {
 				err_print(e->where, "Expected %lu arguments to function call, but got %lu.", (unsigned long)nparams, (unsigned long)nargs);
@@ -1163,6 +1190,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				}
 			}
 		}
+		c->arg_exprs = arg_exprs;
 		FnExpr *original_fn = NULL;
 		Type table_index_type = {0};
 		Value table_index = {0};
@@ -1187,6 +1215,74 @@ static bool types_expr(Typer *tr, Expression *e) {
 			Declaration *param_decl = fn->params;
 			size_t ident_idx = 0;
 			size_t i = 0;
+
+			Type **arg_types = NULL;
+			Type **decl_types = NULL;
+			Identifier *inferred_idents = NULL;
+			
+			arr_foreach(fn->params, Declaration, param) {
+				arr_foreach(param->idents, Identifier, ident) {
+					if (param->flags & DECL_INFER) {
+						*(Identifier *)arr_add(&inferred_idents) = *ident;
+					} else if ((param->flags & DECL_ANNOTATES_TYPE)
+							   && !(param->flags & DECL_HAS_EXPR)) {
+						
+						if (param->type.kind == TYPE_TUPLE)
+							err_print(param->where, "Parameters cannot have tuple types.");
+						
+						Type **p = typer_arr_add(tr, &decl_types);
+						*p = &param->type;
+						Type **q = typer_arr_add(tr, &arg_types);
+						*q = &arg_exprs[i].type;
+					}
+					++i;
+				}
+			}
+
+			size_t ninferred_idents = arr_len(inferred_idents);
+			if (ninferred_idents) {
+				Value *inferred_vals = typer_malloc(tr, ninferred_idents * sizeof *inferred_vals);
+				Type *inferred_types = typer_malloc(tr, ninferred_idents * sizeof *inferred_types);
+				
+				if (!infer_ident_vals(tr, decl_types, arg_types, inferred_idents, inferred_vals, inferred_types))
+					return false;
+				{
+					Type *type = inferred_types;
+					for (i = 0; i < ninferred_idents; ++i) {
+						if (type->kind == TYPE_UNKNOWN) {
+							long counter = (long)i;
+							Declaration *decl = fn->params;
+							while (1) {
+								counter -= (long)arr_len(decl->idents);
+								if (counter < 0) break;
+								++decl;
+							}
+							err_print(decl->where, "Could not infer value of declaration.");
+							info_print(e->where, "While processing this call");
+							return false;
+						}
+						++type;
+					}
+				}
+				i = 0;
+				arr_foreach(fn->params, Declaration, param) {
+					if (param->flags & DECL_INFER) {
+						Value *val = &inferred_vals[i];
+						Type *type = &inferred_types[i];
+						/* if we have an inferred type argument, it shouldn't be flexible */
+						if (type->kind == TYPE_TYPE)
+							val->type->flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE;
+						param->val = *val;
+						param->type = *type;
+						param->flags |= DECL_FOUND_VAL | DECL_FOUND_TYPE;
+						++i;
+					}
+				}
+			}
+			
+
+
+			i = 0;
 			
 			
 			table_index_type.flags = TYPE_IS_RESOLVED;
@@ -1252,73 +1348,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 					++param_decl;
 				}
 			}
-
-			i = 0;
-			Type **arg_types = NULL;
-			Type **decl_types = NULL;
-			Identifier *inferred_idents = NULL;
-			
-			arr_foreach(fn->params, Declaration, param) {
-				arr_foreach(param->idents, Identifier, ident) {
-					if (param->flags & DECL_INFER) {
-						*(Identifier *)arr_add(&inferred_idents) = *ident;
-					} else if ((param->flags & DECL_ANNOTATES_TYPE)
-							   && !(param->flags & DECL_HAS_EXPR)) {
-						
-						if (param->type.kind == TYPE_TUPLE)
-							err_print(param->where, "Parameters cannot have tuple types.");
-						
-						Type **p = typer_arr_add(tr, &decl_types);
-						*p = &param->type;
-						Type **q = typer_arr_add(tr, &arg_types);
-						*q = &arg_exprs[i].type;
-					}
-					++i;
-				}
-			}
-
-			size_t ninferred_idents = arr_len(inferred_idents);
-			if (ninferred_idents) {
-				Value *inferred_vals = typer_malloc(tr, ninferred_idents * sizeof *inferred_vals);
-				Type *inferred_types = typer_malloc(tr, ninferred_idents * sizeof *inferred_types);
-				
-				if (!infer_ident_vals(tr, decl_types, arg_types, inferred_idents, inferred_vals, inferred_types))
-					return false;
-				{
-					Type *type = inferred_types;
-					for (i = 0; i < ninferred_idents; ++i) {
-						if (type->kind == TYPE_UNKNOWN) {
-							long counter = (long)i;
-							Declaration *decl = fn->params;
-							while (1) {
-								counter -= (long)arr_len(decl->idents);
-								if (counter < 0) break;
-								++decl;
-							}
-							err_print(decl->where, "Could not infer value of declaration.");
-							info_print(e->where, "While processing this call");
-							return false;
-						}
-						++type;
-					}
-				}
-				i = 0;
-				arr_foreach(fn->params, Declaration, param) {
-					if (param->flags & DECL_INFER) {
-						Value *val = &inferred_vals[i];
-						Type *type = &inferred_types[i];
-						/* if we have an inferred type argument, it shouldn't be flexible */
-						if (type->kind == TYPE_TYPE)
-							val->type->flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE;
-						param->val = *val;
-						param->type = *type;
-						param->flags |= DECL_FOUND_VAL | DECL_FOUND_TYPE;
-						++i;
-					}
-				}
-			}
-			
-			/* type return declarations, etc */
+			/* type params, return declarations, etc */
 			if (!type_of_fn(tr, &fn_copy, e->where, &f->type, TYPE_OF_FN_IS_INSTANCE))
 				return false;
 			
@@ -1392,9 +1422,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		}
 
 		*t = *ret_type;
-		c->arg_exprs = arg_exprs;
-		break;
-	}
+	} break;
 	case EXPR_BLOCK: {
 		Block *b = &e->block;
 		if (!types_block(tr, b))
