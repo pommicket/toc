@@ -1331,6 +1331,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 							arg_exprs[i].type = table_index_type.tuple[i+1] = param_types[i] = param->type;
 							arg_exprs[i].val = table_index.tuple[i+1] = param->val;
 							params_set[i] = true;
+							++i;
 							continue;
 						}
 						assert(param->flags & DECL_HAS_EXPR);
