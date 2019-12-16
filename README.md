@@ -77,10 +77,12 @@ See `main.c` for a bit more information.
 
 Here are the major versions of `toc`.
 
-| Version | Description | Date |
-| ------- | ----------- | ---- |
-| 0.0     | Initial version. | 2019 Dec 6 |
-| 0.1     | Constant parameter inference. | 2019 Dec 15 |
+<table>
+<tr><th>Version</th><th>Description</th><th>Date</th></tr>
+<tr><td>0.0</td><td>Initial version.</td><td>2019 Dec 6</td></tr>
+<tr><td>0.1</td><td>Constant parameter inference.</td><td>2019 Dec 15</td></tr>
+<tr><td>0.1.1</td><td>Better constant parameter inference.</td><td>2019 Dec 16</td></tr>
+</table>
 
 ---
 
