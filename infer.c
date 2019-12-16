@@ -23,6 +23,22 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Expres
 		}
 		break;
 	case EXPR_CALL: {
+		while (to->kind == EXPR_IDENT) {
+		    IdentDecl *idecl = ident_decl(to->ident);
+			if (idecl->kind == IDECL_DECL) {
+				Declaration *decl = idecl->decl;
+				int index = ident_index_in_decl(to->ident, decl);
+				Expression *expr = NULL;
+				if (decl->type.kind == TYPE_TUPLE) {
+					if (decl->expr.kind == EXPR_TUPLE) {
+						expr = &decl->expr.tuple[index];
+					}
+				} else {
+					expr = &decl->expr;
+				}
+				if (expr) to = expr;
+			} else break;
+		}
 		if (to->kind != EXPR_CALL) return true; /* give up */
 		Argument *m_args = match->call.args;
 		Expression *t_args = to->call.arg_exprs;

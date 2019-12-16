@@ -6,7 +6,12 @@ putf ::= fn(x: float) {
 	 #C("printf(\"%f\\n\", (double)x);
 ");
 };
+
 main ::= fn() {
-	 x : : = 3;
-	 puti(x);
+	 Integer ::= id(int);
+	 x : Integer;
+	 puti(foo(x));
 };
+id ::= fn(t ::=, x :: t) t { x };
+
+foo ::= fn(t ::=, x : id(t)) int { 3 as t };

@@ -72,18 +72,20 @@ static bool typedefs_decl(CGenerator *g, Declaration *d) {
 					cgen_write(g, ";");
 				}
 			} else {
-				cgen_write(g, "typedef ");
-				if (!cgen_type_pre(g, val->type, d->where)) return false;
-				cgen_write(g, " ");
-				if (id) {
-					cgen_ident_id(g, id);
-				} else {
-					cgen_ident(g, i);
+				if (val->type->kind != TYPE_TYPE) {
+					cgen_write(g, "typedef ");
+					if (!cgen_type_pre(g, val->type, d->where)) return false;
+					cgen_write(g, " ");
+					if (id) {
+						cgen_ident_id(g, id);
+					} else {
+						cgen_ident(g, i);
+					}
+					if (val->type->kind != TYPE_STRUCT) {
+						if (!cgen_type_post(g, val->type, d->where)) return false;
+					}
+					cgen_write(g, ";");
 				}
-				if (val->type->kind != TYPE_STRUCT) {
-					if (!cgen_type_post(g, val->type, d->where)) return false;
-				}
-				cgen_write(g, ";");
 			}
 			cgen_nl(g);
 		}
