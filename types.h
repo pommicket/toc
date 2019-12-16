@@ -205,7 +205,6 @@ typedef enum {
 
 typedef enum {
 			  KW_SEMICOLON,
-			  KW_COLONCOLON,
 			  KW_COLON,
 			  KW_COMMA,
 			  KW_LPAREN,

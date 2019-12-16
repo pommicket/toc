@@ -6,16 +6,7 @@ putf ::= fn(x: float) {
 	 #C("printf(\"%f\\n\", (double)x);
 ");
 };
-f ::= fn(x : int) Type {
-  if x == 0 { int } else { float }
-};
-
-r ::= fn(n::=, a :f(n)) int {
-n
-};
-
 main ::= fn() {
-	 x :: = 3;
-	 y : f(x);
-	 puti(r(y));
+	 x : : = 3;
+	 puti(x);
 };

@@ -1139,15 +1139,15 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 						}
 					}
 				}
-				if (token_is_kw(t->token, KW_COLONCOLON)) {
-					tokr_err(t, "The variable(s) in a for loop cannot be constant.");
-					return false;
-				}
 				if (!token_is_kw(t->token, KW_COLON)) {
 					tokr_err(t, "Expected : following identifiers in for statement.");
 					return false;
 				}
 				++t->token;
+				if (token_is_kw(t->token, KW_COLON)) {
+					tokr_err(t, "The variable(s) in a for loop cannot be constant.");
+					return false;
+				}
 				if (!token_is_kw(t->token, KW_EQ)) {
 					ea->flags |= EACH_ANNOTATED_TYPE;
 					if (!parse_type(p, &ea->type))
@@ -1752,9 +1752,12 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 		}
 		if (token_is_kw(t->token, KW_COLON)) {
 			++t->token;
-			break;
+		} else {
+			
+			tokr_err(t, "Expected ',' to continue listing variables or ':' / '::' to indicate type.");
+			goto ret_false;
 		}
-		if (token_is_kw(t->token, KW_COLONCOLON)) {
+		if (token_is_kw(t->token, KW_COLON)) {
 			++t->token;
 			if (token_is_kw(t->token, KW_COLON) && (flags & PARSE_DECL_ALLOW_SEMI_CONST)) {
 				++t->token;
@@ -1764,8 +1767,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 			}
 			break;
 		}
-		tokr_err(t, "Expected ',' to continue listing variables or ':' / '::' to indicate type.");
-	    goto ret_false;
+		break;
 	}
 	
 	if (token_is_kw(t->token, KW_SEMICOLON) || token_is_kw(t->token, KW_RPAREN)) {
@@ -1860,7 +1862,7 @@ static bool is_decl(Tokenizer *t) {
 		if (token->kind != TOKEN_IDENT) return false;
 		++token;
 		if (token->kind != TOKEN_KW) return false;
-		if (token->kw == KW_COLON || token->kw == KW_COLONCOLON)
+		if (token->kw == KW_COLON)
 			return true;
 		if (token->kw != KW_COMMA) return false;
 		++token;
