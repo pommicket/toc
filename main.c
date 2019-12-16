@@ -19,8 +19,6 @@
 
 /* 
 TODO:
-get ArrInt to work with inference
----
 packages
 ---
 X ::= newtype(int); or something

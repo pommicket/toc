@@ -191,7 +191,7 @@ enum {
 	  TYPE_OF_FN_IS_INSTANCE = 0x01
 };
 
-static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags) {
+static bool type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	t->kind = TYPE_FN;
 	t->fn.types = NULL;
 	t->fn.constness = NULL; /* OPTIM: constness doesn't need to be a dynamic array */
@@ -211,7 +211,6 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 		
 	/* f has compile time params, but it's not an instance! */
 	bool generic = !(flags & TYPE_OF_FN_IS_INSTANCE) && fn_has_any_const_params(f);
-
     if (generic) {
 		Copier cop = copier_create(tr->allocr, tr->block);
 		copy_fn_expr(&cop, &fn_copy, f, false);
@@ -308,6 +307,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 			f->ret_type.flags = TYPE_IS_RESOLVED;
 			f->ret_type.was_expr = NULL;
 			f->ret_type.tuple = NULL;
+			f->ret_type.where = f->ret_decls[0].where;
 			arr_foreach(f->ret_decls, Declaration, d) {
 				arr_foreach(d->idents, Identifier, i) {
 					*(Type *)arr_add(&f->ret_type.tuple) = d->type;
@@ -316,7 +316,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Location where, Type *t, U16 flags)
 		}
 	}
 	if (!generic) {
-		if (!type_resolve(tr, &f->ret_type, where)) {
+		if (!type_resolve(tr, &f->ret_type, f->ret_type.where)) {
 			success = false;
 			goto ret;
 		}
@@ -398,7 +398,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 		} else {
 			if ((d->flags & DECL_HAS_EXPR) && (d->expr.kind == EXPR_FN)) {
 				/* allow using a function before declaring it */
-				if (!type_of_fn(tr, d->expr.fn, d->expr.where, t, 0)) return false;
+				if (!type_of_fn(tr, d->expr.fn, t, 0)) return false;
 				return true;
 			} else {
 				if (location_after(d->where, where)) {
@@ -514,6 +514,10 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 		Value typeval;
 		if (!types_expr(tr, t->expr))
 			return false;
+		if (t->expr->type.kind != TYPE_TYPE) {
+			err_print(where, "This expression is not a type, but it's being used as one.");
+			return false;
+		}
 		Expression *expr = t->expr;
 		if (!eval_expr(tr->evalr, t->expr, &typeval))
 			return false;
@@ -809,7 +813,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 	e->flags |= EXPR_FOUND_TYPE; /* even if failed, pretend we found the type */
 	switch (e->kind) {
 	case EXPR_FN: {
-		if (!type_of_fn(tr, e->fn, e->where, &e->type, 0))
+		if (!type_of_fn(tr, e->fn, &e->type, 0))
 			return false;
 		if (fn_has_any_const_params(e->fn)) {
 			HashTable z = {0};
@@ -1374,7 +1378,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				}
 			}
 			/* type params, return declarations, etc */
-			if (!type_of_fn(tr, &fn_copy, e->where, &f->type, TYPE_OF_FN_IS_INSTANCE))
+			if (!type_of_fn(tr, &fn_copy, &f->type, TYPE_OF_FN_IS_INSTANCE))
 				return false;
 			
 			/* deal with default arguments */
