@@ -337,7 +337,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	}
 
  ret:
-	arr_remove_last(&tr->blocks);
+	arr_remove_lasta(&tr->blocks, tr->allocr);
 	tr->block = prev_block;
 	/* cleanup */
 	if (entered_fn) {
@@ -854,7 +854,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		break;
 	case EXPR_EACH: {
 		EachExpr *ea = e->each;
-		*(Expression **)arr_add(&tr->in_expr_decls) = e;
+		*(Expression **)typer_arr_add(tr, &tr->in_expr_decls) = e;
 		if (!each_enter(e)) return false;
 		if (ea->flags & EACH_IS_RANGE) {
 			/* TODO: allow user-defined numerical types */
@@ -971,7 +971,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			ea->range.stepval = stepval;
 		}
 		
-		arr_remove_last(&tr->in_expr_decls);
+		arr_remove_lasta(&tr->in_expr_decls, tr->allocr);
 		
 		if (!types_block(tr, &ea->body)) return false;
 		each_exit(e);
@@ -1252,7 +1252,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			arr_foreach(fn->params, Declaration, param) {
 				arr_foreach(param->idents, Identifier, ident) {
 					if (param->flags & DECL_INFER) {
-						*(Identifier *)arr_add(&inferred_idents) = *ident;
+						*(Identifier *)typer_arr_add(tr, &inferred_idents) = *ident;
 					} else if ((param->flags & DECL_ANNOTATES_TYPE)
 							   && !(param->flags & DECL_HAS_EXPR)) {
 						
@@ -1270,11 +1270,18 @@ static bool types_expr(Typer *tr, Expression *e) {
 
 			size_t ninferred_idents = arr_len(inferred_idents);
 			if (ninferred_idents) {
-				Value *inferred_vals = typer_malloc(tr, ninferred_idents * sizeof *inferred_vals);
-				Type *inferred_types = typer_malloc(tr, ninferred_idents * sizeof *inferred_types);
+				Value *inferred_vals;
+				Type *inferred_types;
+				size_t inferred_vals_size = ninferred_idents * sizeof *inferred_vals;
+				inferred_vals = typer_malloc(tr, inferred_vals_size);
+				size_t inferred_types_size = ninferred_idents * sizeof *inferred_types;
+				inferred_types = typer_malloc(tr, inferred_types_size);
 				
 				if (!infer_ident_vals(tr, decl_types, arg_types, inferred_idents, inferred_vals, inferred_types))
 					return false;
+
+				allocr_free(tr->allocr, inferred_idents, ninferred_idents * sizeof *inferred_idents);
+				
 				{
 					Type *type = inferred_types;
 					for (i = 0; i < ninferred_idents; ++i) {
@@ -1307,6 +1314,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 						++i;
 					}
 				}
+				allocr_free(tr->allocr, inferred_vals, inferred_vals_size);
+				allocr_free(tr->allocr, inferred_types, inferred_types_size);
 			}
 			
 
@@ -1444,7 +1453,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				ErrCtx *err_ctx = e->where.ctx;
 				*(Location *)typer_arr_add(tr, &err_ctx->instance_stack) = e->where;
 				bool success = types_fn(tr, &c->instance->fn, &f->type, e->where, c->instance);
-				arr_remove_last(&err_ctx->instance_stack);
+				arr_remove_lasta(&err_ctx->instance_stack, tr->allocr);
 				if (!success) return false;
 				arr_cleara(&table_index_type.tuple, tr->allocr);
 			}
@@ -1910,7 +1919,7 @@ static bool types_block(Typer *tr, Block *b) {
 					goto ret;
 				}
 				b->ret_expr = e;
-				arr_remove_last(&b->stmts);
+				arr_remove_lasta(&b->stmts, tr->allocr);
 			}
 		}
 	}
@@ -2019,7 +2028,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 		d->type.kind = TYPE_UNKNOWN;
 		tr->evalr->enabled = false; /* disable evaluator completely so that it doesn't accidentally try to access this declaration */
 	}
-	arr_remove_last(&tr->in_decls);
+	arr_remove_lasta(&tr->in_decls, tr->allocr);
 	return success;
 }
 

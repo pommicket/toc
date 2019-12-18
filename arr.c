@@ -130,13 +130,21 @@ static void *arr_end_(void *arr, size_t item_sz) {
 }
 
 /* OPTIM: shrink array */
-static void arr_remove_last_(void **arr, size_t item_sz) {
+static void arr_remove_last_(void **arr) {
 	assert(arr_hdr(*arr)->len);
-	if (--arr_hdr(*arr)->len == 0)
-		*arr = NULL;
-	(void)item_sz;
-    
+	if (--arr_hdr(*arr)->len == 0) {
+		arr_clear_(arr);
+	}
 }
+
+static void arr_remove_lasta_(void **arr, size_t item_sz, Allocator *a) {
+	assert(arr_hdr(*arr)->len);
+	if (--arr_hdr(*arr)->len == 0) {
+		arr_cleara_(arr, item_sz, a);
+	}
+}
+
+
 
 static void arr_copya_(void **out, void *in, size_t item_sz, Allocator *a) {
 	size_t len = arr_len(in);
@@ -179,7 +187,8 @@ You shouldn't rely on this, though, e.g. by doing
 /* one past last, or NULL if empty */
 #define arr_end(arr) arr_end_((void *)(arr), sizeof *(arr))
 #define arr_foreach(arr, type, var) for (type *var = arr, *join(var,_foreach_end) = arr_end(arr); var < join(var,_foreach_end); ++var) /* NOTE: < is useful here because currently it's possible for var_foreach_end to be NULL but var could start out not null */
-#define arr_remove_last(arr) arr_remove_last_((void **)(arr), sizeof **(arr))
+#define arr_remove_last(arr) arr_remove_last_((void **)(arr)), (void)sizeof **(arr)
+#define arr_remove_lasta(arr, a) arr_remove_lasta_((void **)(arr), sizeof **(arr), (a))
 #define arr_copya(out, in, a) do { assert(sizeof *(in) == sizeof **(out)); arr_copya_((void **)(out), (in), sizeof **(out), (a)); } while(0)
 	
 #ifdef TOC_DEBUG
