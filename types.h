@@ -103,8 +103,7 @@ typedef struct ArrBlock {
 typedef struct BlockArr {
 	size_t item_sz;
 	int lg_block_sz;
-	/* NOTE: dynamic array tends to over-allocate, so we're using our own */
-    ArrBlock *blocks;
+	ArrBlock *blocks;
 } BlockArr;
 
 typedef struct HashTable {
@@ -174,6 +173,7 @@ typedef struct IdentTree {
 	/* zero value is an empty trie */
 	uint16_t depth;
 	unsigned char index_in_parent; /* index of this in .parent.children */
+	U64 id; /* unique integer associated with this identifier - also index in Identifiers.trees */
 	struct IdentTree *parent;
 	struct IdentTree *children[TREE_NCHILDREN];
     IdentDecl *decls; /* array of declarations of this identifier */

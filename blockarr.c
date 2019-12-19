@@ -39,6 +39,15 @@ static void *block_arr_add(BlockArr *arr) {
 	}
 }
 
+static U64 block_arr_len(BlockArr *arr) {
+	ArrBlock *last_block;
+	if (!arr->blocks) return 0;
+	last_block = arr->blocks + (arr_len(arr->blocks) - 1);
+	U64 len = (arr_len(arr->blocks)-1) * (((U64)1)<<arr->lg_block_sz);
+	len += last_block->n;
+	return len;
+}
+
 static inline void *block_arr_get(BlockArr *arr, size_t index) {
 	size_t block_index = index >> arr->lg_block_sz;
 	ArrBlock *block = &arr->blocks[block_index];
