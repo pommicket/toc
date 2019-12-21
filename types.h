@@ -173,7 +173,7 @@ typedef struct IdentTree {
 	/* zero value is an empty trie */
 	uint16_t depth;
 	unsigned char index_in_parent; /* index of this in .parent.children */
-	U64 id; /* unique integer associated with this identifier - also index in Identifiers.trees */
+	U64 id; /* 0 if there's no actual identifier here, otherwise unique positive integer associated with this identifier */
 	struct IdentTree *parent;
 	struct IdentTree *children[TREE_NCHILDREN];
     IdentDecl *decls; /* array of declarations of this identifier */
@@ -184,6 +184,7 @@ typedef IdentTree *Identifier;
 typedef struct Identifiers {
 	BlockArr trees;
 	IdentTree *root;
+	U64 nidents;
 } Identifiers;
 
 typedef enum {

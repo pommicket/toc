@@ -41,7 +41,7 @@ static Identifier ident_new(Identifiers *ids, Identifier parent, unsigned char i
 	if (parent)
 		tree->depth = (uint16_t)(parent->depth + 1);
 	tree->index_in_parent = index_in_parent;
-	tree->id = block_arr_len(&ids->trees);
+	tree->id = 0;
 	return tree;
 }
 
@@ -49,6 +49,7 @@ static Identifier ident_new(Identifiers *ids, Identifier parent, unsigned char i
 static void idents_create(Identifiers *ids) {
 	block_arr_create(&ids->trees, 10, sizeof(IdentTree)); /* blocks of 1 << 10 = 1024 */
 	ids->root = ident_new(ids, NULL, 0); /* create root tree */
+	ids->nidents = 0;
 }
 
 #if CHAR_MIN < 0
@@ -70,6 +71,8 @@ static Identifier ident_insert(Identifiers *ids, char **s) {
 	IdentTree *tree = ids->root;
 	while (1) {
 		if (!isident(**s)) {
+			if (!tree->id)
+				tree->id = ++ids->nidents;
 			return tree;
 		}
 		int c = ident_char_to_uchar(**s);
@@ -97,7 +100,7 @@ static void fprint_ident(FILE *out, Identifier id) {
 	    i = i->parent->parent; /* to go up one character, we need to go to the grandparent */
 		++chars;
 	}
-	printf("%lu:",(unsigned long)id->id);
+	printf("%lu-",(unsigned long)id->id);
 	char *s = malloc(chars + 1);
 	char *p = s + chars;
 	i = id;
