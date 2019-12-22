@@ -18,7 +18,7 @@ static const char *keywords[KW_COUNT] =
 static inline const char *kw_to_str(Keyword k) { return keywords[k]; }
 
 static const char *directives[DIRECT_COUNT] =
-	{"C", "sizeof", "alignof"};
+	{"C", "sizeof", "alignof", "export"};
 
 /* Returns KW_COUNT if it's not a keyword */
 /* OPTIM: don't use strncmp so much */
@@ -60,6 +60,10 @@ static Directive tokenize_direct(char **s) {
 
 static inline bool token_is_kw(Token *t, Keyword kw) {
 	return t->kind == TOKEN_KW && t->kw == kw;
+}
+
+static inline bool token_is_direct(Token *t, Directive d) {
+	return t->kind == TOKEN_DIRECT && t->direct == d;
 }
 
 static const char *token_kind_to_str(TokenKind t) {

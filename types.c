@@ -2021,7 +2021,11 @@ static bool types_decl(Typer *tr, Declaration *d) {
  ret:
 	/* pretend we found the type even if we didn't to prevent too many errors */
 	d->flags |= DECL_FOUND_TYPE;
-	if (!success) {
+	if (success) {
+		/* export it! */
+		if (!export_decl(tr->exptr, d))
+			success = false;
+	} else {
 		/* use unknown type if we didn't get the type */
 		d->type.flags = TYPE_IS_RESOLVED;
 		d->type.was_expr = NULL;
@@ -2086,6 +2090,7 @@ static void typer_create(Typer *tr, Evaluator *ev, Allocator *allocr) {
 	tr->blocks = NULL;
 	tr->fn = NULL;
 	tr->evalr = ev;
+	tr->exptr = NULL; /* by default, don't set an exporter */
 	tr->in_decls = NULL;
 	tr->in_expr_decls = NULL;
 	tr->allocr = allocr;

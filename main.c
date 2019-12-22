@@ -126,9 +126,14 @@ int main(int argc, char **argv) {
 	
 	Typer tr;
 	Evaluator ev;
+	Exporter exptr;
 	evalr_create(&ev, &tr, &main_allocr);
 	typer_create(&tr, &ev, &main_allocr);
+	tr.exptr = &exptr;
 
+	FILE *out_pkg = fopen("out.top", "wb");
+	exptr_create(&exptr, out_pkg);
+	
 	if (!block_enter(NULL, f.stmts, SCOPE_CHECK_REDECL)) /* enter global scope */
 		return false;
 
@@ -158,6 +163,7 @@ int main(int argc, char **argv) {
 	evalr_free(&ev);
 	
 	fclose(out);
+	fclose(out_pkg);
 	idents_free(&file_idents);
 }
 

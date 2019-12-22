@@ -201,6 +201,7 @@ typedef enum {
 			  DIRECT_C,
 			  DIRECT_SIZEOF,
 			  DIRECT_ALIGNOF,
+			  DIRECT_EXPORT,
 			  DIRECT_COUNT
 } Directive;
 
@@ -651,6 +652,7 @@ enum {
 	  DECL_FOUND_VAL = 0x0040,
 	  DECL_IS_PARAM = 0x0080,
 	  DECL_INFER = 0x0100, /* infer the value (e.g. fn(t::Type=, x:t)) */
+	  DECL_EXPORT = 0x0200
 };
 
 typedef U32 DeclFlags;
@@ -721,12 +723,17 @@ typedef struct Evaluator {
 typedef struct Typer {
 	Allocator *allocr;
 	Evaluator *evalr;
+	struct Exporter *exptr;
 	Expression **in_expr_decls; /* an array of expressions whose declarations (e.g. each **x := foo**) we are currently inside */
 	Declaration **in_decls; /* array of declarations we are currently inside */
 	Block *block;
 	Block **blocks; /* dyn array of all the block's we're in ([0] = NULL for global scope) */
 	FnExpr *fn; /* the function we're currently parsing. */
 } Typer;
+
+typedef struct Exporter {
+	FILE *out; /* .top (toc package) to output to */
+} Exporter;
 
 typedef struct CGenerator {
 	Allocator *allocr;

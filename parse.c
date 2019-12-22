@@ -8,7 +8,8 @@ static bool parse_stmt(Parser *p, Statement *s);
 enum {
 	  PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR = 0x01,
 	  PARSE_DECL_ALLOW_SEMI_CONST = 0x02,
-	  PARSE_DECL_ALLOW_INFER
+	  PARSE_DECL_ALLOW_INFER = 0x04,
+	  PARSE_DECL_ALLOW_EXPORT = 0x08
 };
 static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_t flags);
 static bool parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end);
@@ -1669,6 +1670,9 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				e->kind = EXPR_DALIGNOF;
 				single_arg = e->dalignof.of = parser_new_expr(p);
 				break;
+			case DIRECT_EXPORT:
+				err_print(t->token->where, "Unrecognized expression.");
+			    return false;
 			case DIRECT_COUNT: assert(0); break;
 			}
 			if (single_arg) {
@@ -1737,6 +1741,11 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
     d->idents = NULL;
 	Tokenizer *t = p->tokr;
 	d->flags = 0;
+
+	if ((flags & PARSE_DECL_ALLOW_EXPORT) && token_is_direct(t->token, DIRECT_EXPORT)) {
+		d->flags |= DECL_EXPORT;
+		++t->token;
+	}
 	
 	while (1) {
 		Identifier *ident = parser_arr_add(p, &d->idents);
@@ -1858,6 +1867,11 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 
 static bool is_decl(Tokenizer *t) {
 	Token *token = t->token;
+	
+	/* you can only export declarations */
+	if (token_is_direct(token, DIRECT_EXPORT))
+		return true;	
+	
 	while (1) {
 		if (token->kind != TOKEN_IDENT) return false;
 		++token;
@@ -1904,7 +1918,7 @@ static bool parse_stmt(Parser *p, Statement *s) {
 	}
 	if (is_decl(t)) {
 		s->kind = STMT_DECL;
-		if (!parse_decl(p, &s->decl, DECL_END_SEMICOLON, 0)) {
+		if (!parse_decl(p, &s->decl, DECL_END_SEMICOLON, PARSE_DECL_ALLOW_EXPORT)) {
 			return false;
 		}
 		return true;

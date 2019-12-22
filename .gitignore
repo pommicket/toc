@@ -1,6 +1,7 @@
 toc
 a.out
 out.c
+out.top
 tests/**/*.c
 tests/**/*.bin
 vgcore*

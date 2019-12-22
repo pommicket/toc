@@ -9,13 +9,14 @@ deref - dereference
 direct - directive
 eof - end of file
 err - error
+eval - evaluate
 evalr - evaluator
 expr - expression
+exptr - exporter
 fn - function
 ident - identifier
 kw - keyword
 len - length
-mut - mutable
 num - number
 op - operator
 param - parameter

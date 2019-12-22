@@ -42,6 +42,7 @@ static void print_val(Value v, Type *t);
 
 #include "eval.c"
 #include "infer.c"
+#include "export.c"
 #include "types.c"
 static bool cgen_decls_file(CGenerator *g, ParsedFile *f);
 static bool typedefs_file(CGenerator *g, ParsedFile *f);
