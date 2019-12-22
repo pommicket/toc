@@ -50,10 +50,7 @@ typedef double F64;
 #define F32_FMT "%.16f"
 #define F64_FMT "%.16f"
 
-typedef U32 IdentID; /* identifier ID for cgen (anonymous variables) */
-
-typedef U32 LineNo;
-typedef U32 CodePos;
+typedef U32 IdentID; /* identifier ID for cgen (anonymous variables). not to be confused with IdentTree.id */
 
 #define join(a,b) a##b
 
@@ -70,8 +67,8 @@ typedef U32 CodePos;
 
 
 typedef struct Location {
-	LineNo line;
-    CodePos pos; /* position in ctx->str */
+	U32 line;
+    U32 pos; /* position in ctx->str */
 	struct ErrCtx *ctx;
 } Location;
 
@@ -304,7 +301,7 @@ typedef struct Tokenizer {
 	Token *tokens;
 	char *s; /* string being parsed */
 	ErrCtx *err_ctx;
-	LineNo line;
+	U32 line;
 	Token *token; /* token currently being processed */
 	Identifiers *idents;
 } Tokenizer;
@@ -733,6 +730,7 @@ typedef struct Typer {
 
 typedef struct Exporter {
 	FILE *out; /* .top (toc package) to output to */
+	bool export_locations;
 } Exporter;
 
 typedef struct CGenerator {

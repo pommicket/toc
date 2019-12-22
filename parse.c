@@ -1737,14 +1737,15 @@ static inline bool ends_decl(Token *t, DeclEndKind ends_with) {
 }
 
 static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 flags) {
-	d->where = p->tokr->token->where;
-    d->idents = NULL;
 	Tokenizer *t = p->tokr;
+	d->where = t->token->where;
+    d->idents = NULL;
 	d->flags = 0;
 
 	if ((flags & PARSE_DECL_ALLOW_EXPORT) && token_is_direct(t->token, DIRECT_EXPORT)) {
 		d->flags |= DECL_EXPORT;
 		++t->token;
+		d->where = t->token->where;
 	}
 	
 	while (1) {

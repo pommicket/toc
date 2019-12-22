@@ -2022,9 +2022,11 @@ static bool types_decl(Typer *tr, Declaration *d) {
 	/* pretend we found the type even if we didn't to prevent too many errors */
 	d->flags |= DECL_FOUND_TYPE;
 	if (success) {
-		/* export it! */
-		if (!export_decl(tr->exptr, d))
-			success = false;
+		if (d->flags & DECL_EXPORT) {
+			/* export it! */
+			if (!export_decl(tr->exptr, d))
+				success = false;
+		}
 	} else {
 		/* use unknown type if we didn't get the type */
 		d->type.flags = TYPE_IS_RESOLVED;

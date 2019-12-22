@@ -150,7 +150,7 @@ static void tokenization_err(Tokenizer *t, const char *fmt, ...) {
 	Location where;
 	where.line = t->line;
 	where.ctx = t->err_ctx;
-	where.pos = (CodePos)(t->s - where.ctx->str);
+	where.pos = (U32)(t->s - where.ctx->str);
 	va_start(args, fmt);
 	err_vprint(where, fmt, args);
 	va_end(args);
@@ -189,7 +189,7 @@ static void tokr_err_(
 static void tokr_put_location(Tokenizer *tokr, Token *t) {
 	t->where.line = tokr->line;
 	t->where.ctx = tokr->err_ctx;
-	t->where.pos = (CodePos)(tokr->s - t->where.ctx->str);
+	t->where.pos = (U32)(tokr->s - t->where.ctx->str);
 }
 
 static void tokr_get_location(Tokenizer *tokr, Token *t) {
@@ -278,7 +278,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 				/* it's a directive */
 				Token *token = tokr_add(t);
 				tokr_put_location(t, token);
-				token->where.pos = (CodePos)(start_s - token->where.ctx->str);
+				token->where.pos = (U32)(start_s - token->where.ctx->str);
 				token->kind = TOKEN_DIRECT;
 				token->direct = direct;
 				continue;
@@ -295,7 +295,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 				/* it's a keyword */
 				Token *token = tokr_add(t);
 				tokr_put_location(t, token);
-				token->where.pos = (CodePos)(start_s - token->where.ctx->str);
+				token->where.pos = (U32)(start_s - token->where.ctx->str);
 				token->kind = TOKEN_KW;
 				token->kw = kw;
 				continue;

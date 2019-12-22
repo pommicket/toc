@@ -24,6 +24,7 @@
 /* forward declarations for debugging */
 static void print_val(Value v, Type *t);
 
+/* utilities */
 #include "allocator.c"
 #include "arr.c"
 #include "location.c"
@@ -33,13 +34,12 @@ static void print_val(Value v, Type *t);
 #include "str.c"
 #include "instance_table.c"
 #include "copy.c"
+#include "binfile.c"
 
 #include "identifiers.c"
 #include "tokenizer.c"
 #include "parse.c"
 #include "scope.c"
-
-
 #include "eval.c"
 #include "infer.c"
 #include "export.c"

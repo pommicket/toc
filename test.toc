@@ -1,2 +1,2 @@
-#export
-asdf ::= 5;
+foo ::= 7;
+#export asdf, dsajkhf, sadjkfh ::= 5;
