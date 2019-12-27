@@ -1348,6 +1348,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				++t->token;
 				if (!token_is_kw(t->token, KW_LPAREN)) {
 					err_print(t->token->where, "Expected ( to follow new.");
+					return false;
 				}
 				++t->token;
 				if (!parse_type(p, &e->new.type)) return false;
@@ -1968,7 +1969,7 @@ static bool parse_file(Parser *p, ParsedFile *f) {
 	return ret;
 }
 
-#define PARSE_PRINT_LOCATION(l) /* fprintf(out, "[l%lu]", (unsigned long)(l).line); */
+#define PARSE_PRINT_LOCATION(l)  /* fprintf(out, "[%lu:%lu]", (unsigned long)(l).line, (unsigned long)(l).pos); */
 
 static void fprint_expr(FILE *out, Expression *e);
 static void fprint_stmt(FILE *out, Statement *s);

@@ -117,10 +117,8 @@ int main(int argc, char **argv) {
 		err_fprint(TEXT_IMPORTANT("Errors occured while parsing.\n"));
 		return EXIT_FAILURE;
 	}
-#if 0
-	fprint_parsed_file(stdout, &f);
-	printf("\n\n-----\n\n");
-#endif
+	/* fprint_parsed_file(stdout, &f); */
+	/* printf("\n\n-----\n\n"); */
 	
 	tokr_free(&t);
 	
@@ -138,6 +136,7 @@ int main(int argc, char **argv) {
 		return false;
 
 	if (!types_file(&tr, &f)) {
+		/* TODO(eventually): fix this if the error occured while exporting something */
 	    err_fprint(TEXT_IMPORTANT("Errors occured while determining types.\n"));
 		return EXIT_FAILURE;
 	}

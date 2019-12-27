@@ -86,7 +86,7 @@ static void err_print_location_text(Location where) {
 		end = strchr(text, '\0');
 	assert(end);
 	err_fprint("\there: --> ");
-	if (!has_newline)
+	if (!text[0])
 		err_fprint("<end of file>");
 	else
 		err_fwrite(text, 1, (size_t)(end - text));

@@ -1525,7 +1525,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 				break;
 			}
 			if (!expr_must_lval(of)) {
-				err_print(e->where, "Cannot take address of non-lvalue."); /* FEATURE: better err */
 				return false;
 			}
 			if (of_type->kind == TYPE_TUPLE) {
@@ -2028,7 +2027,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 				err_print(d->where, "Declaration marked for exporting, but no package output was specified."); 
 				success = false;
 			} else {
-				export_decl(tr->exptr, d);
+				success = export_decl(tr->exptr, d);
 			}
 		}
 	} else {

@@ -36,56 +36,29 @@ static void export_ident(Exporter *ex, Identifier i) {
 	export_u64(ex, i->id);
 }
 
-static inline bool type_contains_reference(Type *type) {
-	assert(type->flags & TYPE_IS_RESOLVED);
-	switch (type->kind) {
-	case TYPE_PTR:
-	case TYPE_SLICE:
-	case TYPE_FN:
-		return true;
-	case TYPE_TUPLE:
-		arr_foreach(type->tuple, Type, sub)
-			if (type_contains_reference(sub))
-				return true;
-		return false;
-	case TYPE_STRUCT:
-		arr_foreach(type->struc->fields, Field, field) {
-			if (type_contains_reference(field->type))
-				return true;
-		}
-		return false;
-	case TYPE_ARR:
-		return type_contains_reference(type->arr.of);
-	case TYPE_BUILTIN:
-	case TYPE_VOID:
-	case TYPE_UNKNOWN:
-	case TYPE_TYPE:
-		return false;
-	case TYPE_EXPR: break;
-	}
-	assert(0);
-	return false;
-}
-
 static void export_type(Exporter *ex, Type *type) {
 }
 
-static void export_val(Exporter *ex, Value val, Type *type) {
-	assert(!type_contains_reference(type));
+static bool export_val(Exporter *ex, Value val, Type *type, Location where) {
 	export_type(ex, type);
 	switch (type->kind) {
     case TYPE_VOID: break;
 	case TYPE_TYPE:
 		export_type(ex, val.type);
 		break;
+	case TYPE_PTR:
+		err_print(where, "Cannot export pointer.");
+		return false;
 	case TYPE_UNKNOWN:
 	case TYPE_EXPR:
 		assert(0);
-		break;
+	    return false;
 	}
+	return true;
 }
 
-static void export_expr(Exporter *ex, Expression *e) {
+static bool export_expr(Exporter *ex, Expression *e) {
+	return true;
 }
 
 enum {
@@ -94,12 +67,17 @@ enum {
 	  DECL_EXPORT_VAL
 };
 
-static void export_decl(Exporter *ex, Declaration *d) {
+static bool export_decl(Exporter *ex, Declaration *d) {
 	if (d->type.kind == TYPE_UNKNOWN) {
-		warn_print(d->where, "Can't export declaration of unknown type.");
-		return;
+		err_print(d->where, "Can't export declaration of unknown type.");
+		return false;
 	}
 	export_location(ex, d->where);
+	size_t n_idents = arr_len(d->idents);
+	if (n_idents > 65535) {
+		err_print(d->where, "Too many identifiers in one declaration (the maximum is 65535).");
+		return false;
+	}
 	export_u16(ex, (U16)arr_len(d->idents));
 	arr_foreach(d->idents, Identifier, ident) {
 		export_ident(ex, *ident);
@@ -111,19 +89,19 @@ static void export_decl(Exporter *ex, Declaration *d) {
 	export_u8(ex, constness);
 
 	U8 expr_kind = 0;
-	if (d->flags & DECL_HAS_EXPR) expr_kind = DECL_EXPORT_EXPR;
-	if (d->flags & DECL_FOUND_VAL) {
-		if (type_contains_reference(&d->type))
-			expr_kind = DECL_EXPORT_EXPR;
-		else
-			expr_kind = DECL_EXPORT_VAL;
-	}
+	if (d->flags & DECL_HAS_EXPR)
+		expr_kind = DECL_EXPORT_EXPR;
+	if (d->flags & DECL_FOUND_VAL)
+		expr_kind = DECL_EXPORT_VAL;
 	
 	export_u8(ex, expr_kind);
 
 	if (expr_kind == DECL_EXPORT_EXPR) {
-		export_expr(ex, &d->expr);
+		if (!export_expr(ex, &d->expr))
+			return false;
 	} else if (expr_kind == DECL_EXPORT_VAL) {
-		export_val(ex, d->val, &d->type);
+		if (!export_val(ex, d->val, &d->type, d->where))
+			return false;
 	}
+	return true;
 }
