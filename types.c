@@ -2024,8 +2024,12 @@ static bool types_decl(Typer *tr, Declaration *d) {
 	if (success) {
 		if (d->flags & DECL_EXPORT) {
 			/* export it! */
-			if (!export_decl(tr->exptr, d))
+			if (!tr->exptr) {
+				err_print(d->where, "Declaration marked for exporting, but no package output was specified."); 
 				success = false;
+			} else {
+				export_decl(tr->exptr, d);
+			}
 		}
 	} else {
 		/* use unknown type if we didn't get the type */
