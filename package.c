@@ -11,18 +11,40 @@ static void exptr_create(Exporter *exptr, FILE *out) {
 static void export_u8(Exporter *ex, U8 u8) {
 	write_u8(ex->out, u8);
 }
-
+static void export_i8(Exporter *ex, I8 i8) {
+	write_i8(ex->out, i8);
+}
 static void export_u16(Exporter *ex, U16 u16) {
 	write_u16(ex->out, u16);
 }
-
+static void export_i16(Exporter *ex, I16 i16) {
+	write_i16(ex->out, i16);
+}
 static void export_u32(Exporter *ex, U32 u32) {
 	write_u32(ex->out, u32);
 }
-
+static void export_i32(Exporter *ex, I32 i32) {
+	write_i32(ex->out, i32);
+}
 static void export_u64(Exporter *ex, U64 u64) {
 	write_u64(ex->out, u64);
 }
+static void export_i64(Exporter *ex, I64 i64) {
+	write_i64(ex->out, i64);
+}
+static void export_f32(Exporter *ex, F32 f32) {
+	write_f32(ex->out, f32);
+}
+static void export_f64(Exporter *ex, F64 f64) {
+	write_f64(ex->out, f64);
+}
+static void export_bool(Exporter *ex, bool b) {
+	write_bool(ex->out, b);
+}
+static void export_char(Exporter *ex, char c) {
+	write_char(ex->out, c);
+}
+
 
 static void export_location(Exporter *ex, Location where) {
 	if (ex->export_locations) {
@@ -43,6 +65,22 @@ static bool export_val(Exporter *ex, Value val, Type *type, Location where) {
 	export_type(ex, type);
 	switch (type->kind) {
     case TYPE_VOID: break;
+	case TYPE_BUILTIN:
+		switch (type->builtin) {
+		case BUILTIN_I8: export_i8(ex, val.i8); break;
+		case BUILTIN_U8: export_u8(ex, val.u8); break;
+		case BUILTIN_I16: export_i16(ex, val.i16); break;
+		case BUILTIN_U16: export_u16(ex, val.u16); break;
+		case BUILTIN_I32: export_i32(ex, val.i32); break;
+		case BUILTIN_U32: export_u32(ex, val.u32); break;
+		case BUILTIN_I64: export_i64(ex, val.i64); break;
+		case BUILTIN_U64: export_u64(ex, val.u64); break;
+		case BUILTIN_F32: export_f32(ex, val.f32); break;
+		case BUILTIN_F64: export_f64(ex, val.f64); break;
+		case BUILTIN_BOOL: export_bool(ex, val.boolv); break;
+		case BUILTIN_CHAR: export_char(ex, val.charv); break;
+		}
+		break;
 	case TYPE_TYPE:
 		export_type(ex, val.type);
 		break;

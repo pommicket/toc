@@ -1,2 +1,2 @@
-#export foo ::= 7;
+#export foo :: f64 = 0.07321;
 asdf, dsajkhf, sadjkfh ::= 5;

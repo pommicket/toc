@@ -97,6 +97,8 @@ static bool type_builtin_is_signed(BuiltinType b) {
 	case BUILTIN_I16:
 	case BUILTIN_I32:
 	case BUILTIN_I64:
+	case BUILTIN_F32:
+	case BUILTIN_F64:
 		return true;
 	default: return false;
 	}
