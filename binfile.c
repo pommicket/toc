@@ -1,4 +1,4 @@
-#define BINFILE_PORTABLE 1
+/* #define BINFILE_PORTABLE 1 */
 
 static inline void write_u8(FILE *fp, U8 u8) {
 	putc(u8, fp);

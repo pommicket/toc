@@ -1956,6 +1956,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 				success = false;
 				goto ret;
 			}
+			d->expr.type = d->type;
 		} else {
 			if (d->expr.type.kind == TYPE_VOID) {
 				/* e.g. x := (fn(){})(); */
