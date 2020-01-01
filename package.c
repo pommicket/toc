@@ -61,6 +61,16 @@ static void export_ident(Exporter *ex, Identifier i) {
 static void export_type(Exporter *ex, Type *type) {
 }
 
+static bool export_len(Exporter *ex, size_t len, const char *for_, Location where) {
+	if (len > 65535) {
+		err_print(where, "Too many %s (the maximum is 65535).", for_);
+		return false;
+	}
+	export_len(ex, (U16)len);
+	return true;
+}
+   
+
 static bool export_val(Exporter *ex, Value val, Type *type, Location where) {
 	export_type(ex, type);
 	switch (type->kind) {
@@ -80,6 +90,14 @@ static bool export_val(Exporter *ex, Value val, Type *type, Location where) {
 		case BUILTIN_BOOL: export_bool(ex, val.boolv); break;
 		case BUILTIN_CHAR: export_char(ex, val.charv); break;
 		}
+		break;
+	case TYPE_TUPLE:
+		if (arr_len(type->tuple) > 65535) {
+			err_print(where, "Too many types in one tuple.");
+			return false;
+		}
+		export_u16((U16)arr_len(type->tuple));
+		
 		break;
 	case TYPE_TYPE:
 		export_type(ex, val.type);
