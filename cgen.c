@@ -1394,9 +1394,10 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		}
 		break;
 	case EXPR_C: {
-		assert(e->kind == EXPR_VAL);
+		Expression *code = e->c.code;
+		assert(code->kind == EXPR_VAL);
 		cgen_indent(g);
-		fwrite(e->val.slice.data, 1, (size_t)e->val.slice.n, cgen_writing_to(g));
+		fwrite(code->val.slice.data, 1, (size_t)code->val.slice.n, cgen_writing_to(g));
 	} break;
 	case EXPR_DSIZEOF:
 	case EXPR_DALIGNOF: {

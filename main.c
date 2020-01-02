@@ -129,9 +129,10 @@ int main(int argc, char **argv) {
 	typer_create(&tr, &ev, &main_allocr);
 	tr.exptr = &exptr;
 
+#ifdef TOC_DEBUG
 	FILE *out_pkg = fopen("out.top", "wb");
 	exptr_create(&exptr, out_pkg);
-	
+#endif
 	if (!block_enter(NULL, f.stmts, SCOPE_CHECK_REDECL)) /* enter global scope */
 		return false;
 
@@ -162,7 +163,9 @@ int main(int argc, char **argv) {
 	evalr_free(&ev);
 	
 	fclose(out);
+#ifdef TOC_DEBUG
 	fclose(out_pkg);
+#endif
 	idents_free(&file_idents);
 }
 
