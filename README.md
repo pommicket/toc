@@ -30,15 +30,14 @@ See `docs` for more information (in progress).
 
 To compile the compiler on a Unix-y system, just run `./build.sh release`. You can supply a compiler by running `CC=tcc ./build.sh release`, or build it in debug mode without the `release`.
 
-On other systems, you can just compile main.c with a C compiler. `toc` uses several C99 and a couple of C11 features, so it might not work on all compilers. But it does compile on quite a few, including `clang`, `gcc`, and `tcc`. It can also be compiled as if it were C++, but it does break the standard in a few places\*. So, MSVC can also compile it. The *outputted* code should be C99-compliant.
+On other systems, you can just compile main.c with a C compiler. `toc` uses several C99 and a couple of C11 features, so it might not work on all compilers. But it does compile on quite a few, including `clang`, `gcc`, and `tcc`. It can also be compiled as if it were C++, so, MSVC and `g++` can also compile it (it does rely on implicit casting of  `void *` though). The *outputted* code should be C99-compliant.
 
 #### Why it compiles to C
 
-`toc` compiles to C for three reasons:
+`toc` compiles to C. Here are some reasons why:
 
 - Speed. C is one of the most performant programming languages out there. It also has compilers which are very good at optimizing (better than anything I could write). 
 - Portability. C is probably the most portable language. It has existed for >30 years and can run on practically anything. Furthermore, all major languages nowadays can call functions written in C.
-- Laziness. I don't really want to deal with writing something which outputs machine code, and it would certainly be more buggy than something which outputs C.
 
 ---
 
@@ -59,8 +58,6 @@ Here are all the C99 features which `toc` depends on (I might have forgotten som
 - `inttypes.h`
 - Non-constant struct literal initializers (e.g. `int x[2] = {y, z};`)
 - Flexible array members
-
-The last three of those could all be removed fairly easily (assuming the system actually has 8-, 16-, 32-, and 64-bit signed and unsigned types).
 
 And here are all of its C11 features:
 
@@ -91,25 +88,3 @@ Here are the major versions of `toc`.
 If you find a bug, you can report it through [GitHub's issue tracker](https://github.com/pommicket/toc/issues), or by emailing pommicket@gmail.com.
 
 Just send me the `toc` source code which results in the bug, and I'll try to fix it. 
-
----
-
-\* for those curious, it has to do with `goto`. In C, this program:
-<pre><code>
-int main() {  
-	goto label;  
-	int x = 5;  
-	label:  
-	return 0;  
-}
-</code></pre>
-Is completely fine. `x` will hold an unspecified value after the jump (but it isn't used so it doesn't really matter). Apparently, in C++, this is an ill-formed program. This is a bit ridiculous since
-<pre><code>
-int main() {  
-	goto label;  
-	int x; x = 5;  
-	label:  
-	return 0;  
-}
-</code></pre>
-is fine. So that's an interesting little "fun fact": `int x = 5;` isn't always the same as `int x; x = 5;` in C++.

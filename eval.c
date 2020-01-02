@@ -23,7 +23,6 @@ static void evalr_create(Evaluator *ev, Typer *tr, Allocator *allocr) {
 static void evalr_free(Evaluator *ev) {
 	typedef void *VoidPtr;
 	arr_foreach(ev->to_free, VoidPtr, f) {
-		printf("Freeing %p\n",*f);
 		free(*f);
 	}
 	arr_clear(&ev->to_free);

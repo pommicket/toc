@@ -1,8 +1,24 @@
-/* #define BINFILE_PORTABLE 1 */
+#define BINFILE_PORTABLE 1
+
+#ifdef TOC_DEBUG
+#define BINFILE_PRINT
+#endif
 
 static inline void write_u8(FILE *fp, U8 u8) {
 	putc(u8, fp);
+#ifdef BINFILE_PRINT
+	static int col = 0;
+	printf("%02x ", u8);
+	++col;
+	if (col == 8) printf(" ");
+	if (col == 16) {
+		col = 0;
+		printf("\n");
+	}
+#endif
 }
+
+#undef BINFILE_PRINT /* don't need it anymore */
 
 static inline void write_i8(FILE *fp, I8 i8) {
 	write_u8(fp, (U8)i8);
@@ -14,8 +30,8 @@ static inline void write_i8(FILE *fp, I8 i8) {
  */
 
 static inline void write_u16(FILE *fp, U16 u16) {
-	putc(u16 & 0xFF, fp);
-	putc(u16 >> 8, fp);
+	write_u8(fp, (U8)(u16 & 0xFF));
+	write_u8(fp, (U8)(u16 >> 8));
 }
 
 static inline void write_i16(FILE *fp, I16 i16) {
@@ -76,14 +92,14 @@ static void write_f32(FILE *fp, F32 f32) {
 		f32 *= (F32)2;
 		fraction_bit >>= 1;
 	}
-	putc(fraction & 0xFF, fp);
-	putc((fraction & 0xFF00) >> 8, fp);
+	write_u8(fp, fraction & 0xFF);
+	write_u8(fp, (fraction & 0xFF00) >> 8);
 	unsigned byte3 = (fraction & 0x7F0000) >> 16;
 	byte3 |= (exponent & 1) << 7;
-	putc((int)byte3, fp);
+	write_u8(fp, (U8)byte3);
 	unsigned byte4 = exponent >> 1;
 	byte4 |= (sign << 7);
-	putc((int)byte4, fp);
+	write_u8(fp, (U8)byte4);
 #else
 	fwrite(&f32, sizeof f32, 1, fp);
 #endif
@@ -115,28 +131,27 @@ static void write_f64(FILE *fp, F64 f64) {
 		f64 *= (F64)2;
 		fraction_bit >>= 1;
 	}
-	printf("%lu\n",fraction);
-	putc(fraction & 0xFF, fp);
-	putc((fraction & 0xFF00) >> 8, fp);
-	putc((fraction & 0xFF0000) >> 16, fp);
-	putc((fraction & 0xFF000000) >> 24, fp);
-	putc((fraction & 0xFF00000000) >> 32, fp);
-	putc((fraction & 0xFF0000000000) >> 40, fp);
+	write_u8(fp, fraction & 0xFF);
+	write_u8(fp, (fraction & 0xFF00) >> 8);
+	write_u8(fp, (fraction & 0xFF0000) >> 16);
+	write_u8(fp, (fraction & 0xFF000000) >> 24);
+	write_u8(fp, (fraction & 0xFF00000000) >> 32);
+	write_u8(fp, (fraction & 0xFF0000000000) >> 40);
 	unsigned byte7 = (fraction & 0xF000000000000) >> 48;
 	byte7 |= (exponent & 0xF) << 4;
-	putc((int)byte7, fp);
+	write_u8(fp, (U8)byte7);
 	unsigned byte8 = (exponent & 0x7F0) >> 4;
 	byte8 |= (sign << 7);
-	putc((int)byte8, fp);
+	write_u8(fp, (U8)byte8);
 #else
 	fwrite(&f64, sizeof f64, 1, fp);
 #endif
 }
 
 static void write_bool(FILE *fp, bool b) {
-	putc(b, fp);
+	write_u8(fp, b);
 }
 
 static void write_char(FILE *fp, char c) {
-	putc(c, fp);
+	write_u8(fp, (U8)c);
 }

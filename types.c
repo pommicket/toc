@@ -664,6 +664,9 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where,
 	FnExpr *prev_fn = tr->fn;
 	bool success = true;
 	bool entered_fn = false;
+	Expression *ret_expr;
+	Type *ret_type;
+	bool has_named_ret_vals;
 	assert(t->kind == TYPE_FN);
 	if (instance) {
 		f = &instance->fn;
@@ -682,9 +685,9 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where,
 		success = false;
 		goto ret;
 	}
-	Expression *ret_expr = f->body.ret_expr;
-	Type *ret_type = t->fn.types;
-	bool has_named_ret_vals = f->ret_decls != NULL;
+	ret_expr = f->body.ret_expr;
+	ret_type = t->fn.types;
+	has_named_ret_vals = f->ret_decls != NULL;
 	if (ret_expr) {
 		if (!type_eq(ret_type, &ret_expr->type)) {
 			char *got = type_to_str(&ret_expr->type);
@@ -1724,7 +1727,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				lhs_type = lhs_type->ptr;
 				if (lhs_type->kind != TYPE_STRUCT) break;
 				/* fallthrough */
-			case TYPE_STRUCT:
+			case TYPE_STRUCT: {
 				/* allow accessing struct members with a string */
 				if (rhs_type->kind != TYPE_SLICE
 					|| !type_is_builtin(rhs_type->slice, BUILTIN_CHAR)) {
@@ -1754,7 +1757,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 					free(fstr); free(typestr);
 					return false;
 				}
-				break;
+			} break;
 			default: {
 				char *s = type_to_str(lhs_type);
 				err_print(e->where, "Trying to take index of non-array type %s.", s);
@@ -2015,12 +2018,14 @@ static bool types_decl(Typer *tr, Declaration *d) {
 		}
 	}
 
-	size_t n_idents = arr_len(d->idents);
-	if (d->type.kind == TYPE_TUPLE) {
-		if (n_idents != arr_len(d->type.tuple)) {
-			err_print(d->where, "Expected to have %lu things declared in declaration, but got %lu.", (unsigned long)arr_len(d->type.tuple), (unsigned long)n_idents);
-			success = false;
-			goto ret;
+	{
+		size_t n_idents = arr_len(d->idents);
+		if (d->type.kind == TYPE_TUPLE) {
+			if (n_idents != arr_len(d->type.tuple)) {
+				err_print(d->where, "Expected to have %lu things declared in declaration, but got %lu.", (unsigned long)arr_len(d->type.tuple), (unsigned long)n_idents);
+				success = false;
+				goto ret;
+			}
 		}
 	}
  ret:

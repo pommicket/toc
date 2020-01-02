@@ -1789,69 +1789,73 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 		goto ret_false;
 	}
 
-	bool annotates_type = !token_is_kw(t->token, KW_EQ) && !token_is_kw(t->token, KW_COMMA);
-	if (annotates_type) {
-		d->flags |= DECL_ANNOTATES_TYPE;
-		Type type;
-		if (!parse_type(p, &type)) {
-		    goto ret_false;
-		}
-		d->type = type;
-		if (type.kind == TYPE_TUPLE && arr_len(d->type.tuple) != arr_len(d->idents)) {
-			err_print(d->where, "Expected to have %lu things declared in declaration, but got %lu.", (unsigned long)arr_len(d->type.tuple), (unsigned long)arr_len(d->idents));
-			goto ret_false;
+	{
+		bool annotates_type = !token_is_kw(t->token, KW_EQ) && !token_is_kw(t->token, KW_COMMA);
+		if (annotates_type) {
+			d->flags |= DECL_ANNOTATES_TYPE;
+			Type type;
+			if (!parse_type(p, &type)) {
+				goto ret_false;
+			}
+			d->type = type;
+			if (type.kind == TYPE_TUPLE && arr_len(d->type.tuple) != arr_len(d->idents)) {
+				err_print(d->where, "Expected to have %lu things declared in declaration, but got %lu.", (unsigned long)arr_len(d->type.tuple), (unsigned long)arr_len(d->idents));
+				goto ret_false;
+			}
 		}
 	}
-	const char *end_str = NULL;
-	switch (ends_with) {
-	case DECL_END_SEMICOLON: end_str = "';'"; break;
-	case DECL_END_RPAREN_COMMA: end_str = "')' or ','"; break;
-	case DECL_END_LBRACE_COMMA: end_str = "'{' or ','"; break;
-	}
+	{
+		const char *end_str = NULL;
+		switch (ends_with) {
+		case DECL_END_SEMICOLON: end_str = "';'"; break;
+		case DECL_END_RPAREN_COMMA: end_str = "')' or ','"; break;
+		case DECL_END_LBRACE_COMMA: end_str = "'{' or ','"; break;
+		}
 			
-	if (token_is_kw(t->token, KW_EQ)) {
-		++t->token;
-		if ((flags & PARSE_DECL_ALLOW_INFER) && ends_decl(t->token, ends_with)) {
-			/* inferred expression */
-			d->flags |= DECL_INFER;
-			if (arr_len(d->idents) > 1) {
-				err_print(d->where, "Inferred declarations can only have one identifier. Please separate this declaration.");
-				goto ret_false;
-			}
-			if (!(d->flags & DECL_IS_CONST)) {
-				tokr_err(t, "Inferred parameters must be constant.");
-				goto ret_false;
-			}
+		if (token_is_kw(t->token, KW_EQ)) {
 			++t->token;
-		} else {
-			d->flags |= DECL_HAS_EXPR;
-			uint16_t expr_flags = 0;
-			if (ends_with == DECL_END_RPAREN_COMMA)
-				expr_flags |= EXPR_CAN_END_WITH_COMMA;
-			if (ends_with == DECL_END_LBRACE_COMMA)
-				expr_flags |= EXPR_CAN_END_WITH_LBRACE;
-			Token *end = expr_find_end(p, expr_flags);
-			if (!end || !ends_decl(end, ends_with)) {
-				t->token = end;
-				tokr_err(t, "Expected %s at end of declaration.", end_str);
-				goto ret_false;
-			}
-			if (!parse_expr(p, &d->expr, end)) {
-				t->token = end; /* move to ; */
-				goto ret_false;
-			}
-			if (ends_decl(t->token, ends_with)) {
+			if ((flags & PARSE_DECL_ALLOW_INFER) && ends_decl(t->token, ends_with)) {
+				/* inferred expression */
+				d->flags |= DECL_INFER;
+				if (arr_len(d->idents) > 1) {
+					err_print(d->where, "Inferred declarations can only have one identifier. Please separate this declaration.");
+					goto ret_false;
+				}
+				if (!(d->flags & DECL_IS_CONST)) {
+					tokr_err(t, "Inferred parameters must be constant.");
+					goto ret_false;
+				}
 				++t->token;
 			} else {
-				tokr_err(t, "Expected %s at end of declaration.", end_str);
-				goto ret_false;
+				d->flags |= DECL_HAS_EXPR;
+				uint16_t expr_flags = 0;
+				if (ends_with == DECL_END_RPAREN_COMMA)
+					expr_flags |= EXPR_CAN_END_WITH_COMMA;
+				if (ends_with == DECL_END_LBRACE_COMMA)
+					expr_flags |= EXPR_CAN_END_WITH_LBRACE;
+				Token *end = expr_find_end(p, expr_flags);
+				if (!end || !ends_decl(end, ends_with)) {
+					t->token = end;
+					tokr_err(t, "Expected %s at end of declaration.", end_str);
+					goto ret_false;
+				}
+				if (!parse_expr(p, &d->expr, end)) {
+					t->token = end; /* move to ; */
+					goto ret_false;
+				}
+				if (ends_decl(t->token, ends_with)) {
+					++t->token;
+				} else {
+					tokr_err(t, "Expected %s at end of declaration.", end_str);
+					goto ret_false;
+				}
 			}
+		} else if (ends_decl(t->token, ends_with)) {
+			++t->token;
+		} else {
+			tokr_err(t, "Expected %s or '=' at end of delaration.", end_str);
+			goto ret_false;
 		}
-	} else if (ends_decl(t->token, ends_with)) {
-		++t->token;
-	} else {
-		tokr_err(t, "Expected %s or '=' at end of delaration.", end_str);
-	    goto ret_false;
 	}
 	
 	if ((d->flags & DECL_IS_CONST) && !(d->flags & DECL_HAS_EXPR) && !(flags & PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR)) {

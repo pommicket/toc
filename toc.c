@@ -16,7 +16,6 @@
 #include <string.h>
 #include <limits.h>
 #include <float.h>
-#include <stdbool.h>
 #include <inttypes.h>
 
 #include "types.h"

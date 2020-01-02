@@ -31,6 +31,13 @@ typedef uint32_t U32;
 typedef uint64_t U64;
 #define U64_MAX UINT64_MAX
 
+#if __STDC_VERSION__ >= 199901
+#include <stdbool.h>
+#else
+typedef U8 bool;
+#endif
+
+
 typedef int8_t I8;
 #define I8_MAX INT8_MAX
 typedef int16_t I16;

@@ -30,16 +30,15 @@ it is nearly as fast in theory.</p>
 
 <p>To compile the compiler on a Unix-y system, just run <code>./build.sh release</code>. You can supply a compiler by running <code>CC=tcc ./build.sh release</code>, or build it in debug mode without the <code>release</code>.</p>
 
-<p>On other systems, you can just compile main.c with a C compiler. <code>toc</code> uses several C99 and a couple of C11 features, so it might not work on all compilers. But it does compile on quite a few, including <code>clang</code>, <code>gcc</code>, and <code>tcc</code>. It can also be compiled as if it were C++, but it does break the standard in a few places*. So, MSVC can also compile it. The <em>outputted</em> code should be C99-compliant.</p>
+<p>On other systems, you can just compile main.c with a C compiler. <code>toc</code> uses several C99 and a couple of C11 features, so it might not work on all compilers. But it does compile on quite a few, including <code>clang</code>, <code>gcc</code>, and <code>tcc</code>. It can also be compiled as if it were C++, so, MSVC and <code>g++</code> can also compile it (it does rely on implicit casting of  <code>void *</code> though). The <em>outputted</em> code should be C99-compliant.</p>
 
 <h4>Why it compiles to C</h4>
 
-<p><code>toc</code> compiles to C for three reasons:</p>
+<p><code>toc</code> compiles to C. Here are some reasons why:</p>
 
 <ul>
 <li>Speed. C is one of the most performant programming languages out there. It also has compilers which are very good at optimizing (better than anything I could write).</li>
 <li>Portability. C is probably the most portable language. It has existed for >30 years and can run on practically anything. Furthermore, all major languages nowadays can call functions written in C.</li>
-<li>Laziness. I don&rsquo;t really want to deal with writing something which outputs machine code, and it would certainly be more buggy than something which outputs C.</li>
 </ul>
 
 
@@ -68,8 +67,6 @@ it is nearly as fast in theory.</p>
 <li>Flexible array members</li>
 </ul>
 
-
-<p>The last three of those could all be removed fairly easily (assuming the system actually has 8-, 16-, 32-, and 64-bit signed and unsigned types).</p>
 
 <p>And here are all of its C11 features:</p>
 
@@ -104,31 +101,3 @@ it is nearly as fast in theory.</p>
 <p>If you find a bug, you can report it through <a href="https://github.com/pommicket/toc/issues">GitHub&rsquo;s issue tracker</a>, or by emailing pommicket@gmail.com.</p>
 
 <p>Just send me the <code>toc</code> source code which results in the bug, and I&rsquo;ll try to fix it.</p>
-
-<hr />
-
-<p>* for those curious, it has to do with <code>goto</code>. In C, this program:</p>
-
-<pre><code>
-int main() {  
-    goto label;  
-    int x = 5;  
-    label:  
-    return 0;  
-}
-</code></pre>
-
-
-<p>Is completely fine. <code>x</code> will hold an unspecified value after the jump (but it isn&rsquo;t used so it doesn&rsquo;t really matter). Apparently, in C++, this is an ill-formed program. This is a bit ridiculous since</p>
-
-<pre><code>
-int main() {  
-    goto label;  
-    int x; x = 5;  
-    label:  
-    return 0;  
-}
-</code></pre>
-
-
-<p>is fine. So that&rsquo;s an interesting little &ldquo;fun fact&rdquo;: <code>int x = 5;</code> isn&rsquo;t always the same as <code>int x; x = 5;</code> in C++.</p>
