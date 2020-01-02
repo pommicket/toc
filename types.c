@@ -2038,7 +2038,12 @@ static bool types_decl(Typer *tr, Declaration *d) {
 				err_print(d->where, "Declaration marked for exporting, but no package output was specified."); 
 				success = false;
 			} else {
+#ifdef TOC_DEBUG /* TODO: remove this */
 				success = export_decl(tr->exptr, d);
+#else
+				err_print(d->where, "This feature is in progress.");
+				success = false;
+#endif
 			}
 		}
 	} else {

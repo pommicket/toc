@@ -43,6 +43,8 @@ On other systems, you can just compile main.c with a C compiler. `toc` uses seve
 
 ### `toc` Source Code
 
+The source code to `toc` is licensed under the GNU General Public License, version 3. See `LICENSE` for more information.
+
 `toc` is written in C, for speed and portability. It has no dependencies, other than the C runtime library.
 
 #### Build system
@@ -79,6 +81,7 @@ Here are the major versions of `toc`.
 <tr><td>0.0</td><td>Initial version.</td><td>2019 Dec 6</td></tr>
 <tr><td>0.1</td><td>Constant parameter inference.</td><td>2019 Dec 15</td></tr>
 <tr><td>0.1.1</td><td>Better constant parameter inference.</td><td>2019 Dec 16</td></tr>
+<tr><td>0.1.2</td><td>Minor bug fixes</td><td>2020 Jan 2</td></tr>
 </table>
 
 ---
