@@ -473,14 +473,14 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 		if (type_builtin_is_signed(n_expr->type.builtin)) {
 		    I64 ssize = val_to_i64(&val, n_expr->type.builtin);
 			if (ssize < 0) {
-				err_print(t->arr.n_expr->where, "Negative array length (" INTEGER_FMT ")", ssize);
+				err_print(t->arr.n_expr->where, "Negative array length (%" PRId64 ")", ssize);
 				return false;
 			}
 			size = (U64)ssize;
 		} else {
 			size = val_to_u64(&val, n_expr->type.builtin);
 		}
-		t->arr.n = (UInteger)size;
+		t->arr.n = (U64)size;
 		if (!type_resolve(tr, t->arr.of, where))
 			return false;
 	} break;
@@ -1482,6 +1482,11 @@ static bool types_expr(Typer *tr, Expression *e) {
 			free(s);
 			return false;
 		}
+		Value code_val;
+		if (!eval_expr(tr->evalr, code, &code_val))
+			return false;
+		code->val = code_val;
+		code->kind = EXPR_VAL;
 		t->kind = TYPE_UNKNOWN;
 	} break;
 	case EXPR_DSIZEOF: {

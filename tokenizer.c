@@ -94,7 +94,7 @@ static void fprint_token(FILE *out, Token *t) {
 		fprintf(out, "number: ");
 		switch (t->num.kind) {
 		case NUM_LITERAL_INT:
-			fprintf(out, INTEGER_FMT, t->num.intval);
+			fprintf(out, "%"PRIu64, t->num.intval);
 			break;
 		case NUM_LITERAL_FLOAT:
 			fprintf(out, "%g", (double)t->num.floatval);
@@ -406,14 +406,14 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 				}
 				switch (n->kind) {
 				case NUM_LITERAL_INT:
-					if ((UInteger)n->intval > (UInteger)UINTEGER_MAX / (UInteger)base ||
-						(UInteger)n->intval * (UInteger)base > (UInteger)UINTEGER_MAX - (UInteger)digit) {
+					if (n->intval > U64_MAX / (U64)base ||
+						n->intval * (U64)base > U64_MAX - (U64)digit) {
 						/* too big! */
 						tokenization_err(t, "Number too big to fit in a numeric literal.");
 						goto err;
 					}
-					n->intval *= (UInteger)base;
-					n->intval += (UInteger)digit;
+					n->intval *= (U64)base;
+					n->intval += (U64)digit;
 					break;
 				case NUM_LITERAL_FLOAT:
 					n->floatval += decimal_pow10 * (Floating)digit;

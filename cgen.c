@@ -1144,7 +1144,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		cgen_write(g, "%.16Lf", (long double)e->floatl); /* TODO(eventually): better precision? */
 		break;
 	case EXPR_LITERAL_INT:
-		cgen_write(g, UINTEGER_FMT, e->intl);
+		cgen_write(g, "%"PRIu64, e->intl);
 		break;
 	case EXPR_LITERAL_STR: {
 		size_t c;
@@ -1394,11 +1394,9 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		}
 		break;
 	case EXPR_C: {
-		Value val;
-		if (!eval_expr(g->evalr, e->c.code, &val))
-			return false;
+		assert(e->kind == EXPR_VAL);
 		cgen_indent(g);
-		fwrite(val.slice.data, 1, (size_t)val.slice.n, cgen_writing_to(g));
+		fwrite(e->val.slice.data, 1, (size_t)e->val.slice.n, cgen_writing_to(g));
 	} break;
 	case EXPR_DSIZEOF:
 	case EXPR_DALIGNOF: {

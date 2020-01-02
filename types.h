@@ -5,8 +5,6 @@
 */
 /* NOTE: make sure you edit copy.c when you make a change to expression-related types or type-related types in this file! */
 
-typedef int64_t Integer;
-typedef uint64_t UInteger;
 typedef long double Floating; /* OPTIM: Switch to double, but make sure floating-point literals are right */
 
 #if __STDC_VERSION__ < 201112
@@ -24,20 +22,23 @@ typedef union {
 typedef max_align_t MaxAlign;
 #endif
 
-#define INTEGER_MAX INT64_MAX
-#define UINTEGER_MAX UINT64_MAX
-#define INTEGER_FMT "%"PRId64
-#define UINTEGER_FMT "%"PRIu64
-
 typedef uint8_t U8;
+#define U8_MAX UINT8_MAX
 typedef uint16_t U16;
+#define U16_MAX UINT16_MAX
 typedef uint32_t U32;
+#define U32_MAX UINT32_MAX
 typedef uint64_t U64;
+#define U64_MAX UINT64_MAX
 
 typedef int8_t I8;
+#define I8_MAX INT8_MAX
 typedef int16_t I16;
+#define I16_MAX INT16_MAX
 typedef int32_t I32;
+#define I32_MAX INT32_MAX
 typedef int64_t I64;
+#define I64_MAX INT64_MAX
 
 /* NOTE: if you change these, make sure you change hash_tables.c */
 typedef float F32;
@@ -272,7 +273,7 @@ typedef enum {
 typedef struct NumLiteral {
 	NumLiteralKind kind;
 	union {
-		UInteger intval;
+		U64 intval;
 		Floating floatval;
 	};
 } NumLiteral;
@@ -585,7 +586,7 @@ typedef struct Expression {
 	union {
 		Floating floatl;
 		/* Floating floatl; */
-		UInteger intl;
+		U64 intl;
 		StrLiteral strl;
 		bool booll;
 		char charl;

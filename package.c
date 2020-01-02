@@ -55,56 +55,119 @@ static void export_location(Exporter *ex, Location where) {
 
 static void export_ident(Exporter *ex, Identifier i) {
 	assert(i->id);
-	export_u64(ex, i->id);
+	if (sizeof i->id == 8) {
+		export_u64(ex, (U64)i->id);
+	} else {
+		assert(sizeof i->id == 4);
+		export_u32(ex, (U32)i->id);
+	}
 }
 
-static void export_type(Exporter *ex, Type *type) {
-}
 
-static bool export_len(Exporter *ex, size_t len, const char *for_, Location where) {
+static bool export_len16(Exporter *ex, size_t len, const char *for_, Location where) {
 	if (len > 65535) {
 		err_print(where, "Too many %s (the maximum is 65535).", for_);
 		return false;
 	}
-	export_len(ex, (U16)len);
+	export_u16(ex, (U16)len);
 	return true;
 }
-   
 
-static bool export_val(Exporter *ex, Value val, Type *type, Location where) {
-	export_type(ex, type);
+static bool export_type(Exporter *ex, Type *type, Location where) {
+	assert(type->flags & TYPE_IS_RESOLVED);
+	export_u8(ex, (U8)type->kind);
+	switch (type->kind) {
+	case TYPE_VOID:
+	case TYPE_TYPE:
+	case TYPE_UNKNOWN:
+		break;
+	case TYPE_PTR: export_type(ex, type->ptr, where); break;
+	case TYPE_SLICE: export_type(ex, type->slice, where); break;
+	case TYPE_BUILTIN:
+		export_u8(ex, (U8)type->builtin);
+		break;
+	case TYPE_TUPLE:
+		if (!export_len16(ex, arr_len(type->tuple), "types in a tuple", where))
+			return false;
+		arr_foreach(type->tuple, Type, sub)
+			if (!export_type(ex, sub, where))
+				return false;
+		break;
+	case TYPE_ARR:
+		export_u64(ex, type->arr.n);
+		if (!export_type(ex, type->arr.of, where))
+			return false;
+		break;
+	case TYPE_EXPR:
+		assert(0);
+		return false;
+	}
+	return true;
+}
+
+static bool export_val(Exporter *ex, Value val, Type *type, Location where);
+static bool export_val_ptr(Exporter *ex, void *val, Type *type, Location where) {
 	switch (type->kind) {
     case TYPE_VOID: break;
 	case TYPE_BUILTIN:
 		switch (type->builtin) {
-		case BUILTIN_I8: export_i8(ex, val.i8); break;
-		case BUILTIN_U8: export_u8(ex, val.u8); break;
-		case BUILTIN_I16: export_i16(ex, val.i16); break;
-		case BUILTIN_U16: export_u16(ex, val.u16); break;
-		case BUILTIN_I32: export_i32(ex, val.i32); break;
-		case BUILTIN_U32: export_u32(ex, val.u32); break;
-		case BUILTIN_I64: export_i64(ex, val.i64); break;
-		case BUILTIN_U64: export_u64(ex, val.u64); break;
-		case BUILTIN_F32: export_f32(ex, val.f32); break;
-		case BUILTIN_F64: export_f64(ex, val.f64); break;
-		case BUILTIN_BOOL: export_bool(ex, val.boolv); break;
-		case BUILTIN_CHAR: export_char(ex, val.charv); break;
+		case BUILTIN_I8: export_i8(ex, *(I8 *)val); break;
+		case BUILTIN_U8: export_u8(ex, *(U8 *)val); break;
+		case BUILTIN_I16: export_i16(ex, *(I16 *)val); break;
+		case BUILTIN_U16: export_u16(ex, *(U16 *)val); break;
+		case BUILTIN_I32: export_i32(ex, *(I32 *)val); break;
+		case BUILTIN_U32: export_u32(ex, *(U32 *)val); break;
+		case BUILTIN_I64: export_i64(ex, *(I64 *)val); break;
+		case BUILTIN_U64: export_u64(ex, *(U64 *)val); break;
+		case BUILTIN_F32: export_f32(ex, *(F32 *)val); break;
+		case BUILTIN_F64: export_f64(ex, *(F64 *)val); break;
+		case BUILTIN_BOOL: export_bool(ex, *(bool *)val); break;
+		case BUILTIN_CHAR: export_char(ex, *(char *)val); break;
 		}
 		break;
-	case TYPE_TUPLE:
-		if (arr_len(type->tuple) > 65535) {
-			err_print(where, "Too many types in one tuple.");
-			return false;
+	case TYPE_TUPLE: {
+		size_t n = arr_len(type->tuple);
+		Value *vals = *(Value **)val;
+		for (size_t i = 0; i < n; ++i) {
+			if (!export_val(ex, vals[i], &type->tuple[i], where))
+				return false;
 		}
-		export_u16((U16)arr_len(type->tuple));
-		
-		break;
+	} break;
 	case TYPE_TYPE:
-		export_type(ex, val.type);
+		if (!export_type(ex, *(Type **)val, where))
+			return false;
 		break;
 	case TYPE_PTR:
 		err_print(where, "Cannot export pointer.");
 		return false;
+	case TYPE_ARR: {
+		size_t item_size = compiler_sizeof(type->arr.of);
+		char *ptr = val;
+		for (U64 i = 0; i < type->arr.n; ++i) {
+			if (!export_val_ptr(ex, ptr, type->arr.of, where))
+				return false;
+			ptr += item_size;
+		}
+	} break;
+	case TYPE_STRUCT:
+		eval_struct_find_offsets(type);
+		arr_foreach(type->struc->fields, Field, f) {
+			if (!export_val_ptr(ex, (char *)val + f->offset, f->type, where))
+				return false;
+		}
+		break;
+	case TYPE_SLICE: {
+		Slice slice = *(Slice *)val;
+		I64 n = slice.n;
+		size_t item_size = compiler_sizeof(type->slice);
+		export_i64(ex, n);
+		char *ptr = slice.data;
+		for (I64 i = 0; i < n; ++i) {
+			if (!export_val_ptr(ex, ptr, type->slice, where))
+				return false;
+			ptr += item_size;
+		}
+	} break;
 	case TYPE_UNKNOWN:
 	case TYPE_EXPR:
 		assert(0);
@@ -113,7 +176,42 @@ static bool export_val(Exporter *ex, Value val, Type *type, Location where) {
 	return true;
 }
 
+static bool export_val(Exporter *ex, Value val, Type *type, Location where) {
+	return export_val_ptr(ex, val_get_ptr(&val, type), type, where);
+}
+
 static bool export_expr(Exporter *ex, Expression *e) {
+	assert(e->flags & EXPR_FOUND_TYPE);
+	if (!export_type(ex, &e->type, e->where))
+		return false;
+	switch (e->kind) {
+	case EXPR_LITERAL_INT:
+		export_u64(ex, e->intl);
+		break;
+	case EXPR_LITERAL_FLOAT:
+		if (e->type.builtin == BUILTIN_F32)
+			export_f32(ex, (F32)e->floatl);
+		else
+			export_f64(ex, (F64)e->floatl);
+		break;
+	case EXPR_LITERAL_BOOL:
+		export_bool(ex, e->booll);
+		break;
+	case EXPR_LITERAL_CHAR:
+		export_char(ex, e->charl);
+		break;
+	case EXPR_LITERAL_STR:
+		fwrite(e->strl.str, 1, e->strl.len, ex->out);
+		break;
+	case EXPR_C:
+		assert(e->c.code->kind == EXPR_VAL);
+		export_val(ex, e->c.code->val, &e->c.code->type, e->where);
+	    break;
+	case EXPR_IDENT:
+		export_ident(ex, e->ident);
+		break;
+		
+	}
 	return true;
 }
 
@@ -129,16 +227,15 @@ static bool export_decl(Exporter *ex, Declaration *d) {
 		return false;
 	}
 	export_location(ex, d->where);
-	size_t n_idents = arr_len(d->idents);
-	if (n_idents > 65535) {
-		err_print(d->where, "Too many identifiers in one declaration (the maximum is 65535).");
+	if (!export_len16(ex, arr_len(d->idents), "identifiers in one declaration", d->where))
 		return false;
-	}
-	export_u16(ex, (U16)arr_len(d->idents));
 	arr_foreach(d->idents, Identifier, ident) {
 		export_ident(ex, *ident);
 	}
 
+	if (!export_type(ex, &d->type, d->where))
+		return false;
+	
 	U8 constness = 0;
 	if (d->flags & DECL_IS_CONST) constness = 1;
 	else if (d->flags & DECL_SEMI_CONST) constness = 2;
@@ -151,7 +248,6 @@ static bool export_decl(Exporter *ex, Declaration *d) {
 		expr_kind = DECL_EXPORT_VAL;
 	
 	export_u8(ex, expr_kind);
-
 	if (expr_kind == DECL_EXPORT_EXPR) {
 		if (!export_expr(ex, &d->expr))
 			return false;
