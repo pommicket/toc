@@ -234,7 +234,7 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 	case TYPE_ARR: {
 		size_t written = str_copy(buffer, bufsize, "[");
 		if (t->flags & TYPE_IS_RESOLVED) {
-			snprintf(buffer + written, bufsize - written, "%"PRIu64, t->arr.n);
+			snprintf(buffer + written, bufsize - written, U64_FMT, t->arr.n);
 			written += strlen(buffer + written);
 		} else {
 			written += str_copy(buffer + written, bufsize - written, "N");
@@ -2061,7 +2061,7 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprintf(out, "%s", e->booll ? "true" : "false");
 		break;
 	case EXPR_LITERAL_CHAR:
-		fprintf(out, "'%c'", e->charl);
+		fprint_char_literal(out, e->charl);
 		break;
 	case EXPR_IDENT:
 		fprint_ident(out, e->ident);
@@ -2226,6 +2226,11 @@ static void fprint_decl(FILE *out, Declaration *d) {
 	if (d->flags & DECL_HAS_EXPR) {
 		fprintf(out, "=");
 		fprint_expr(out, &d->expr);
+	}
+	if (d->flags & DECL_FOUND_VAL) {
+		fprintf(out, "(");
+		fprint_val(out, d->val, &d->type);
+		fprintf(out, ")");
 	}
 }
 

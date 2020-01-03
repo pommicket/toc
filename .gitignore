@@ -5,3 +5,5 @@ out.top
 tests/**/*.c
 tests/**/*.bin
 vgcore*
+TAGS
+tags

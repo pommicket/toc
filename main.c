@@ -29,12 +29,6 @@ make sure futurely/currently-declared types are only used by pointer/slice
 allow omission of trailing ; in foo ::= fn() {}?
  */
 
-#ifdef __cplusplus
-#define new new_
-#define this this_
-#elif __STDC_VERSION__ < 199901
-#define inline
-#endif
 
 #include "toc.c"
 
@@ -141,8 +135,9 @@ int main(int argc, char **argv) {
 	    err_fprint(TEXT_IMPORTANT("Errors occured while determining types.\n"));
 		return EXIT_FAILURE;
 	}
+#ifdef TOC_DEBUG
 	fprint_parsed_file(stdout, &f);
-
+#endif
 	FILE *out = fopen(out_filename, "w");
 	if (!out) {
 		err_fprint(TEXT_IMPORTANT("Could not open output file (out.c).\n"));
@@ -167,5 +162,6 @@ int main(int argc, char **argv) {
 	fclose(out_pkg);
 #endif
 	idents_free(&file_idents);
+	return 0;
 }
 

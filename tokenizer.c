@@ -94,7 +94,7 @@ static void fprint_token(FILE *out, Token *t) {
 		fprintf(out, "number: ");
 		switch (t->num.kind) {
 		case NUM_LITERAL_INT:
-			fprintf(out, "%"PRIu64, t->num.intval);
+			fprintf(out, U64_FMT, t->num.intval);
 			break;
 		case NUM_LITERAL_FLOAT:
 			fprintf(out, "%g", (double)t->num.floatval);

@@ -415,7 +415,7 @@ static inline void cgen_fn_name(CGenerator *g, FnExpr *f) {
 }
 
 static inline void cgen_fn_instance_number(CGenerator *g, U64 instance) {
-	cgen_write(g, "%"PRIu64"_", instance);
+	cgen_write(g, U64_FMT"_", instance);
 }
 
 /* does this type have a type type in it? (e.g. [5]Type, &&Type) */
@@ -1144,7 +1144,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		cgen_write(g, "%.16Lf", (long double)e->floatl); /* TODO(eventually): better precision? */
 		break;
 	case EXPR_LITERAL_INT:
-		cgen_write(g, "%"PRIu64, e->intl);
+		cgen_write(g, U64_FMT, e->intl);
 		break;
 	case EXPR_LITERAL_STR: {
 		size_t c;
@@ -1404,7 +1404,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		Value val;
 		if (!eval_expr(g->evalr, e, &val))
 			return false;
-		cgen_write(g, "%"PRId64, val.i64);
+		cgen_write(g, I64_FMT, val.i64);
 	} break;
 	case EXPR_CAST: {
 		Type *from = &e->cast.expr->type;
@@ -1697,14 +1697,14 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 		return false;
 	case TYPE_BUILTIN:
 		switch (t->builtin) {
-		case BUILTIN_I8: cgen_write(g, "%"PRId8, *(I8 *)v); break;
-		case BUILTIN_U8: cgen_write(g, "%"PRIu8, *(U8 *)v); break;
-		case BUILTIN_I16: cgen_write(g, "%"PRId16, *(I16 *)v); break;
-		case BUILTIN_U16: cgen_write(g, "%"PRIu16, *(U16 *)v); break;
-		case BUILTIN_I32: cgen_write(g, "%"PRId32, *(I32 *)v); break;
-		case BUILTIN_U32: cgen_write(g, "%"PRIu32, *(U32 *)v); break;
-		case BUILTIN_I64: cgen_write(g, "%"PRId64, *(I64 *)v); break;
-		case BUILTIN_U64: cgen_write(g, "%"PRIu64, *(U64 *)v); break;
+		case BUILTIN_I8: cgen_write(g, I8_FMT, *(I8 *)v); break;
+		case BUILTIN_U8: cgen_write(g, U8_FMT, *(U8 *)v); break;
+		case BUILTIN_I16: cgen_write(g, I16_FMT, *(I16 *)v); break;
+		case BUILTIN_U16: cgen_write(g, U16_FMT, *(U16 *)v); break;
+		case BUILTIN_I32: cgen_write(g, I32_FMT, *(I32 *)v); break;
+		case BUILTIN_U32: cgen_write(g, U32_FMT, *(U32 *)v); break;
+		case BUILTIN_I64: cgen_write(g, I64_FMT, *(I64 *)v); break;
+		case BUILTIN_U64: cgen_write(g, U64_FMT, *(U64 *)v); break;
 		case BUILTIN_F32: cgen_write(g, F32_FMT"f", *(F32 *)v); break;
 		case BUILTIN_F64: cgen_write(g, F64_FMT, *(F64 *)v); break;
 		case BUILTIN_CHAR: cgen_write(g, "'\\x%02x'", *(char *)v); break;

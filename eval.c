@@ -274,17 +274,17 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		break;
 	case TYPE_BUILTIN:
 		switch (t->builtin) {
-		case BUILTIN_I8: fprintf(f, "%"PRId8, *(I8 *)p); break;
-		case BUILTIN_U8: fprintf(f, "%"PRIu8, *(U8 *)p); break;
-		case BUILTIN_I16: fprintf(f, "%"PRId16, *(I16 *)p); break;
-		case BUILTIN_U16: fprintf(f, "%"PRIu16, *(U16 *)p); break;
-		case BUILTIN_I32: fprintf(f, "%"PRId32, *(I32 *)p); break;
-		case BUILTIN_U32: fprintf(f, "%"PRIu32, *(U32 *)p); break;
-		case BUILTIN_I64: fprintf(f, "%"PRId64, *(I64 *)p); break;
-		case BUILTIN_U64: fprintf(f, "%"PRIu64, *(U64 *)p); break;
+		case BUILTIN_I8: fprintf(f, I8_FMT, *(I8 *)p); break;
+		case BUILTIN_U8: fprintf(f, U8_FMT, *(U8 *)p); break;
+		case BUILTIN_I16: fprintf(f, I16_FMT, *(I16 *)p); break;
+		case BUILTIN_U16: fprintf(f, U16_FMT, *(U16 *)p); break;
+		case BUILTIN_I32: fprintf(f, I32_FMT, *(I32 *)p); break;
+		case BUILTIN_U32: fprintf(f, U32_FMT, *(U32 *)p); break;
+		case BUILTIN_I64: fprintf(f, I64_FMT, *(I64 *)p); break;
+		case BUILTIN_U64: fprintf(f, U64_FMT, *(U64 *)p); break;
 		case BUILTIN_F32: fprintf(f, F32_FMT, *(F32 *)p); break;
 		case BUILTIN_F64: fprintf(f, F64_FMT, *(F64 *)p); break;
-		case BUILTIN_CHAR: fprintf(f, "'%c'", *(char *)p); break;
+		case BUILTIN_CHAR: fprint_char_literal(f, *(char *)p); break;
 		case BUILTIN_BOOL: fprintf(f, "%s", *(bool *)p ? "true" : "false"); break;
 		}
 		break;

@@ -30,9 +30,14 @@ typedef uint32_t U32;
 #define U32_MAX UINT32_MAX
 typedef uint64_t U64;
 #define U64_MAX UINT64_MAX
+#define U8_FMT "%" PRIu8
+#define U16_FMT "%" PRIu16
+#define U32_FMT "%" PRIu32
+#define U64_FMT "%" PRIu64
 
 #if __STDC_VERSION__ >= 199901
 #include <stdbool.h>
+#elif defined __cplusplus
 #else
 typedef U8 bool;
 #endif
@@ -46,6 +51,10 @@ typedef int32_t I32;
 #define I32_MAX INT32_MAX
 typedef int64_t I64;
 #define I64_MAX INT64_MAX
+#define I8_FMT "%" PRId8
+#define I16_FMT "%" PRId16
+#define I32_FMT "%" PRId32
+#define I64_FMT "%" PRId64
 
 /* NOTE: if you change these, make sure you change hash_tables.c */
 typedef float F32;

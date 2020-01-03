@@ -18,10 +18,26 @@
 #include <float.h>
 #include <inttypes.h>
 
+
+#ifdef __cplusplus
+#define new new_
+#define this this_
+#elif __STDC_VERSION__ < 199901
+#define inline
+#endif
+
 #include "types.h"
 
 /* forward declarations for debugging */
 static void print_val(Value v, Type *t);
+
+static void fprint_char_literal(FILE *f, char c) {
+	if (isprint(c))
+		fprintf(f, "'%c'", c);
+	else
+		fprintf(f, "'\\x%02x'", c);
+}
+
 
 /* utilities */
 #include "allocator.c"
@@ -51,4 +67,13 @@ static bool typedefs_file(CGenerator *g, ParsedFile *f);
 
 #ifdef TOC_DEBUG
 #include "tests.c"
+#endif
+
+
+
+#ifdef __cplusplus
+#undef new
+#undef this
+#elif __STDC_VERSION__ < 199901
+#undef inline
 #endif

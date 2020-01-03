@@ -473,7 +473,7 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 		if (type_builtin_is_signed(n_expr->type.builtin)) {
 		    I64 ssize = val_to_i64(&val, n_expr->type.builtin);
 			if (ssize < 0) {
-				err_print(t->arr.n_expr->where, "Negative array length (%" PRId64 ")", ssize);
+				err_print(t->arr.n_expr->where, "Negative array length (" I64_FMT ")", ssize);
 				return false;
 			}
 			size = (U64)ssize;
