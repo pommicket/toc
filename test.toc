@@ -1,7 +1,2 @@
-// #export
-foo :: f64 = 0.07321;
-// asdf, dsajkhf, sadjkfh ::= 5;
-// #export asdf ::= "asdfasdfasdf";
-// #export
-zla, asdf := foo, 9;
-asfdsfad ::= '\n';
+#export asdf ::= int;
+#export ghjk := #sizeof(asdf);

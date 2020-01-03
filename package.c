@@ -205,12 +205,42 @@ static bool export_expr(Exporter *ex, Expression *e) {
 		break;
 	case EXPR_C:
 		assert(e->c.code->kind == EXPR_VAL);
-		export_val(ex, e->c.code->val, &e->c.code->type, e->where);
+		if (!export_val(ex, e->c.code->val, &e->c.code->type, e->where))
+			return false;
 	    break;
 	case EXPR_IDENT:
 		export_ident(ex, e->ident);
 		break;
-		
+	case EXPR_UNARY_OP:
+		export_u8(ex, (U8)e->unary.op);
+		if (!export_expr(ex, e->unary.of))
+			return false;
+		break;
+	case EXPR_BINARY_OP:
+		export_u8(ex, (U8)e->binary.op);
+		if (!export_expr(ex, e->binary.lhs)
+			|| !export_expr(ex, e->binary.rhs))
+			return false;
+		break;
+	case EXPR_VAL:
+		if (!export_val(ex, e->val, &e->type, e->where))
+			return false;
+		break;
+	case EXPR_TUPLE:
+		if (!export_len16(ex, arr_len(e->tuple), "expressions in a tuple", e->where))
+			return false;
+		arr_foreach(e->tuple, Expression, item)
+			if (!export_expr(ex, item))
+				return false;
+		break;
+	case EXPR_TYPE:
+		if (!export_type(ex, &e->typeval, e->where))
+			return false;
+		break;
+	case EXPR_DSIZEOF:
+	case EXPR_DALIGNOF:
+		assert(0);
+		break;
 	}
 	return true;
 }
@@ -241,7 +271,7 @@ static bool export_decl(Exporter *ex, Declaration *d) {
 	else if (d->flags & DECL_SEMI_CONST) constness = 2;
 	export_u8(ex, constness);
 
-	U8 expr_kind = 0;
+	U8 expr_kind = DECL_EXPORT_NONE;
 	if (d->flags & DECL_HAS_EXPR)
 		expr_kind = DECL_EXPORT_EXPR;
 	if (d->flags & DECL_FOUND_VAL)

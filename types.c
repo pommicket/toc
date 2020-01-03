@@ -1492,15 +1492,20 @@ static bool types_expr(Typer *tr, Expression *e) {
 		code->kind = EXPR_VAL;
 		t->kind = TYPE_UNKNOWN;
 	} break;
-	case EXPR_DSIZEOF: {
-		if (!types_expr(tr, e->dsizeof.of))
+	case EXPR_DSIZEOF:
+	case EXPR_DALIGNOF:  {
+		Expression *of = e->kind == EXPR_DSIZEOF ? e->dsizeof.of : e->dalignof.of;
+		if (!types_expr(tr, of))
 			return false;
-		t->kind = TYPE_BUILTIN;
-		t->builtin = BUILTIN_I64;
-	} break;
-	case EXPR_DALIGNOF: {
-		if (!types_expr(tr, e->dalignof.of))
-			return false;
+		if (e->dsizeof.of->type.kind == TYPE_TYPE) {
+			Value val;
+			if (!eval_expr(tr->evalr, of, &val))
+				return false;
+			e->val.i64 = (I64)compiler_sizeof(val.type);
+		} else {
+			e->val.i64 = (I64)compiler_sizeof(&of->type);
+		}
+		e->kind = EXPR_VAL;
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_I64;
 	} break;

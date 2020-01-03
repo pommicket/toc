@@ -1399,13 +1399,6 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		cgen_indent(g);
 		fwrite(code->val.slice.data, 1, (size_t)code->val.slice.n, cgen_writing_to(g));
 	} break;
-	case EXPR_DSIZEOF:
-	case EXPR_DALIGNOF: {
-		Value val;
-		if (!eval_expr(g->evalr, e, &val))
-			return false;
-		cgen_write(g, I64_FMT, val.i64);
-	} break;
 	case EXPR_CAST: {
 		Type *from = &e->cast.expr->type;
 		Type *to = &e->cast.type;
@@ -1427,6 +1420,8 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			cgen_write(g, ")");
 		}
 	} break;
+	case EXPR_DSIZEOF:
+	case EXPR_DALIGNOF: /* handled by types.c */
 	case EXPR_TUPLE:
 		/* the only time this should happen is if you're stating
 		   a tuple, e.g. 3, 5;, but we've errored about that before
