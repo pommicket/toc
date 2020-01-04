@@ -85,7 +85,7 @@ static void *allocr_realloc(Allocator *a, void *data, size_t old_size, size_t ne
 		return NULL;
 	}
 	if (a == NULL) return err_realloc(data, new_size);
-    void *ret = allocr_malloc(a, new_size);
+	void *ret = allocr_malloc(a, new_size);
 	memcpy(ret, data, old_size);
 	return ret;
 }

@@ -309,7 +309,7 @@ static void copy_block(Copier *c, Block *out, Block *in) {
 	*out = *in;
 	size_t nstmts = arr_len(in->stmts);
 	out->stmts = NULL;
-    Block *prev = c->block;
+	Block *prev = c->block;
 	c->block = out;
 	if (in->ret_expr)
 		copy_expr(c, out->ret_expr = allocr_malloc(c->allocr, sizeof *out->ret_expr), in->ret_expr);

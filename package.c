@@ -147,7 +147,7 @@ static bool export_fn_ptr(Exporter *ex, FnExpr *f, Location where) {
 static bool export_val(Exporter *ex, Value val, Type *type, Location where);
 static bool export_val_ptr(Exporter *ex, void *val, Type *type, Location where) {
 	switch (type->kind) {
-    case TYPE_VOID: break;
+	case TYPE_VOID: break;
 	case TYPE_BUILTIN:
 		switch (type->builtin) {
 		case BUILTIN_I8: export_i8(ex, *(I8 *)val); break;

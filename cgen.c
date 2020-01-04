@@ -712,7 +712,7 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 		}
 	    break;
 	case EXPR_SLICE:
-    case EXPR_IDENT:
+	case EXPR_IDENT:
 	case EXPR_LITERAL_INT:
 	case EXPR_LITERAL_CHAR:
 	case EXPR_LITERAL_BOOL:
@@ -1905,7 +1905,7 @@ static bool cgen_defs_expr(CGenerator *g, Expression *e) {
 }
 
 static bool cgen_defs_decl(CGenerator *g, Declaration *d) {
-    if (d->flags & DECL_HAS_EXPR) {
+	if (d->flags & DECL_HAS_EXPR) {
 		if (!cgen_defs_expr(g, &d->expr))
 			return false;
 	}

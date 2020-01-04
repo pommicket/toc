@@ -181,7 +181,7 @@ static IdentDecl *ident_add_decl(Identifier i, struct Declaration *d, struct Blo
 }
 
 static IdentDecl *ident_decl(Identifier i) {
-    return (IdentDecl *)arr_last(i->decls);
+	return (IdentDecl *)arr_last(i->decls);
 }
 
 static void ident_tree_free(IdentTree *id) {

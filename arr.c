@@ -83,7 +83,7 @@ static void arr_set_lena_(void **arr, size_t n, size_t item_sz, Allocator *a) {
 
 static void *arr_add_(void **arr, size_t item_sz) {
 	ArrHeader *hdr;
-    if (*arr == NULL) {
+	if (*arr == NULL) {
 		arr_resv_(arr, 10, item_sz);
 		hdr = arr_hdr(*arr);
 	} else {
@@ -97,7 +97,7 @@ static void *arr_add_(void **arr, size_t item_sz) {
 }
 static void *arr_adda_(void **arr, size_t item_sz, Allocator *a) {
 	ArrHeader *hdr;
-    if (*arr == NULL) {
+	if (*arr == NULL) {
 		arr_resva_(arr, 10, item_sz, a);
 		hdr = arr_hdr(*arr);
 	} else {

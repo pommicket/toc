@@ -6,7 +6,6 @@
 
 /* 
    NOTE:
-   
    Structure of the toc compiler:
    tokenizer => parser => typing (types.c) => typdefs_cgen, decls_cgen, cgen 
    (lexing)
@@ -105,7 +104,7 @@ int main(int argc, char **argv) {
 	
 	Parser p;
 	parser_create(&p, &t, &main_allocr);
-   	ParsedFile f;
+	ParsedFile f;
 	if (!parse_file(&p, &f)) {
 		
 		err_fprint(TEXT_IMPORTANT("Errors occured while parsing.\n"));

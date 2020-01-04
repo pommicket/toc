@@ -211,7 +211,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 		
 	/* f has compile time params, but it's not an instance! */
 	bool generic = !(flags & TYPE_OF_FN_IS_INSTANCE) && fn_has_any_const_params(f);
-    if (generic) {
+	if (generic) {
 		Copier cop = copier_create(tr->allocr, tr->block);
 		copy_fn_expr(&cop, &fn_copy, f, false);
 		f = &fn_copy;
@@ -344,7 +344,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 		fn_exit(f);
 		tr->fn = prev_fn;
 	}
-    return success;
+	return success;
 }
 
 static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
@@ -643,7 +643,7 @@ static Status type_cast_status(Type *from, Type *to) {
 		break;
 	}
 	assert(0);
-    return STATUS_ERR;
+	return STATUS_ERR;
 }
 
 static bool arg_is_const(Expression *arg, Constness constness) {
@@ -1059,7 +1059,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				IfExpr *nexti = &curr->next_elif->if_;
 				Type *next_type = &curr->next_elif->type;
 				curr->next_elif->flags |= EXPR_FOUND_TYPE;
-			    if (!types_block(tr, &nexti->body)) {
+				if (!types_block(tr, &nexti->body)) {
 					return false;
 				}
 				if (nexti->body.ret_expr) {
@@ -1494,7 +1494,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		t->kind = TYPE_UNKNOWN;
 	} break;
 	case EXPR_DSIZEOF:
-	case EXPR_DALIGNOF:  {
+	case EXPR_DALIGNOF: {
 		Expression *of = e->kind == EXPR_DSIZEOF ? e->dsizeof.of : e->dalignof.of;
 		if (!types_expr(tr, of))
 			return false;

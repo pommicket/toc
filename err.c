@@ -138,7 +138,7 @@ static void err_print_(
 					   int line, const char *file,
 #endif
 					   Location where, const char *fmt, ...) {
-    va_list args;
+	va_list args;
 	if (where.ctx && !where.ctx->enabled) return;
 #if ERR_SHOW_SOURCE_LOCATION
 	if (file)

@@ -83,7 +83,7 @@ typedef U32 IdentID; /* identifier ID for cgen (anonymous variables). not to be 
 
 typedef struct Location {
 	U32 line;
-    U32 pos; /* position in ctx->str */
+	U32 pos; /* position in ctx->str */
 	struct ErrCtx *ctx;
 } Location;
 
@@ -98,7 +98,7 @@ typedef struct ErrCtx {
 typedef struct Page {
 	struct Page *next;
 	size_t used; /* number MaxAligns used, not bytes */
-    MaxAlign data[];
+	MaxAlign data[];
 } Page;
 
 typedef struct Allocator {
@@ -109,7 +109,7 @@ typedef struct Allocator {
 typedef struct ArrBlock {
 	void *data;
 	size_t n; /* number of things in this block so far */
-    void *last; /* last one of them */
+	void *last; /* last one of them */
 } ArrBlock;
 
 typedef struct BlockArr {
@@ -126,7 +126,7 @@ typedef struct HashTable {
 } HashTable;
 
 typedef struct Slice {
-    I64 n;
+	I64 n;
 	void *data;
 } Slice;
 
@@ -170,7 +170,7 @@ typedef struct IdentDecl {
 	Value val;
 	SOURCE_LOCATION
 	IdentDeclKind kind;
-    U16 flags;
+	U16 flags;
 } IdentDecl;
 
 /* 
@@ -188,7 +188,7 @@ typedef struct IdentTree {
 	U64 id; /* 0 if there's no actual identifier here, otherwise unique positive integer associated with this identifier */
 	struct IdentTree *parent;
 	struct IdentTree *children[TREE_NCHILDREN];
-    IdentDecl *decls; /* array of declarations of this identifier */
+	IdentDecl *decls; /* array of declarations of this identifier */
 } IdentTree;
 
 typedef IdentTree *Identifier;
@@ -428,7 +428,7 @@ typedef struct Block {
 	Location start;
 	Location end;
 	struct Statement *stmts;
-    struct Expression *ret_expr; /* the return expression of this block, e.g. {foo(); 3} => 3  NULL for no expression. */
+	struct Expression *ret_expr; /* the return expression of this block, e.g. {foo(); 3} => 3  NULL for no expression. */
 } Block;
 
 typedef enum {
@@ -493,7 +493,7 @@ typedef enum {
 
 typedef struct CallExpr {
 	struct Expression *fn;
-    union {
+	union {
 	    struct Argument *args;
 		struct Expression *arg_exprs;
 	};
@@ -551,8 +551,8 @@ typedef struct EachExpr {
 
 
 typedef struct FnExpr {
-    struct Declaration *params; /* declarations of the parameters to this function */
-    struct Declaration *ret_decls; /* array of decls, if this has named return values. otherwise, NULL */
+	struct Declaration *params; /* declarations of the parameters to this function */
+	struct Declaration *ret_decls; /* array of decls, if this has named return values. otherwise, NULL */
 	Type ret_type;
 	Block body;
 	HashTable instances; /* for fns with constant parameters. the key is a tuple where
@@ -684,7 +684,7 @@ typedef struct Declaration {
 	Location where;
 	Identifier *idents;
 	Type type;
-    DeclFlags flags;
+	DeclFlags flags;
 	Expression expr;
 	Value val; /* only for constant decls. */
 } Declaration;
@@ -757,7 +757,7 @@ typedef struct Typer {
 typedef struct Exporter {
 	FILE *out; /* .top (toc package) to output to */
 	bool export_locations;
-    FnExpr **exported_fns;
+	FnExpr **exported_fns;
 	StructDef **exported_structs;
 } Exporter;
 

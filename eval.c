@@ -748,7 +748,7 @@ static void *eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr) {
 	} else {
 		struc_data = struc.struc;
 	}
-    return (char *)struc_data + dot_expr->binary.field->offset;
+	return (char *)struc_data + dot_expr->binary.field->offset;
 }
 
 static bool eval_address_of(Evaluator *ev, Expression *e, void **ptr) {
@@ -992,7 +992,7 @@ static Value val_zero(Type *t) {
 	case TYPE_ARR:
 		val.arr = err_calloc(t->arr.n, compiler_sizeof(t->arr.of));
 		break;
-    default:
+	default:
 		break;
 	}
 	return val;

@@ -523,9 +523,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 	return !has_err;
 }
 
-/* 
-   skip to one token past the next semicolon not in braces (or the end of the file).
-*/
+/* skip to one token past the next semicolon not in braces (or the end of the file). */
 static void tokr_skip_semicolon(Tokenizer *t) {
 	int brace_level = 0;
 	while (t->token->kind != TOKEN_EOF) {
@@ -546,5 +544,5 @@ static void tokr_skip_semicolon(Tokenizer *t) {
 
 /* only frees tokens, not string literals (because those are on the allocator). */
 static void tokr_free(Tokenizer *t) {
-    arr_clear(&t->tokens);
+	arr_clear(&t->tokens);
 }

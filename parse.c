@@ -293,9 +293,7 @@ static inline void *parser_malloc(Parser *p, size_t bytes) {
 	return allocr_malloc(p->allocr, bytes);
 }
 
-/* 
-   allocate a new expression.
-*/
+/* allocate a new expression. */
 static inline Expression *parser_new_expr(Parser *p) {
 	return parser_malloc(p, sizeof(Expression));
 }
@@ -641,7 +639,7 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 	Tokenizer *t = p->tokr;
 	Token *start = t->token;
 	bool ret = false;
-    do {
+	do {
 	continu:
 		switch (t->token->kind) {
 		case TOKEN_KW:
@@ -964,7 +962,6 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		/* there's more stuff after. maybe it's, e.g. int, float */
 	}
 	t->token = before;
-    
 	if (end - t->token == 1) {
 		/* 1-token expression */
 		switch (t->token->kind) {
@@ -1735,7 +1732,7 @@ static inline bool ends_decl(Token *t, DeclEndKind ends_with) {
 	switch (ends_with) {
 	case DECL_END_SEMICOLON:
 		return t->kw == KW_SEMICOLON;
-    case DECL_END_RPAREN_COMMA:
+	case DECL_END_RPAREN_COMMA:
 		return t->kw == KW_RPAREN || t->kw == KW_COMMA;
 	case DECL_END_LBRACE_COMMA:
 		return t->kw == KW_LBRACE || t->kw == KW_COMMA;
@@ -1746,7 +1743,7 @@ static inline bool ends_decl(Token *t, DeclEndKind ends_with) {
 static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 flags) {
 	Tokenizer *t = p->tokr;
 	d->where = t->token->where;
-    d->idents = NULL;
+	d->idents = NULL;
 	d->flags = 0;
 
 	if ((flags & PARSE_DECL_ALLOW_EXPORT) && token_is_direct(t->token, DIRECT_EXPORT)) {
@@ -1965,7 +1962,7 @@ static void parser_create(Parser *p, Tokenizer *t, Allocator *allocr) {
 
 static bool parse_file(Parser *p, ParsedFile *f) {
 	Tokenizer *t = p->tokr;
-    f->stmts = NULL;
+	f->stmts = NULL;
 	bool ret = true;
 	while (t->token->kind != TOKEN_EOF) {
 		Statement *stmt = parser_arr_add(p, &f->stmts);

@@ -77,7 +77,7 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Expres
 
 /* if match is not the same kind of type as to, returns true */
 static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents, Value *vals, Type *types) {
-    assert(to->flags & TYPE_IS_RESOLVED);
+	assert(to->flags & TYPE_IS_RESOLVED);
 	
 	switch (match->kind) {
 	case TYPE_VOID:

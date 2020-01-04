@@ -36,12 +36,12 @@ static inline void write_u16(FILE *fp, U16 u16) {
 }
 
 static inline void write_i16(FILE *fp, I16 i16) {
-    write_u16(fp, (U16)i16);
+	write_u16(fp, (U16)i16);
 }
 
 static inline void write_u32(FILE *fp, U32 u32) {
 	write_u16(fp, u32 & 0xFFFF);
-    write_u16(fp, (U16)(u32 >> 16));
+	write_u16(fp, (U16)(u32 >> 16));
 }
 
 static inline void write_i32(FILE *fp, I32 i32) {
@@ -163,5 +163,5 @@ static void write_vlq(FILE *fp, U64 x) {
 		write_u8(fp, (U8)(x & 0x7f) | 0x80);
 		x >>= 7;
 	}
-    write_u8(fp, (U8)x);
+	write_u8(fp, (U8)x);
 }
