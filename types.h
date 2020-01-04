@@ -379,12 +379,16 @@ enum {
 
 typedef struct {
 	Field *fields;
+	Location where;
 	U16 flags;
 	size_t size; /* size of this struct during compile time */
 	struct {
 		Identifier name;
 		IdentID id;
 	} c;
+	struct {
+		U32 id; /* (index into exptr->exported_structs) + 1, or 0 if hasn't been exported */
+	} export;
 } StructDef;
 
 enum {
@@ -749,21 +753,12 @@ typedef struct Typer {
 	FnExpr *fn; /* the function we're currently parsing. */
 } Typer;
 
-typedef struct {
-	FnExpr *fn;
-	Location where;
-} FnWithLocation;
-
-typedef struct {
-	StructDef *struc;
-	Location where;
-} StructDefWithLocation;
 
 typedef struct Exporter {
 	FILE *out; /* .top (toc package) to output to */
 	bool export_locations;
-    FnWithLocation *exported_fns;
-	StructDefWithLocation *exported_structs;
+    FnExpr **exported_fns;
+	StructDef **exported_structs;
 } Exporter;
 
 typedef struct CGenerator {

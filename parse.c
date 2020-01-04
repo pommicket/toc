@@ -570,12 +570,15 @@ static bool parse_type(Parser *p, Type *type) {
 		case KW_STRUCT:
 			/* struct */
 			type->kind = TYPE_STRUCT;
-			type->struc = parser_malloc(p, sizeof *type->struc);
-			type->struc->flags = 0;
+			StructDef *struc = type->struc = parser_malloc(p, sizeof *type->struc);
+			struc->flags = 0;
 			/* help cgen out */
-			type->struc->c.name = NULL;
-			type->struc->c.id = 0;
-			type->struc->fields = NULL;
+			struc->c.name = NULL;
+			struc->c.id = 0;
+			struc->fields = NULL;
+			struc->export.id = 0;
+			struc->where = t->token->where;
+				
 			++t->token;
 			if (!token_is_kw(t->token, KW_LBRACE)) {
 				err_print(t->token->where, "Expected { or ( to follow struct.");
@@ -729,6 +732,7 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 								if (is_decl(t)) /* has return declaration */
 									goto end;
 								Type return_type;
+								/* TODO: think of a better way of determining if it's a void fn type. (maybe followed by ;/,/)?)*/
 								bool *enabled = &t->token->where.ctx->enabled;
 								bool prev_enabled = *enabled;
 							    *enabled = false;

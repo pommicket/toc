@@ -70,30 +70,9 @@ static void export_ident(Exporter *ex, Identifier i) {
 	}
 }
 
-static bool export_len8(Exporter *ex, size_t len, const char *for_, Location where) {
-	if (len > U8_MAX) {
-		err_print(where, "Too many %s (the maximum is " STRINGIFY(U8_MAX) ").", for_);
-		return false;
-	}
-	export_u8(ex, (U8)len);
-	return true;
-}
-
-static bool export_len16(Exporter *ex, size_t len, const char *for_, Location where) {
-	if (len > U16_MAX) {
-		err_print(where, "Too many %s (the maximum is " STRINGIFY(U16_MAX) ").", for_);
-		return false;
-	}
-	export_u16(ex, (U16)len);
-	return true;
-}
-
-static bool export_len32(Exporter *ex, size_t len, const char *for_, Location where) {
-	if (len > U32_MAX) {
-		err_print(where, "Too many %s (the maximum is " STRINGIFY(U32_MAX) ").", for_);
-		return false;
-	}
-	export_u32(ex, (U32)len);
+/* TODO: replace with vlq */
+static bool export_len(Exporter *ex, size_t len) {
+	export_u64(ex, (U64)len);
 	return true;
 }
 
@@ -111,8 +90,7 @@ static bool export_type(Exporter *ex, Type *type, Location where) {
 		export_u8(ex, (U8)type->builtin);
 		break;
 	case TYPE_TUPLE:
-		if (!export_len16(ex, arr_len(type->tuple), "types in a tuple", where))
-			return false;
+		export_len(ex, arr_len(type->tuple));
 		arr_foreach(type->tuple, Type, sub)
 			if (!export_type(ex, sub, where))
 				return false;
@@ -123,8 +101,7 @@ static bool export_type(Exporter *ex, Type *type, Location where) {
 			return false;
 		break;
 	case TYPE_FN:
-		if (!export_len16(ex, arr_len(type->fn.types), "types in a function type", where))
-			return false;
+		export_len(ex, arr_len(type->fn.types));
 		arr_foreach(type->fn.types, Type, sub)
 			if (!export_type(ex, sub, where))
 				return false;
@@ -134,6 +111,21 @@ static bool export_type(Exporter *ex, Type *type, Location where) {
 		arr_foreach(type->fn.constness, Constness, c)
 			export_u8(ex, *c);
 		break;
+	case TYPE_STRUCT: {
+		StructDef *struc = type->struc;
+		if (struc->export.id == 0) {
+		    StructDef **ptr = arr_add(&ex->exported_structs);
+			*ptr = struc;
+			size_t nexported_structs = arr_len(ex->exported_structs);
+			if (nexported_structs > U32_MAX) {
+				err_print(struc->where, "Too many exported structure definitions (the maximum is " STRINGIFY(U32_MAX) ").");
+				return false;
+			}
+				
+			struc->export.id = (U32)nexported_structs;
+		}
+		export_len(ex, (size_t)struc->export.id);
+	} break;
 	case TYPE_EXPR:
 		assert(0);
 		return false;
@@ -143,15 +135,16 @@ static bool export_type(Exporter *ex, Type *type, Location where) {
 
 static bool export_fn_ptr(Exporter *ex, FnExpr *f, Location where) {
 	if (f->export.id == 0) {
-		FnWithLocation *floc = arr_add(&ex->exported_fns);
-		floc->fn = f;
-		floc->where = where;
-		if (arr_len(ex->exported_fns) > U32_MAX) {
+		FnExpr **fptr = arr_add(&ex->exported_fns);
+		*fptr = f;
+		size_t nexported_fns = arr_len(ex->exported_fns);
+		if (nexported_fns > U32_MAX) {
 			err_print(where, "Too many exported functions (the maximum is " STRINGIFY(U32_MAX) ").");
+			return false;
 		}
-		f->export.id = (U32)arr_len(ex->exported_fns);
+		f->export.id = (U32)nexported_fns;
 	}
-	export_u32(ex, f->export.id);
+	export_len(ex, (size_t)f->export.id);
 	return true;
 }
 
@@ -272,8 +265,20 @@ static bool export_expr(Exporter *ex, Expression *e) {
 		break;
 	case EXPR_BINARY_OP:
 		export_u8(ex, (U8)e->binary.op);
-		if (!export_expr(ex, e->binary.lhs)
-			|| !export_expr(ex, e->binary.rhs))
+		if (!export_expr(ex, e->binary.lhs))
+			return false;
+		if (e->binary.op == BINARY_DOT) {
+			/* rhs may not typed (if it's a string it will be)! */
+			Expression *rhs = e->binary.rhs;
+			if (!(rhs->flags & EXPR_FOUND_TYPE)) {
+				export_u8(ex, 0);
+				assert(rhs->kind == EXPR_IDENT);
+				export_ident(ex, rhs->ident);
+				break;
+			} else 
+				export_u8(ex, 1);
+		}
+		if (!export_expr(ex, e->binary.rhs))
 			return false;
 		break;
 	case EXPR_VAL:
@@ -281,8 +286,7 @@ static bool export_expr(Exporter *ex, Expression *e) {
 			return false;
 		break;
 	case EXPR_TUPLE:
-		if (!export_len16(ex, arr_len(e->tuple), "expressions in a tuple", e->where))
-			return false;
+		export_len(ex, arr_len(e->tuple));
 		arr_foreach(e->tuple, Expression, item)
 			if (!export_expr(ex, item))
 				return false;
@@ -327,8 +331,7 @@ static bool export_decl(Exporter *ex, Declaration *d) {
 		return false;
 	}
 	export_location(ex, d->where);
-	if (!export_len16(ex, arr_len(d->idents), "identifiers in one declaration", d->where))
-		return false;
+	export_len(ex, arr_len(d->idents));
 	arr_foreach(d->idents, Identifier, ident) {
 		export_ident(ex, *ident);
 	}
@@ -383,8 +386,7 @@ static bool export_stmt(Exporter *ex, Statement *s) {
 static bool export_block(Exporter *ex, Block *b) {
 	export_location(ex, b->start);
 	export_location(ex, b->end);
-	if (!export_len32(ex, arr_len(b->stmts), "statements in a block", b->start))
-		return false;
+	export_len(ex, arr_len(b->stmts));
 	arr_foreach(b->stmts, Statement, s) {
 		if (!export_stmt(ex, s))
 			return false;
@@ -396,14 +398,12 @@ static bool export_block(Exporter *ex, Block *b) {
 	return true;
 }
 
-static bool export_fn(Exporter *ex, FnExpr *f, Location where) {
-	if (!export_len16(ex, arr_len(f->params), "parameters in a function", where))
-		return false;
+static bool export_fn(Exporter *ex, FnExpr *f) {
+	export_len(ex, arr_len(f->params));
 	arr_foreach(f->params, Declaration, param)
 		if (!export_decl(ex, param))
 			return false;
-	if (!export_len8(ex, arr_len(f->ret_decls), "return declarations", where))
-		return false;
+	export_len(ex, arr_len(f->ret_decls));
 	arr_foreach(f->ret_decls, Declaration, ret_decl)
 		if (!export_decl(ex, ret_decl))
 			return false;
@@ -413,10 +413,11 @@ static bool export_fn(Exporter *ex, FnExpr *f, Location where) {
 	return true;
 }
 
-static bool export_struct(Exporter *ex, StructDef *s, Location where) {
+static bool export_struct(Exporter *ex, StructDef *s) {
+	export_len(ex, arr_len(s->fields));
 	arr_foreach(s->fields, Field, f) {
 		export_ident(ex, f->name);
-		if (!export_type(ex, f->type, where))
+		if (!export_type(ex, f->type, s->where))
 			return false;
 	}
 	return true;
@@ -424,17 +425,23 @@ static bool export_struct(Exporter *ex, StructDef *s, Location where) {
 
 /* does NOT close the file */
 static bool exptr_finish(Exporter *ex) {
-	if (!export_len32(ex, arr_len(ex->exported_fns), "exported functions", LOCATION_NONE))
-		return false;
-	arr_foreach(ex->exported_fns, FnWithLocation, f) {
-		if (!export_fn(ex, f->fn, f->where))
+	export_len(ex, arr_len(ex->exported_fns));
+	typedef FnExpr *FnExprPtr;
+	arr_foreach(ex->exported_fns, FnExprPtr, f) {
+		if (!export_fn(ex, *f))
 			return false;
 	}
 	arr_clear(&ex->exported_fns);
-	arr_foreach(ex->exported_structs, StructDefWithLocation, s) {
-		if (!export_struct(ex, s->struc, s->where))
+	export_len(ex, arr_len(ex->exported_structs));
+	typedef StructDef *StructDefPtr;
+	arr_foreach(ex->exported_structs, StructDefPtr, s) {
+		if (!export_struct(ex, *s))
 			return false;
 	}
 	arr_clear(&ex->exported_structs);
+
+	if (ferror(ex->out)) {
+		warn_print(LOCATION_NONE, "An error occured while writing the package output. It may be incorrect.");
+	}
 	return true;
 }
