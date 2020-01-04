@@ -8,8 +8,14 @@ static bool location_after(Location a, Location b) { /* a is after b? */
 	return a.pos > b.pos;
 }
 
+static Location const LOCATION_NONE = {0};
+
 /* for debugging */
 static void fprint_location(FILE *out, Location location) {
+	if (!location.ctx) {
+		fprintf(out, "No location available.");
+		return;
+	}
 	char *str = location.ctx->str + location.pos;
 	char *newline = strchr(str, '\n');
 	if (newline) *newline = 0;

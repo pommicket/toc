@@ -69,13 +69,11 @@ typedef double F64;
 
 typedef U32 IdentID; /* identifier ID for cgen (anonymous variables). not to be confused with IdentTree.id */
 
-#define join(a,b) a##b
-
 /* for keeping track of whence something came */
 #ifdef TOC_DEBUG
 #define SOURCE_LOCATION char *src_file; int src_line;
 #define SOURCE_LOCATION_PARAMS char *src_file, int src_line,
-#define DEBUG_UNDERSCORE(x) join(x,_)
+#define DEBUG_UNDERSCORE(x) JOIN(x,_)
 #else
 #define SOURCE_LOCATION
 #define SOURCE_LOCATION_PARAMS
@@ -547,6 +545,7 @@ typedef struct EachExpr {
 	};
 } EachExpr;
 
+
 typedef struct FnExpr {
     struct Declaration *params; /* declarations of the parameters to this function */
     struct Declaration *ret_decls; /* array of decls, if this has named return values. otherwise, NULL */
@@ -556,6 +555,11 @@ typedef struct FnExpr {
 							the first element is a u64 value whose ith bit (1<<i) is 1
 							if the ith semi-constant parameter is constant.
 						 */
+	struct {
+		U32 id; /* (index of function in ex->exported_fns) + 1, 
+				   or 0 if this function has not been
+				   added to the exporting array yet */
+	} export;
 	struct {
 		/* if name = NULL, this is an anonymous function, and id will be the ID of the fn. */
 		Identifier name;
@@ -669,7 +673,7 @@ enum {
 	  DECL_EXPORT = 0x0200
 };
 
-typedef U32 DeclFlags;
+typedef U16 DeclFlags;
 
 /* OPTIM: Instead of using dynamic arrays, do two passes. */
 typedef struct Declaration {
@@ -691,7 +695,7 @@ enum {
 	  RET_HAS_EXPR = 0x01,
 };
 typedef struct Return {
-	U16 flags;
+	U8 flags; /* if this changes, go to package.c */
 	Expression expr;
 } Return;
 
@@ -745,9 +749,15 @@ typedef struct Typer {
 	FnExpr *fn; /* the function we're currently parsing. */
 } Typer;
 
+typedef struct {
+	FnExpr *fn;
+	Location where;
+} FnWithLocation;
+
 typedef struct Exporter {
 	FILE *out; /* .top (toc package) to output to */
 	bool export_locations;
+    FnWithLocation *exported_fns;
 } Exporter;
 
 typedef struct CGenerator {

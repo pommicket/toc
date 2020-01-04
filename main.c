@@ -122,10 +122,12 @@ int main(int argc, char **argv) {
 	evalr_create(&ev, &tr, &main_allocr);
 	typer_create(&tr, &ev, &main_allocr);
 	tr.exptr = &exptr;
-
+	
 #ifdef TOC_DEBUG
 	FILE *out_pkg = fopen("out.top", "wb");
 	exptr_create(&exptr, out_pkg);
+	exptr.export_locations = false;
+	
 #endif
 	if (!block_enter(NULL, f.stmts, SCOPE_CHECK_REDECL)) /* enter global scope */
 		return false;
@@ -136,6 +138,15 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 #ifdef TOC_DEBUG
+	if (!exptr_finish(&exptr)) {
+		fclose(out_pkg);
+		err_fprint(TEXT_IMPORTANT("Errors occured while exporting things.\n"));
+		return EXIT_FAILURE;
+	}
+	fclose(out_pkg);
+#endif
+#ifdef TOC_DEBUG
+	printf("\n\n");	
 	fprint_parsed_file(stdout, &f);
 #endif
 	FILE *out = fopen(out_filename, "w");
@@ -158,9 +169,6 @@ int main(int argc, char **argv) {
 	evalr_free(&ev);
 	
 	fclose(out);
-#ifdef TOC_DEBUG
-	fclose(out_pkg);
-#endif
 	idents_free(&file_idents);
 	return 0;
 }

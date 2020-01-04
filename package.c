@@ -3,10 +3,16 @@
   This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
+static bool export_decl(Exporter *ex, Declaration *d);
+static bool export_block(Exporter *ex, Block *b);
+
+
 static void exptr_create(Exporter *exptr, FILE *out) {
 	exptr->out = out;
 	exptr->export_locations = true;
+	exptr->exported_fns = NULL;
 }
+
 
 static void export_u8(Exporter *ex, U8 u8) {
 	write_u8(ex->out, u8);
@@ -63,13 +69,30 @@ static void export_ident(Exporter *ex, Identifier i) {
 	}
 }
 
+static bool export_len8(Exporter *ex, size_t len, const char *for_, Location where) {
+	if (len > U8_MAX) {
+		err_print(where, "Too many %s (the maximum is " STRINGIFY(U8_MAX) ").", for_);
+		return false;
+	}
+	export_u8(ex, (U8)len);
+	return true;
+}
 
 static bool export_len16(Exporter *ex, size_t len, const char *for_, Location where) {
-	if (len > 65535) {
-		err_print(where, "Too many %s (the maximum is 65535).", for_);
+	if (len > U16_MAX) {
+		err_print(where, "Too many %s (the maximum is " STRINGIFY(U16_MAX) ").", for_);
 		return false;
 	}
 	export_u16(ex, (U16)len);
+	return true;
+}
+
+static bool export_len32(Exporter *ex, size_t len, const char *for_, Location where) {
+	if (len > U32_MAX) {
+		err_print(where, "Too many %s (the maximum is " STRINGIFY(U32_MAX) ").", for_);
+		return false;
+	}
+	export_u32(ex, (U32)len);
 	return true;
 }
 
@@ -98,10 +121,36 @@ static bool export_type(Exporter *ex, Type *type, Location where) {
 		if (!export_type(ex, type->arr.of, where))
 			return false;
 		break;
+	case TYPE_FN:
+		if (!export_len16(ex, arr_len(type->fn.types), "types in a function type", where))
+			return false;
+		arr_foreach(type->fn.types, Type, sub)
+			if (!export_type(ex, sub, where))
+				return false;
+		export_u8(ex, type->fn.constness != NULL);
+		/* [implied] if (type->fn.constness) */
+		assert(sizeof(Constness) == 1); /* future-proofing */
+		arr_foreach(type->fn.constness, Constness, c)
+			export_u8(ex, *c);
+		break;
 	case TYPE_EXPR:
 		assert(0);
 		return false;
 	}
+	return true;
+}
+
+static bool export_fn_ptr(Exporter *ex, FnExpr *f, Location where) {
+	if (f->export.id == 0) {
+		FnWithLocation *floc = arr_add(&ex->exported_fns);
+		floc->fn = f;
+		floc->where = where;
+		if (arr_len(ex->exported_fns) > U32_MAX) {
+			err_print(where, "Too many exported functions (the maximum is " STRINGIFY(U32_MAX) ").");
+		}
+		f->export.id = (U32)arr_len(ex->exported_fns);
+	}
+	export_u32(ex, f->export.id);
 	return true;
 }
 
@@ -168,6 +217,10 @@ static bool export_val_ptr(Exporter *ex, void *val, Type *type, Location where) 
 			ptr += item_size;
 		}
 	} break;
+	case TYPE_FN:
+		if (!export_fn_ptr(ex, *(FnExpr **)val, where))
+			return false;
+		break;
 	case TYPE_UNKNOWN:
 	case TYPE_EXPR:
 		assert(0);
@@ -237,6 +290,22 @@ static bool export_expr(Exporter *ex, Expression *e) {
 		if (!export_type(ex, &e->typeval, e->where))
 			return false;
 		break;
+	case EXPR_FN:
+		if (!export_fn_ptr(ex, e->fn, e->where))
+			return false;
+		break;
+	case EXPR_BLOCK:
+		if (!export_block(ex, &e->block))
+			return false;
+		break;
+	case EXPR_NEW:
+		if (!export_type(ex, &e->new.type, e->where))
+			return false;
+		export_u8(ex, e->new.n != NULL);
+		if (e->new.n)
+			if (!export_expr(ex, e->new.n))
+				return false;
+		break;
 	case EXPR_DSIZEOF:
 	case EXPR_DALIGNOF:
 		assert(0);
@@ -283,6 +352,72 @@ static bool export_decl(Exporter *ex, Declaration *d) {
 			return false;
 	} else if (expr_kind == DECL_EXPORT_VAL) {
 		if (!export_val(ex, d->val, &d->type, d->where))
+			return false;
+	}
+	return true;
+}
+
+static bool export_stmt(Exporter *ex, Statement *s) {
+	export_u8(ex, (U8)s->kind);
+	switch (s->kind) {
+	case STMT_EXPR:
+		if (!export_expr(ex, &s->expr))
+			return false;
+		break;
+	case STMT_DECL:
+		if (!export_decl(ex, &s->decl))
+			return false;
+		break;
+	case STMT_RET:
+		assert(sizeof s->ret.flags == 1);
+		export_u8(ex, (U8)s->ret.flags);
+		if (s->ret.flags & RET_HAS_EXPR)
+			if (!export_expr(ex, &s->ret.expr))
+				return false;
+		break;
+	}
+	return true;
+}
+
+static bool export_block(Exporter *ex, Block *b) {
+	export_location(ex, b->start);
+	export_location(ex, b->end);
+	if (!export_len32(ex, arr_len(b->stmts), "statements in a block", b->start))
+		return false;
+	arr_foreach(b->stmts, Statement, s) {
+		if (!export_stmt(ex, s))
+			return false;
+	}
+	export_u8(ex, b->ret_expr != NULL);
+	if (b->ret_expr)
+		if (!export_expr(ex, b->ret_expr))
+			return false;
+	return true;
+}
+
+static bool export_fn(Exporter *ex, FnExpr *f, Location where) {
+	if (!export_len16(ex, arr_len(f->params), "parameters in a function", where))
+		return false;
+	arr_foreach(f->params, Declaration, param)
+		if (!export_decl(ex, param))
+			return false;
+	if (!export_len8(ex, arr_len(f->ret_decls), "return declarations", where))
+		return false;
+	arr_foreach(f->ret_decls, Declaration, ret_decl)
+		if (!export_decl(ex, ret_decl))
+			return false;
+	/* no need to export the return type */
+	if (!export_block(ex, &f->body))
+		return false;
+	return true;
+}
+
+/* does NOT close the file */
+static bool exptr_finish(Exporter *ex) {
+	if (!export_len32(ex, arr_len(ex->exported_fns), "exported functions", LOCATION_NONE))
+		return false;
+	arr_foreach(ex->exported_fns, FnWithLocation, f) {
+		if (!export_fn(ex, f->fn, f->where))
 			return false;
 	}
 	return true;

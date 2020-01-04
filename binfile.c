@@ -15,6 +15,7 @@ static inline void write_u8(FILE *fp, U8 u8) {
 		col = 0;
 		printf("\n");
 	}
+	fflush(stdout);
 #endif
 }
 

@@ -1,2 +1,4 @@
-#export asdf ::= int;
-#export ghjk := #sizeof(asdf);
+#export main ::= fn() int {
+		{3}
+};
+// #export ghjk := #sizeof(asdf);

@@ -1819,10 +1819,13 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 	return true;
 }
 
-/* does NOT call cgen_expr_pre for ret. */
 static bool cgen_ret(CGenerator *g, Expression *ret) {
 	assert((g->fn->ret_type.kind == TYPE_VOID) == (ret == NULL));
-	if (ret) assert(type_eq(&g->fn->ret_type, &ret->type));
+	if (ret) {
+		assert(type_eq(&g->fn->ret_type, &ret->type));
+		if (!cgen_expr_pre(g, ret))
+			return false;
+	}
 	if (!ret) {
 		cgen_write(g, "return");
 	} else if (cgen_uses_ptr(&g->fn->ret_type)) {
@@ -1835,7 +1838,6 @@ static bool cgen_ret(CGenerator *g, Expression *ret) {
 		cgen_write(g, " return");
 	} else {
 		cgen_write(g, "return ");
-			
 		if (!cgen_expr(g, ret)) return false;
 	}
 	cgen_write(g, ";");
@@ -1862,10 +1864,6 @@ static bool cgen_stmt(CGenerator *g, Statement *s) {
 		break;
 	case STMT_RET: {
 		unsigned has_expr = s->ret.flags & RET_HAS_EXPR;
-		if (has_expr) {
-			if (!cgen_expr_pre(g, &s->ret.expr))
-				return false;
-		}
 		if (!cgen_ret(g, has_expr ? &s->ret.expr : NULL))
 			return false;
 	} break;

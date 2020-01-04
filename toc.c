@@ -31,12 +31,19 @@
 /* forward declarations for debugging */
 static void print_val(Value v, Type *t);
 
+
+/* misc */
+#define JOIN(a,b) a##b
+#define STRINGIFY2(x) #x
+#define STRINGIFY(x) STRINGIFY2(x)
+
 static void fprint_char_literal(FILE *f, char c) {
 	if (isprint(c))
 		fprintf(f, "'%c'", c);
 	else
 		fprintf(f, "'\\x%02x'", c);
 }
+
 
 
 /* utilities */

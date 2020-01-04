@@ -55,6 +55,8 @@ static void err_vfprint(const char *fmt, va_list args) {
 }
 
 static void err_print_header_(Location where) {
+	if (!where.ctx)
+		err_fprint("Error (no location available):\n");
 #if ERR_EMACS
 	err_fprint("%s:%lu: " TEXT_ERROR("error") ":\n", where.ctx->filename, (unsigned long)where.line);
 #else
@@ -63,6 +65,8 @@ static void err_print_header_(Location where) {
 }
 
 static void info_print_header_(Location where) {
+	if (!where.ctx)
+		err_fprint("Info (no location available):\n");
 #if ERR_EMACS
 	err_fprint("%s:%lu: " TEXT_INFO("info") ":\n", where.ctx->filename, (unsigned long)where.line);
 #else
@@ -71,6 +75,8 @@ static void info_print_header_(Location where) {
 }
 
 static void warn_print_header_(Location where) {
+	if (!where.ctx)
+		err_fprint("Warning (no location available):\n");
 #if ERR_EMACS
 	err_fprint("%s:%lu: " TEXT_WARN("warning") ":\n", where.ctx->filename, (unsigned long)where.line);
 #else

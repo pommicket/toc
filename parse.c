@@ -1021,7 +1021,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			e->kind = EXPR_FN;
 			if (!parse_fn_expr(p, e->fn = parser_malloc(p, sizeof *e->fn)))
 				return false;
-			
+			e->fn->export.id = 0;
 			if (t->token != end) {
 				if (token_is_kw(t->token, KW_LPAREN))
 					tokr_err(t, "Direct function calling in an expression is not supported.\nYou can wrap the function in parentheses.");
