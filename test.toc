@@ -2,17 +2,10 @@ Foo ::= struct {
 	x: u8;
 };
 #export main ::= fn() Foo {
-		g ::= fn() int { 3 };
-
-		f: Foo;
-		if f.x == 0 {
-		   f.x = g() as u8;
-		} elif f.x == 1 {
-		  f.x = 2;
-		} elif f.x == 3 {
-		  f.x = 17;
-		} else {
-		  f.x = 112;
-		}
-		f
+	g ::= fn() int { 3 };
+	a : [3]int;
+	b := a[1:3];
+	b[0] = 7;
+	f: Foo;
+	f
 };

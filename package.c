@@ -5,7 +5,7 @@
 */
 static bool export_decl(Exporter *ex, Declaration *d);
 static bool export_block(Exporter *ex, Block *b);
-
+static bool export_expr(Exporter *ex, Expression *e);
 
 static void exptr_create(Exporter *ex, FILE *out) {
 	ex->out = out;
@@ -223,6 +223,16 @@ static bool export_val(Exporter *ex, Value val, Type *type, Location where) {
 	return export_val_ptr(ex, val_get_ptr(&val, type), type, where);
 }
 
+/* e can be NULL! */
+static inline bool export_optional_expr(Exporter *ex, Expression *e) {
+	bool has_e = e != NULL;
+	export_bool(ex, has_e);
+	if (has_e)
+		return export_expr(ex, e);
+	else
+		return true;
+}
+
 static bool export_expr(Exporter *ex, Expression *e) {
 	assert(e->flags & EXPR_FOUND_TYPE);
 	if (!export_type(ex, &e->type, e->where))
@@ -303,11 +313,8 @@ static bool export_expr(Exporter *ex, Expression *e) {
 	case EXPR_NEW:
 		if (!export_type(ex, &e->new.type, e->where))
 			return false;
-		bool has_n = e->new.n != NULL;
-		export_bool(ex, has_n);
-		if (has_n)
-			if (!export_expr(ex, e->new.n))
-				return false;
+		if (!export_optional_expr(ex, e->new.n))
+			return false;
 		break;
 	case EXPR_CAST:
 		if (!export_expr(ex, e->cast.expr)
@@ -325,17 +332,26 @@ static bool export_expr(Exporter *ex, Expression *e) {
 	} break;
 	case EXPR_IF: {
 		IfExpr *i = &e->if_;
-		bool has_cond = i->cond != NULL;
-		export_bool(ex, has_cond);
-		if (has_cond) {
-			if (!export_expr(ex, i->cond))
-				return false;
-		}
+		if (!export_optional_expr(ex, i->cond))
+			return false;
 		if (!export_block(ex, &i->body)) return false;
-		bool has_next = i->next_elif != NULL;
-		if (has_next)
-			if (!export_expr(ex, i->next_elif))
-				return false;
+		if (!export_optional_expr(ex, i->next_elif))
+			return false;
+	} break;
+	case EXPR_WHILE: {
+		WhileExpr *w = &e->while_;
+		if (!export_optional_expr(ex, w->cond))
+			return false;
+		if (!export_block(ex, &w->body))
+			return false;
+	} break;
+	case EXPR_SLICE: {
+		SliceExpr *s = &e->slice;
+		if (!export_expr(ex, s->of)) return false;
+		if (!export_optional_expr(ex, s->from))
+			return false;
+		if (!export_optional_expr(ex, s->to))
+			return false;
 	} break;
 	case EXPR_DSIZEOF:
 	case EXPR_DALIGNOF:
@@ -417,11 +433,8 @@ static bool export_block(Exporter *ex, Block *b) {
 		if (!export_stmt(ex, s))
 			return false;
 	}
-	bool has_ret_expr = b->ret_expr != NULL;
-	export_bool(ex, has_ret_expr);
-	if (has_ret_expr)
-		if (!export_expr(ex, b->ret_expr))
-			return false;
+	if (!export_optional_expr(ex, b->ret_expr))
+		return false;
 	return true;
 }
 

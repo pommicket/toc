@@ -1284,7 +1284,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				if (!infer_ident_vals(tr, decl_types, arg_types, inferred_idents, inferred_vals, inferred_types))
 					return false;
 
-				allocr_free(tr->allocr, inferred_idents, ninferred_idents * sizeof *inferred_idents);
+				arr_cleara(&inferred_idents, tr->allocr);
 				
 				{
 					Type *type = inferred_types;

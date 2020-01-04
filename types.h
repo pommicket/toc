@@ -590,9 +590,9 @@ typedef struct NewExpr {
 } NewExpr;
 
 typedef struct SliceExpr {
-	struct Expression *of;
-	struct Expression *from;
-	struct Expression *to;
+	struct Expression *of; /* required */
+	struct Expression *from; /* optional */
+	struct Expression *to; /* optional */
 	struct {
 		IdentID id;
 	} c;
