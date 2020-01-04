@@ -156,3 +156,12 @@ static void write_bool(FILE *fp, bool b) {
 static void write_char(FILE *fp, char c) {
 	write_u8(fp, (U8)c);
 }
+
+
+static void write_vlq(FILE *fp, U64 x) {
+	while (x >= 0x80) {
+		write_u8(fp, (U8)(x & 0x7f) | 0x80);
+		x >>= 7;
+	}
+    write_u8(fp, (U8)x);
+}

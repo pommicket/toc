@@ -580,8 +580,8 @@ typedef struct Instance {
 } Instance;
 
 typedef struct CastExpr {
-	Type type;
 	struct Expression *expr;
+	Type type;
 } CastExpr;
 
 typedef struct NewExpr {

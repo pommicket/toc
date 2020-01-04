@@ -15,65 +15,60 @@ static void exptr_create(Exporter *ex, FILE *out) {
 }
 
 
-static void export_u8(Exporter *ex, U8 u8) {
+static inline void export_u8(Exporter *ex, U8 u8) {
 	write_u8(ex->out, u8);
 }
-static void export_i8(Exporter *ex, I8 i8) {
+static inline void export_i8(Exporter *ex, I8 i8) {
 	write_i8(ex->out, i8);
 }
-static void export_u16(Exporter *ex, U16 u16) {
+static inline void export_u16(Exporter *ex, U16 u16) {
 	write_u16(ex->out, u16);
 }
-static void export_i16(Exporter *ex, I16 i16) {
+static inline void export_i16(Exporter *ex, I16 i16) {
 	write_i16(ex->out, i16);
 }
-static void export_u32(Exporter *ex, U32 u32) {
+static inline void export_u32(Exporter *ex, U32 u32) {
 	write_u32(ex->out, u32);
 }
-static void export_i32(Exporter *ex, I32 i32) {
+static inline void export_i32(Exporter *ex, I32 i32) {
 	write_i32(ex->out, i32);
 }
-static void export_u64(Exporter *ex, U64 u64) {
+static inline void export_u64(Exporter *ex, U64 u64) {
 	write_u64(ex->out, u64);
 }
-static void export_i64(Exporter *ex, I64 i64) {
+static inline void export_i64(Exporter *ex, I64 i64) {
 	write_i64(ex->out, i64);
 }
-static void export_f32(Exporter *ex, F32 f32) {
+static inline void export_f32(Exporter *ex, F32 f32) {
 	write_f32(ex->out, f32);
 }
-static void export_f64(Exporter *ex, F64 f64) {
+static inline void export_f64(Exporter *ex, F64 f64) {
 	write_f64(ex->out, f64);
 }
-static void export_bool(Exporter *ex, bool b) {
+static inline void export_bool(Exporter *ex, bool b) {
 	write_bool(ex->out, b);
 }
-static void export_char(Exporter *ex, char c) {
+static inline void export_char(Exporter *ex, char c) {
 	write_char(ex->out, c);
 }
-
+static inline void export_vlq(Exporter *ex, U64 x) {
+	write_vlq(ex->out, x);
+}
 
 static void export_location(Exporter *ex, Location where) {
 	if (ex->export_locations) {
-		export_u32(ex, where.line);
-		export_u32(ex, where.pos);
+		export_vlq(ex, (U64)where.line);
+		export_vlq(ex, (U64)where.pos);
 	}
 }
 
-static void export_ident(Exporter *ex, Identifier i) {
+static inline void export_ident(Exporter *ex, Identifier i) {
 	assert(i->id);
-	if (sizeof i->id == 8) {
-		export_u64(ex, (U64)i->id);
-	} else {
-		assert(sizeof i->id == 4);
-		export_u32(ex, (U32)i->id);
-	}
+	export_vlq(ex, (U64)i->id);
 }
 
-/* TODO: replace with vlq */
-static bool export_len(Exporter *ex, size_t len) {
-	export_u64(ex, (U64)len);
-	return true;
+static inline void export_len(Exporter *ex, size_t len) {
+	export_vlq(ex, (U64)len);
 }
 
 static bool export_type(Exporter *ex, Type *type, Location where) {
@@ -96,7 +91,8 @@ static bool export_type(Exporter *ex, Type *type, Location where) {
 				return false;
 		break;
 	case TYPE_ARR:
-		export_u64(ex, type->arr.n);
+		/* smaller arrays are more common */
+		export_vlq(ex, type->arr.n);
 		if (!export_type(ex, type->arr.of, where))
 			return false;
 		break;
@@ -233,7 +229,8 @@ static bool export_expr(Exporter *ex, Expression *e) {
 		return false;
 	switch (e->kind) {
 	case EXPR_LITERAL_INT:
-		export_u64(ex, e->intl);
+		/* smaller int literals are more common */
+		export_vlq(ex, e->intl);
 		break;
 	case EXPR_LITERAL_FLOAT:
 		if (e->type.builtin == BUILTIN_F32)
@@ -310,6 +307,11 @@ static bool export_expr(Exporter *ex, Expression *e) {
 		if (e->new.n)
 			if (!export_expr(ex, e->new.n))
 				return false;
+		break;
+	case EXPR_CAST:
+		if (!export_expr(ex, e->cast.expr)
+			|| !export_type(ex, &e->cast.type, e->where))
+			return false;
 		break;
 	case EXPR_DSIZEOF:
 	case EXPR_DALIGNOF:

@@ -1,12 +1,8 @@
-
 Foo ::= struct {
-	x: int;
+	x: u8;
 };
-
 #export main ::= fn() Foo {
 		f: Foo;
-		f.x = 13;
+		f.x = 13 as u8;
 		f
 };
-
-// #export ghjk := #sizeof(asdf);
