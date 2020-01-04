@@ -33,7 +33,6 @@ static void print_val(Value v, Type *t);
 
 
 /* misc */
-#define JOIN(a,b) a##b
 #define STRINGIFY2(x) #x
 #define STRINGIFY(x) STRINGIFY2(x)
 

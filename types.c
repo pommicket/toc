@@ -1930,7 +1930,8 @@ static bool types_block(Typer *tr, Block *b) {
 					success = false;
 					goto ret;
 				}
-				b->ret_expr = e;
+				b->ret_expr = typer_malloc(tr, sizeof *b->ret_expr);
+				*b->ret_expr = *e;
 				arr_remove_lasta(&b->stmts, tr->allocr);
 			}
 		}

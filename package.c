@@ -7,10 +7,11 @@ static bool export_decl(Exporter *ex, Declaration *d);
 static bool export_block(Exporter *ex, Block *b);
 
 
-static void exptr_create(Exporter *exptr, FILE *out) {
-	exptr->out = out;
-	exptr->export_locations = true;
-	exptr->exported_fns = NULL;
+static void exptr_create(Exporter *ex, FILE *out) {
+	ex->out = out;
+	ex->export_locations = true;
+	ex->exported_fns = NULL;
+	ex->exported_structs = NULL;
 }
 
 
@@ -412,6 +413,15 @@ static bool export_fn(Exporter *ex, FnExpr *f, Location where) {
 	return true;
 }
 
+static bool export_struct(Exporter *ex, StructDef *s, Location where) {
+	arr_foreach(s->fields, Field, f) {
+		export_ident(ex, f->name);
+		if (!export_type(ex, f->type, where))
+			return false;
+	}
+	return true;
+}
+
 /* does NOT close the file */
 static bool exptr_finish(Exporter *ex) {
 	if (!export_len32(ex, arr_len(ex->exported_fns), "exported functions", LOCATION_NONE))
@@ -420,5 +430,11 @@ static bool exptr_finish(Exporter *ex) {
 		if (!export_fn(ex, f->fn, f->where))
 			return false;
 	}
+	arr_clear(&ex->exported_fns);
+	arr_foreach(ex->exported_structs, StructDefWithLocation, s) {
+		if (!export_struct(ex, s->struc, s->where))
+			return false;
+	}
+	arr_clear(&ex->exported_structs);
 	return true;
 }

@@ -73,7 +73,7 @@ typedef U32 IdentID; /* identifier ID for cgen (anonymous variables). not to be 
 #ifdef TOC_DEBUG
 #define SOURCE_LOCATION char *src_file; int src_line;
 #define SOURCE_LOCATION_PARAMS char *src_file, int src_line,
-#define DEBUG_UNDERSCORE(x) JOIN(x,_)
+#define DEBUG_UNDERSCORE(x) x##_
 #else
 #define SOURCE_LOCATION
 #define SOURCE_LOCATION_PARAMS
@@ -754,10 +754,16 @@ typedef struct {
 	Location where;
 } FnWithLocation;
 
+typedef struct {
+	StructDef *struc;
+	Location where;
+} StructDefWithLocation;
+
 typedef struct Exporter {
 	FILE *out; /* .top (toc package) to output to */
 	bool export_locations;
     FnWithLocation *exported_fns;
+	StructDefWithLocation *exported_structs;
 } Exporter;
 
 typedef struct CGenerator {
