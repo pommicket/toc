@@ -527,7 +527,7 @@ enum {
 };
 
 typedef struct EachExpr {
-	U16 flags;
+	U8 flags;
 	struct {
 		IdentID id;
 	} c;

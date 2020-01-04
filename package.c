@@ -67,6 +67,14 @@ static inline void export_ident(Exporter *ex, Identifier i) {
 	export_vlq(ex, (U64)i->id);
 }
 
+static inline void export_optional_ident(Exporter *ex, Identifier i) {
+	bool has_i = i != NULL;
+	export_bool(ex, has_i);
+	if (has_i) {
+		export_ident(ex, i);
+	}
+}
+
 static inline void export_len(Exporter *ex, size_t len) {
 	export_vlq(ex, (U64)len);
 }
@@ -219,8 +227,18 @@ static bool export_val_ptr(Exporter *ex, void *val, Type *type, Location where) 
 	return true;
 }
 
-static bool export_val(Exporter *ex, Value val, Type *type, Location where) {
+static inline bool export_val(Exporter *ex, Value val, Type *type, Location where) {
 	return export_val_ptr(ex, val_get_ptr(&val, type), type, where);
+}
+
+static inline bool export_optional_val(Exporter *ex, Value *val, Type *type, Location where) {
+	bool has_val = val != NULL;
+	export_bool(ex, has_val);
+	if (has_val) {
+		return export_val(ex, *val, type, where);
+	} else {
+		return true;
+	}
 }
 
 /* e can be NULL! */
@@ -351,6 +369,29 @@ static bool export_expr(Exporter *ex, Expression *e) {
 		if (!export_optional_expr(ex, s->from))
 			return false;
 		if (!export_optional_expr(ex, s->to))
+			return false;
+	} break;
+	case EXPR_EACH: {
+		EachExpr *ea = e->each;
+		export_u8(ex, ea->flags);
+		if (!export_type(ex, &ea->type, e->where))
+			return false;
+		export_optional_ident(ex, ea->index);
+		export_optional_ident(ex, ea->value);
+		
+		if (ea->flags & EACH_IS_RANGE) {
+			if (!export_expr(ex, ea->range.from))
+				return false;
+			if (!export_optional_expr(ex, ea->range.to))
+				return false;
+			if (!export_optional_val(ex, ea->range.stepval, &ea->type, e->where))
+				return false;
+		} else {
+			if (!export_expr(ex, ea->of))
+				return false;
+		}
+		
+		if (!export_block(ex, &ea->body))
 			return false;
 	} break;
 	case EXPR_DSIZEOF:

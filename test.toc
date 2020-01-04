@@ -1,5 +1,5 @@
 Foo ::= struct {
-	x: u8;
+	x: int;
 };
 #export main ::= fn() Foo {
 	g ::= fn() int { 3 };
@@ -7,5 +7,12 @@ Foo ::= struct {
 	b := a[1:3];
 	b[0] = 7;
 	f: Foo;
+	each i, j := b {
+		 f.x += i + j;
+	}
+	each k := 10..100 {
+		 f.x += k;
+	}
+	
 	f
 };
