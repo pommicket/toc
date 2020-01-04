@@ -1058,6 +1058,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			if (curr->next_elif) {
 				IfExpr *nexti = &curr->next_elif->if_;
 				Type *next_type = &curr->next_elif->type;
+				curr->next_elif->flags |= EXPR_FOUND_TYPE;
 			    if (!types_block(tr, &nexti->body)) {
 					return false;
 				}

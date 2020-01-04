@@ -101,7 +101,7 @@ static bool export_type(Exporter *ex, Type *type, Location where) {
 		arr_foreach(type->fn.types, Type, sub)
 			if (!export_type(ex, sub, where))
 				return false;
-		export_u8(ex, type->fn.constness != NULL);
+		export_bool(ex, type->fn.constness != NULL);
 		/* [implied] if (type->fn.constness) */
 		assert(sizeof(Constness) == 1); /* future-proofing */
 		arr_foreach(type->fn.constness, Constness, c)
@@ -267,13 +267,13 @@ static bool export_expr(Exporter *ex, Expression *e) {
 		if (e->binary.op == BINARY_DOT) {
 			/* rhs may not typed (if it's a string it will be)! */
 			Expression *rhs = e->binary.rhs;
-			if (!(rhs->flags & EXPR_FOUND_TYPE)) {
-				export_u8(ex, 0);
+			bool rhs_found_type = (rhs->flags & EXPR_FOUND_TYPE) != 0;
+			export_bool(ex, rhs_found_type);
+			if (!rhs_found_type) {
 				assert(rhs->kind == EXPR_IDENT);
 				export_ident(ex, rhs->ident);
 				break;
-			} else 
-				export_u8(ex, 1);
+			}
 		}
 		if (!export_expr(ex, e->binary.rhs))
 			return false;
@@ -303,8 +303,9 @@ static bool export_expr(Exporter *ex, Expression *e) {
 	case EXPR_NEW:
 		if (!export_type(ex, &e->new.type, e->where))
 			return false;
-		export_u8(ex, e->new.n != NULL);
-		if (e->new.n)
+		bool has_n = e->new.n != NULL;
+		export_bool(ex, has_n);
+		if (has_n)
 			if (!export_expr(ex, e->new.n))
 				return false;
 		break;
@@ -313,6 +314,29 @@ static bool export_expr(Exporter *ex, Expression *e) {
 			|| !export_type(ex, &e->cast.type, e->where))
 			return false;
 		break;
+	case EXPR_CALL: {
+		CallExpr *c = &e->call;
+		if (!export_expr(ex, c->fn))
+			return false;
+		export_len(ex, arr_len(c->arg_exprs));
+		arr_foreach(c->arg_exprs, Expression, arg)
+			if (!export_expr(ex, arg))
+				return false;
+	} break;
+	case EXPR_IF: {
+		IfExpr *i = &e->if_;
+		bool has_cond = i->cond != NULL;
+		export_bool(ex, has_cond);
+		if (has_cond) {
+			if (!export_expr(ex, i->cond))
+				return false;
+		}
+		if (!export_block(ex, &i->body)) return false;
+		bool has_next = i->next_elif != NULL;
+		if (has_next)
+			if (!export_expr(ex, i->next_elif))
+				return false;
+	} break;
 	case EXPR_DSIZEOF:
 	case EXPR_DALIGNOF:
 		assert(0);
@@ -393,8 +417,9 @@ static bool export_block(Exporter *ex, Block *b) {
 		if (!export_stmt(ex, s))
 			return false;
 	}
-	export_u8(ex, b->ret_expr != NULL);
-	if (b->ret_expr)
+	bool has_ret_expr = b->ret_expr != NULL;
+	export_bool(ex, has_ret_expr);
+	if (has_ret_expr)
 		if (!export_expr(ex, b->ret_expr))
 			return false;
 	return true;
