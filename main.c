@@ -126,7 +126,9 @@ int main(int argc, char **argv) {
 	FILE *out_pkg = fopen("out.top", "wb");
 	exptr_create(&exptr, out_pkg);
 	exptr.export_locations = false;
-	
+	exptr_start(&exptr, contents);
+	/* export_len(&exptr, 1782); */
+	/* export_u8(&exptr, 0xab); */
 #endif
 	if (!block_enter(NULL, f.stmts, SCOPE_CHECK_REDECL)) /* enter global scope */
 		return false;

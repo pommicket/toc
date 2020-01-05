@@ -3,17 +3,12 @@
   This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
+
+#define TOP_FMT_VERSION 0
+
 static bool export_decl(Exporter *ex, Declaration *d);
 static bool export_block(Exporter *ex, Block *b);
 static bool export_expr(Exporter *ex, Expression *e);
-
-static void exptr_create(Exporter *ex, FILE *out) {
-	ex->out = out;
-	ex->export_locations = true;
-	ex->exported_fns = NULL;
-	ex->exported_structs = NULL;
-}
-
 
 static inline void export_u8(Exporter *ex, U8 u8) {
 	write_u8(ex->out, u8);
@@ -54,6 +49,15 @@ static inline void export_char(Exporter *ex, char c) {
 static inline void export_vlq(Exporter *ex, U64 x) {
 	write_vlq(ex->out, x);
 }
+/* since char may be signed or unsigned, use this only if necessary */
+static inline void export_str(Exporter *ex, const char *str, size_t len) {
+#ifdef TOC_DEBUG
+	for (size_t i = 0; i < len; ++i)
+		export_char(ex, *str++);
+#else
+	fwrite(str, 1, len, ex->out);
+#endif
+}
 
 static void export_location(Exporter *ex, Location where) {
 	if (ex->export_locations) {
@@ -77,6 +81,29 @@ static inline void export_optional_ident(Exporter *ex, Identifier i) {
 
 static inline void export_len(Exporter *ex, size_t len) {
 	export_vlq(ex, (U64)len);
+}
+
+static void exptr_create(Exporter *ex, FILE *out) {
+	ex->out = out;
+	ex->export_locations = true;
+	ex->exported_fns = NULL;
+	ex->exported_structs = NULL;
+}
+
+/* writes the header */
+static void exptr_start(Exporter *ex, char *code) {
+	const U8 toc[3] = {116, 111, 99}; /* "toc" in ASCII */
+	export_u8(ex, toc[0]);
+	export_u8(ex, toc[1]);
+	export_u8(ex, toc[2]);
+	export_u32(ex, TOP_FMT_VERSION);
+	bool has_code = code != NULL;
+	export_bool(ex, has_code);
+	if (has_code) {
+		size_t len = strlen(code);
+		export_len(ex, len);
+		export_str(ex, code, len);
+	}
 }
 
 static bool export_type(Exporter *ex, Type *type, Location where) {

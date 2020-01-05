@@ -19,6 +19,15 @@ static inline void write_u8(FILE *fp, U8 u8) {
 #endif
 }
 
+static void write_char(FILE *fp, char c) {
+#ifdef TOC_DEBUG
+	/* mayyybe this'd do the wrong thing for negative characters on systems where char is signed? */
+	write_u8(fp, (U8)c);
+#else
+	putc(c, fp);
+#endif
+}
+
 #undef BINFILE_PRINT /* don't need it anymore */
 
 static inline void write_i8(FILE *fp, I8 i8) {
@@ -153,11 +162,12 @@ static void write_bool(FILE *fp, bool b) {
 	write_u8(fp, b);
 }
 
-static void write_char(FILE *fp, char c) {
-	write_u8(fp, (U8)c);
-}
-
-
+/* 
+   toc's vlq format:
+   a byte whose first (most significant) bit is 0 indicates the number is done.
+   a byte whose first bit is 1 indicates the number will continue.
+   starts with the 7 least significant bits of the number.
+*/
 static void write_vlq(FILE *fp, U64 x) {
 	while (x >= 0x80) {
 		write_u8(fp, (U8)(x & 0x7f) | 0x80);
