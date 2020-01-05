@@ -472,7 +472,7 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where, U64 instanc
 	bool out_param = cgen_uses_ptr(&f->ret_type);
 	bool any_params = false;
 	assert(cgen_should_gen_fn(f));
-	if (!f->c.name) /* anonymous fn */
+	if (!f->export.id) /* local to this translation unit */
 		cgen_write(g, "static ");
 	if (out_param) {
 		cgen_write(g, "void ");
@@ -1062,8 +1062,17 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		cgen_write(g, "slice_ ");
 		cgen_ident_id(g, s_id);
 		cgen_write(g, "; { slice_ of__ = ");
-		if (!cgen_expr(g, s->of))
-			return false;
+		if (s->of->type.kind == TYPE_SLICE) {
+			if (!cgen_expr(g, s->of))
+				return false;
+		} else {
+			assert(s->of->type.kind == TYPE_ARR);
+			cgen_write(g, "mkslice_(");
+			if (!cgen_expr(g, s->of))
+				return false;
+			cgen_write(g, ", " U64_FMT, s->of->type.arr.n);
+			cgen_write(g, ")");
+		}
 		cgen_write(g, "; i64 ");
 		cgen_ident_id(g, from_id);
 		cgen_write(g, " = ");
@@ -1082,9 +1091,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		if (!cgen_type_post(g, e->type.slice, e->where))
 			return false;
 		cgen_write(g, ")(of__");
-		if (s->of->type.kind == TYPE_SLICE) {
-			cgen_write(g, ".data");
-		}
+		cgen_write(g, ".data");
 		cgen_write(g, ") + ");
 		cgen_ident_id(g, from_id);
 		cgen_write(g, "; ");
@@ -1291,7 +1298,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		case UNARY_NOT:
 			s = "!"; break;
 		case UNARY_DEL:
-			cgen_write(g, "free(");
+			cgen_write(g, "free_(");
 			if (!cgen_expr(g, e->unary.of))
 				return false;
 			if (of_type->kind == TYPE_SLICE)
@@ -1947,11 +1954,9 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 	g->fn = NULL;
 	g->file = f;
 	/* 
-	   TODO: to improve compile times, don't include stdlib.h
-	   (you can even get away with not including stdio.h with posix file descriptors)
+	   TODO: don't include stdio.h with posix file descriptors
 	*/
 	cgen_write(g, "#include <stdint.h>\n"
-			   "#include <stdlib.h>\n"
 			   "#include <stdio.h>\n"
 			   "typedef int8_t i8;\n"
 			   "typedef int16_t i16;\n"
@@ -1967,8 +1972,9 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 			   "typedef struct { void *data; i64 n; } slice_;\n"
 			   "#define false ((bool)0)\n"
 			   "#define true ((bool)1)\n"
-			   "static inline slice_ mkslice_(void *data, i64 n) { slice_ ret; ret.data = data; ret.n = n; return ret; }\n"
-			   "static void *e__calloc(size_t n, size_t sz) { void *ret = calloc(n, sz); if (!ret) { fprintf(stderr, \"Out of memory.\\n\"); abort(); } return ret; }\n\n\n");
+			   "static slice_ mkslice_(void *data, i64 n) { slice_ ret; ret.data = data; ret.n = n; return ret; }\n"
+			   "static void free_(void *data) { extern void free(void *data); free(data); }\n" /* don't introduce free to global namespace */
+			   "static void *e__calloc(size_t n, size_t sz) { extern void *calloc(size_t n, size_t size); extern void abort(void); void *ret = calloc(n, sz); if (!ret) { fprintf(stderr, \"Out of memory.\\n\"); abort(); } return ret; }\n\n\n");
 
 	if (!typedefs_file(g, f))
 		return false;
