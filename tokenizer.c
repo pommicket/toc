@@ -88,7 +88,7 @@ static void fprint_token(FILE *out, Token *t) {
 		break;
 	case TOKEN_IDENT:
 		fprintf(out, "identifier: %p: ", (void*)t->ident);
-		fprint_ident(out, t->ident);
+		fprint_ident_debug(out, t->ident);
 		break;
 	case TOKEN_LITERAL_NUM:
 		fprintf(out, "number: ");

@@ -10,6 +10,15 @@ static bool export_decl(Exporter *ex, Declaration *d);
 static bool export_block(Exporter *ex, Block *b);
 static bool export_expr(Exporter *ex, Expression *e);
 
+static void exptr_create(Exporter *ex, FILE *out) {
+	ex->out = out;
+	ex->ident_id = 0;
+	ex->export_locations = true;
+	ex->exported_fns = NULL;
+	ex->exported_structs = NULL;
+	ex->exported_idents = NULL;
+}
+
 static inline void export_u8(Exporter *ex, U8 u8) {
 	write_u8(ex->out, u8);
 }
@@ -67,8 +76,10 @@ static void export_location(Exporter *ex, Location where) {
 }
 
 static inline void export_ident(Exporter *ex, Identifier i) {
-	assert(i->id);
-	export_vlq(ex, (U64)i->id);
+	if (!i->export_id) {
+		i->export_id = ++ex->ident_id;
+	}
+	export_vlq(ex, i->export_id);
 }
 
 static inline void export_optional_ident(Exporter *ex, Identifier i) {
@@ -81,13 +92,6 @@ static inline void export_optional_ident(Exporter *ex, Identifier i) {
 
 static inline void export_len(Exporter *ex, size_t len) {
 	export_vlq(ex, (U64)len);
-}
-
-static void exptr_create(Exporter *ex, FILE *out) {
-	ex->out = out;
-	ex->export_locations = true;
-	ex->exported_fns = NULL;
-	ex->exported_structs = NULL;
 }
 
 /* writes the header */
@@ -440,6 +444,16 @@ static bool export_decl(Exporter *ex, Declaration *d) {
 		err_print(d->where, "Can't export declaration of unknown type.");
 		return false;
 	}
+	if (d->flags & DECL_EXPORT) {
+		arr_foreach(d->idents, Identifier, ident) {
+			if (!(*ident)->export_name) {
+				Identifier *iptr = arr_add(&ex->exported_idents);
+				*iptr = *ident;
+				(*ident)->export_name = true;
+			}
+		}
+	}
+	
 	export_location(ex, d->where);
 	export_len(ex, arr_len(d->idents));
 	arr_foreach(d->idents, Identifier, ident) {
@@ -533,6 +547,15 @@ static bool export_struct(Exporter *ex, StructDef *s) {
 
 /* does NOT close the file */
 static bool exptr_finish(Exporter *ex) {
+	export_len(ex, arr_len(ex->exported_idents));
+	arr_foreach(ex->exported_idents, Identifier, ident) {
+		Identifier i = *ident;
+		assert(i->export_name);
+		export_vlq(ex, i->export_id);
+		export_len(ex, ident_len(i));
+		fprint_ident(ex->out, i);
+	}
+	
 	export_len(ex, arr_len(ex->exported_fns));
 	typedef FnExpr *FnExprPtr;
 	arr_foreach(ex->exported_fns, FnExprPtr, f) {
@@ -551,5 +574,8 @@ static bool exptr_finish(Exporter *ex) {
 	if (ferror(ex->out)) {
 		warn_print(LOCATION_NONE, "An error occured while writing the package output. It may be incorrect.");
 	}
+
+	arr_clear(&ex->exported_idents);
+	
 	return true;
 }

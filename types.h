@@ -185,7 +185,8 @@ typedef struct IdentTree {
 	/* zero value is an empty trie */
 	uint16_t depth;
 	unsigned char index_in_parent; /* index of this in .parent.children */
-	U64 id; /* 0 if there's no actual identifier here, otherwise unique positive integer associated with this identifier */
+	bool export_name; /* is this identifier's name important? */
+	U64 export_id; /* 0 if there's no exported identifier here, otherwise unique positive integer associated with this identifier */
 	struct IdentTree *parent;
 	struct IdentTree *children[TREE_NCHILDREN];
 	IdentDecl *decls; /* array of declarations of this identifier */
@@ -757,8 +758,10 @@ typedef struct Typer {
 typedef struct Exporter {
 	FILE *out; /* .top (toc package) to output to */
 	bool export_locations;
+	U64 ident_id;
 	FnExpr **exported_fns;
 	StructDef **exported_structs;
+	Identifier *exported_idents; /* (only those whose names are exported) */
 } Exporter;
 
 typedef struct CGenerator {

@@ -1,7 +1,7 @@
 Foo ::= struct {
 	x: int;
 };
-main ::= fn() Foo {
+#export main ::= fn() Foo {
 	g ::= fn() int { 3 };
 	a : [3]int;
 	b := a[1:3];

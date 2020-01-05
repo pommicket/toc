@@ -41,7 +41,6 @@ static Identifier ident_new(Identifiers *ids, Identifier parent, unsigned char i
 	if (parent)
 		tree->depth = (uint16_t)(parent->depth + 1);
 	tree->index_in_parent = index_in_parent;
-	tree->id = 0;
 	return tree;
 }
 
@@ -71,8 +70,6 @@ static Identifier ident_insert(Identifiers *ids, char **s) {
 	IdentTree *tree = ids->root;
 	while (1) {
 		if (!isident(**s)) {
-			if (!tree->id)
-				tree->id = ++ids->nidents;
 			return tree;
 		}
 		int c = ident_char_to_uchar(**s);
@@ -92,32 +89,43 @@ static Identifier ident_insert(Identifiers *ids, char **s) {
 	}
 }
 
+static inline size_t ident_len(Identifier i) {
+	return (size_t)(i->depth / 2);
+}
+
+static char *ident_to_str(Identifier i) {
+	size_t i_len = ident_len(i);
+	char *str = err_malloc(i_len + 1);
+	str += i_len;
+	*str = 0;
+	while (i->parent) {
+		--str;
+		unsigned char c_high = i->index_in_parent;
+		unsigned char c_low = i->parent->index_in_parent;
+		char c = (char)ident_uchar_to_char((int)c_low + ((int)c_high << 4));
+		*str = c;
+		i = i->parent->parent; /* go to grandparent (prev char) */
+	}
+	
+	return str;
+}
 
 static void fprint_ident(FILE *out, Identifier id) {
-	Identifier i = id;
-	size_t chars = 0;
-	while (i->parent) {
-	    i = i->parent->parent; /* to go up one character, we need to go to the grandparent */
-		++chars;
-	}
-	printf("%lu-",(unsigned long)id->id);
-	char *s = malloc(chars + 1);
-	char *p = s + chars;
-	i = id;
-	*p-- = '\0';
-	while (i->parent) {
-		int c_low = i->parent->index_in_parent;
-		int c_high = i->index_in_parent;
-	    char c = (char)ident_uchar_to_char(c_low + (c_high << 4)); 
-		*p-- = c;
-		i = i->parent->parent;
-	}
-	fprintf(out, "%s", s);
-	free(s);
+	char *str = ident_to_str(id);
+	fprintf(out, "%s", str);
+	free(str);
+}
+
+static void fprint_ident_debug(FILE *out, Identifier id) {
+#ifdef TOC_DEBUG
+	if (id->export_id)
+		printf(U64_FMT "-", id->export_id);
+#endif
+	fprint_ident(out, id);
 }
 
 static void print_ident(Identifier id) {
-	fprint_ident(stdout, id);
+	fprint_ident_debug(stdout, id);
 	printf("\n");
 }
 
@@ -152,23 +160,6 @@ static Identifier ident_get(Identifiers *ids, const char *s) {
 		++s;
 	}
 	return tree;
-}
-
-static char *ident_to_str(Identifier i) {
-	size_t i_len = (size_t)(i->depth / 2); /* length = depth / 2 */
-	char *str = err_malloc(i_len + 1);
-	str += i_len;
-	*str = 0;
-	while (i->parent) {
-		--str;
-		unsigned char c_high = i->index_in_parent;
-		unsigned char c_low = i->parent->index_in_parent;
-		char c = (char)ident_uchar_to_char((int)c_low + ((int)c_high << 4));
-		*str = c;
-		i = i->parent->parent; /* go to grandparent (prev char) */
-	}
-	
-	return str;
 }
 
 static IdentDecl *ident_add_decl(Identifier i, struct Declaration *d, struct Block *b) {

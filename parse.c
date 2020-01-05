@@ -2026,7 +2026,7 @@ static void fprint_args(FILE *out, Argument *args) {
 	arr_foreach(args, Argument, arg) {
 		if (arg != args) fprintf(out, ", ");
 		if (arg->name) {
-			fprint_ident(out, arg->name);
+			fprint_ident_debug(out, arg->name);
 			fprintf(out, " = ");
 		}
 		fprint_expr(out, &arg->val);
@@ -2065,7 +2065,7 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprint_char_literal(out, e->charl);
 		break;
 	case EXPR_IDENT:
-		fprint_ident(out, e->ident);
+		fprint_ident_debug(out, e->ident);
 		break;
 	case EXPR_BINARY_OP: {
 		fprintf(out, "(");
@@ -2114,11 +2114,11 @@ static void fprint_expr(FILE *out, Expression *e) {
 		EachExpr *ea = e->each;
 		fprintf(out, "each ");
 		if (ea->index) {
-			fprint_ident(out, ea->index);
+			fprint_ident_debug(out, ea->index);
 		} else fprintf(out, "_");
 		fprintf(out, ", ");
 		if (ea->value) {
-			fprint_ident(out, ea->value);
+			fprint_ident_debug(out, ea->value);
 		} else fprintf(out, "_");
 		fprintf(out, " :");
 		if (ea->flags & EACH_ANNOTATED_TYPE)
@@ -2212,7 +2212,7 @@ static void fprint_decl(FILE *out, Declaration *d) {
 	PARSE_PRINT_LOCATION(d->where);
 	arr_foreach(d->idents, Identifier, ident) {
 		if (ident != d->idents) fprintf(out, ", ");
-		fprint_ident(out, *ident);
+		fprint_ident_debug(out, *ident);
 	}
 	if (d->flags & DECL_IS_CONST) {
 		fprintf(out, "::");

@@ -78,15 +78,15 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 	fclose(in);
-	Identifiers file_idents;
-	idents_create(&file_idents);
+	Identifiers idents;
+	idents_create(&idents);
 	Tokenizer t;
 	Allocator main_allocr;
 	allocr_create(&main_allocr);
 	ErrCtx err_ctx = {0};
 	err_ctx.filename = in_filename;
 	err_ctx.enabled = true;
-	tokr_create(&t, &file_idents, &err_ctx, &main_allocr);
+	tokr_create(&t, &idents, &err_ctx, &main_allocr);
 	if (!tokenize_string(&t, contents)) {
 		
 		err_fprint(TEXT_IMPORTANT("Errors occured while preprocessing.\n"));
@@ -127,8 +127,6 @@ int main(int argc, char **argv) {
 	exptr_create(&exptr, out_pkg);
 	exptr.export_locations = false;
 	exptr_start(&exptr, contents);
-	/* export_len(&exptr, 1782); */
-	/* export_u8(&exptr, 0xab); */
 #endif
 	if (!block_enter(NULL, f.stmts, SCOPE_CHECK_REDECL)) /* enter global scope */
 		return false;
@@ -156,7 +154,7 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 	CGenerator g;
-	cgen_create(&g, out, &file_idents, &ev, &main_allocr);
+	cgen_create(&g, out, &idents, &ev, &main_allocr);
 	if (!cgen_file(&g, &f)) {
 		fclose(out);
 		err_fprint(TEXT_IMPORTANT("Errors occured while generating C code.\n"));
@@ -170,7 +168,7 @@ int main(int argc, char **argv) {
 	evalr_free(&ev);
 	
 	fclose(out);
-	idents_free(&file_idents);
+	idents_free(&idents);
 	return 0;
 }
 

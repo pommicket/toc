@@ -338,7 +338,7 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		arr_foreach(t->struc->fields, Field, fi) {
 			if (fi != t->struc->fields)
 				fprintf(f, ", ");
-			fprint_ident(f, fi->name);
+			fprint_ident_debug(f, fi->name);
 			fprintf(f, ": ");
 			fprint_val_ptr(f, (char *)p + fi->offset, fi->type);
 		}
