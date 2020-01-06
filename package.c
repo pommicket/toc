@@ -99,13 +99,15 @@ static inline void export_len(Exporter *ex, size_t len) {
 
 /* writes the header */
 static void exptr_start(Exporter *ex, const char *pkg_name, size_t pkg_name_len) {
-	const U8 toc[3] = {116, 111, 99}; /* "toc" in ASCII */
+	const U8 toc[3] = {116, 111, 112}; /* "top" in ASCII */
 	const char *code = ex->code;
 	ex->started = true;
 	export_u8(ex, toc[0]);
 	export_u8(ex, toc[1]);
 	export_u8(ex, toc[2]);
 	export_u32(ex, TOP_FMT_VERSION);
+	assert(ftell(ex->out) == 7L);
+	export_u32(ex, 0); /* placeholder for identifier offset in file */
 	export_len(ex, pkg_name_len);
 	export_str(ex, pkg_name, pkg_name_len);
 	bool has_code = code != NULL;
@@ -555,6 +557,16 @@ static bool export_struct(Exporter *ex, StructDef *s) {
 
 /* does NOT close the file */
 static bool exptr_finish(Exporter *ex) {
+	long ident_offset = ftell(ex->out);
+	fseek(ex->out, 7L, SEEK_SET);
+	if (ident_offset > U32_MAX) {
+		err_print(LOCATION_NONE, "Package file is too large.");
+		return false;
+	}
+	export_u32(ex, (U32)ident_offset);
+	fseek(ex->out, 0L, SEEK_END);
+
+	
 	export_len(ex, arr_len(ex->exported_idents));
 	arr_foreach(ex->exported_idents, Identifier, ident) {
 		Identifier i = *ident;

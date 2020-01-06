@@ -1818,6 +1818,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 		case DECL_END_RPAREN_COMMA: end_str = "')' or ','"; break;
 		case DECL_END_LBRACE_COMMA: end_str = "'{' or ','"; break;
 		}
+		assert(end_str);
 			
 		if (token_is_kw(t->token, KW_EQ)) {
 			++t->token;
@@ -1842,7 +1843,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 					expr_flags |= EXPR_CAN_END_WITH_LBRACE;
 				Token *end = expr_find_end(p, expr_flags);
 				if (!end || !ends_decl(end, ends_with)) {
-					t->token = end;
+					if (end) t->token = end;
 					tokr_err(t, "Expected %s at end of declaration.", end_str);
 					goto ret_false;
 				}

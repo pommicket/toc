@@ -1981,7 +1981,8 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 	if (!cgen_decls_file(g, f))
 		return false;
 	cgen_write(g, "/* code */\n");
-	cgen_write(g, "int main() {\n\tmain__();\n\treturn 0;\n}\n\n");
+	if (!f->pkg_name)
+		cgen_write(g, "int main() {\n\tmain__();\n\treturn 0;\n}\n\n");
 	arr_foreach(f->stmts, Statement, s) {
 		if (!cgen_defs_stmt(g, s))
 			return false;

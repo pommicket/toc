@@ -171,8 +171,8 @@ static void tokr_err_(
 					  const char *src_file, int src_line,
 #endif
 					  Tokenizer *t, const char *fmt, ...) {
-	if (!t->token->where.ctx->enabled) return;
 #if ERR_SHOW_SOURCE_LOCATION
+	if (t->token->where.ctx && !t->token->where.ctx->enabled) return;
 	err_fprint("At line %d of %s:\n", src_line, src_file);
 #endif
 	va_list args;

@@ -2045,12 +2045,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 				err_print(d->where, "Declaration marked for exporting, but no package output was specified."); 
 				success = false;
 			} else {
-#ifdef TOC_DEBUG /* TODO: remove this */
 				success = export_decl(tr->exptr, d);
-#else
-				err_print(d->where, "This feature is in progress.");
-				success = false;
-#endif
 			}
 		}
 	} else {
@@ -2125,8 +2120,9 @@ static void typer_create(Typer *tr, Evaluator *ev, Allocator *allocr) {
 	*(Block **)arr_adda(&tr->blocks, allocr) = NULL;
 }
 
-static bool types_file(Typer *tr, ParsedFile *f) {
+static bool types_file(Typer *tr, ParsedFile *f, char *code) {
 	bool ret = true;
+	FILE *pkg_fp = NULL;
 	if (f->pkg_name) {
 		Value pkg_name;
 		if (!types_expr(tr, f->pkg_name))
@@ -2146,12 +2142,26 @@ static bool types_file(Typer *tr, ParsedFile *f) {
 			err_print(f->pkg_name->where, "Package name has a negative length (" I64_FMT ")!", pkg_name_len);
 			return false;
 		}
+		char *pkg_file_name = err_malloc((size_t)pkg_name_len+5);
+		sprintf(pkg_file_name, "%s.top", pkg_name_str);
+		pkg_fp = fopen(pkg_file_name, "wb");
+		if (!pkg_fp) {
+			err_print(f->pkg_name->where, "Could not open package output file: %s.", pkg_file_name);
+			free(pkg_file_name);
+			return false;
+		}
+		free(pkg_file_name);
+		exptr_create(tr->exptr, pkg_fp, code);
 		exptr_start(tr->exptr, pkg_name_str, (size_t)pkg_name_len);
 	}
 	arr_foreach(f->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {
 			ret = false;
 		}
+	}
+	if (pkg_fp) {
+		exptr_finish(tr->exptr);
+		fclose(pkg_fp);
 	}
 	return ret;
 }

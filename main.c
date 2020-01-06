@@ -49,7 +49,6 @@ int main(int argc, char **argv) {
 		in_filename = argv[1];
 	}
 	const char *out_filename = "out.c";
-
 	for (int i = 2; i < argc-1; ++i) {
 		if (strcmp(argv[i], "-o") == 0)
 			out_filename = argv[i+1];
@@ -122,27 +121,14 @@ int main(int argc, char **argv) {
 	typer_create(&tr, &ev, &main_allocr);
 	tr.exptr = &exptr;
 	
-#ifdef TOC_DEBUG
-	FILE *out_pkg = fopen("out.top", "wb");
-	exptr_create(&exptr, out_pkg, contents);
-	exptr.export_locations = false;
-#endif
 	if (!block_enter(NULL, f.stmts, SCOPE_CHECK_REDECL)) /* enter global scope */
 		return false;
 
-	if (!types_file(&tr, &f)) {
+	if (!types_file(&tr, &f, contents)) {
 		/* TODO(eventually): fix this if the error occured while exporting something */
 	    err_fprint(TEXT_IMPORTANT("Errors occured while determining types.\n"));
 		return EXIT_FAILURE;
 	}
-#ifdef TOC_DEBUG
-	if (!exptr_finish(&exptr)) {
-		fclose(out_pkg);
-		err_fprint(TEXT_IMPORTANT("Errors occured while exporting things.\n"));
-		return EXIT_FAILURE;
-	}
-	fclose(out_pkg);
-#endif
 #ifdef TOC_DEBUG
 	printf("\n\n");	
 	fprint_parsed_file(stdout, &f);

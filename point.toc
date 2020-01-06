@@ -1,0 +1,12 @@
+pkg "point";
+
+#export Point ::= struct {
+	x, y: int;
+};
+
+#export mk_point ::= fn(x, y: int) Point {
+		 p : Point;
+		 p.x = x;
+		 p.y = y;
+		 p
+};
