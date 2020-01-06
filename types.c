@@ -2127,6 +2127,27 @@ static void typer_create(Typer *tr, Evaluator *ev, Allocator *allocr) {
 
 static bool types_file(Typer *tr, ParsedFile *f) {
 	bool ret = true;
+	if (f->pkg_name) {
+		Value pkg_name;
+		if (!types_expr(tr, f->pkg_name))
+			return false;
+		if (f->pkg_name->type.kind != TYPE_SLICE || !type_is_builtin(f->pkg_name->type.slice, BUILTIN_CHAR)) {
+			char *typestr = type_to_str(&f->pkg_name->type);
+			err_print(f->pkg_name->where, "Package names must be of type []char, but this is of type %s.", typestr);
+			free(typestr);
+			return false;
+		}
+		if (!eval_expr(tr->evalr, f->pkg_name, &pkg_name))
+			return false;
+		Slice pkg_name_slice = pkg_name.slice;
+		char *pkg_name_str = pkg_name_slice.data;
+		I64 pkg_name_len = pkg_name_slice.n;
+		if (pkg_name_len < 0) {
+			err_print(f->pkg_name->where, "Package name has a negative length (" I64_FMT ")!", pkg_name_len);
+			return false;
+		}
+		exptr_start(tr->exptr, pkg_name_str, (size_t)pkg_name_len);
+	}
 	arr_foreach(f->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {
 			ret = false;

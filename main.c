@@ -124,9 +124,8 @@ int main(int argc, char **argv) {
 	
 #ifdef TOC_DEBUG
 	FILE *out_pkg = fopen("out.top", "wb");
-	exptr_create(&exptr, out_pkg);
+	exptr_create(&exptr, out_pkg, contents);
 	exptr.export_locations = false;
-	exptr_start(&exptr, contents);
 #endif
 	if (!block_enter(NULL, f.stmts, SCOPE_CHECK_REDECL)) /* enter global scope */
 		return false;

@@ -276,6 +276,7 @@ typedef enum {
 			  KW_BOOL,
 			  KW_TRUE,
 			  KW_FALSE,
+			  KW_PKG,
 			  KW_COUNT
 } Keyword;
 
@@ -720,12 +721,14 @@ typedef struct Statement {
 
 typedef struct ParsedFile {
 	Statement *stmts;
+	Expression *pkg_name;
 } ParsedFile;
 
 typedef struct Parser {
 	Tokenizer *tokr;
 	Allocator *allocr;
 	Block *block; /* which block are we in? NULL = file scope */
+	ParsedFile *file;
 } Parser;
 
 typedef enum {
@@ -758,10 +761,12 @@ typedef struct Typer {
 typedef struct Exporter {
 	FILE *out; /* .top (toc package) to output to */
 	bool export_locations;
+	bool started;
 	U64 ident_id;
 	FnExpr **exported_fns;
 	StructDef **exported_structs;
 	Identifier *exported_idents; /* (only those whose names are exported) */
+	const char *code;
 } Exporter;
 
 typedef struct CGenerator {

@@ -4,7 +4,7 @@
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
 static bool parse_expr(Parser *p, Expression *e, Token *end);
-static bool parse_stmt(Parser *p, Statement *s);
+static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement);
 enum {
 	  PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR = 0x01,
 	  PARSE_DECL_ALLOW_SEMI_CONST = 0x02,
@@ -787,11 +787,11 @@ static bool parse_block(Parser *p, Block *b) {
 	Block *prev_block = p->block;
 	b->flags = 0;
 	b->ret_expr = NULL;
-	p->block = b;
 	if (!token_is_kw(t->token, KW_LBRACE)) {
 		tokr_err(t, "Expected '{' to open block.");
 		return false;
 	}
+	p->block = b;
 	b->start = t->token->where;
 	++t->token;	/* move past { */
 	b->stmts = NULL;
@@ -801,22 +801,28 @@ static bool parse_block(Parser *p, Block *b) {
 		/* non-empty block */
 		while (1) {
 			Statement *stmt = parser_arr_add(p, &b->stmts);
-			bool success = parse_stmt(p, stmt);
+			bool was_a_statement;
+			bool success = parse_stmt(p, stmt, &was_a_statement);
 			if (!success) {
 				ret = false;
+			}
+			if (!was_a_statement) {
+				arr_remove_lasta(&b->stmts, p->allocr);
 			}
 			if (token_is_kw(t->token, KW_RBRACE)) {
 				break;
 			}
 			if (t->token->kind == TOKEN_EOF) {
 				tokr_err(t, "Expected '}' to close function body.");
-				return false;
+				ret = false;
+				goto end;
 			}
 			
 		}
 	}
 	b->end = t->token->where;
 	++t->token;	/* move past } */
+ end:
 	p->block = prev_block;
 	return ret;
 }
@@ -1892,7 +1898,8 @@ static bool is_decl(Tokenizer *t) {
 	}
 }
 
-static bool parse_stmt(Parser *p, Statement *s) {
+/* sets *was_a_statement to false if s was not filled, but the token was advanced */
+static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 	Tokenizer *t = p->tokr;
 	if (t->token->kind == TOKEN_EOF) {
 		tokr_err(t, "Expected statement.");
@@ -1900,30 +1907,61 @@ static bool parse_stmt(Parser *p, Statement *s) {
 	}
 	s->where = t->token->where;
 	s->flags = 0;
-	if (token_is_kw(t->token, KW_RETURN)) {
-		s->kind = STMT_RET;
-		++t->token;
-		s->ret.flags = 0;
-		if (token_is_kw(t->token, KW_SEMICOLON)) {
-			/* return with no expr */
+	*was_a_statement = true;
+	if (t->token->kind == TOKEN_KW) {
+		switch (t->token->kw) {
+		case KW_RETURN: {
+			s->kind = STMT_RET;
 			++t->token;
-			return true;
+			s->ret.flags = 0;
+			if (token_is_kw(t->token, KW_SEMICOLON)) {
+				/* return with no expr */
+				++t->token;
+				return true;
+			}
+			s->ret.flags |= RET_HAS_EXPR;
+			Token *end = expr_find_end(p, 0);
+			if (!end) {
+				while (t->token->kind != TOKEN_EOF) ++t->token; /* move to end of file */
+				return false;
+			}
+			if (!token_is_kw(end, KW_SEMICOLON)) {
+				err_print(end->where, "Expected ';' at end of return statement.");
+				t->token = end->kind == TOKEN_EOF ? end : end + 1;
+				return false;
+			}
+			bool success = parse_expr(p, &s->ret.expr, end);
+			t->token = end + 1;
+			return success;
 		}
-		s->ret.flags |= RET_HAS_EXPR;
-		Token *end = expr_find_end(p, 0);
-		if (!end) {
-			while (t->token->kind != TOKEN_EOF) ++t->token; /* move to end of file */
-			return false;
+		case KW_PKG: {
+			/* declaration of package name */
+			Expression *pkg_name  = parser_new_expr(p);
+			++t->token;
+			Token *end = expr_find_end(p, 0);
+			if (!end || !token_is_kw(end, KW_SEMICOLON)) {
+				tokr_err(t, "No semicolon at end of package name.");
+				tokr_skip_to_eof(t);
+				return false;
+			}
+			if (p->block) {
+				tokr_err(t, "You must set the package name at global scope.");
+				t->token = end + 1;
+				return false;
+			}
+			if (p->file->pkg_name) {
+				tokr_err(t, "You've already set the package name.");
+				t->token = end + 1;
+				return false;
+			}
+			p->file->pkg_name = pkg_name;
+			bool success = parse_expr(p, pkg_name, end);
+			t->token = end + 1;
+			*was_a_statement = false;
+			return success;
 		}
-		if (!token_is_kw(end, KW_SEMICOLON)) {
-			err_print(end->where, "Expected ';' at end of return statement.");
-			t->token = end->kind == TOKEN_EOF ? end : end + 1;
-			return false;
+		default: break;
 		}
-		bool success = parse_expr(p, &s->ret.expr, end);
-		t->token = end + 1;
-		return success;
-		
 	}
 	if (is_decl(t)) {
 		s->kind = STMT_DECL;
@@ -1936,7 +1974,7 @@ static bool parse_stmt(Parser *p, Statement *s) {
 		Token *end = expr_find_end(p, 0);
 		if (!end) {
 			tokr_err(t, "No semicolon found at end of statement.");
-			while (t->token->kind != TOKEN_EOF) ++t->token; /* move to end of file */
+			tokr_skip_to_eof(t);
 			return false;
 		}
 		
@@ -1963,11 +2001,16 @@ static void parser_create(Parser *p, Tokenizer *t, Allocator *allocr) {
 static bool parse_file(Parser *p, ParsedFile *f) {
 	Tokenizer *t = p->tokr;
 	f->stmts = NULL;
+	f->pkg_name = NULL;
+	p->file = f;
 	bool ret = true;
 	while (t->token->kind != TOKEN_EOF) {
+		bool was_a_statement;
 		Statement *stmt = parser_arr_add(p, &f->stmts);
-		if (!parse_stmt(p, stmt))
+		if (!parse_stmt(p, stmt, &was_a_statement))
 			ret = false;
+		if (!was_a_statement)
+			arr_remove_lasta(&f->stmts, p->allocr);
 		if (token_is_kw(t->token, KW_RBRACE)) {
 			tokr_err(t, "} without a matching {.");
 			return false;

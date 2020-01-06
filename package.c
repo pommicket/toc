@@ -10,14 +10,17 @@ static bool export_decl(Exporter *ex, Declaration *d);
 static bool export_block(Exporter *ex, Block *b);
 static bool export_expr(Exporter *ex, Expression *e);
 
-static void exptr_create(Exporter *ex, FILE *out) {
+static void exptr_create(Exporter *ex, FILE *out, char *code) {
 	ex->out = out;
 	ex->ident_id = 0;
 	ex->export_locations = true;
 	ex->exported_fns = NULL;
 	ex->exported_structs = NULL;
 	ex->exported_idents = NULL;
+	ex->started = false;
+	ex->code = code;
 }
+
 
 static inline void export_u8(Exporter *ex, U8 u8) {
 	write_u8(ex->out, u8);
@@ -58,7 +61,7 @@ static inline void export_char(Exporter *ex, char c) {
 static inline void export_vlq(Exporter *ex, U64 x) {
 	write_vlq(ex->out, x);
 }
-/* since char may be signed or unsigned, use this only if necessary */
+
 static inline void export_str(Exporter *ex, const char *str, size_t len) {
 #ifdef TOC_DEBUG
 	for (size_t i = 0; i < len; ++i)
@@ -95,12 +98,16 @@ static inline void export_len(Exporter *ex, size_t len) {
 }
 
 /* writes the header */
-static void exptr_start(Exporter *ex, char *code) {
+static void exptr_start(Exporter *ex, const char *pkg_name, size_t pkg_name_len) {
 	const U8 toc[3] = {116, 111, 99}; /* "toc" in ASCII */
+	const char *code = ex->code;
+	ex->started = true;
 	export_u8(ex, toc[0]);
 	export_u8(ex, toc[1]);
 	export_u8(ex, toc[2]);
 	export_u32(ex, TOP_FMT_VERSION);
+	export_len(ex, pkg_name_len);
+	export_str(ex, pkg_name, pkg_name_len);
 	bool has_code = code != NULL;
 	export_bool(ex, has_code);
 	if (has_code) {
@@ -440,6 +447,7 @@ enum {
 };
 
 static bool export_decl(Exporter *ex, Declaration *d) {
+	assert(ex->started);
 	if (d->type.kind == TYPE_UNKNOWN) {
 		err_print(d->where, "Can't export declaration of unknown type.");
 		return false;

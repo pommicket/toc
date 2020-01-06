@@ -13,7 +13,8 @@ static const char *keywords[KW_COUNT] =
 	 "new", "del", "struct",
 	 "int", "i8", "i16", "i32", "i64",
 	 "u8", "u16", "u32", "u64", "float", "f32", "f64", "Type",
-	 "char", "bool", "true", "false"};
+	 "char", "bool", "true", "false",
+	 "pkg"};
 
 static inline const char *kw_to_str(Keyword k) { return keywords[k]; }
 
@@ -540,6 +541,10 @@ static void tokr_skip_semicolon(Tokenizer *t) {
 			}
 		++t->token;
 	}
+}
+
+static inline void tokr_skip_to_eof(Tokenizer *t) {
+	while (t->token->kind != TOKEN_EOF) ++t->token; /* move to end of file */
 }
 
 /* only frees tokens, not string literals (because those are on the allocator). */
