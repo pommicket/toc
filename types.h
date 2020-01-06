@@ -387,6 +387,7 @@ typedef struct {
 	Location where;
 	U16 flags;
 	size_t size; /* size of this struct during compile time */
+	size_t align;
 	struct {
 		Identifier name;
 		IdentID id;

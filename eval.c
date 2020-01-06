@@ -55,6 +55,31 @@ static size_t compiler_sizeof_builtin(BuiltinType b) {
 	return 0;
 }
 
+static size_t compiler_alignof(Type *t);
+/* finds offsets and size */
+static void eval_struct_find_offsets(Type *t) {
+	assert(t->kind == TYPE_STRUCT);
+	if (!(t->struc->flags & STRUCT_DEF_FOUND_OFFSETS)) {
+		size_t bytes = 0;
+		size_t total_align = 0;
+		arr_foreach(t->struc->fields, Field, f) {
+			size_t falign = compiler_alignof(f->type);
+			if (falign > total_align)
+				total_align = falign;
+			/* align */
+			bytes += ((falign - bytes) % falign + falign) % falign; /* = -bytes mod falign */
+			assert(bytes % falign == 0);
+			f->offset = bytes;
+			/* add size */
+			bytes += compiler_sizeof(f->type);
+		}
+		bytes += ((total_align - bytes) % total_align + total_align) % total_align; /* = -bytes mod align */
+		t->struc->size = bytes;
+		t->struc->align = total_align;
+		t->struc->flags |= STRUCT_DEF_FOUND_OFFSETS;
+	}
+}
+
 static size_t compiler_alignof(Type *t) {
 	Value v;
 	assert(t->flags & TYPE_IS_RESOLVED);
@@ -82,12 +107,8 @@ static size_t compiler_alignof(Type *t) {
 		return sizeof v.pkg;
 	case TYPE_STRUCT: {
 		/* assume the align of a struct is (at most) the greatest align out of its children's */
-		size_t align = 1;
-		arr_foreach(t->struc->fields, Field, f) {
-			size_t falign = compiler_alignof(f->type);
-			if (falign > align) align = falign;
-		}
-		return align;
+		eval_struct_find_offsets(t);
+		return t->struc->align;
 	}
 	case TYPE_UNKNOWN:
 	case TYPE_EXPR:
@@ -95,28 +116,6 @@ static size_t compiler_alignof(Type *t) {
 	}
 	assert(0);
 	return 0;
-}
-
-/* finds offsets and size */
-static void eval_struct_find_offsets(Type *t) {
-	assert(t->kind == TYPE_STRUCT);
-	if (!(t->struc->flags & STRUCT_DEF_FOUND_OFFSETS)) {
-		size_t bytes = 0;
-		arr_foreach(t->struc->fields, Field, f) {
-			size_t falign = compiler_alignof(f->type);
-			/* align */
-			bytes += ((falign - bytes) % falign + falign) % falign; /* = -bytes mod falign */
-			assert(bytes % falign == 0);
-			f->offset = bytes;
-			/* add size */
-			bytes += compiler_sizeof(f->type);
-		}
-		/* final align */
-		size_t align = compiler_alignof(t);
-		bytes += ((align - bytes) % align + align) % align; /* = -bytes mod align */
-		t->struc->size = bytes;
-		t->struc->flags |= STRUCT_DEF_FOUND_OFFSETS;
-	}
 }
 
 /* size of a type at compile time */
