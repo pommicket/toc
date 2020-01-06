@@ -755,6 +755,7 @@ typedef struct Typer {
 	Block *block;
 	Block **blocks; /* dyn array of all the block's we're in ([0] = NULL for global scope) */
 	FnExpr *fn; /* the function we're currently parsing. */
+	char *pkg_name;
 } Typer;
 
 
@@ -779,6 +780,7 @@ typedef struct CGenerator {
 	Block *block;
 	FnExpr *fn; /* which function are we in? (NULL for none) - not used during decls */
 	Evaluator *evalr;
+	Exporter *exptr;
 	Identifier main_ident;
 	Identifiers *idents;
 } CGenerator;

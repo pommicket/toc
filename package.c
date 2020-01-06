@@ -110,6 +110,7 @@ static void exptr_start(Exporter *ex, const char *pkg_name, size_t pkg_name_len)
 	export_u64(ex, 0); /* placeholder for identifier offset in file */
 	export_len(ex, pkg_name_len);
 	export_str(ex, pkg_name, pkg_name_len);
+	
 	bool has_code = code != NULL;
 	export_bool(ex, has_code);
 	if (has_code) {
@@ -558,6 +559,7 @@ static bool export_struct(Exporter *ex, StructDef *s) {
 /* does NOT close the file */
 static bool exptr_finish(Exporter *ex) {
 	long ident_offset = ftell(ex->out);
+
 	fseek(ex->out, 7L, SEEK_SET);
 	export_u64(ex, (U64)ident_offset);
 	fseek(ex->out, 0L, SEEK_END);

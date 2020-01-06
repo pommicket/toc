@@ -2116,6 +2116,7 @@ static void typer_create(Typer *tr, Evaluator *ev, Allocator *allocr) {
 	tr->exptr = NULL; /* by default, don't set an exporter */
 	tr->in_decls = NULL;
 	tr->in_expr_decls = NULL;
+	tr->pkg_name = NULL;
 	tr->allocr = allocr;
 	*(Block **)arr_adda(&tr->blocks, allocr) = NULL;
 }
@@ -2137,13 +2138,18 @@ static bool types_file(Typer *tr, ParsedFile *f, char *code) {
 			return false;
 		Slice pkg_name_slice = pkg_name.slice;
 		char *pkg_name_str = pkg_name_slice.data;
-		I64 pkg_name_len = pkg_name_slice.n;
-		if (pkg_name_len < 0) {
-			err_print(f->pkg_name->where, "Package name has a negative length (" I64_FMT ")!", pkg_name_len);
+		if (pkg_name_slice.n < 0) {
+			err_print(f->pkg_name->where, "Package name has a negative length (" I64_FMT ")!", pkg_name_slice.n);
 			return false;
 		}
-		char *pkg_file_name = err_malloc((size_t)pkg_name_len+5);
-		sprintf(pkg_file_name, "%s.top", pkg_name_str);
+	    size_t pkg_name_len = (size_t)pkg_name_slice.n;
+		
+		char *pkg_name_cstr = typer_malloc(tr, pkg_name_len+1);
+		memcpy(pkg_name_cstr, pkg_name_str, pkg_name_len);
+		pkg_name_cstr[pkg_name_len] = 0;
+		tr->pkg_name = pkg_name_cstr;
+		char *pkg_file_name = err_malloc(pkg_name_len+5);
+		sprintf(pkg_file_name, "%s.top", pkg_name_cstr);
 		pkg_fp = fopen(pkg_file_name, "wb");
 		if (!pkg_fp) {
 			err_print(f->pkg_name->where, "Could not open package output file: %s.", pkg_file_name);
@@ -2152,7 +2158,7 @@ static bool types_file(Typer *tr, ParsedFile *f, char *code) {
 		}
 		free(pkg_file_name);
 		exptr_create(tr->exptr, pkg_fp, code);
-		exptr_start(tr->exptr, pkg_name_str, (size_t)pkg_name_len);
+		exptr_start(tr->exptr, pkg_name_str, pkg_name_len);
 	}
 	arr_foreach(f->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {

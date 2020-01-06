@@ -8,3 +8,7 @@ pkg "point";
 		 p.x = x;
 		 p.y = y;
 };
+
+mk_point2 ::= fn(x, y:int) p: Point {
+		  p = mk_point(x*x, y*y);
+};

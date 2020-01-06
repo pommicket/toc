@@ -8,3 +8,4 @@ tests/**/*.bin
 vgcore*
 TAGS
 tags
+*.o

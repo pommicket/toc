@@ -12,6 +12,7 @@ static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *e
 	g->indent_lvl = 0;
 	g->idents = ids;
 	g->allocr = allocr;
+	g->exptr = ev->typer->exptr;
 }
 
 static bool cgen_stmt(CGenerator *g, Statement *s);
@@ -467,10 +468,18 @@ static bool cgen_should_gen_fn(FnExpr *f) {
 	}
 }
 
+static void cgen_full_fn_name(CGenerator *g, FnExpr *f, U64 instance) {
+	cgen_fn_name(g, f);
+	if (instance) {
+		cgen_fn_instance_number(g, instance);
+	}
+}
+
 /* unless f has const/semi-const args, instance and which_are_const can be set to 0 */
 static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where, U64 instance, U64 which_are_const) {
 	bool out_param = cgen_uses_ptr(&f->ret_type);
 	bool any_params = false;
+	char *pkg_name = g->evalr->typer->pkg_name;
 	assert(cgen_should_gen_fn(f));
 	if (!f->export.id) /* local to this translation unit */
 		cgen_write(g, "static ");
@@ -480,10 +489,11 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where, U64 instanc
 		if (!cgen_type_pre(g, &f->ret_type, where)) return false;
 		cgen_write(g, " ");
 	}
-	cgen_fn_name(g, f);
-	if (instance) {
-		cgen_fn_instance_number(g, instance);
+	if (f->export.id) {
+		assert(pkg_name);
+		cgen_write(g, "%s__", pkg_name);
 	}
+	cgen_full_fn_name(g, f, instance);	
 	if (!out_param) {
 		if (!cgen_type_post(g, &f->ret_type, where)) return false;
 	}

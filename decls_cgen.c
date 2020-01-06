@@ -7,6 +7,28 @@ static bool cgen_decls_stmt(CGenerator *g, Statement *s);
 static bool cgen_decls_block(CGenerator *g, Block *b);
 static bool cgen_decls_decl(CGenerator *g, Declaration *d);
 
+static bool cgen_fn_decl(CGenerator *g, FnExpr *f, Location where, U64 instance, U64 which_are_const) {
+	if (cgen_should_gen_fn(f)) {
+		if (!fn_enter(f, 0))
+			return false;
+		if (!cgen_fn_header(g, f, where, instance, which_are_const))
+			return false;
+		cgen_write(g, ";");
+		cgen_nl(g);
+		fn_exit(f);
+		char *pkg_name = g->evalr->typer->pkg_name;
+		if (pkg_name && f->export.id) {
+			/* allow use of function without referring to package in this file */
+			cgen_write(g, "#define ");
+			cgen_full_fn_name(g, f, instance);
+			cgen_write(g, " %s__", pkg_name);
+			cgen_full_fn_name(g, f, instance);
+			cgen_nl(g);
+		}
+	}
+	return true;
+}
+
 static bool cgen_decls_fn_instances(CGenerator *g, Expression *e) {
 	assert(e->kind == EXPR_FN);
 	FnExpr *f = e->fn;
@@ -17,8 +39,7 @@ static bool cgen_decls_fn_instances(CGenerator *g, Expression *e) {
 			if (cgen_should_gen_fn(&(*data)->fn)) {
 				(*data)->fn.c.name = f->c.name;
 				(*data)->fn.c.id = f->c.id;
-			
-				if (!cgen_fn_header(g, &(*data)->fn, e->where, (*data)->c.id, (*data)->val.tuple[0].u64))
+				if (!cgen_fn_decl(g, &(*data)->fn, e->where, (*data)->c.id, (*data)->val.tuple[0].u64))
 					return false;
 				cgen_write(g, ";");
 				cgen_nl(g);
@@ -42,14 +63,8 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 			if (!cgen_decls_fn_instances(g, e))
 				return false;
 		} else {
-			if (cgen_should_gen_fn(e->fn)) {
-				fn_enter(e->fn, 0);
-				if (!cgen_fn_header(g, e->fn, e->where, 0, 0))
-					return false;
-				cgen_write(g, ";");
-				cgen_nl(g);
-				fn_exit(e->fn);
-			}
+			if (!cgen_fn_decl(g, e->fn, e->where, 0, 0))
+				return false;
 		}
 	} break;
 	case EXPR_TYPE: {
@@ -108,14 +123,8 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 			if (!cgen_decls_fn_instances(g, &d->expr))
 				return false;
 		} else {
-			if (cgen_should_gen_fn(d->expr.fn)) {
-				fn_enter(d->expr.fn, 0);
-				if (!cgen_fn_header(g, d->expr.fn, d->where, 0, 0))
-					return false;
-				cgen_write(g, ";");
-				cgen_nl(g);
-				fn_exit(d->expr.fn);
-			}
+			if (!cgen_fn_decl(g, d->expr.fn, d->expr.where, 0, 0))
+				return false;
 		}
 		cgen_recurse_subexprs(g, (&d->expr), cgen_decls_expr, cgen_decls_block, cgen_decls_decl);
 	} else {
