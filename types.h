@@ -758,6 +758,7 @@ typedef struct Evaluator {
 typedef struct Typer {
 	Allocator *allocr;
 	Evaluator *evalr;
+	Identifiers *idents;
 	struct Exporter *exptr;
 	Expression **in_expr_decls; /* an array of expressions whose declarations (e.g. each **x := foo**) we are currently inside */
 	Declaration **in_decls; /* array of declarations we are currently inside */

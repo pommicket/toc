@@ -423,36 +423,36 @@ static inline void cgen_fn_instance_number(CGenerator *g, U64 instance) {
 	cgen_write(g, U64_FMT"_", instance);
 }
 
-/* does this type have a type type in it? (e.g. [5]Type, &&Type) */
-static bool type_contains_type(Type *t) {
+/* does this type have a Type or a Package in it? (e.g. [5]Type, &&Package) */
+static bool type_contains_compileonly_type(Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_BUILTIN:
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
-	case TYPE_PKG:
 		return false;
+	case TYPE_PKG:
 	case TYPE_TYPE:
 		return true;
 	case TYPE_PTR:
-		return type_contains_type(t->ptr);
+		return type_contains_compileonly_type(t->ptr);
 	case TYPE_SLICE:
-		return type_contains_type(t->slice);
+		return type_contains_compileonly_type(t->slice);
 	case TYPE_ARR:
-		return type_contains_type(t->arr.of);
+		return type_contains_compileonly_type(t->arr.of);
 	case TYPE_FN:
 		arr_foreach(t->fn.types, Type, sub)
-			if (type_contains_type(sub))
+			if (type_contains_compileonly_type(sub))
 				return true;
 		return false;
 	case TYPE_TUPLE:
 		arr_foreach(t->tuple, Type, sub)
-			if (type_contains_type(sub))
+			if (type_contains_compileonly_type(sub))
 				return true;
 		return false;
 	case TYPE_STRUCT:
 		arr_foreach(t->struc->fields, Field, f)
-			if (type_contains_type(f->type))
+			if (type_contains_compileonly_type(f->type))
 				return true;
 		return false;
 	case TYPE_EXPR: break;
@@ -465,11 +465,11 @@ static bool type_contains_type(Type *t) {
 static bool cgen_should_gen_fn(FnExpr *f) {
 	if (f->ret_decls) {
 		arr_foreach(f->ret_decls, Declaration, decl)
-			if (type_contains_type(&decl->type))
+			if (type_contains_compileonly_type(&decl->type))
 				return false;
 		return true;
 	} else {
-		return !type_contains_type(&f->ret_type);
+		return !type_contains_compileonly_type(&f->ret_type);
 	}
 }
 
@@ -1762,13 +1762,7 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 		    Identifier i = d->idents[idx];
 			Type *type = decl_type_at_index(d, idx);
 			Value *val = decl_val_at_index(d, idx);
-			if (type->kind == TYPE_TYPE) {
-				/* 
-				   confusingly,
-				   struct declarations are handled by typedefs_cgen,
-				   and struct definitions are handled by decls_cgen.
-				   we don't need to do anything here.
-				*/
+			if (type_contains_compileonly_type(type)) {
 				continue;
 			}
 			if (g->block == NULL && g->fn == NULL && !i->export_name)

@@ -854,12 +854,31 @@ static bool types_expr(Typer *tr, Expression *e) {
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_CHAR;
 		break;
-	case EXPR_PKG:
+	case EXPR_PKG: {
 		t->kind = TYPE_PKG;
 		Expression *name_expr = e->pkg.name_expr;
 		if (!types_expr(tr, name_expr)) return false;
+		if (!type_is_slicechar(&name_expr->type)) {
+			char *s = type_to_str(&name_expr->type);
+			err_print(name_expr->where, "Package name is not of type []char (as it should be), but of type %s.",  s);
+			free(s);
+			return false;
+		}
 		Value name_val;
-		break;
+		if (!eval_expr(tr->evalr, name_expr, &name_val))
+			return false;
+
+		Slice name_str = name_val.slice;
+		if (name_str.n < 0) {
+			err_print(name_expr->where, "Package name has negative length (" I64_FMT ")!", name_str.n);
+			return false;
+		}
+		char *name_cstr = err_malloc((size_t)name_str.n + 1);
+		memcpy(name_cstr, name_str.data, (size_t)name_str.n);
+		name_cstr[name_str.n] = '\0';
+		Identifier name_ident = ident_insert(tr->idents, &name_cstr);
+		e->pkg.name_ident = name_ident;
+	} break;
 	case EXPR_EACH: {
 		EachExpr *ea = e->each;
 		*(Expression **)typer_arr_add(tr, &tr->in_expr_decls) = e;
@@ -2112,7 +2131,7 @@ static bool types_stmt(Typer *tr, Statement *s) {
 	return true;
 }
 
-static void typer_create(Typer *tr, Evaluator *ev, Allocator *allocr) {
+static void typer_create(Typer *tr, Evaluator *ev, Allocator *allocr, Identifiers *idents) {
 	tr->block = NULL;
 	tr->blocks = NULL;
 	tr->fn = NULL;
@@ -2122,6 +2141,7 @@ static void typer_create(Typer *tr, Evaluator *ev, Allocator *allocr) {
 	tr->in_expr_decls = NULL;
 	tr->pkg_name = NULL;
 	tr->allocr = allocr;
+	tr->idents = idents;
 	*(Block **)arr_adda(&tr->blocks, allocr) = NULL;
 }
 

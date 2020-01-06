@@ -118,7 +118,7 @@ int main(int argc, char **argv) {
 	Evaluator ev;
 	Exporter exptr;
 	evalr_create(&ev, &tr, &main_allocr);
-	typer_create(&tr, &ev, &main_allocr);
+	typer_create(&tr, &ev, &main_allocr, &idents);
 	tr.exptr = &exptr;
 	
 	if (!block_enter(NULL, f.stmts, SCOPE_CHECK_REDECL)) /* enter global scope */

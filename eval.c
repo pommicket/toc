@@ -1514,6 +1514,9 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	case EXPR_VAL:
 		*v = e->val;
 		break;
+	case EXPR_PKG:
+		v->pkg = e->pkg.name_ident->pkg;
+		break;
 	case EXPR_DSIZEOF:
 	case EXPR_DALIGNOF:
 		assert(0);
