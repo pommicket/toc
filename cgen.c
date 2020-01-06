@@ -1769,7 +1769,6 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 		}
 	} else {
 		/* declarations where we use an expression */
-		assert(g->block && !(d->flags & DECL_IS_CONST));
 		int nidents = (int)arr_len(d->idents);
 		for (int idx = 0; idx < nidents; ++idx) {
 			Identifier i = d->idents[idx];
@@ -1787,6 +1786,7 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 			cgen_write(g, "; ");
 		}
 		if (has_expr) {
+			assert(g->block && !(d->flags & DECL_IS_CONST));
 			if (!cgen_expr_pre(g, &d->expr)) return false;
 			if (d->expr.type.kind == TYPE_TUPLE) {
 				if (!cgen_set_tuple(g, NULL, d->idents, NULL, &d->expr)) return false;

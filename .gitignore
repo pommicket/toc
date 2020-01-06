@@ -1,6 +1,7 @@
 toc
 a.out
 out.c
+point.c
 *.top
 tests/**/*.c
 tests/**/*.bin
