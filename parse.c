@@ -692,7 +692,10 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 					}
 				}
 				break;
-			case KW_LPAREN: {
+			case KW_LT: {
+				/* no expression can start with < */
+				return true;
+#if 0
 				Token *child_end;
 				++t->token;
 				ret = false;
@@ -702,7 +705,7 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 						if (t->token->kw == KW_COMMA) {
 							++t->token;
 							continue;
-						} else if (t->token->kw == KW_RPAREN) {
+						} else if (t->token->kw == KW_GT) {
 							/* it *is* a tuple! */
 							ret = true;
 							++t->token;
@@ -710,6 +713,7 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 						}
 					} else break;
 				}
+#endif
 			} break;
 			case KW_FN: {
 				ret = false;

@@ -13,5 +13,8 @@ foo ::= fn() <int, int> {
 
 main ::= fn() {
 	 a, b := foo();
+	 x , y::= (int, int);
 	 puti(a); puti(b);
+	 c:x = 7;
+	 d:x = 18;
 };
