@@ -126,6 +126,7 @@ static bool export_type(Exporter *ex, Type *type, Location where) {
 	switch (type->kind) {
 	case TYPE_VOID:
 	case TYPE_TYPE:
+	case TYPE_PKG:
 	case TYPE_UNKNOWN:
 		break;
 	case TYPE_PTR: export_type(ex, type->ptr, where); break;
@@ -404,6 +405,10 @@ static bool export_expr(Exporter *ex, Expression *e) {
 		if (!export_block(ex, &w->body))
 			return false;
 	} break;
+	case EXPR_PKG:
+		if (!export_expr(ex, e->pkg.name))
+			return false;
+		break;
 	case EXPR_SLICE: {
 		SliceExpr *s = &e->slice;
 		if (!export_expr(ex, s->of)) return false;

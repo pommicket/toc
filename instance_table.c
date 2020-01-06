@@ -96,6 +96,7 @@ static U64 type_hash(Type *t) {
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 	case TYPE_TYPE:
+	case TYPE_PKG:
 		return hash;
 	case TYPE_TUPLE:
 		arr_foreach(t->tuple, Type, sub)

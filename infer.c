@@ -84,6 +84,7 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 	case TYPE_UNKNOWN:
 	case TYPE_BUILTIN:
 	case TYPE_TYPE:
+	case TYPE_PKG:
 		break; /* nothing we can do here */
 	case TYPE_TUPLE: {
 		if (to->kind != TYPE_TUPLE) return true;

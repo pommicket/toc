@@ -49,6 +49,7 @@ static const char *expr_kind_to_str(ExprKind k) {
 	case EXPR_SLICE: return "slice";
 	case EXPR_TYPE: return "type";
 	case EXPR_VAL: return "value";
+	case EXPR_PKG: return "package";
 	}
 	assert(0);
 	return "";
@@ -266,6 +267,8 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 	}
 	case TYPE_TYPE:
 		return str_copy(buffer, bufsize, "<type>");
+	case TYPE_PKG:
+		return str_copy(buffer, bufsize, "pkg");
 	case TYPE_EXPR:
 		/* TODO: improve this... we're gonna need expr_to_str ): */
 		return str_copy(buffer, bufsize, "<type expression>");
@@ -449,12 +452,11 @@ static bool parse_type(Parser *p, Type *type) {
 			}
 		}
 		/* Not a builtin */
-		if (t->token->kw == KW_TYPE) {
+		switch (t->token->kw) {
+		case KW_TYPE:
 			type->kind = TYPE_TYPE;
 			++t->token;
 			break;
-		}
-		switch (t->token->kw) {
 		case KW_FN: {
 			/* function type */
 			type->kind = TYPE_FN;
@@ -529,11 +531,11 @@ static bool parse_type(Parser *p, Type *type) {
 				return false;
 			}
 		} break;
-		case KW_LPAREN:
+		case KW_LT:
 			/* tuple! */
 			type->kind = TYPE_TUPLE;
 		    type->tuple = NULL;
-			++t->token;	/* move past ( */
+			++t->token;	/* move past < */
 			while (1) {
 				Type *child = parser_arr_add(p, &type->tuple);
 				if (!parse_type(p, child)) return false;
@@ -541,8 +543,8 @@ static bool parse_type(Parser *p, Type *type) {
 					err_print(child->where, "Tuples cannot contain tuples.");
 					return false;
 				}
-				if (token_is_kw(t->token, KW_RPAREN)) { /* we're done with the tuple */
-					++t->token;	/* move past ) */
+				if (token_is_kw(t->token, KW_GT)) { /* we're done with the tuple */
+					++t->token;	/* move past > */
 					break;
 				}
 				if (token_is_kw(t->token, KW_COMMA)) {
@@ -612,19 +614,19 @@ static bool parse_type(Parser *p, Type *type) {
 			}
 			break;
 		default:
-			tokr_err(t, "Unrecognized type.");
-			return false;
+			goto type_expr;
 		}
 		break;
 	default:
+	type_expr: {
 		/* TYPE_EXPR */
-		if (parse_expr(p, type->expr = parser_new_expr(p),
-					   expr_find_end(p, (ExprEndFlags)-1 /* end as soon as possible */))) {
+		Token *end = expr_find_end(p, (ExprEndFlags)-1 /* end as soon as possible */);
+		if (parse_expr(p, type->expr = parser_new_expr(p), end)) {
 			type->kind = TYPE_EXPR;
 		} else {
-			tokr_err(t, "Unrecognized type.");
 			return false;
 		}
+		} break;
 	}
 	return true;
 	
@@ -1023,6 +1025,12 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	Token *start = t->token;
 	/* TODO: consider moving this after ops, so that "if true { 5 } else { 3 } as f32" is possible */
 	if (t->token->kind == TOKEN_KW) switch (t->token->kw) {
+		case KW_PKG:
+			++t->token;
+			e->kind = EXPR_PKG;
+			if (!parse_expr(p, e->pkg.name = parser_malloc(p, sizeof *e->pkg.name), expr_find_end(p, 0)))
+				return false;
+			return true;
 		case KW_FN: {
 			/* this is a function */
 			e->kind = EXPR_FN;
@@ -2241,6 +2249,11 @@ static void fprint_expr(FILE *out, Expression *e) {
 	case EXPR_VAL:
 		fprint_val(out, e->val, &e->type);
 		break;
+	case EXPR_PKG:
+		fprintf(out, "(pkg ");
+		fprint_expr(out, e->pkg.name);
+		fprintf(out, ")");
+		break;
 	}
 	if (found_type) {
 		fprintf(out, ":");
@@ -2338,6 +2351,7 @@ static bool expr_is_definitely_const(Expression *e) {
 	case EXPR_DALIGNOF:
 	case EXPR_TYPE:
 	case EXPR_VAL:
+	case EXPR_PKG:
 		return true;
 	case EXPR_IF:
 	case EXPR_WHILE:

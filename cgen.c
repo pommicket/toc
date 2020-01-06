@@ -63,6 +63,7 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 	case EXPR_LITERAL_STR:												\
 	case EXPR_LITERAL_CHAR:												\
 	case EXPR_LITERAL_FLOAT:											\
+	case EXPR_PKG:														\
 	break;																\
 	case EXPR_UNARY_OP:													\
 	if (!f(g, e->unary.of)) return false;								\
@@ -238,6 +239,7 @@ static bool cgen_uses_ptr(Type *t) {
 	case TYPE_TYPE:
 		return false;
 	case TYPE_EXPR:
+	case TYPE_PKG:
 		break;
 	}
 	assert(0);
@@ -328,6 +330,7 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
 	case TYPE_TUPLE:
 	case TYPE_TYPE:
 	case TYPE_EXPR:
+	case TYPE_PKG:
 		/* We should never try to generate this type */
 		assert(0);
 		return false;
@@ -401,6 +404,7 @@ static bool cgen_type_post(CGenerator *g, Type *t, Location where) {
 	case TYPE_STRUCT:
 		break;
 	case TYPE_EXPR:
+	case TYPE_PKG:
 		assert(0);
 		break;
 	}
@@ -426,6 +430,7 @@ static bool type_contains_type(Type *t) {
 	case TYPE_BUILTIN:
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
+	case TYPE_PKG:
 		return false;
 	case TYPE_TYPE:
 		return true;
@@ -624,6 +629,7 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 	case TYPE_VOID:
 	case TYPE_TYPE:
 	case TYPE_EXPR:
+	case TYPE_PKG:
 		assert(0);
 		return false;
 	}
@@ -721,6 +727,8 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 			cgen_write(g, "; ");
 		}
 	    break;
+		
+		/* things which can never be tuples */
 	case EXPR_SLICE:
 	case EXPR_IDENT:
 	case EXPR_LITERAL_INT:
@@ -737,6 +745,7 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 	case EXPR_DSIZEOF:
 	case EXPR_DALIGNOF:
 	case EXPR_TYPE:
+	case EXPR_PKG:
 		assert(0);
 		return false;
 	}
@@ -1147,10 +1156,12 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 	case EXPR_DSIZEOF:
 	case EXPR_DALIGNOF:
 	case EXPR_TYPE:
+	case EXPR_PKG:
 		break;
 	case EXPR_TUPLE:
 		arr_foreach(e->tuple, Expression, x)
 			if (!cgen_expr_pre(g, x)) return false;
+		break;
 	}
 	return true;
 }
@@ -1444,6 +1455,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		   a tuple, e.g. 3, 5;, but we've errored about that before
 		*/
 	case EXPR_TYPE:
+	case EXPR_PKG:
 		assert(0);
 		break;
 	case EXPR_FN: {
@@ -1518,6 +1530,7 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 	case TYPE_UNKNOWN:
 	case TYPE_TUPLE:
 	case TYPE_EXPR:
+	case TYPE_PKG:
 		assert(0);
 		break;
 	}
@@ -1662,6 +1675,7 @@ static bool cgen_val_ptr_pre(CGenerator *g, void *v, Type *t, Location where) {
 	case TYPE_STRUCT:
 		break;
 	case TYPE_EXPR:
+	case TYPE_PKG:
 		assert(0);
 	    return false;
 	}
@@ -1676,6 +1690,7 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 	case TYPE_VOID:
 	case TYPE_EXPR:
 	case TYPE_TYPE:
+	case TYPE_PKG:
 		assert(0);
 		return false;
 	case TYPE_UNKNOWN:

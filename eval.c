@@ -180,6 +180,7 @@ static bool val_truthiness(Value *v, Type *t) {
 	case TYPE_TUPLE:
 	case TYPE_STRUCT:
 	case TYPE_EXPR:
+	case TYPE_PKG:
 		break;
 	}
 	assert(0);
@@ -252,6 +253,7 @@ static void *val_get_ptr(Value *v, Type *t) {
 	case TYPE_SLICE:
 	case TYPE_TYPE:
 	case TYPE_TUPLE:
+	case TYPE_PKG:
 		return v;
 	case TYPE_ARR:
 		return v->arr;
@@ -368,6 +370,7 @@ static void *val_ptr_to_free(Value *v, Type *t) {
 	case TYPE_SLICE:
 	case TYPE_VOID:
 	case TYPE_TYPE:
+	case TYPE_PKG:
 	case TYPE_UNKNOWN:
 		return NULL;
 	case TYPE_ARR:
@@ -475,6 +478,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 	case TYPE_TYPE:
 	case TYPE_STRUCT:
 	case TYPE_EXPR:
+	case TYPE_PKG:
 		assert(0); break;
 	case TYPE_BUILTIN:
 		switch (to->kind) {
@@ -503,6 +507,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_FN:
 		case TYPE_ARR:
 		case TYPE_TYPE:
+		case TYPE_PKG:
 			assert(0);
 			break;
 		}
@@ -516,15 +521,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_FN:
 			vout->fn = vin->fn;
 			break;
-		case TYPE_SLICE:
-		case TYPE_UNKNOWN:
-		case TYPE_TUPLE:
-		case TYPE_VOID:
-		case TYPE_ARR:
-		case TYPE_BUILTIN:
-		case TYPE_TYPE:
-		case TYPE_STRUCT:
-		case TYPE_EXPR:
+		default:
 			assert(0); break;
 		}
 		break;
@@ -550,13 +547,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_FN:
 			vout->fn = vin->ptr;
 			break;
-		case TYPE_SLICE:
-		case TYPE_UNKNOWN:
-		case TYPE_TUPLE:
-		case TYPE_VOID:
-		case TYPE_EXPR:
-		case TYPE_TYPE:
-		case TYPE_STRUCT:
+		default:
 			assert(0);
 			break;
 		}
@@ -570,15 +561,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_ARR:
 			vout->arr = vin->arr;
 			break;
-		case TYPE_EXPR:
-		case TYPE_SLICE:
-		case TYPE_FN:
-		case TYPE_UNKNOWN:
-		case TYPE_TUPLE:
-		case TYPE_VOID:
-		case TYPE_BUILTIN:
-		case TYPE_TYPE:
-		case TYPE_STRUCT:
+		default:
 			assert(0); break;
 		}
 		break;
@@ -593,14 +576,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_SLICE:
 			vout->slice = vin->slice;
 			break;
-		case TYPE_FN:
-		case TYPE_UNKNOWN:
-		case TYPE_TUPLE:
-		case TYPE_VOID:
-		case TYPE_BUILTIN:
-		case TYPE_EXPR:
-		case TYPE_TYPE:
-		case TYPE_STRUCT:
+		default:
 			assert(0); break;
 		}
 		break;

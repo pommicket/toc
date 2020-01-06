@@ -79,6 +79,7 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 	switch (in->kind) {
 	case TYPE_BUILTIN:
 	case TYPE_TYPE:
+	case TYPE_PKG:
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 		break;
@@ -266,6 +267,9 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		if (sin->to)
 			copy_expr(c, sout->to = allocr_malloc(a, sizeof *sout->to), sin->to);
 	} break;
+	case EXPR_PKG:
+		copy_expr(c, out->pkg.name = allocr_malloc(a, sizeof *out->pkg.name), in->pkg.name);
+		break;
 	case EXPR_TYPE:
 		copy_type(c, &out->typeval, &in->typeval);
 		break;

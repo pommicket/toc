@@ -1,11 +1,17 @@
-f ::= g();
-
-x ::= 3;
-
-g ::= fn() int { x };
+puti ::= fn(x: int) {
+	 #C("printf(\"%ld\\n\", (long)x);
+");
+};
+putf ::= fn(x: float) {
+	 #C("printf(\"%f\\n\", (double)x);
+");
+};
+foo ::= fn() <int, int> {
+	x, y := 3, 5;
+	x, y
+};
 
 main ::= fn() {
-	 #C("printf(\"%ld\\n\", (long)x)");
-	 a := g();
-	 #C("printf(\"%ld\\n\", (long)a)");
+	 a, b := foo();
+	 puti(a); puti(b);
 };

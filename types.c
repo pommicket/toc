@@ -52,6 +52,7 @@ static bool type_eq(Type *a, Type *b) {
 	case TYPE_VOID: return true;
 	case TYPE_UNKNOWN: assert(0); return false;
 	case TYPE_TYPE: return true;
+	case TYPE_PKG: return true;
 	case TYPE_BUILTIN:
 		return a->builtin == b->builtin;
 	case TYPE_STRUCT: return a->struc == b->struc;
@@ -177,7 +178,8 @@ static bool expr_must_lval(Expression *e) {
 	case EXPR_BLOCK:
 	case EXPR_SLICE:
 	case EXPR_TYPE:
-	case EXPR_VAL: {
+	case EXPR_VAL:
+	case EXPR_PKG: {
 		err_print(e->where, "Cannot use %s as l-value.", expr_kind_to_str(e->kind));
 		return false;
 	}
@@ -528,6 +530,7 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 	case TYPE_UNKNOWN:
 	case TYPE_VOID:
 	case TYPE_TYPE:
+	case TYPE_PKG:
 	case TYPE_BUILTIN:
 		break;
 	}
@@ -546,6 +549,7 @@ static bool type_can_be_truthy(Type *t) {
 	case TYPE_ARR:
 	case TYPE_TYPE:
 	case TYPE_STRUCT:
+	case TYPE_PKG:
 		return false;
 	case TYPE_FN:
 	case TYPE_UNKNOWN:
@@ -577,6 +581,7 @@ static Status type_cast_status(Type *from, Type *to) {
 	case TYPE_STRUCT:
 	case TYPE_TYPE:
 	case TYPE_VOID:
+	case TYPE_PKG:
 		return STATUS_ERR;
 	case TYPE_BUILTIN:
 		switch (from->builtin) {
@@ -594,16 +599,8 @@ static Status type_cast_status(Type *from, Type *to) {
 				return STATUS_NONE;
 			case TYPE_PTR:
 				return STATUS_WARN;
-			case TYPE_FN:
-			case TYPE_TYPE:
-			case TYPE_TUPLE:
-			case TYPE_SLICE:
-			case TYPE_STRUCT:
-			case TYPE_ARR:
-			case TYPE_VOID:
+			default:
 				return STATUS_ERR;
-			case TYPE_EXPR:
-				assert(0);
 			}
 			break;
 		case BUILTIN_F32:

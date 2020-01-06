@@ -334,6 +334,7 @@ typedef enum {
 			  TYPE_PTR,
 			  TYPE_SLICE,
 			  TYPE_TYPE,
+			  TYPE_PKG,
 			  TYPE_EXPR, /* just use this expression as the type. this kind of type doesn't exist after resolving. */
 			  TYPE_STRUCT
 #define TYPE_COUNT (TYPE_STRUCT+1)
@@ -456,6 +457,7 @@ typedef enum {
 			  EXPR_DALIGNOF,
 			  EXPR_SLICE,
 			  EXPR_TYPE,
+			  EXPR_PKG,
 			  /* 
 				 a value (it's useful to have this). 
 				 right now they don't work with cgen_set_tuple
@@ -641,6 +643,9 @@ typedef struct Expression {
 		struct {
 			Type type;
 		} del;
+		struct {
+			struct Expression *name;
+		} pkg;
 		IfExpr if_;
 		WhileExpr while_;
 	    EachExpr *each;
