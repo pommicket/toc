@@ -118,9 +118,31 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 			}
 		}
 		cgen_recurse_subexprs(g, (&d->expr), cgen_decls_expr, cgen_decls_block, cgen_decls_decl);
-	} else if (d->flags & DECL_HAS_EXPR) {
-		if (!cgen_decls_expr(g, &d->expr))
-			return false;
+	} else {
+		if (d->flags & DECL_HAS_EXPR) {
+			if (!cgen_decls_expr(g, &d->expr))
+				return false;
+		}
+		if (g->block == NULL && g->fn == NULL) {
+			for (int i = 0, n_idents = (int)arr_len(d->idents); i < n_idents; ++i) {
+				Identifier ident = d->idents[i];
+				Type *type = decl_type_at_index(d, i);
+				if (type->kind != TYPE_TYPE) {
+					if (ident->export_name)
+						cgen_write(g, "extern ");
+					else
+						cgen_write(g, "static ");
+					if (!cgen_type_pre(g, type, d->where))
+						return false;
+					cgen_write(g, " ");
+					cgen_ident(g, ident);
+					if (!cgen_type_post(g, type, d->where))
+						return false;
+					cgen_write(g, ";");
+					cgen_nl(g);
+				}
+			}
+		}
 	}
 	return true;
 }

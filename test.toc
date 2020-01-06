@@ -1,0 +1,11 @@
+f ::= g();
+
+x ::= 3;
+
+g ::= fn() int { x };
+
+main ::= fn() {
+	 #C("printf(\"%ld\\n\", (long)x)");
+	 a := g();
+	 #C("printf(\"%ld\\n\", (long)a)");
+};

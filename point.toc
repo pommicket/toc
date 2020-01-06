@@ -4,9 +4,7 @@ pkg "point";
 	x, y: int;
 };
 
-#export mk_point ::= fn(x, y: int) Point {
-		 p : Point;
+#export mk_point ::= fn(x, y: int) p : Point {
 		 p.x = x;
 		 p.y = y;
-		 p
 };

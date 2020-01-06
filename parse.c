@@ -1952,6 +1952,7 @@ static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			}
 			if (p->file->pkg_name) {
 				tokr_err(t, "You've already set the package name.");
+				info_print(p->file->pkg_name->where, "The package name was previously set here.");
 				t->token = end + 1;
 				return false;
 			}
@@ -2320,7 +2321,9 @@ static inline Value *decl_val_at_index(Declaration *d, int i) {
 }
 
 static inline Type *decl_type_at_index(Declaration *d, int i) {
-	return d->type.kind == TYPE_TUPLE ? &d->type.tuple[i] : &d->type;
+	Type *ret = d->type.kind == TYPE_TUPLE ? &d->type.tuple[i] : &d->type;
+	assert(ret->kind != TYPE_TUPLE);
+	return ret;
 }
 
 

@@ -1566,6 +1566,7 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where, U64 instance, Valu
 		if (!cgen_decl(g, d))
 			return false;
 	}
+	
 	if (!cgen_block_enter(g, &f->body)) return false;
 	if (!cgen_block(g, &f->body, NULL, CGEN_BLOCK_NOENTER | CGEN_BLOCK_NOBRACES))
 		return false;
@@ -1728,13 +1729,14 @@ static bool cgen_val(CGenerator *g, Value v, Type *t, Location where) {
 
 static bool cgen_decl(CGenerator *g, Declaration *d) {
 	int has_expr = d->flags & DECL_HAS_EXPR;
-	bool is_tuple = d->type.kind == TYPE_TUPLE;
-	if ((d->flags & DECL_IS_CONST) || (g->block == NULL && g->fn == NULL)) {
+	if (cgen_fn_is_direct(g, d))
+		return true; /* dealt with in cgen_defs_ */
+	if (d->flags & DECL_FOUND_VAL) {
 		/* declarations where we use a value */
-		for (size_t idx = 0; idx < arr_len(d->idents); ++idx) {
+		for (int idx = 0, nidents = (int)arr_len(d->idents); idx < nidents; ++idx) {
 		    Identifier i = d->idents[idx];
-			Type *type = is_tuple ? &d->type.tuple[idx] : &d->type;
-			Value *val = is_tuple ? &d->val.tuple[idx] : &d->val;
+			Type *type = decl_type_at_index(d, idx);
+			Value *val = decl_val_at_index(d, idx);
 			if (type->kind == TYPE_TYPE) {
 				/* 
 				   confusingly,
@@ -1743,10 +1745,9 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 				   we don't need to do anything here.
 				*/
 				continue;
-			} else if (type->kind == TYPE_FN && (d->flags & DECL_IS_CONST)) {
-				/* don't generate function pointer declaration for constant fns */
-				continue;
 			}
+			if (g->block == NULL && g->fn == NULL && !i->export_name)
+				cgen_write(g, "static ");
 			if (has_expr) {
 				if (!cgen_val_pre(g, *val, type, d->where))
 					return false;
@@ -1768,10 +1769,12 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 		}
 	} else {
 		/* declarations where we use an expression */
-		size_t nidents = arr_len(d->idents);
-		for (size_t idx = 0; idx < nidents; ++idx) {
+		assert(g->block && !(d->flags & DECL_IS_CONST));
+		int nidents = (int)arr_len(d->idents);
+		for (int idx = 0; idx < nidents; ++idx) {
 			Identifier i = d->idents[idx];
-			Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx] : &d->type;
+			Type *type = decl_type_at_index(d, idx);
+			if (g->block == NULL && g->fn == NULL && !i->export_name) cgen_write(g, "static ");
 			if (!cgen_type_pre(g, type, d->where)) return false;
 			cgen_write(g, " ");
 			cgen_ident(g, i);
