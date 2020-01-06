@@ -17,4 +17,6 @@ main ::= fn() {
 	 puti(a); puti(b);
 	 c:x = 7;
 	 d:x = 18;
+	 k : [5]struct {x: int; y: int;};
+	 puti(k[0].x);
 };

@@ -7,6 +7,7 @@ static bool types_stmt(Typer *tr, Statement *s);
 static bool types_block(Typer *tr, Block *b);
 static bool type_resolve(Typer *tr, Type *t, Location where);
 
+
 static inline void *typer_malloc(Typer *tr, size_t bytes) {
 	return allocr_malloc(tr->allocr, bytes);
 }
@@ -21,6 +22,10 @@ static inline void *typer_arr_add_(Typer *tr, void **arr, size_t sz) {
 
 static inline bool type_is_builtin(Type *t, BuiltinType b) {
 	return t->kind == TYPE_BUILTIN && t->builtin == b;
+}
+
+static inline bool type_is_slicechar(Type *t) {
+	return t->kind == TYPE_SLICE && type_is_builtin(t->slice, BUILTIN_CHAR);
 }
 
 #define typer_arr_add(tr, a) typer_arr_add_(tr, (void **)(a), sizeof **(a))
@@ -826,7 +831,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 	case EXPR_LITERAL_INT:
 	    t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_I64;
-		t->flags |= TYPE_IS_FLEXIBLE | TYPE_IS_RESOLVED;
+		t->flags |= TYPE_IS_FLEXIBLE;
 		break;
 	case EXPR_LITERAL_STR:
 		t->kind = TYPE_SLICE;
@@ -835,22 +840,25 @@ static bool types_expr(Typer *tr, Expression *e) {
 		t->slice->was_expr = NULL;
 		t->slice->kind = TYPE_BUILTIN;
 		t->slice->builtin = BUILTIN_CHAR;
-		t->flags |= TYPE_IS_RESOLVED;
 		break;
 	case EXPR_LITERAL_FLOAT:
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_F32;
-		t->flags |= TYPE_IS_FLEXIBLE | TYPE_IS_RESOLVED;
+		t->flags |= TYPE_IS_FLEXIBLE;
 		break;
 	case EXPR_LITERAL_BOOL:
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_BOOL;
-		t->flags |= TYPE_IS_RESOLVED;
 		break;
 	case EXPR_LITERAL_CHAR:
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_CHAR;
-		t->flags |= TYPE_IS_RESOLVED;
+		break;
+	case EXPR_PKG:
+		t->kind = TYPE_PKG;
+		Expression *name_expr = e->pkg.name_expr;
+		if (!types_expr(tr, name_expr)) return false;
+		Value name_val;
 		break;
 	case EXPR_EACH: {
 		EachExpr *ea = e->each;
@@ -1476,10 +1484,9 @@ static bool types_expr(Typer *tr, Expression *e) {
 		Expression *code = e->c.code;
 		if (!types_expr(tr, code))
 			return false;
-		if (code->type.kind != TYPE_SLICE
-			|| !type_is_builtin(code->type.slice, BUILTIN_CHAR)) {
+		if (!type_is_slicechar(&code->type)) {
 			char *s = type_to_str(&code->type);
-			err_print(e->where, "Argument to #C directive must be a string, but got type %s.");
+			err_print(e->where, "Argument to #C directive must of type []char, but got type %s.");
 			free(s);
 			return false;
 		}
@@ -1732,8 +1739,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				/* fallthrough */
 			case TYPE_STRUCT: {
 				/* allow accessing struct members with a string */
-				if (rhs_type->kind != TYPE_SLICE
-					|| !type_is_builtin(rhs_type->slice, BUILTIN_CHAR)) {
+				if (!type_is_slicechar(rhs_type)) {
 					char *s = type_to_str(rhs_type);
 					err_print(e->where, "Expected a string for struct member access with [], but got type %s.", s);
 					return false;
@@ -1803,10 +1809,11 @@ static bool types_expr(Typer *tr, Expression *e) {
 						
 					Value field_name;
 					if (!types_expr(tr, rhs)) return false;
-					if (rhs_type->kind != TYPE_SLICE || !type_is_builtin(rhs_type->slice, BUILTIN_CHAR)) {
-						err_print(e->where, "Invalid field of type %s.");
+					if (!type_is_slicechar(rhs_type)) {
+						char *s = type_to_str(rhs_type);
+						err_print(e->where, "Invalid field of type %s.", s);
+						free(s);
 						return false;
-						
 					}
 					if (!eval_expr(tr->evalr, rhs, &field_name)) return false;
 					char *str = field_name.slice.data;
@@ -2125,7 +2132,7 @@ static bool types_file(Typer *tr, ParsedFile *f, char *code) {
 		Value pkg_name;
 		if (!types_expr(tr, f->pkg_name))
 			return false;
-		if (f->pkg_name->type.kind != TYPE_SLICE || !type_is_builtin(f->pkg_name->type.slice, BUILTIN_CHAR)) {
+		if (!type_is_slicechar(&f->pkg_name->type)) {
 			char *typestr = type_to_str(&f->pkg_name->type);
 			err_print(f->pkg_name->where, "Package names must be of type []char, but this is of type %s.", typestr);
 			free(typestr);

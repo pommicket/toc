@@ -7,6 +7,41 @@ static bool cgen_decls_stmt(CGenerator *g, Statement *s);
 static bool cgen_decls_block(CGenerator *g, Block *b);
 static bool cgen_decls_decl(CGenerator *g, Declaration *d);
 
+static bool cgen_decls_type(CGenerator *g, Type *type, Location where) {
+	if (!(type->flags & TYPE_IS_RESOLVED)) /* non-instance constant fn parameter type */
+		return true;
+	if (type->kind == TYPE_STRUCT) {
+		StructDef *sdef = type->struc;
+		if (!(sdef->flags & STRUCT_DEF_CGENERATED)) {
+			/* generate struct definition */
+			cgen_write(g, "struct ");
+			if (sdef->c.name) {
+				cgen_ident(g, sdef->c.name);
+			} else {
+				assert(sdef->c.id);
+				cgen_ident_id(g, sdef->c.id);
+			}
+			cgen_write(g, "{");
+			cgen_nl(g);
+			++g->indent_lvl;
+			arr_foreach(sdef->fields, Field, f) {
+				if (!cgen_type_pre(g, f->type, where)) return false;
+				cgen_write(g, " ");
+				cgen_ident(g, f->name);
+				if (!cgen_type_post(g, f->type, where)) return false;
+				cgen_write(g, ";");
+				cgen_nl(g);
+			}
+			--g->indent_lvl;
+			cgen_write(g, "};");
+			cgen_nl(g);
+			sdef->flags |= STRUCT_DEF_CGENERATED;
+		}
+	}
+	cgen_recurse_into_type(cgen_decls_type, g, type, where);
+	return true;
+}
+
 static bool cgen_fn_decl(CGenerator *g, FnExpr *f, Location where, U64 instance, U64 which_are_const) {
 	if (cgen_should_gen_fn(f)) {
 		if (!fn_enter(f, 0))
@@ -57,7 +92,7 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 		FnExpr *f = e->fn;
 		f->c.name = NULL;
 		if (!f->c.id)
-			f->c.id = g->ident_counter++;
+			f->c.id = ++g->ident_counter;
 		FnType *fn_type = &e->type.fn;
 		if (fn_type->constness) {
 			if (!cgen_decls_fn_instances(g, e))
@@ -69,33 +104,12 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 	} break;
 	case EXPR_TYPE: {
 		Type *type = &e->typeval;
-		if (type->kind == TYPE_STRUCT) {
-			StructDef *sdef = type->struc;
-			if (!(sdef->flags & STRUCT_DEF_CGENERATED)) {
-				/* generate struct definition */
-				cgen_write(g, "struct ");
-				if (sdef->c.name)
-					cgen_ident(g, sdef->c.name);
-				else
-					cgen_ident_id(g, sdef->c.id);
-				cgen_write(g, "{");
-				cgen_nl(g);
-				++g->indent_lvl;
-				arr_foreach(sdef->fields, Field, f) {
-					if (!cgen_type_pre(g, f->type, e->where)) return false;
-					cgen_write(g, " ");
-					cgen_ident(g, f->name);
-					if (!cgen_type_post(g, f->type, e->where)) return false;
-					cgen_write(g, ";");
-					cgen_nl(g);
-				}
-				--g->indent_lvl;
-				cgen_write(g, "};");
-				cgen_nl(g);
-				sdef->flags |= STRUCT_DEF_CGENERATED;
-			}
-		}
+		if (!cgen_decls_type(g, type, e->where))
+			return false;
 	} break;
+	case EXPR_CAST:
+		if (!cgen_decls_type(g, &e->cast.type, e->where))
+			return false;
 	default:
 		break;
 	}
@@ -117,6 +131,8 @@ static bool cgen_decls_block(CGenerator *g, Block *b) {
 }
 
 static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
+	if (!cgen_decls_type(g, &d->type, d->where))
+		return false;
 	if (cgen_fn_is_direct(g, d)) {
 		d->expr.fn->c.name = d->idents[0];
 		if (d->expr.type.fn.constness) {

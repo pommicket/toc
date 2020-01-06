@@ -5,7 +5,7 @@
 */
 static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *ev, Allocator *allocr) {
 	g->outc = out;
-	g->ident_counter = 1; /* some places use 0 to mean no id */
+	g->ident_counter = 0;
 	g->main_ident = ident_get(ids, "main");
 	g->evalr = ev;
 	g->will_indent = true;
@@ -760,7 +760,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 	case EXPR_WHILE:
 	case EXPR_EACH:
 	case EXPR_BLOCK: {
-		id = g->ident_counter++;
+		id = ++g->ident_counter;
 		
 		cgen_ident_id_to_str(ret_name, id);
 		char *p = ret_name + strlen(ret_name);
@@ -1026,7 +1026,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		}
 		if (cgen_uses_ptr(&e->type)
 			&& e->type.kind != TYPE_TUPLE) {
-			e->call.c.id = g->ident_counter++;
+			e->call.c.id = ++g->ident_counter;
 			if (!cgen_type_pre(g, &e->type, e->where)) return false;
 			cgen_write(g, " ");
 			cgen_ident_id(g, e->call.c.id);
@@ -1070,8 +1070,8 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		break;
 	case EXPR_SLICE: {
 		SliceExpr *s = &e->slice;
-	    IdentID s_id = e->slice.c.id = g->ident_counter++;
-		IdentID from_id = g->ident_counter++;
+	    IdentID s_id = e->slice.c.id = ++g->ident_counter;
+		IdentID from_id = ++g->ident_counter;
 		if (!cgen_expr_pre(g, s->of))
 			return false;
 		if (s->from && !cgen_expr_pre(g, s->from))
@@ -1135,7 +1135,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		if (!cgen_val_pre(g, e->val, &e->type, e->where))
 			return false;
 		if (!cgen_type_pre(g, &e->type, e->where)) return false;
-		e->val_c_id = g->ident_counter++;
+		e->val_c_id = ++g->ident_counter;
 		cgen_write(g, " ");
 		cgen_ident_id(g, e->val_c_id);
 		if (!cgen_type_post(g, &e->type, e->where)) return false;

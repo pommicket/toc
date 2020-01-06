@@ -56,6 +56,7 @@ static size_t compiler_sizeof_builtin(BuiltinType b) {
 }
 
 static size_t compiler_alignof(Type *t) {
+	Value v;
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_BUILTIN:
@@ -63,11 +64,11 @@ static size_t compiler_alignof(Type *t) {
 	case TYPE_VOID:
 		return 1;
 	case TYPE_FN:
-		return sizeof(FnExpr *);
+		return sizeof v.fn;
 	case TYPE_PTR:
-		return sizeof(void *);
+		return sizeof v.ptr;
 	case TYPE_TUPLE:
-		return sizeof(Value *);
+		return sizeof v.tuple;
 	case TYPE_ARR:
 		return compiler_alignof(t->arr.of);
 	case TYPE_SLICE:
@@ -76,7 +77,9 @@ static size_t compiler_alignof(Type *t) {
 		else
 			return sizeof(size_t);
 	case TYPE_TYPE:
-		return sizeof(Type *);
+		return sizeof v.type;
+	case TYPE_PKG:
+		return sizeof v.pkg;
 	case TYPE_STRUCT: {
 		/* assume the align of a struct is (at most) the greatest align out of its children's */
 		size_t align = 1;
@@ -118,22 +121,25 @@ static void eval_struct_find_offsets(Type *t) {
 
 /* size of a type at compile time */
 static size_t compiler_sizeof(Type *t) {
+	Value v;
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_BUILTIN:
 		return compiler_sizeof_builtin(t->builtin);
 	case TYPE_FN:
-		return sizeof(FnExpr *);
+		return sizeof v.fn;
 	case TYPE_PTR:
-		return sizeof(void *);
+		return sizeof v.ptr;
 	case TYPE_ARR:
 		return t->arr.n * compiler_sizeof(t->arr.of);
 	case TYPE_TUPLE:
-		return sizeof(Value *);
+		return sizeof v.tuple;
 	case TYPE_SLICE:
-		return sizeof(Slice);
+		return sizeof v.slice;
 	case TYPE_TYPE:
-		return sizeof(Type *);
+		return sizeof v.type;
+	case TYPE_PKG:
+		return sizeof v.pkg;
 	case TYPE_STRUCT: {
 		eval_struct_find_offsets(t);
 		return t->struc->size;
@@ -318,6 +324,10 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 	case TYPE_PTR:
 		fprintf(f, "<pointer: %p>", *(void **)p);
 		break;
+	case TYPE_PKG: {
+		Package *pkg = *(Package **)p;
+		fprintf(f, "<package at %p>", (void *)pkg);
+	} break;
 	case TYPE_SLICE: {
 		fprintf(f, "["); /* TODO: change? when slice initializers are added */
 		Slice slice = *(Slice *)p;
@@ -614,6 +624,9 @@ static void eval_deref(Value *v, void *ptr, Type *type) {
 	case TYPE_TYPE:
 		v->type = *(Type **)ptr;
 		break;
+	case TYPE_PKG:
+		v->pkg = *(Package **)ptr;
+		break;
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 	case TYPE_EXPR:
@@ -651,6 +664,9 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 		break;
 	case TYPE_TYPE:
 		*(Type **)set = to->type;
+		break;
+	case TYPE_PKG:
+		*(Package **)set = to->pkg;
 		break;
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:

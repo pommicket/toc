@@ -36,6 +36,7 @@ static Identifier ident_new(Identifiers *ids, Identifier parent, unsigned char i
 	for (size_t i = 0; i < TREE_NCHILDREN; ++i)
 		tree->children[i] = NULL;
 	tree->decls = NULL;
+	tree->pkg = NULL;
 #endif
 	tree->parent = parent;
 	if (parent)

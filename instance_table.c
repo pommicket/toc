@@ -191,6 +191,10 @@ static U64 val_ptr_hash(void *v, Type *t) {
 		}
 		return hash;
 	}
+	case TYPE_PKG: {
+		Package *pkg = *(Package **)v;
+		return (U64)pkg;
+	} break;
 	case TYPE_EXPR: break;
 	}
 	assert(0);
@@ -272,6 +276,8 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 				return false;
 		}
 	    return true;
+	case TYPE_PKG:
+		return *(Package **)u == *(Package **)v;
 	case TYPE_EXPR: break;
 	}
 	assert(0);

@@ -1013,7 +1013,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		case KW_PKG:
 			++t->token;
 			e->kind = EXPR_PKG;
-			if (!parse_expr(p, e->pkg.name = parser_malloc(p, sizeof *e->pkg.name), expr_find_end(p, 0)))
+			if (!parse_expr(p, e->pkg.name_expr = parser_malloc(p, sizeof *e->pkg.name_expr), expr_find_end(p, 0)))
 				return false;
 			return true;
 		case KW_FN: {
@@ -2236,7 +2236,11 @@ static void fprint_expr(FILE *out, Expression *e) {
 		break;
 	case EXPR_PKG:
 		fprintf(out, "(pkg ");
-		fprint_expr(out, e->pkg.name);
+		if (found_type) {
+			fprint_ident(out, e->pkg.name_ident);
+		} else {
+			fprint_expr(out, e->pkg.name_expr);
+		}
 		fprintf(out, ")");
 		break;
 	}

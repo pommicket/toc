@@ -150,6 +150,7 @@ typedef union Value {
 	union Value *tuple;
 	Slice slice;
 	struct Type *type;
+	struct Package *pkg;
 } Value;
 
 enum {
@@ -187,6 +188,7 @@ typedef struct IdentTree {
 	unsigned char index_in_parent; /* index of this in .parent.children */
 	bool export_name; /* is this identifier's name important? */
 	U64 export_id; /* 0 if there's no exported identifier here, otherwise unique positive integer associated with this identifier */
+	struct Package *pkg; /* NULL if this is not associated with a package */
 	struct IdentTree *parent;
 	struct IdentTree *children[TREE_NCHILDREN];
 	IdentDecl *decls; /* array of declarations of this identifier */
@@ -643,8 +645,9 @@ typedef struct Expression {
 		struct {
 			Type type;
 		} del;
-		struct {
-			struct Expression *name;
+		union {
+			struct Expression *name_expr;
+			Identifier name_ident;
 		} pkg;
 		IfExpr if_;
 		WhileExpr while_;
@@ -763,6 +766,10 @@ typedef struct Typer {
 	char *pkg_name;
 } Typer;
 
+typedef struct Package {
+	Identifier name;
+	Identifiers idents;
+} Package;
 
 typedef struct Exporter {
 	FILE *out; /* .top (toc package) to output to */
@@ -789,6 +796,7 @@ typedef struct CGenerator {
 	Identifier main_ident;
 	Identifiers *idents;
 } CGenerator;
+
 
 #ifdef TOC_DEBUG
 #define add_ident_decls(b, d, flags) add_ident_decls_(__FILE__, __LINE__, b, d, flags)

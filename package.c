@@ -261,6 +261,10 @@ static bool export_val_ptr(Exporter *ex, void *val, Type *type, Location where) 
 		if (!export_fn_ptr(ex, *(FnExpr **)val, where))
 			return false;
 		break;
+	case TYPE_PKG: {
+		Package *pkg = *(Package **)val;
+		export_ident(ex, pkg->name);
+	} break;
 	case TYPE_UNKNOWN:
 	case TYPE_EXPR:
 		assert(0);
@@ -406,8 +410,7 @@ static bool export_expr(Exporter *ex, Expression *e) {
 			return false;
 	} break;
 	case EXPR_PKG:
-		if (!export_expr(ex, e->pkg.name))
-			return false;
+		export_ident(ex, e->pkg.name_ident);
 		break;
 	case EXPR_SLICE: {
 		SliceExpr *s = &e->slice;

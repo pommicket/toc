@@ -38,6 +38,8 @@ static void copy_val(Allocator *a, Value *out, Value *in, Type *t) {
 	case TYPE_SLICE:
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
+	case TYPE_PKG:
+	case TYPE_TYPE:
 		*out = *in;
 		break;
 	case TYPE_ARR: {
@@ -55,9 +57,6 @@ static void copy_val(Allocator *a, Value *out, Value *in, Type *t) {
 		out->struc = allocr_malloc(a, bytes);
 		memcpy(out->struc, in->struc, bytes);
 	} break;
-	case TYPE_TYPE:
-		*out = *in;
-		break;
 	case TYPE_EXPR:
 		assert(0);
 	}
@@ -268,7 +267,7 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 			copy_expr(c, sout->to = allocr_malloc(a, sizeof *sout->to), sin->to);
 	} break;
 	case EXPR_PKG:
-		copy_expr(c, out->pkg.name = allocr_malloc(a, sizeof *out->pkg.name), in->pkg.name);
+		copy_expr(c, out->pkg.name_expr = allocr_malloc(a, sizeof *out->pkg.name_expr), in->pkg.name_expr);
 		break;
 	case EXPR_TYPE:
 		copy_type(c, &out->typeval, &in->typeval);
