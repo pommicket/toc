@@ -251,13 +251,13 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 		return written;
 	}
 	case TYPE_TUPLE: {
-		size_t written = str_copy(buffer, bufsize, "(");
+		size_t written = str_copy(buffer, bufsize, "<");
 		arr_foreach(t->tuple, Type, child) {
 			if (child != t->tuple)
 				written += str_copy(buffer + written, bufsize - written, ", ");
 			written += type_to_str_(child, buffer + written, bufsize - written);
 		}
-		written += str_copy(buffer + written, bufsize - written, ")");
+		written += str_copy(buffer + written, bufsize - written, ">");
 		return written;
 	}
 	case TYPE_PTR: {
@@ -266,7 +266,7 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 		return written;
 	}
 	case TYPE_TYPE:
-		return str_copy(buffer, bufsize, "<type>");
+		return str_copy(buffer, bufsize, "Type");
 	case TYPE_PKG:
 		return str_copy(buffer, bufsize, "pkg");
 	case TYPE_EXPR:
@@ -695,25 +695,6 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 			case KW_LT: {
 				/* no expression can start with < */
 				return true;
-#if 0
-				Token *child_end;
-				++t->token;
-				ret = false;
-				while (parser_is_definitely_type(p, &child_end)) {
-					t->token = child_end;
-					if (t->token->kind == TOKEN_KW) {
-						if (t->token->kw == KW_COMMA) {
-							++t->token;
-							continue;
-						} else if (t->token->kw == KW_GT) {
-							/* it *is* a tuple! */
-							ret = true;
-							++t->token;
-							goto end;
-						}
-					} else break;
-				}
-#endif
 			} break;
 			case KW_FN: {
 				ret = false;
