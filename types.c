@@ -873,11 +873,30 @@ static bool types_expr(Typer *tr, Expression *e) {
 			err_print(name_expr->where, "Package name has negative length (" I64_FMT ")!", name_str.n);
 			return false;
 		}
-		char *name_cstr = err_malloc((size_t)name_str.n + 1);
-		memcpy(name_cstr, name_str.data, (size_t)name_str.n);
+		size_t name_str_len = (size_t)name_str.n;
+		char *name_cstr = err_malloc(name_str_len + 1);
+		memcpy(name_cstr, name_str.data, name_str_len);
 		name_cstr[name_str.n] = '\0';
-		Identifier name_ident = ident_insert(tr->idents, &name_cstr);
+		/* advance copy so we can free the original */
+		char *copy = name_cstr;
+		Identifier name_ident = ident_insert(tr->idents, &copy);
+		free(name_cstr);
 		e->pkg.name_ident = name_ident;
+		if (!name_ident->pkg) {
+			char *filename = err_malloc(name_str_len + 5);
+			Package *pkg = name_ident->pkg = allocr_calloc(tr->allocr, 1, sizeof *pkg);
+			memcpy(filename, name_str.data, name_str_len);
+			strcpy(filename + name_str.n, ".top");
+			/* TODO: library paths */
+			FILE *fp = fopen(filename, "rb");
+			if (!fp) {
+				err_print(e->where, "Could not open package: %s (does this file exist?)", filename);
+				free(filename);
+				return false;
+			}
+			import_pkg(pkg, fp);
+			fclose(fp);
+		}
 	} break;
 	case EXPR_EACH: {
 		EachExpr *ea = e->each;

@@ -605,3 +605,7 @@ static bool exptr_finish(Exporter *ex) {
 	
 	return true;
 }
+
+static void import_pkg(Package *p, FILE *f) {
+	idents_create(&p->idents);
+}
