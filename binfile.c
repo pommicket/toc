@@ -19,7 +19,13 @@ static inline void write_u8(FILE *fp, U8 u8) {
 #endif
 }
 
-static void write_char(FILE *fp, char c) {
+#undef BINFILE_PRINT /* don't need it anymore */
+
+static inline U8 read_u8(FILE *fp) {
+	return (U8)getc(fp);
+}
+
+static inline void write_char(FILE *fp, char c) {
 #ifdef TOC_DEBUG
 	/* mayyybe this'd do the wrong thing for negative characters on systems where char is signed? */
 	write_u8(fp, (U8)c);
@@ -28,10 +34,17 @@ static void write_char(FILE *fp, char c) {
 #endif
 }
 
-#undef BINFILE_PRINT /* don't need it anymore */
+static inline char read_char(FILE *fp) {
+	return (char)getc(fp);
+}
 
 static inline void write_i8(FILE *fp, I8 i8) {
 	write_u8(fp, (U8)i8);
+}
+
+static inline I8 read_i8(FILE *fp) {
+	U8 u8 = read_u8(fp);
+	return (I8)((u8 & (1<<7)) ? -(1 + ~u8) : u8);
 }
 
 /* 
@@ -44,8 +57,19 @@ static inline void write_u16(FILE *fp, U16 u16) {
 	write_u8(fp, (U8)(u16 >> 8));
 }
 
+static inline U16 read_u16(FILE *fp) {
+	U8 a = read_u8(fp);
+	U8 b = read_u8(fp);
+	return (U16)(a + (((U16)b) << 8));
+}
+
 static inline void write_i16(FILE *fp, I16 i16) {
 	write_u16(fp, (U16)i16);
+}
+
+static inline I16 read_i16(FILE *fp) {
+	U16 u16 = read_u16(fp);
+	return (I16)((u16 & (1U<<15)) ? -(1 + ~u16) : u16);
 }
 
 static inline void write_u32(FILE *fp, U32 u32) {
@@ -53,8 +77,19 @@ static inline void write_u32(FILE *fp, U32 u32) {
 	write_u16(fp, (U16)(u32 >> 16));
 }
 
+static inline U32 read_u32(FILE *fp) {
+	U16 a = read_u16(fp);
+	U16 b = read_u16(fp);
+	return (U32)(a + (((U32)b << 16)));
+}
+
 static inline void write_i32(FILE *fp, I32 i32) {
 	write_u32(fp, (U32)i32);
+}
+
+static inline I32 read_i32(FILE *fp) {
+	U32 u32 = read_u32(fp);
+	return (I32)((u32 & (1UL<<31)) ? -(1 + ~u32) : u32);
 }
 
 static void write_u64(FILE *fp, U64 u64) {
@@ -66,11 +101,34 @@ static void write_u64(FILE *fp, U64 u64) {
 #endif
 }
 
+static U64 read_u64(FILE *fp) {
+#if BINFILE_PORTABLE
+	U32 a = read_u32(fp);
+	U32 b = read_u32(fp);
+	return (U64)(a + (((U64)b << 32)));
+#else
+	U64 x;
+	fread(&x, sizeof x, 1, fp);
+	return x;
+#endif
+}
+
 static inline void write_i64(FILE *fp, I64 i64) {
 #if BINFILE_PORTABLE
 	write_u64(fp, (U64)i64);
 #else
 	fwrite(&i64, sizeof i64, 1, fp);
+#endif
+}
+
+static inline I64 read_i64(FILE *fp) {
+#ifdef BINFILE_PORTABLE
+	U64 u64 = read_u64(fp);
+	return (I64)((u64 & ((U64)1<<63)) ? -(1 + ~u64) : u64);
+#else
+	I64 x;
+	fread(&x, sizeof x, 1, fp);
+	return x;
 #endif
 }
 
