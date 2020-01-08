@@ -43,7 +43,7 @@ On other systems, you can just compile main.c with a C compiler. `toc` uses seve
 
 ### `toc` Compiler Source Code
 
-The source code for the `toc` compiler is licensed under the GNU General Public License, version 3. See `LICENSE` for more information.
+Most of the source code for the `toc` compiler is licensed under the GNU General Public License, version 3. See `LICENSE` for more information.
 
 `toc` is written in C, for speed and portability. It has no dependencies, other than the C runtime library.
 

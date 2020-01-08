@@ -2,20 +2,23 @@
 
 #ifdef TOC_DEBUG
 #define BINFILE_PRINT
+static bool binfile_printing_enabled = true;
 #endif
 
 static inline void write_u8(FILE *fp, U8 u8) {
 	putc(u8, fp);
 #ifdef BINFILE_PRINT
-	static int col = 0;
-	printf("%02x ", u8);
-	++col;
-	if (col == 8) printf(" ");
-	if (col == 16) {
-		col = 0;
-		printf("\n");
+	if (binfile_printing_enabled) {
+		static int col = 0;
+		printf("%02x ", u8);
+		++col;
+		if (col == 8) printf(" ");
+		if (col == 16) {
+			col = 0;
+			printf("\n");
+		}
+		fflush(stdout);
 	}
-	fflush(stdout);
 #endif
 }
 
@@ -171,10 +174,20 @@ static F32 read_f32(FILE *fp) {
 #ifdef TOC_PORTABLE
 	/* TODO: infinity, NaN */
 	U32 u32 = read_u32(fp);
-	U32 sign =     (u32 & 0x8000000);
-	U32 exponent = (u32 & 0x7f80000) >> 23;
-	U32 fraction = (u32 & 0x007ffff);
-	/* TODO: finish me */
+	U32 sign =     (u32 & 0x80000000);
+	U32 exponent = (u32 & 0x7f800000) >> 23;
+	U32 fraction = (u32 & 0x007fffff);
+	F32 flt = (float)fraction;
+	I32 signed_exponent = (I32)exponent - 127;
+	while (signed_exponent < 0) {
+		++signed_exponent;
+		flt /= (F32)2;
+	}
+	while (signed_exponent > 0) {
+		--signed_exponent;
+		flt *= (F32)2;
+	}
+	if (sign) flt = -flt;
 #else
 	F32 f32;
 	fread(&f32, sizeof f32, 1, fp);
@@ -231,3 +244,25 @@ static void write_vlq(FILE *fp, U64 x) {
 	}
 	write_u8(fp, (U8)x);
 }
+
+#ifdef TOC_DEBUG
+static void binfile_test(void) {
+	binfile_printing_enabled = false;
+	FILE *fp = tmpfile();
+	/* U64 a = 12387217312; */
+	/* write_vlq(fp, a); */
+	I64 b = -123981232131;
+	write_i64(fp, b);
+	U8 c = 12;
+	write_u8(fp, c);
+	float d = -2.323198123f;
+	write_f32(fp, d);
+	fseek(fp, 0L, SEEK_SET);
+	/* assert(read_vlq(fp) == a); */
+	assert(read_i64(fp) == b);
+	assert(read_u8(fp) == c);
+	assert(read_f32(fp) == d);
+	fclose(fp);
+	binfile_printing_enabled = true;
+}
+#endif
