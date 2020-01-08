@@ -7,46 +7,6 @@ static bool typedefs_stmt(CGenerator *g, Statement *s);
 static bool typedefs_decl(CGenerator *g, Declaration *d);
 static bool typedefs_expr(CGenerator *g, Expression *e);
 
-#define cgen_recurse_into_type(f, g, type, extra)	\
-	switch (type->kind) {							\
-	case TYPE_STRUCT:								\
-		arr_foreach(type->struc->fields, Field, fl)	\
-			if (!f(g, fl->type, extra))				\
-				return false;						\
-		break;										\
-	case TYPE_FN:									\
-		arr_foreach(type->fn.types, Type, sub) {	\
-			if (!f(g, sub, extra))					\
-				return false;						\
-		}											\
-		break;										\
-	case TYPE_TUPLE:								\
-		arr_foreach(type->tuple, Type, sub)			\
-			if (!f(g, sub, extra))					\
-				return false;						\
-		break;										\
-	case TYPE_ARR:									\
-		if (!f(g, type->arr.of, extra))				\
-			return false;							\
-		break;										\
-	case TYPE_SLICE:								\
-		if (!f(g, type->slice, extra))				\
-			return false;							\
-		break;										\
-	case TYPE_PTR:									\
-		if (!f(g, type->ptr, extra))				\
-			return false;							\
-		break;										\
-	case TYPE_VOID:									\
-	case TYPE_BUILTIN:								\
-	case TYPE_PKG:									\
-	case TYPE_TYPE:									\
-	case TYPE_UNKNOWN:								\
-		break;										\
-	case TYPE_EXPR: assert(0);						\
-	}
-
-
 /* i is the name for this type, NULL if not available */
 /* ALWAYS RETURNS TRUE. it just returns a bool for cgen_recurse_into_type to work */
 static bool typedefs_type(CGenerator *g, Type *type, Identifier i) {
@@ -72,7 +32,7 @@ static bool typedefs_type(CGenerator *g, Type *type, Identifier i) {
 			cgen_nl(g);
 		}
 	}
-	cgen_recurse_into_type(typedefs_type, g, type, NULL);
+	cgen_recurse_subtypes(typedefs_type, g, type, NULL);
 	return true;
 }
 

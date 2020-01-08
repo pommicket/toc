@@ -3,7 +3,7 @@
   This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
-/* NOTE: make sure you edit copy.c when you make a change to expression-related types or type-related types in this file! */
+/* NOTE: make sure you edit copy.c and package.c and cgen_recurse_subexprs when you make a change to expression-related types or type-related types in this file! */
 
 typedef long double Floating; /* OPTIM: Switch to double, but make sure floating-point literals are right */
 

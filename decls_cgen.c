@@ -38,7 +38,7 @@ static bool cgen_decls_type(CGenerator *g, Type *type, Location where) {
 			sdef->flags |= STRUCT_DEF_CGENERATED;
 		}
 	}
-	cgen_recurse_into_type(cgen_decls_type, g, type, where);
+	cgen_recurse_subtypes(cgen_decls_type, g, type, where);
 	return true;
 }
 

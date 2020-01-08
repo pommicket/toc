@@ -154,6 +154,48 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 		break;															\
 	}
 
+
+#define cgen_recurse_subtypes(f, g, type, extra)	\
+	switch (type->kind) {							\
+	case TYPE_STRUCT:								\
+		arr_foreach(type->struc->fields, Field, fl)	\
+			if (!f(g, fl->type, extra))				\
+				return false;						\
+		break;										\
+	case TYPE_FN:									\
+		arr_foreach(type->fn.types, Type, sub) {	\
+			if (!f(g, sub, extra))					\
+				return false;						\
+		}											\
+		break;										\
+	case TYPE_TUPLE:								\
+		arr_foreach(type->tuple, Type, sub)			\
+			if (!f(g, sub, extra))					\
+				return false;						\
+		break;										\
+	case TYPE_ARR:									\
+		if (!f(g, type->arr.of, extra))				\
+			return false;							\
+		break;										\
+	case TYPE_SLICE:								\
+		if (!f(g, type->slice, extra))				\
+			return false;							\
+		break;										\
+	case TYPE_PTR:									\
+		if (!f(g, type->ptr, extra))				\
+			return false;							\
+		break;										\
+	case TYPE_VOID:									\
+	case TYPE_BUILTIN:								\
+	case TYPE_PKG:									\
+	case TYPE_TYPE:									\
+	case TYPE_UNKNOWN:								\
+		break;										\
+	case TYPE_EXPR: assert(0);						\
+	}
+
+
+
 static bool cgen_block_enter(CGenerator *g, Block *b) {
 	g->block = b;
 	Statement *stmts;
