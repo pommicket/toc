@@ -171,14 +171,14 @@ static void write_f32(FILE *fp, F32 f32) {
 }
 
 static F32 read_f32(FILE *fp) {
-#ifdef TOC_PORTABLE
+#if BINFILE_PORTABLE
 	/* TODO: infinity, NaN */
 	U32 u32 = read_u32(fp);
 	U32 sign =     (u32 & 0x80000000);
 	U32 exponent = (u32 & 0x7f800000) >> 23;
 	U32 fraction = (u32 & 0x007fffff);
-	F32 flt = (float)fraction;
-	I32 signed_exponent = (I32)exponent - 127;
+	F32 flt = (F32)1 + (F32)fraction / (F32)0x0800000;
+	int signed_exponent = (int)exponent - 127;
 	while (signed_exponent < 0) {
 		++signed_exponent;
 		flt /= (F32)2;
@@ -188,6 +188,7 @@ static F32 read_f32(FILE *fp) {
 		flt *= (F32)2;
 	}
 	if (sign) flt = -flt;
+	return flt;
 #else
 	F32 f32;
 	fread(&f32, sizeof f32, 1, fp);
@@ -227,8 +228,38 @@ static void write_f64(FILE *fp, F64 f64) {
 #endif
 }
 
+static F64 read_f64(FILE *fp) {
+#if BINFILE_PORTABLE
+	/* TODO: infinity, NaN */
+	U64 u64 = read_u64(fp);
+	U64 sign =     (u64 & 0x8000000000000000);
+	U64 exponent = (u64 & 0x7ff0000000000000) >> 52;
+	U64 fraction = (u64 & 0x000fffffffffffff);
+	F64 flt = (F64)fraction / (F64)0x10000000000000 + (F64)1;
+	int signed_exponent = (int)exponent - 1023;
+	while (signed_exponent < 0) {
+		++signed_exponent;
+		flt /= (F64)2;
+	}
+	while (signed_exponent > 0) {
+		--signed_exponent;
+		flt *= (F64)2;
+	}
+	if (sign) flt = -flt;
+	return flt;
+#else
+	F64 f64;
+	fread(&f64, sizeof f64, 1, fp);
+	return f64;
+#endif
+}
+
 static void write_bool(FILE *fp, bool b) {
 	write_u8(fp, b);
+}
+
+static bool read_bool(FILE *fp) {
+	return read_u8(fp);
 }
 
 /* 
@@ -245,23 +276,48 @@ static void write_vlq(FILE *fp, U64 x) {
 	write_u8(fp, (U8)x);
 }
 
+static U64 read_vlq(FILE *fp) {
+    U8 byte = read_u8(fp);
+	if (byte & 0x80) {
+		return (read_vlq(fp) << 7) + (byte & 0x7F);
+	} else {
+		return byte;
+	}
+}
+
 #ifdef TOC_DEBUG
 static void binfile_test(void) {
 	binfile_printing_enabled = false;
 	FILE *fp = tmpfile();
-	/* U64 a = 12387217312; */
-	/* write_vlq(fp, a); */
+	U64 a = 234873485734;
+	write_vlq(fp, a);
 	I64 b = -123981232131;
 	write_i64(fp, b);
 	U8 c = 12;
 	write_u8(fp, c);
-	float d = -2.323198123f;
+	F32 d = (F32)-2.323198123;
 	write_f32(fp, d);
+	bool e = true;
+	write_bool(fp, e);
+	F64 f = (F64)-34.69459324823;
+	write_f64(fp, f);
 	fseek(fp, 0L, SEEK_SET);
-	/* assert(read_vlq(fp) == a); */
-	assert(read_i64(fp) == b);
-	assert(read_u8(fp) == c);
-	assert(read_f32(fp) == d);
+
+#define expect(type, fmt, expr, to_be) {								\
+		type exp = to_be;												\
+		type got = expr;												\
+		if (exp != got) {												\
+			fprintf(stderr, "Expected " #expr " to be " fmt " but got " fmt "\n", exp, got); \
+		    abort();													\
+		}																\
+	}
+
+	expect(U64, U64_FMT, read_vlq(fp), a);
+	expect(I64, I64_FMT, read_i64(fp), b);
+	expect(U8, U8_FMT, read_u8(fp), c);
+	expect(F32, F32_FMT, read_f32(fp), d);
+	expect(bool, "%d", read_bool(fp), e);
+    expect(F64, F64_FMT, read_f64(fp), f);
 	fclose(fp);
 	binfile_printing_enabled = true;
 }
