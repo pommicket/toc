@@ -139,8 +139,8 @@ static void write_f32(FILE *fp, F32 f32) {
 	/* TODO: infinity, NaN */
 	U32 fraction = 0;
 	U32 fraction_bit = ((U32)1) << 22;
-	unsigned exponent = 127;
-	unsigned sign = f32 < 0;
+	U32 exponent = 127;
+	U32 sign = f32 < 0;
 	if (sign) f32 = -f32;
 	while (f32 < (F32)1) {
 		f32 *= (F32)2;
@@ -161,34 +161,33 @@ static void write_f32(FILE *fp, F32 f32) {
 		f32 *= (F32)2;
 		fraction_bit >>= 1;
 	}
-	write_u8(fp, fraction & 0xFF);
-	write_u8(fp, (fraction & 0xFF00) >> 8);
-	unsigned byte3 = (fraction & 0x7F0000) >> 16;
-	byte3 |= (exponent & 1) << 7;
-	write_u8(fp, (U8)byte3);
-	unsigned byte4 = exponent >> 1;
-	byte4 |= (sign << 7);
-	write_u8(fp, (U8)byte4);
+	write_u32(fp, fraction | (exponent << 23) | (sign << 31));
 #else
 	fwrite(&f32, sizeof f32, 1, fp);
 #endif
 }
 
 static F32 read_f32(FILE *fp) {
+#ifdef TOC_PORTABLE
 	/* TODO: infinity, NaN */
 	U32 u32 = read_u32(fp);
 	U32 sign =     (u32 & 0x8000000);
 	U32 exponent = (u32 & 0x7f80000) >> 23;
 	U32 fraction = (u32 & 0x007ffff);
-	
+	/* TODO: finish me */
+#else
+	F32 f32;
+	fread(&f32, sizeof f32, 1, fp);
+	return f32;
+#endif
 }
 
 static void write_f64(FILE *fp, F64 f64) {
 #if BINFILE_PORTABLE
 	U64 fraction = 0;
 	U64 fraction_bit = ((U64)1) << 51;
-	unsigned exponent = 1023;
-	unsigned sign = f64 < 0;
+	U64 exponent = 1023;
+	U64 sign = f64 < 0;
 	if (sign) f64 = -f64;
 	while (f64 < (F64)1) {
 		f64 *= (F64)2;
@@ -209,18 +208,7 @@ static void write_f64(FILE *fp, F64 f64) {
 		f64 *= (F64)2;
 		fraction_bit >>= 1;
 	}
-	write_u8(fp, fraction & 0xFF);
-	write_u8(fp, (fraction & 0xFF00) >> 8);
-	write_u8(fp, (fraction & 0xFF0000) >> 16);
-	write_u8(fp, (fraction & 0xFF000000) >> 24);
-	write_u8(fp, (fraction & 0xFF00000000) >> 32);
-	write_u8(fp, (fraction & 0xFF0000000000) >> 40);
-	unsigned byte7 = (fraction & 0xF000000000000) >> 48;
-	byte7 |= (exponent & 0xF) << 4;
-	write_u8(fp, (U8)byte7);
-	unsigned byte8 = (exponent & 0x7F0) >> 4;
-	byte8 |= (sign << 7);
-	write_u8(fp, (U8)byte8);
+	write_u64(fp, fraction | (exponent << 52) | (sign << 63));
 #else
 	fwrite(&f64, sizeof f64, 1, fp);
 #endif
