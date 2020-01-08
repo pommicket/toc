@@ -787,6 +787,7 @@ typedef struct Exporter {
 typedef struct Importer {
 	FILE *in;
 	Package *pkg;
+	Allocator *allocr;
 } Importer;
 
 typedef struct CGenerator {

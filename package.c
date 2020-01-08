@@ -21,6 +21,10 @@ static void exptr_create(Exporter *ex, FILE *out, char *code) {
 	ex->code = code;
 }
 
+static inline void *imptr_malloc(Importer *i, size_t n) {
+	return allocr_malloc(i->allocr, n);
+}
+
 
 static inline void export_u8(Exporter *ex, U8 u8) {
 	write_u8(ex->out, u8);
@@ -97,7 +101,7 @@ static inline bool import_char(Importer *i) {
 static inline void export_vlq(Exporter *ex, U64 x) {
 	write_vlq(ex->out, x);
 }
-static inline bool import_vlq(Importer *i) {
+static inline U64 import_vlq(Importer *i) {
 	return read_vlq(i->in);
 }
 
@@ -108,6 +112,13 @@ static inline void export_str(Exporter *ex, const char *str, size_t len) {
 #else
 	fwrite(str, 1, len, ex->out);
 #endif
+}
+
+static inline char *import_str(Importer *i, size_t len) {
+	char *str = imptr_malloc(i, len+1);
+	str[len] = 0;
+	fread(str, 1, len, i->in);
+	return str;
 }
 
 static void export_location(Exporter *ex, Location where) {
@@ -135,6 +146,9 @@ static inline void export_optional_ident(Exporter *ex, Identifier i) {
 static inline void export_len(Exporter *ex, size_t len) {
 	export_vlq(ex, (U64)len);
 }
+static inline size_t import_len(Importer *i) {
+	return (size_t)import_vlq(i);
+}
 
 static const U8 toc_package_indicator[3] = {116, 111, 112};
 
@@ -158,6 +172,43 @@ static void exptr_start(Exporter *ex, const char *pkg_name, size_t pkg_name_len)
 		export_len(ex, len);
 		export_str(ex, code, len);
 	}
+}
+
+/* where = where was this imported */
+static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname, Location where) {
+	Importer i = {0};
+	idents_create(&p->idents);
+    i.pkg = p;
+	i.in = f;
+	i.allocr = allocr;
+	/* read header */
+	U8 toc[3];
+	toc[0] = import_u8(&i);
+	toc[1] = import_u8(&i);
+	toc[2] = import_u8(&i);
+	if (toc[0] != toc_package_indicator[0] ||
+		toc[1] != toc_package_indicator[1] ||
+		toc[2] != toc_package_indicator[2]) {
+		err_print(where, "%s is not a toc package file.", fname);
+		return false;
+	}
+	U32 version_written = import_u32(&i);
+	if (version_written != TOP_FMT_VERSION) {
+		warn_print(where, "Warning: toc version mismatch. Package was created with version " U32_FMT " but version " STRINGIFY(TOP_FMT_VERSION) " is being used.\n"
+				   "The package may be read incorrectly.",
+				   version_written);
+	}
+	U64 ident_offset = import_u64(&i);
+	size_t pkg_name_len = import_len(&i);
+	char *pkg_name = import_str(&i, pkg_name_len);
+	puts(pkg_name);
+	bool has_code = import_bool(&i);
+	if (has_code) {
+		size_t code_len = import_len(&i);
+		char *code = import_str(&i, code_len);
+		puts(code);
+	}
+	return true;
 }
 
 static bool export_type(Exporter *ex, Type *type, Location where) {
@@ -643,24 +694,5 @@ static bool exptr_finish(Exporter *ex) {
 
 	arr_clear(&ex->exported_idents);
 	
-	return true;
-}
-
-/* where = where was this imported */
-static bool import_pkg(Package *p, FILE *f, const char *fname, Location where) {
-	Importer i = {0};
-	idents_create(&p->idents);
-    i.pkg = p;
-	i.in = f;
-	U8 toc[3];
-	toc[0] = import_u8(&i);
-	toc[1] = import_u8(&i);
-	toc[2] = import_u8(&i);
-	if (toc[0] != toc_package_indicator[0] ||
-		toc[1] != toc_package_indicator[1] ||
-		toc[2] != toc_package_indicator[2]) {
-		err_print(where, "%s is not a toc package file.", fname);
-		return false;
-	}
 	return true;
 }

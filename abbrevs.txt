@@ -15,6 +15,7 @@ expr - expression
 exptr - exporter
 fn - function
 ident - identifier
+imptr - importer
 kw - keyword
 len - length
 num - number

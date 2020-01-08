@@ -894,7 +894,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				free(filename);
 				return false;
 			}
-			if (!import_pkg(pkg, fp, filename, e->where)) {
+			if (!import_pkg(tr->allocr, pkg, fp, filename, e->where)) {
 				free(filename);
 				return false;
 			}
