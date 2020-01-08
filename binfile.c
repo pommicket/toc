@@ -134,7 +134,8 @@ static inline I64 read_i64(FILE *fp) {
 
 static void write_f32(FILE *fp, F32 f32) {
 #if BINFILE_PORTABLE
-	/* writes as IEEE 754 32-bit floating-point number, little endian */
+	/* writes as IEEE 754 32-bit floating-point number, the byte order is little endian */
+	/* https://en.wikipedia.org/wiki/Single_precision_floating-point_format */
 	/* TODO: infinity, NaN */
 	U32 fraction = 0;
 	U32 fraction_bit = ((U32)1) << 22;
@@ -171,6 +172,15 @@ static void write_f32(FILE *fp, F32 f32) {
 #else
 	fwrite(&f32, sizeof f32, 1, fp);
 #endif
+}
+
+static F32 read_f32(FILE *fp) {
+	/* TODO: infinity, NaN */
+	U32 u32 = read_u32(fp);
+	U32 sign =     (u32 & 0x8000000);
+	U32 exponent = (u32 & 0x7f80000) >> 23;
+	U32 fraction = (u32 & 0x007ffff);
+	
 }
 
 static void write_f64(FILE *fp, F64 f64) {

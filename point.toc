@@ -1,5 +1,9 @@
 pkg "point";
 
+#export f ::= 3.123343234;
+#export g ::= -3.14938244 as f64;
+
+
 #export Point ::= struct {
 	x, y: int;
 };

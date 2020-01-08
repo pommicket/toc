@@ -244,7 +244,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 			case '*': { /* multi line comment */
 				tokr_nextchar(t);
 				int comment_level = 1; /* allow nested multi-line comments */
-			    while (*t->s) {
+			    while (1) {
 					if (t->s[0] == '*' && t->s[1] == '/') {
 						t->s += 2;
 						--comment_level;
@@ -255,12 +255,13 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 						t->s += 2;
 						++comment_level;
 					} else {
+						if (*t->s == 0) {
+							tokenization_err(t, "End of file reached inside multi-line comment.");
+							return false;
+						}
+
 						tokr_nextchar(t);
 					}
-				}
-				if (*t->s == 0) {
-					tokenization_err(t, "End of file reached inside multi-line comment.");
-					abort(); /* there won't be any further errors, of course */
 				}
 			} break;
 			default:
