@@ -160,7 +160,7 @@ static bool export_type(Exporter *ex, Type *type, Location where) {
 	case TYPE_STRUCT: {
 		StructDef *struc = type->struc;
 		if (struc->export.id == 0) {
-		    StructDef **ptr = arr_add(&ex->exported_structs);
+			StructDef **ptr = arr_add(&ex->exported_structs);
 			*ptr = struc;
 			size_t nexported_structs = arr_len(ex->exported_structs);
 			if (nexported_structs > U32_MAX) {
@@ -268,7 +268,7 @@ static bool export_val_ptr(Exporter *ex, void *val, Type *type, Location where) 
 	case TYPE_UNKNOWN:
 	case TYPE_EXPR:
 		assert(0);
-	    return false;
+		return false;
 	}
 	return true;
 }
@@ -325,7 +325,7 @@ static bool export_expr(Exporter *ex, Expression *e) {
 		assert(e->c.code->kind == EXPR_VAL);
 		if (!export_val(ex, e->c.code->val, &e->c.code->type, e->where))
 			return false;
-	    break;
+		break;
 	case EXPR_IDENT:
 		export_ident(ex, e->ident);
 		break;

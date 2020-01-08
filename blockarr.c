@@ -72,7 +72,7 @@ static void block_arr_test(void) {
 		ps[i] = p;
 	}
 	for (int i = 0; i < 100; ++i) {
-	    assert(*ps[i] == i);
+		assert(*ps[i] == i);
 	}
 	block_arr_free(&a);
 }

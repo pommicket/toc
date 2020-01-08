@@ -348,7 +348,7 @@ static bool cgen_type_post(CGenerator *g, Type *t, Location where) {
 		break;
 	case TYPE_ARR:
 		assert(t->flags & TYPE_IS_RESOLVED);
-	    cgen_write(g, "[%lu])", (unsigned long)t->arr.n);
+		cgen_write(g, "[%lu])", (unsigned long)t->arr.n);
 		if (!cgen_type_post(g, t->arr.of, where))
 			return false;
 		break;
@@ -622,7 +622,7 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 	case TYPE_TUPLE:
 		assert(set_expr);
 		assert(to_expr);
-	    assert(set_expr->kind == EXPR_TUPLE);
+		assert(set_expr->kind == EXPR_TUPLE);
 		if (!cgen_set_tuple(g, set_expr->tuple, NULL, NULL, to_expr))
 			return false;
 		break;
@@ -699,7 +699,7 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 		cgen_writeln(g, "); ");
 	} break;
 	case EXPR_IF:
-	    prefix_id = to->if_.c.id;
+		prefix_id = to->if_.c.id;
 		goto prefixed;
 	case EXPR_BLOCK:
 		prefix_id = to->block_ret_id;
@@ -726,7 +726,7 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 			cgen_write(g, "%lu_", i);
 			cgen_write(g, "; ");
 		}
-	    break;
+		break;
 		
 		/* things which can never be tuples */
 	case EXPR_SLICE:
@@ -830,7 +830,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		} else {
 			if (!cgen_expr_pre(g, ea->of)) return false;
 		}
-	    
+		
 		ea->c.id = id;
 		if (!each_enter(e)) return false;
 		cgen_write(g, "{");
@@ -1017,7 +1017,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 	case EXPR_CALL: {
 		if (!cgen_expr_pre(g, e->call.fn)) return false;
 		int i = 0;
-	    Constness *constness = e->call.fn->type.fn.constness;
+		Constness *constness = e->call.fn->type.fn.constness;
 		arr_foreach(e->call.arg_exprs, Expression, arg) {
 			if (!constness || !arg_is_const(arg, constness[i])) {
 				if (!cgen_expr_pre(g, arg)) return false;
@@ -1070,7 +1070,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		break;
 	case EXPR_SLICE: {
 		SliceExpr *s = &e->slice;
-	    IdentID s_id = e->slice.c.id = ++g->ident_counter;
+		IdentID s_id = e->slice.c.id = ++g->ident_counter;
 		IdentID from_id = ++g->ident_counter;
 		if (!cgen_expr_pre(g, s->of))
 			return false;
@@ -1407,7 +1407,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			}
 			cgen_write(g, "(");
 			bool first_arg = true;
-		    int i = 0;
+			int i = 0;
 			arr_foreach(e->call.arg_exprs, Expression, arg) {
 				if (!fn_type->constness || !arg_is_const(arg, fn_type->constness[i])) {
 					if (!first_arg)
@@ -1599,7 +1599,7 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where, U64 instance, Valu
 		/* long-winded code to generate a return expression using the ret_decls. */
 		Expression ret_expr;
 		ret_expr.flags = EXPR_FOUND_TYPE;
-	    ret_expr.type = f->ret_type;
+		ret_expr.type = f->ret_type;
 		if (arr_len(f->ret_decls) == 1
 			&& arr_len(f->ret_decls[0].idents) == 1) {
 			ret_expr.kind = EXPR_IDENT;
@@ -1677,7 +1677,7 @@ static bool cgen_val_ptr_pre(CGenerator *g, void *v, Type *t, Location where) {
 	case TYPE_EXPR:
 	case TYPE_PKG:
 		assert(0);
-	    return false;
+		return false;
 	}
 	return true;
 }
@@ -1759,7 +1759,7 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 	if (d->flags & DECL_FOUND_VAL) {
 		/* declarations where we use a value */
 		for (int idx = 0, nidents = (int)arr_len(d->idents); idx < nidents; ++idx) {
-		    Identifier i = d->idents[idx];
+			Identifier i = d->idents[idx];
 			Type *type = decl_type_at_index(d, idx);
 			Value *val = decl_val_at_index(d, idx);
 			if (type_contains_compileonly_type(type)) {
@@ -1799,7 +1799,7 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 			if (!cgen_type_post(g, type, d->where)) return false;
 			if (!has_expr) {
 				cgen_write(g, " = ");
-		    	cgen_zero_value(g, type);
+				cgen_zero_value(g, type);
 			}
 				
 			cgen_write(g, "; ");

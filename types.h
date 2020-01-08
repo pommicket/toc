@@ -408,17 +408,17 @@ typedef struct Type {
 	TypeFlags flags;
 	struct Expression *was_expr; /* if non-NULL, indicates that this type used to be an expression (TYPE_EXPR) */
 	union {
-	    BuiltinType builtin;
+		BuiltinType builtin;
 		FnType fn;
 		struct Type *tuple;
 		struct {
 			struct Type *of;
 			union {
-			    U64 n; /* after resolving */
+				U64 n; /* after resolving */
 				struct Expression *n_expr; /* before resolving */
 			};
 		} arr;
-	    struct Type *ptr;
+		struct Type *ptr;
 		struct Type *slice;
 		StructDef *struc; /* it's a pointer so that multiple Types can reference the same struct definition */
 		struct Expression *expr;
@@ -501,7 +501,7 @@ typedef enum {
 typedef struct CallExpr {
 	struct Expression *fn;
 	union {
-	    struct Argument *args;
+		struct Argument *args;
 		struct Expression *arg_exprs;
 	};
 	struct Instance *instance; /* NULL = ordinary function, no compile time args */
@@ -574,7 +574,7 @@ typedef struct FnExpr {
 	struct {
 		/* if name = NULL, this is an anonymous function, and id will be the ID of the fn. */
 		Identifier name;
-	    IdentID id;
+		IdentID id;
 	} c;
 } FnExpr; /* an expression such as fn(x: int) int { 2 * x } */
 
@@ -582,7 +582,7 @@ typedef struct Instance {
 	Value val; /* key into hash table */
 	FnExpr fn; /* the typed function */
 	struct {
-	    U64 id;
+		U64 id;
 	} c;
 } Instance;
 
@@ -652,7 +652,7 @@ typedef struct Expression {
 		} pkg;
 		IfExpr if_;
 		WhileExpr while_;
-	    EachExpr *each;
+		EachExpr *each;
 		FnExpr *fn;
 		CastExpr cast;
 		SliceExpr slice;

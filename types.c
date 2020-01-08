@@ -157,7 +157,7 @@ static bool expr_must_lval(Expression *e) {
 		default: break;
 		}
 		err_print(e->where, "Cannot use operator %s as l-value.", binary_op_to_str(e->binary.op));
-	    return false;
+		return false;
 	case EXPR_TUPLE:
 		/* x, y is an lval, but 3, "hello" is not. */
 		arr_foreach(e->tuple, Expression, x) {
@@ -302,7 +302,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 
 		arr_foreach(f->ret_decls, Declaration, d) {
 			if (!types_decl(tr, d)) {
-			    success = false;
+				success = false;
 				goto ret;
 			}
 		}
@@ -478,7 +478,7 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 
 		U64 size;
 		if (type_builtin_is_signed(n_expr->type.builtin)) {
-		    I64 ssize = val_to_i64(&val, n_expr->type.builtin);
+			I64 ssize = val_to_i64(&val, n_expr->type.builtin);
 			if (ssize < 0) {
 				err_print(t->arr.n_expr->where, "Negative array length (" I64_FMT ")", ssize);
 				return false;
@@ -640,7 +640,7 @@ static Status type_cast_status(Type *from, Type *to) {
 	case TYPE_SLICE:
 		if (to->kind == TYPE_PTR && type_eq(from->slice, to->ptr))
 			return STATUS_NONE;
-	    return STATUS_ERR;
+		return STATUS_ERR;
 	case TYPE_EXPR:
 		break;
 	}
@@ -829,7 +829,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		}
 	} break;
 	case EXPR_LITERAL_INT:
-	    t->kind = TYPE_BUILTIN;
+		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_I64;
 		t->flags |= TYPE_IS_FLEXIBLE;
 		break;
@@ -933,7 +933,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			}
 
 			if (!(ea->flags & EACH_ANNOTATED_TYPE)) {
-			    ea->type = ea->range.from->type;
+				ea->type = ea->range.from->type;
 			}
 			
 			if (!type_eq(&ea->type, &ea->range.from->type)) {
@@ -1200,7 +1200,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				if (params_set[idx]) {
 					Declaration *param = fn_decl->params;
 					Identifier *ident;
-				    for (Declaration *end = arr_end(fn_decl->params); param < end; ++param) {
+					for (Declaration *end = arr_end(fn_decl->params); param < end; ++param) {
 						ident = param->idents;
 						for (Identifier *iend = arr_end(param->idents); ident != iend; ++ident) {
 							if (idx == 0)
@@ -1283,7 +1283,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 
 			FnExpr *fn = fn_val.fn;
 			/* fn is the instance, original_fn is not */
-		    original_fn = fn;
+			original_fn = fn;
 
 			copy_fn_expr(&cop, &fn_copy, fn, false);
 			fn = &fn_copy;
@@ -1380,7 +1380,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			u64t->builtin = BUILTIN_U64;
 			table_index.tuple = NULL;
 			/* we need to keep table_index's memory around because instance_table_add makes a copy of it to compare against. */
-		    Value *which_are_const_val = typer_arr_add(tr, &table_index.tuple);
+			Value *which_are_const_val = typer_arr_add(tr, &table_index.tuple);
 			U64 *which_are_const = &which_are_const_val->u64;
 			*which_are_const = 0;
 			int semi_const_index = 0;
@@ -1670,7 +1670,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			bool valid = false;
 			assert(lhs_type->flags & TYPE_IS_RESOLVED);
 			assert(rhs_type->flags & TYPE_IS_RESOLVED);
-		    
+			
 			
 			if (o == BINARY_SET) {
 				valid = type_eq(lhs_type, rhs_type);
@@ -2185,7 +2185,7 @@ static bool types_file(Typer *tr, ParsedFile *f, char *code) {
 			err_print(f->pkg_name->where, "Package name has a negative length (" I64_FMT ")!", pkg_name_slice.n);
 			return false;
 		}
-	    size_t pkg_name_len = (size_t)pkg_name_slice.n;
+		size_t pkg_name_len = (size_t)pkg_name_slice.n;
 		
 		char *pkg_name_cstr = typer_malloc(tr, pkg_name_len+1);
 		memcpy(pkg_name_cstr, pkg_name_str, pkg_name_len);

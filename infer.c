@@ -24,7 +24,7 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Expres
 		break;
 	case EXPR_CALL: {
 		while (to->kind == EXPR_IDENT) {
-		    IdentDecl *idecl = ident_decl(to->ident);
+			IdentDecl *idecl = ident_decl(to->ident);
 			if (idecl->kind == IDECL_DECL) {
 				Declaration *decl = idecl->decl;
 				int index = ident_index_in_decl(to->ident, decl);
@@ -46,7 +46,7 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Expres
 		
 		U16 *order = NULL;
 		Expression *f = match->call.fn;
-	    IdentDecl *idecl = ident_decl(f->ident);
+		IdentDecl *idecl = ident_decl(f->ident);
 		bool is_direct_fn = idecl && idecl->kind == IDECL_DECL && (idecl->decl->flags & DECL_HAS_EXPR) && idecl->decl->expr.kind == EXPR_FN;
 		if (is_direct_fn) {
 			if (!types_expr(tr, f))
@@ -89,7 +89,7 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 	case TYPE_TUPLE: {
 		if (to->kind != TYPE_TUPLE) return true;
 		if (arr_len(match->tuple) != arr_len(to->tuple)) return true;
-	    Type *b = to->tuple;
+		Type *b = to->tuple;
 		arr_foreach(match->tuple, Type, a) {
 			if (!infer_from_type(tr, a, b, idents, vals, types))
 				return false;
@@ -102,7 +102,7 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 		}
 		if (to->kind != TYPE_FN) return true;
 		if (arr_len(match->fn.types) != arr_len(to->fn.types)) return true;
-	    size_t i, len = arr_len(match->fn.types);
+		size_t i, len = arr_len(match->fn.types);
 		for (i = 0; i < len; ++i) {
 			if (!infer_from_type(tr, &match->fn.types[i], &to->fn.types[i], idents, vals, types))
 				return false;
@@ -112,7 +112,7 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 		if (to->kind != TYPE_PTR) return true;
 		if (!infer_from_type(tr, match->ptr, to->ptr, idents, vals, types))
 			return false;
-	    break;
+		break;
 	case TYPE_SLICE:
 		if (to->kind != TYPE_SLICE) return true;
 		if (!infer_from_type(tr, match->slice, to->slice, idents, vals, types))

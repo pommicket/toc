@@ -239,11 +239,11 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 	case TYPE_TUPLE: {
 		Value *us = *(Value **)u;
 		Value *vs = *(Value **)v;
-	    for (size_t i = 0, len = arr_len(t->tuple); i < len; ++i) {
+		for (size_t i = 0, len = arr_len(t->tuple); i < len; ++i) {
 			if (!val_eq(us[i], vs[i], &t->tuple[i]))
 				return false;
 		}
-	    return true;
+		return true;
 	}
 	case TYPE_ARR: {
 		U64 size = (U64)compiler_sizeof(t->arr.of);
@@ -275,7 +275,7 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 			if (!val_ptr_eq((char *)u + f->offset, (char *)v + f->offset, f->type))
 				return false;
 		}
-	    return true;
+		return true;
 	case TYPE_PKG:
 		return *(Package **)u == *(Package **)v;
 	case TYPE_EXPR: break;
@@ -311,7 +311,7 @@ static Instance *instance_table_adda(Allocator *a, HashTable *h, Value v, Type *
 						index -= new_cap;
 				}
 				new_data[index] = old_data[i];
-			    new_occupied[index] = true;
+				new_occupied[index] = true;
 			}
 		}
 		h->data = new_data;

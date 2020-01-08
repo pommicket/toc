@@ -229,7 +229,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 		if (*t->s == 0) break;
 		if (isspace(*t->s)) {
 			tokr_nextchar(t);
-	    	continue;
+			continue;
 		}
 		
 		if (*t->s == '/') {
@@ -244,7 +244,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 			case '*': { /* multi line comment */
 				tokr_nextchar(t);
 				int comment_level = 1; /* allow nested multi-line comments */
-			    while (1) {
+				while (1) {
 					if (t->s[0] == '*' && t->s[1] == '/') {
 						t->s += 2;
 						--comment_level;
@@ -275,7 +275,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 			/* it's a directive */
 			char *start_s = t->s;
 			++t->s; /* move past # */
-		    Directive direct = tokenize_direct(&t->s);
+			Directive direct = tokenize_direct(&t->s);
 			if (direct != DIRECT_COUNT) {
 				/* it's a directive */
 				Token *token = tokr_add(t);
@@ -351,7 +351,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 						tokenization_err(t, "Decimal point in non base 10 number.");
 						goto err;
 					}
-				    n->kind = NUM_LITERAL_FLOAT;
+					n->kind = NUM_LITERAL_FLOAT;
 					decimal_pow10 = 0.1;
 					n->floatval = (Floating)n->intval;
 					tokr_nextchar(t);
@@ -424,7 +424,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 				}
 				tokr_nextchar(t);
 			}
-		    
+			
 			token->kind = TOKEN_LITERAL_NUM;
 			continue;
 		}
@@ -479,7 +479,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 				tokr_nextchar(t);
 			}
 			char *strlit = tokr_malloc(t, len + 1);
-		    char *strptr = strlit;
+			char *strptr = strlit;
 			tokr_get_location(t, token);
 			tokr_nextchar(t); /* past opening " */
 			while (*t->s != '"') {

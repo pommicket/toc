@@ -337,7 +337,7 @@ static Token *expr_find_end(Parser *p, ExprEndFlags flags)  {
 				++square_level;
 				break;
 			case KW_RSQUARE:
-			    --square_level;
+				--square_level;
 				if (square_level < 0)
 					return token;
 				break;
@@ -418,7 +418,7 @@ static bool parse_args(Parser *p, Argument **args) {
 			arg->where = t->token->where;
 			/* named arguments */
 			if (t->token->kind == TOKEN_IDENT && token_is_kw(t->token + 1, KW_EQ)) {
-			    arg->name = t->token->ident;
+				arg->name = t->token->ident;
 				t->token += 2;
 			} else {
 				arg->name = NULL;
@@ -443,7 +443,7 @@ static bool parse_type(Parser *p, Type *type) {
 	switch (t->token->kind) {
 	case TOKEN_KW:
 		type->kind = TYPE_BUILTIN;
-	    {
+		{
 			int b = kw_to_builtin_type(t->token->kw);
 			if (b != -1) {
 				type->builtin = (BuiltinType)b;
@@ -534,7 +534,7 @@ static bool parse_type(Parser *p, Type *type) {
 		case KW_LT:
 			/* tuple! */
 			type->kind = TYPE_TUPLE;
-		    type->tuple = NULL;
+			type->tuple = NULL;
 			++t->token;	/* move past < */
 			while (1) {
 				Type *child = parser_arr_add(p, &type->tuple);
@@ -665,7 +665,7 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 						++t->token;
 					}
 				}
-			    break;
+				break;
 			case KW_LSQUARE:
 				ret = true;
 				if (end) {
@@ -720,14 +720,14 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 								/* TODO: think of a better way of determining if it's a void fn type. (maybe followed by ;/,/)?)*/
 								bool *enabled = &t->token->where.ctx->enabled;
 								bool prev_enabled = *enabled;
-							    *enabled = false;
+								*enabled = false;
 								if (!parse_type(p, &return_type)) {
 									/* couldn't parse a return type. void fn type */
 									*enabled = prev_enabled;
 									ret = true;
 									goto end;
 								}
-							    *enabled = prev_enabled;
+								*enabled = prev_enabled;
 								if (token_is_kw(t->token, KW_LBRACE)) {
 									/* non-void fn expr */
 									goto end;
@@ -747,7 +747,7 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 				goto continu;
 			default: {
 				int x = kw_to_builtin_type(t->token->kw);
-			    if ((ret = x != -1)) {
+				if ((ret = x != -1)) {
 					++t->token;
 				}
 				break;
@@ -860,7 +860,7 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 		++t->token;
 	} else {
 		if (!parse_decl_list(p, &f->params, DECL_END_RPAREN_COMMA))
-		    return false;
+			return false;
 		arr_foreach(f->params, Declaration, param)
 			param->flags |= DECL_IS_PARAM;
 	}
@@ -978,7 +978,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		case TOKEN_LITERAL_STR:
 			e->kind = EXPR_LITERAL_STR;
 			e->strl = t->token->str;
-	    	break;
+			break;
 		case TOKEN_LITERAL_CHAR:
 			e->kind = EXPR_LITERAL_CHAR;
 			e->charl = t->token->chr;
@@ -1109,7 +1109,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					return false;
 			}
 			if (!parse_block(p, &w->body)) return false;
-		    return true;
+			return true;
 		}
 		case KW_EACH: {
 			e->kind = EXPR_EACH;
@@ -1174,7 +1174,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				if (token_is_kw(first_end, KW_COMMA)) {
 					/* step */
 					++t->token;
-				    ea->range.step = parser_new_expr(p);
+					ea->range.step = parser_new_expr(p);
 					Token *step_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE|EXPR_CAN_END_WITH_DOTDOT);
 					if (!parse_expr(p, ea->range.step, step_end))
 						return false;
@@ -1648,7 +1648,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					return false;
 				}
 				++t->token;	/* move past ] */
-			    return true;
+				return true;
 			}
 			default:
 				assert(0);
@@ -1675,7 +1675,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				break;
 			case DIRECT_EXPORT:
 				err_print(t->token->where, "Unrecognized expression.");
-			    return false;
+				return false;
 			case DIRECT_COUNT: assert(0); break;
 			}
 			if (single_arg) {
@@ -1863,7 +1863,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 		--t->token;
 		/* disallowed constant without an expression, e.g. x :: int; */
 		tokr_err(t, "You must have an expression at the end of this constant declaration.");
-	    goto ret_false;
+		goto ret_false;
 	}
 
 	return true;
@@ -1973,7 +1973,7 @@ static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			return false;
 		}
 		
-	    bool success = parse_expr(p, &s->expr, end);
+		bool success = parse_expr(p, &s->expr, end);
 		
 		/* go past end of expr regardless of whether successful or not */
 		if (token_is_kw(end, KW_SEMICOLON)) {
@@ -2144,7 +2144,7 @@ static void fprint_expr(FILE *out, Expression *e) {
 			fprint_expr(out, e->if_.next_elif);
 		break;
 	case EXPR_WHILE:
-	    fprintf(out, "while ");
+		fprintf(out, "while ");
 		if (e->while_.cond) fprint_expr(out, e->while_.cond);
 		fprint_block(out, &e->while_.body);
 		break;

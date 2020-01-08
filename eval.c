@@ -1187,7 +1187,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (ea->range.stepval)
 				stepval = *ea->range.stepval;
 			Value x = from;
-		    Value *index_val;
+			Value *index_val;
 			Value *value_val;
 			if (!each_enter(e)) return false;
 			if (ea->index) {
@@ -1261,13 +1261,13 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			case TYPE_ARR:
 				len = (I64)of_type->arr.n;
 				if (uses_ptr) {
-			    	of.arr = of.ptr;
+					of.arr = of.ptr;
 				}
 				
 				break;
 			case TYPE_SLICE:
 				if (uses_ptr) {
-			    	of.slice = *(Slice *)of.ptr;
+					of.slice = *(Slice *)of.ptr;
 				}
 				len = of.slice.n;
 				break;
@@ -1466,7 +1466,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	} break;
 	case EXPR_SLICE: {
 		SliceExpr *s = &e->slice;
-	    Value ofv;
+		Value ofv;
 		Type *of_type = &s->of->type;
 		if (!eval_expr(ev, s->of, &ofv))
 			return false;

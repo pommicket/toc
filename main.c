@@ -126,7 +126,7 @@ int main(int argc, char **argv) {
 
 	if (!types_file(&tr, &f, contents)) {
 		/* TODO(eventually): fix this if the error occured while exporting something */
-	    err_fprint(TEXT_IMPORTANT("Errors occured while determining types.\n"));
+		err_fprint(TEXT_IMPORTANT("Errors occured while determining types.\n"));
 		return EXIT_FAILURE;
 	}
 #ifdef TOC_DEBUG
