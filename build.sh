@@ -10,9 +10,13 @@ fi
 ADDITIONAL_FLAGS="$CFLAGS -Wno-unused-function"
 
 if [ "$CC" = "clang" ]; then
-	WARNINGS='-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wimplicit-fallthrough'
+	WARNINGS='-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wimplicit-fallthrough -Wno-missing-braces'
 elif [ "$CC" = "gcc" ]; then
 	WARNINGS='-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wno-pointer-to-int-cast'
+elif [ "$CC" = "tcc" ]; then
+	WARNINGS='-w'
+elif [ "$CC" = "g++" ]; then
+	WARNINGS='-w -fpermissive'
 else
 	WARNINGS=''
 fi

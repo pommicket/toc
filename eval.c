@@ -1276,7 +1276,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			
 			index_val->i64 = 0;
 			while (index_val->i64 < len) {
-				void *ptr;
+				void *ptr = NULL;
 				if (!eval_val_ptr_at_index(e->where, &of, (U64)index_val->i64, of_type, &ptr, NULL))
 					return false;
 				if (uses_ptr)

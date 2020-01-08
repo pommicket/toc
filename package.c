@@ -25,41 +25,80 @@ static void exptr_create(Exporter *ex, FILE *out, char *code) {
 static inline void export_u8(Exporter *ex, U8 u8) {
 	write_u8(ex->out, u8);
 }
+static inline U8 import_u8(Importer *i) {
+	return read_u8(i->in);
+}
 static inline void export_i8(Exporter *ex, I8 i8) {
 	write_i8(ex->out, i8);
+}
+static inline I8 import_i8(Importer *i) {
+	return read_i8(i->in);
 }
 static inline void export_u16(Exporter *ex, U16 u16) {
 	write_u16(ex->out, u16);
 }
+static inline U16 import_u16(Importer *i) {
+	return read_u16(i->in);
+}
 static inline void export_i16(Exporter *ex, I16 i16) {
 	write_i16(ex->out, i16);
+}
+static inline I16 import_i16(Importer *i) {
+	return read_i16(i->in);
 }
 static inline void export_u32(Exporter *ex, U32 u32) {
 	write_u32(ex->out, u32);
 }
+static inline U32 import_u32(Importer *i) {
+	return read_u32(i->in);
+}
 static inline void export_i32(Exporter *ex, I32 i32) {
 	write_i32(ex->out, i32);
+}
+static inline I32 import_i32(Importer *i) {
+	return read_i32(i->in);
 }
 static inline void export_u64(Exporter *ex, U64 u64) {
 	write_u64(ex->out, u64);
 }
+static inline U64 import_u64(Importer *i) {
+	return read_u64(i->in);
+}
 static inline void export_i64(Exporter *ex, I64 i64) {
 	write_i64(ex->out, i64);
+}
+static inline I64 import_i64(Importer *i) {
+	return read_i64(i->in);
 }
 static inline void export_f32(Exporter *ex, F32 f32) {
 	write_f32(ex->out, f32);
 }
+static inline F32 import_f32(Importer *i) {
+	return read_f32(i->in);
+}
 static inline void export_f64(Exporter *ex, F64 f64) {
 	write_f64(ex->out, f64);
+}
+static inline F64 import_f64(Importer *i) {
+	return read_f64(i->in);
 }
 static inline void export_bool(Exporter *ex, bool b) {
 	write_bool(ex->out, b);
 }
+static inline bool import_bool(Importer *i) {
+	return read_bool(i->in);
+}
 static inline void export_char(Exporter *ex, char c) {
 	write_char(ex->out, c);
 }
+static inline bool import_char(Importer *i) {
+	return read_char(i->in);
+}
 static inline void export_vlq(Exporter *ex, U64 x) {
 	write_vlq(ex->out, x);
+}
+static inline bool import_vlq(Importer *i) {
+	return read_vlq(i->in);
 }
 
 static inline void export_str(Exporter *ex, const char *str, size_t len) {
@@ -97,14 +136,15 @@ static inline void export_len(Exporter *ex, size_t len) {
 	export_vlq(ex, (U64)len);
 }
 
+static const U8 toc_package_indicator[3] = {116, 111, 112};
+
 /* writes the header */
 static void exptr_start(Exporter *ex, const char *pkg_name, size_t pkg_name_len) {
-	const U8 toc[3] = {116, 111, 112}; /* "top" in ASCII */
 	const char *code = ex->code;
 	ex->started = true;
-	export_u8(ex, toc[0]);
-	export_u8(ex, toc[1]);
-	export_u8(ex, toc[2]);
+	export_u8(ex, toc_package_indicator[0]);
+	export_u8(ex, toc_package_indicator[1]);
+	export_u8(ex, toc_package_indicator[2]);
 	export_u32(ex, TOP_FMT_VERSION);
 	assert(ftell(ex->out) == 7L);
 	export_u64(ex, 0); /* placeholder for identifier offset in file */
@@ -606,6 +646,21 @@ static bool exptr_finish(Exporter *ex) {
 	return true;
 }
 
-static void import_pkg(Package *p, FILE *f) {
+/* where = where was this imported */
+static bool import_pkg(Package *p, FILE *f, const char *fname, Location where) {
+	Importer i = {0};
 	idents_create(&p->idents);
+    i.pkg = p;
+	i.in = f;
+	U8 toc[3];
+	toc[0] = import_u8(&i);
+	toc[1] = import_u8(&i);
+	toc[2] = import_u8(&i);
+	if (toc[0] != toc_package_indicator[0] ||
+		toc[1] != toc_package_indicator[1] ||
+		toc[2] != toc_package_indicator[2]) {
+		err_print(where, "%s is not a toc package file.", fname);
+		return false;
+	}
+	return true;
 }

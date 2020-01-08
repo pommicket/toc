@@ -299,7 +299,7 @@ static void binfile_test(void) {
 	write_f32(fp, d);
 	bool e = true;
 	write_bool(fp, e);
-	F64 f = (F64)-34.69459324823;
+	F64 f = (F64)34.69459324823;
 	write_f64(fp, f);
 	fseek(fp, 0L, SEEK_SET);
 

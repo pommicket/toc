@@ -22,6 +22,7 @@
 #ifdef __cplusplus
 #define new new_
 #define this this_
+#define export export_
 #elif __STDC_VERSION__ < 199901
 #define inline
 #endif

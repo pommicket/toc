@@ -894,7 +894,11 @@ static bool types_expr(Typer *tr, Expression *e) {
 				free(filename);
 				return false;
 			}
-			import_pkg(pkg, fp);
+			if (!import_pkg(pkg, fp, filename, e->where)) {
+				free(filename);
+				return false;
+			}
+			free(filename);
 			fclose(fp);
 		}
 	} break;
@@ -1199,7 +1203,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				arg_exprs[idx] = expr;
 				if (params_set[idx]) {
 					Declaration *param = fn_decl->params;
-					Identifier *ident;
+					Identifier *ident = NULL;
 					for (Declaration *end = arr_end(fn_decl->params); param < end; ++param) {
 						ident = param->idents;
 						for (Identifier *iend = arr_end(param->idents); ident != iend; ++ident) {

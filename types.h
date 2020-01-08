@@ -784,6 +784,11 @@ typedef struct Exporter {
 	const char *code;
 } Exporter;
 
+typedef struct Importer {
+	FILE *in;
+	Package *pkg;
+} Importer;
+
 typedef struct CGenerator {
 	Allocator *allocr;
 	FILE *outc;
