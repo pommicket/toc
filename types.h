@@ -299,7 +299,7 @@ typedef struct {
 	ErrCtx *ctx;
 	U32 line;
 	U32 start; /* index in ctx->str */
-	U32 end;
+	U32 end; /* exclusive */
 } SourcePos;
 
 /* NOTE: Location is typedef'd in util/err.c */
@@ -318,8 +318,8 @@ typedef struct Token {
 
 
 typedef struct Location {
-	Token *first;
-	Token *last; /* Included */
+	Token *start;
+	Token *end; /* Exclusive */
 } Location;
 
 
@@ -439,8 +439,7 @@ enum {
 };
 typedef struct Block {
 	U16 flags;
-	Location start;
-	Location end;
+	Location where;
 	struct Statement *stmts;
 	struct Expression *ret_expr; /* the return expression of this block, e.g. {foo(); 3} => 3  NULL for no expression. */
 } Block;

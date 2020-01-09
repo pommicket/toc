@@ -112,7 +112,6 @@ int main(int argc, char **argv) {
 	/* fprint_parsed_file(stdout, &f); */
 	/* printf("\n\n-----\n\n"); */
 	
-	tokr_free(&t);
 	
 	Typer tr;
 	Evaluator ev;
@@ -148,6 +147,7 @@ int main(int argc, char **argv) {
 	
 	block_exit(NULL, f.stmts); /* exit global scope */
 	
+	tokr_free(&t);
 	free(contents);
 	allocr_free_all(&main_allocr);
 	evalr_free(&ev);

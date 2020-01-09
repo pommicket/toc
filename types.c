@@ -718,7 +718,7 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where,
 		}
 		/* TODO: this should really be at the closing brace, and not the function declaration */
 		char *expected = type_to_str(ret_type);
-		err_print(f->body.end, "No return value in function which returns %s.", expected);
+		err_print(token_location(f->body.where.end), "No return value in function which returns %s.", expected);
 		free(expected);
 		info_print(where, "Function was declared here:");
 		success = false;
@@ -1501,7 +1501,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				/* type this instance */
 				
 				/* if anything happens, make sure we let the user know that this happened while generating a fn */
-				ErrCtx *err_ctx = e->where.ctx;
+				ErrCtx *err_ctx = e->where.start->pos.ctx;
 				*(Location *)typer_arr_add(tr, &err_ctx->instance_stack) = e->where;
 				bool success = types_fn(tr, &c->instance->fn, &f->type, e->where, c->instance);
 				arr_remove_lasta(&err_ctx->instance_stack, tr->allocr);

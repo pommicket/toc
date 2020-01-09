@@ -124,8 +124,8 @@ static inline char *import_str(Importer *i, size_t len) {
 
 static void export_location(Exporter *ex, Location where) {
 	if (ex->export_locations) {
-		export_vlq(ex, (U64)where.line);
-		export_vlq(ex, (U64)where.pos);
+		/* for now, we only export the line */
+		export_vlq(ex, (U64)where.start->pos.line);
 	}
 }
 
@@ -631,8 +631,7 @@ static bool export_stmt(Exporter *ex, Statement *s) {
 }
 
 static bool export_block(Exporter *ex, Block *b) {
-	export_location(ex, b->start);
-	export_location(ex, b->end);
+	export_location(ex, b->where);
 	export_len(ex, arr_len(b->stmts));
 	arr_foreach(b->stmts, Statement, s) {
 		if (!export_stmt(ex, s))

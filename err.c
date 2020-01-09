@@ -55,48 +55,52 @@ static void err_vfprint(const char *fmt, va_list args) {
 }
 
 static void err_print_header_(Location where) {
-	if (!where.first)
+	if (!where.start)
 		err_fprint(TEXT_ERROR("error") ":\n");
 	else {
-		SourcePos first_pos = where.first->pos;
-		err_fprint(TEXT_ERROR("error") " at line %lu of %s:\n", (unsigned long)first_pos.line, first_pos.ctx->filename);
+		SourcePos start_pos = where.start->pos;
+		err_fprint(TEXT_ERROR("error") " at line %lu of %s:\n", (unsigned long)start_pos.line, start_pos.ctx->filename);
 	}
 }
 
 static void info_print_header_(Location where) {
-	if (!where.first)
+	if (!where.start)
 		err_fprint(TEXT_INFO("info") ":\n");
 	else {
-		SourcePos first_pos = where.first->pos;
-		err_fprint(TEXT_INFO("info") " at line %lu of %s:\n", (unsigned long)first_pos.line, first_pos.ctx->filename);
+		SourcePos start_pos = where.start->pos;
+		err_fprint(TEXT_INFO("info") " at line %lu of %s:\n", (unsigned long)start_pos.line, start_pos.ctx->filename);
 	}
 }
 
 static void warn_print_header_(Location where) {
-	if (!where.first)
+	if (!where.start)
 		err_fprint(TEXT_WARN("warning") ":\n");
 	else {
-		SourcePos first_pos = where.first->pos;
-		err_fprint(TEXT_WARN("warning") " at line %lu of %s:\n", (unsigned long)first_pos.line, first_pos.ctx->filename);
+		SourcePos start_pos = where.start->pos;
+		err_fprint(TEXT_WARN("warning") " at line %lu of %s:\n", (unsigned long)start_pos.line, start_pos.ctx->filename);
 	}
 }
 
+static void err_print_location_text_from_str(char *str, U32 start_pos, U32 end_pos) {
+	(void)end_pos; /* TODO */
+	const char *text = str + start_pos;
+	const char *end = strchr(text, '\n');
+	int has_newline = end != NULL;
+	if (!has_newline)
+		end = strchr(text, '\0');
+	assert(end);
+	err_fprint("\there: --> ");
+	if (!text[0])
+		err_fprint("<end of file>");
+	else
+		err_fwrite(text, 1, (size_t)(end - text));
+	err_fprint("\n");
+}
+
 static void err_print_location_text(Location where) {
-	if (where.first) {
-		SourcePos first_pos = where.first->pos;
-		ErrCtx *ctx = first_pos.ctx;
-		const char *text = ctx->str + first_pos.start;
-		const char *end = strchr(text, '\n');
-		int has_newline = end != NULL;
-		if (!has_newline)
-			end = strchr(text, '\0');
-		assert(end);
-		err_fprint("\there: --> ");
-		if (!text[0])
-			err_fprint("<end of file>");
-		else
-			err_fwrite(text, 1, (size_t)(end - text));
-		err_fprint("\n");
+	if (where.start) {
+		ErrCtx *ctx = where.start->pos.ctx;
+		err_print_location_text_from_str(ctx->str, where.start->pos.start, where.end[-1].pos.end);
 	} else {
 		err_fprint("\t<no location available>");
 	}
@@ -104,7 +108,7 @@ static void err_print_location_text(Location where) {
 }
 
 static void err_print_footer_(Location where) {
-	ErrCtx *ctx = where.first->pos.ctx;
+	ErrCtx *ctx = where.start->pos.ctx;
 	err_fprint("\n"); 
 	err_print_location_text(where);
 	if (ctx) {

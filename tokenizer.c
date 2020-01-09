@@ -145,7 +145,33 @@ static char tokr_esc_seq(Tokenizer *t) {
 
 }
 
+static Location token_location(Token *t) {
+	Location loc;
+	loc.start = t;
+	loc.end = t + 1;
+	return loc;
+}
 
+/* for use during tokenization */
+static void tokenization_err(Tokenizer *t, const char *fmt, ...) {
+	va_list args;
+	va_start(args, fmt);
+	err_fprint(TEXT_ERROR("error") " at line %lu of %s:\n", (unsigned long)t->line, t->err_ctx->filename);
+	err_vfprint(fmt, args);
+	va_end(args);
+	err_fprint("\n");
+	U32 pos = (U32)(t->s - t->err_ctx->str);
+	err_print_location_text_from_str(t->err_ctx->str, pos, pos + 1);
+	while (*t->s) {
+		if (*t->s == '\n') {
+			tokr_nextchar(t);
+			break;
+		}
+		++t->s;
+	}
+}
+
+/* for use after tokenization */
 static void tokr_err_(
 #if ERR_SHOW_SOURCE_LOCATION
 					  const char *src_file, int src_line,
@@ -155,13 +181,9 @@ static void tokr_err_(
 	if (!t->token->pos.ctx->enabled) return;
 	err_fprint("At line %d of %s:\n", src_line, src_file);
 #endif
-	Location where;
-	where.first = t->token;
-	where.last = t->token;
-
 	va_list args;
 	va_start(args, fmt);
-	err_vprint(where, fmt, args);
+	err_vprint(token_location(t->token), fmt, args);
 	va_end(args);
 }
 
@@ -170,6 +192,7 @@ static void tokr_err_(
 #else
 #define tokr_err tokr_err_
 #endif
+
 
 static void tokr_put_start_pos(Tokenizer *tokr, Token *t) {
 	t->pos.line = tokr->line;
@@ -244,7 +267,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 						++comment_level;
 					} else {
 						if (*t->s == 0) {
-							tokr_err(t, "End of file reached inside multi-line comment.");
+							tokenization_err(t, "End of file reached inside multi-line comment.");
 							return false;
 						}
 
@@ -261,16 +284,16 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 		
 		if (*t->s == '#') {
 			/* it's a directive */
-			char *start_s = t->s;
+			Token token;
+			tokr_put_start_pos(t, &token);
 			++t->s; /* move past # */
 			Directive direct = tokenize_direct(&t->s);
 			if (direct != DIRECT_COUNT) {
 				/* it's a directive */
-				Token *token = tokr_add(t);
-				tokr_put_start_pos(t, token);
-				token->where.pos = (U32)(start_s - token->where.ctx->str);
-				token->kind = TOKEN_DIRECT;
-				token->direct = direct;
+				tokr_put_end_pos(t, &token);
+				token.kind = TOKEN_DIRECT;
+				token.direct = direct;
+				*(Token *)arr_add(&t->tokens) = token;
 				continue;
 			}
 			--t->s; /* go back to # */
@@ -279,15 +302,15 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 		}
 		
 		{
-			char *start_s = t->s;
+			Token token;
+			tokr_put_start_pos(t, &token);
 			Keyword kw = tokenize_kw(&t->s);
 			if (kw != KW_COUNT) {
 				/* it's a keyword */
-				Token *token = tokr_add(t);
-				tokr_put_location(t, token);
-				token->where.pos = (U32)(start_s - token->where.ctx->str);
-				token->kind = TOKEN_KW;
-				token->kw = kw;
+				tokr_put_end_pos(t, &token);
+				token.kind = TOKEN_KW;
+				token.kw = kw;
+				*(Token *)arr_add(&t->tokens) = token;
 				continue;
 			}
 		}
@@ -298,7 +321,6 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 			int base = 10;
 			Floating decimal_pow10 = 0;
 			Token *token = tokr_add(t);
-			tokr_put_location(t, token);
 			NumLiteral *n = &token->num;
 			n->kind = NUM_LITERAL_INT;
 			n->intval = 0;
@@ -412,7 +434,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 				}
 				tokr_nextchar(t);
 			}
-			
+			tokr_put_end_pos(t, token);
 			token->kind = TOKEN_LITERAL_NUM;
 			continue;
 		}
@@ -420,7 +442,6 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 		if (*t->s == '\'') {
 			/* it's a character literal! */
 			Token *token = tokr_add(t);
-			tokr_put_location(t, token);
 			tokr_nextchar(t);
 			char c;
 			if (*t->s == '\\') {
@@ -442,13 +463,13 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 			tokr_nextchar(t);
 			token->kind = TOKEN_LITERAL_CHAR;
 			token->chr = c;
+			tokr_put_end_pos(t, token);
 			continue;
 		}
 
 		if (*t->s == '"') {
 			/* it's a string literal! */
 			Token *token = tokr_add(t);
-			tokr_put_location(t, token);
 			tokr_nextchar(t);
 			size_t len = 0; /* counts \n as 2 chars */
 			size_t backslashes = 0;
@@ -456,8 +477,8 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 				if (*t->s == '\\') {
 					++backslashes;
 				} else if (*t->s == 0) {
-					/* return t to opening " so that we go to the next line */
-					tokr_get_location(t, token);
+					/* return t to opening " */
+					tokr_get_start_pos(t, token);
 					tokenization_err(t, "No matching \" found.");
 					goto err;
 				} else {
@@ -468,7 +489,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 			}
 			char *strlit = tokr_malloc(t, len + 1);
 			char *strptr = strlit;
-			tokr_get_location(t, token);
+			tokr_get_start_pos(t, token);
 			tokr_nextchar(t); /* past opening " */
 			while (*t->s != '"') {
 				assert(*t->s);
@@ -490,16 +511,17 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 			token->str.len = (size_t)(strptr - strlit);
 			token->str.str = strlit;
 			tokr_nextchar(t); /* move past closing " */
+			tokr_put_end_pos(t, token);
 			continue;
 		}
 
 		if (isident(*t->s)) {
 			/* it's an identifier */
 			Token *token = tokr_add(t);
-			tokr_put_location(t, token);
 			Identifier ident = ident_insert(t->idents, &t->s);
 			token->kind = TOKEN_IDENT;
 			token->ident = ident;
+			tokr_put_end_pos(t, token);
 			continue;
 		}		
 		tokenization_err(t, "Token not recognized");
