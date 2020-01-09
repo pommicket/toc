@@ -11,7 +11,7 @@ static bool export_block(Exporter *ex, Block *b);
 static bool export_expr(Exporter *ex, Expression *e);
 static bool import_footer(Importer *i);
 
-static void exptr_create(Exporter *ex, FILE *out, char *code) {
+static void exptr_create(Exporter *ex, FILE *out) {
 	ex->out = out;
 	ex->ident_id = 0;
 	ex->export_locations = true;
@@ -19,7 +19,7 @@ static void exptr_create(Exporter *ex, FILE *out, char *code) {
 	ex->exported_structs = NULL;
 	ex->exported_idents = NULL;
 	ex->started = false;
-	ex->code = code;
+	ex->code = NULL;
 }
 
 static inline void *imptr_malloc(Importer *i, size_t n) {
@@ -217,6 +217,10 @@ static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname
 	if (!import_footer(&i))
 		return false;
 	fseek(f, code_offset, SEEK_SET);
+
+
+
+	free(i.ident_map);
 	return true;
 }
 
@@ -672,7 +676,10 @@ static bool exptr_finish(Exporter *ex) {
 	export_u64(ex, (U64)ident_offset);
 	fseek(ex->out, 0L, SEEK_END);
 
-	
+	/* export total number of identifiers */
+	export_len(ex, ex->ident_id);
+
+	/* export number of identifiers *whose names matter* */
 	export_len(ex, arr_len(ex->exported_idents));
 	arr_foreach(ex->exported_idents, Identifier, ident) {
 		Identifier i = *ident;
@@ -706,7 +713,25 @@ static bool exptr_finish(Exporter *ex) {
 	return true;
 }
 
-static bool import_footer(Importer *i) {
-	/* TODO */
+static bool import_footer(Importer *im) {
+	size_t i;
+	size_t max_ident_id = import_len(im);
+	im->ident_map = err_calloc(max_ident_id + 1, sizeof *im->ident_map);
+	size_t n_named_idents = import_len(im);
+	for (i = 0; i < n_named_idents; ++i) {
+		U64 id = import_vlq(im);
+		size_t name_len = import_vlq(im);
+		char *name = err_malloc(name_len+1);
+		name[name_len] = 0;
+		fread(name, 1, name_len, im->in);
+		char *copy = name; /* don't change the value of name */
+		im->ident_map[id] = ident_insert(&im->pkg->idents, &copy);
+		free(name);
+	}
+	for (i = 1; i <= max_ident_id; ++i) {
+		if (!im->ident_map[i]) {
+			/* TODO (maybe generate random identifier -- or just use malloc and set a certain field to indicate it's not part of a tree?) */
+		}
+	}
 	return true;
 }

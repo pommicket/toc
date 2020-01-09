@@ -31,13 +31,6 @@ static int isident(int c) {
 static Identifier ident_new(Identifiers *ids, Identifier parent, unsigned char index_in_parent) {
 	IdentTree *tree = block_arr_add(&ids->trees);
 	memset(tree, 0, sizeof *tree); /* use zero value of IdentTree */
-#ifdef NONZERO_NULL_PTRS
-	tree->parent = NULL;
-	for (size_t i = 0; i < TREE_NCHILDREN; ++i)
-		tree->children[i] = NULL;
-	tree->decls = NULL;
-	tree->pkg = NULL;
-#endif
 	tree->parent = parent;
 	if (parent)
 		tree->depth = (uint16_t)(parent->depth + 1);

@@ -788,6 +788,7 @@ typedef struct Importer {
 	FILE *in;
 	Package *pkg;
 	Allocator *allocr;
+	Identifier *ident_map; /* [i] = value of identifier with ID i */
 } Importer;
 
 typedef struct CGenerator {

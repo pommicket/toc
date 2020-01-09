@@ -2168,7 +2168,7 @@ static void typer_create(Typer *tr, Evaluator *ev, Allocator *allocr, Identifier
 	*(Block **)arr_adda(&tr->blocks, allocr) = NULL;
 }
 
-static bool types_file(Typer *tr, ParsedFile *f, char *code) {
+static bool types_file(Typer *tr, ParsedFile *f) {
 	bool ret = true;
 	FILE *pkg_fp = NULL;
 	if (f->pkg_name) {
@@ -2204,7 +2204,7 @@ static bool types_file(Typer *tr, ParsedFile *f, char *code) {
 			return false;
 		}
 		free(pkg_file_name);
-		exptr_create(tr->exptr, pkg_fp, code);
+		exptr_create(tr->exptr, pkg_fp);
 		exptr_start(tr->exptr, pkg_name_str, pkg_name_len);
 	}
 	arr_foreach(f->stmts, Statement, s) {

@@ -124,7 +124,7 @@ int main(int argc, char **argv) {
 	if (!block_enter(NULL, f.stmts, SCOPE_CHECK_REDECL)) /* enter global scope */
 		return false;
 
-	if (!types_file(&tr, &f, contents)) {
+	if (!types_file(&tr, &f)) {
 		/* TODO(eventually): fix this if the error occured while exporting something */
 		err_fprint(TEXT_IMPORTANT("Errors occured while determining types.\n"));
 		return EXIT_FAILURE;
