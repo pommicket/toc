@@ -9,6 +9,7 @@
 static bool export_decl(Exporter *ex, Declaration *d);
 static bool export_block(Exporter *ex, Block *b);
 static bool export_expr(Exporter *ex, Expression *e);
+static bool import_footer(Importer *i);
 
 static void exptr_create(Exporter *ex, FILE *out, char *code) {
 	ex->out = out;
@@ -178,7 +179,7 @@ static void exptr_start(Exporter *ex, const char *pkg_name, size_t pkg_name_len)
 static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname, Location where) {
 	Importer i = {0};
 	idents_create(&p->idents);
-    i.pkg = p;
+	i.pkg = p;
 	i.in = f;
 	i.allocr = allocr;
 	/* read header */
@@ -208,6 +209,14 @@ static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname
 		char *code = import_str(&i, code_len);
 		puts(code);
 	}
+	long code_offset = ftell(f);
+	if (ident_offset > LONG_MAX) {
+		err_print(where, "File %s is too large.", fname);
+	}
+	fseek(f, (long)ident_offset, SEEK_SET);
+	if (!import_footer(&i))
+		return false;
+	fseek(f, code_offset, SEEK_SET);
 	return true;
 }
 
@@ -694,5 +703,10 @@ static bool exptr_finish(Exporter *ex) {
 
 	arr_clear(&ex->exported_idents);
 	
+	return true;
+}
+
+static bool import_footer(Importer *i) {
+	/* TODO */
 	return true;
 }
