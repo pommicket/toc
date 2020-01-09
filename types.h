@@ -81,17 +81,11 @@ typedef U32 IdentID; /* identifier ID for cgen (anonymous variables). not to be 
 #endif
 
 
-typedef struct Location {
-	U32 line;
-	U32 pos; /* position in ctx->str */
-	struct ErrCtx *ctx;
-} Location;
-
 typedef struct ErrCtx {
 	const char *filename;
 	char *str; /* file contents */
 	bool enabled;
-	Location *instance_stack; /* stack of locations which generate the instances we're dealing with */
+	struct Location *instance_stack; /* stack of locations which generate the instances we're dealing with */
 } ErrCtx;
 
 
@@ -301,10 +295,17 @@ typedef struct StrLiteral {
 	size_t len;
 } StrLiteral;
 
+typedef struct {
+	ErrCtx *ctx;
+	U32 line;
+	U32 start; /* index in ctx->str */
+	U32 end;
+} SourcePos;
+
 /* NOTE: Location is typedef'd in util/err.c */
 typedef struct Token {
 	TokenKind kind;
-	Location where;
+	SourcePos pos;
 	union {
 		Keyword kw;
 		Directive direct;
@@ -314,6 +315,13 @@ typedef struct Token {
 		StrLiteral str;
 	};
 } Token;
+
+
+typedef struct Location {
+	Token *first;
+	Token *last; /* Included */
+} Location;
+
 
 typedef struct Tokenizer {
 	Allocator *allocr;

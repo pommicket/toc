@@ -82,7 +82,7 @@ static const char *token_kind_to_str(TokenKind t) {
 }
 
 static void fprint_token(FILE *out, Token *t) {
-	fprintf(out, "l%lu-", (unsigned long)t->where.line);
+	fprintf(out, "l%lu-", (unsigned long)t->pos.line);
 	switch (t->kind) {
 	case TOKEN_KW:
 		fprintf(out, "keyword: %s", kw_to_str(t->kw));
@@ -145,39 +145,23 @@ static char tokr_esc_seq(Tokenizer *t) {
 
 }
 
-/* to be used during tokenization */
-static void tokenization_err(Tokenizer *t, const char *fmt, ...) {
-	va_list args;
-	Location where;
-	where.line = t->line;
-	where.ctx = t->err_ctx;
-	where.pos = (U32)(t->s - where.ctx->str);
-	va_start(args, fmt);
-	err_vprint(where, fmt, args);
-	va_end(args);
-	char *end_of_line = strchr(t->s, '\n');
-	if (end_of_line) {
-		t->s = end_of_line;
-		++t->s; /* move past newline */
-	} else {
-		t->s = strchr(t->s, '\0');
-	}
-	++t->line;
-}
 
-/* to be used after tokenization */
 static void tokr_err_(
 #if ERR_SHOW_SOURCE_LOCATION
 					  const char *src_file, int src_line,
 #endif
 					  Tokenizer *t, const char *fmt, ...) {
 #if ERR_SHOW_SOURCE_LOCATION
-	if (t->token->where.ctx && !t->token->where.ctx->enabled) return;
+	if (!t->token->pos.ctx->enabled) return;
 	err_fprint("At line %d of %s:\n", src_line, src_file);
 #endif
+	Location where;
+	where.first = t->token;
+	where.last = t->token;
+
 	va_list args;
 	va_start(args, fmt);
-	err_vprint(t->token->where, fmt, args);
+	err_vprint(where, fmt, args);
 	va_end(args);
 }
 
@@ -187,15 +171,19 @@ static void tokr_err_(
 #define tokr_err tokr_err_
 #endif
 
-static void tokr_put_location(Tokenizer *tokr, Token *t) {
-	t->where.line = tokr->line;
-	t->where.ctx = tokr->err_ctx;
-	t->where.pos = (U32)(tokr->s - t->where.ctx->str);
+static void tokr_put_start_pos(Tokenizer *tokr, Token *t) {
+	t->pos.line = tokr->line;
+	t->pos.ctx = tokr->err_ctx;
+	t->pos.start = (U32)(tokr->s - t->pos.ctx->str);
 }
 
-static void tokr_get_location(Tokenizer *tokr, Token *t) {
-	tokr->line = t->where.line;
-	tokr->s = t->where.pos + t->where.ctx->str;
+static void tokr_put_end_pos(Tokenizer *tokr, Token *t) {
+	t->pos.end = (U32)(tokr->s - t->pos.ctx->str);
+}
+
+static void tokr_get_start_pos(Tokenizer *tokr, Token *t) {
+	tokr->line = t->pos.line;
+	tokr->s = t->pos.start + t->pos.ctx->str;
 }
 
 /* 
@@ -216,7 +204,7 @@ static inline void *tokr_malloc(Tokenizer *t, size_t bytes) {
 
 static Token *tokr_add(Tokenizer *t) {
 	Token *token = arr_add(&t->tokens);
-	tokr_put_location(t, token);
+	tokr_put_start_pos(t, token);
 	return token;
 }
 
@@ -256,7 +244,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 						++comment_level;
 					} else {
 						if (*t->s == 0) {
-							tokenization_err(t, "End of file reached inside multi-line comment.");
+							tokr_err(t, "End of file reached inside multi-line comment.");
 							return false;
 						}
 
@@ -279,7 +267,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 			if (direct != DIRECT_COUNT) {
 				/* it's a directive */
 				Token *token = tokr_add(t);
-				tokr_put_location(t, token);
+				tokr_put_start_pos(t, token);
 				token->where.pos = (U32)(start_s - token->where.ctx->str);
 				token->kind = TOKEN_DIRECT;
 				token->direct = direct;
