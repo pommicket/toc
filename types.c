@@ -414,6 +414,14 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 			err_print(where, "Variables cannot be captured into inner functions (but constants can).");
 			return false;
 		}
+		if ((d->flags & DECL_HAS_EXPR) && (d->expr.kind == EXPR_TYPE)) {
+			/* allow using a type before declaring it */
+			t->kind = TYPE_BUILTIN;
+			t->builtin = BUILTIN_TYPE;
+			t->flags = TYPE_IS_RESOLVED;
+			return true;
+		}
+		 
 		/* are we inside this declaration? */
 		typedef Declaration *DeclarationPtr;
 		arr_foreach(tr->in_decls, DeclarationPtr, in_decl) {
@@ -440,12 +448,6 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 			if ((d->flags & DECL_HAS_EXPR) && (d->expr.kind == EXPR_FN)) {
 				/* allow using a function before declaring it */
 				if (!type_of_fn(tr, d->expr.fn, t, 0)) return false;
-				return true;
-			} else if ((d->flags & DECL_HAS_EXPR) && (d->expr.kind == EXPR_TYPE)) {
-				/* allow using a type before declaring it */
-				t->kind = TYPE_BUILTIN;
-				t->builtin = BUILTIN_TYPE;
-				t->flags = TYPE_IS_RESOLVED;
 				return true;
 			} else {
 				if (where.start <= d->where.end) {

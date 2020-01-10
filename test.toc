@@ -8,13 +8,15 @@ putf ::= fn(x: float) {
 };
 // point ::= pkg "point";
 
-Foo ::= struct {
-	b: &Bar;
-};
+// Foo ::= struct {
+	// b: Bar;
+// };
 
-Bar ::= struct {
-	f: &Foo;
-};
+// Bar ::= struct {
+	// f: Foo;
+// };
+
+Foo ::= struct { p: &Foo; };
 
 main ::= fn() {
 f::=fn(t::Type)Type {t};
