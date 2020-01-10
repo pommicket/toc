@@ -322,8 +322,15 @@ typedef struct Token {
 
 
 typedef struct Location {
+	/* if start is NULL, simple_location will be used. */
 	Token *start;
-	Token *end; /* Exclusive */
+	union {
+		Token *end; /* Exclusive */
+	    struct {
+			ErrCtx *ctx;
+			U32 line;
+		} *simple_location;
+	};
 } Location;
 
 

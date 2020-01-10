@@ -128,6 +128,14 @@ static void export_location(Exporter *ex, Location where) {
 		export_vlq(ex, (U64)where.start->pos.line);
 	}
 }
+static Location import_location(Importer *im) {
+	Location l;
+	l.start = NULL;
+	l.simple_location = imptr_malloc(im, sizeof *l.simple_location);
+	l.simple_location->ctx = &im->err_ctx;
+	l.simple_location->line = (U32)import_vlq(im);
+	return l;
+}
 
 static inline void export_ident(Exporter *ex, Identifier i) {
 	if (!i->export_id) {

@@ -18,7 +18,6 @@
 
 /* 
 TODO:
-test EOF error
 packages
 ---
 X ::= newtype(int); or something

@@ -81,37 +81,37 @@ static void err_vfprint(const char *fmt, va_list args) {
 	vfprintf(stderr, fmt, args);
 }
 
+static void err_print_line_file(Location where) {
+	if (where.start) {
+		err_fprint(" at line %lu of %s:\n", (unsigned long)where.start->pos.line, where.start->pos.ctx->filename);
+	} else if (where.simple_location) {
+		err_fprint(" at line %lu of %s:\n", (unsigned long)where.simple_location->line, where.simple_location->ctx->filename);
+	} else {
+		err_fprint(":\n");
+
+	}
+	
+}
+
 static void err_print_header_(Location where) {
 	SourcePos start_pos = where.start->pos;
 	ErrCtx *ctx = start_pos.ctx;
 	err_text_err(ctx, "error");
-	if (!where.start)
-		err_fprint(":\n");
-	else {
-		err_fprint(" at line %lu of %s:\n", (unsigned long)start_pos.line, ctx->filename);
-	}
+	err_print_line_file(where);
 }
 
 static void info_print_header_(Location where) {
 	SourcePos start_pos = where.start->pos;
 	ErrCtx *ctx = start_pos.ctx;
 	err_text_info(ctx, "info");
-	if (!where.start)
-		err_fprint(":\n");
-	else {
-		err_fprint(" at line %lu of %s:\n", (unsigned long)start_pos.line, ctx->filename);
-	}
+	err_print_line_file(where);
 }
 
 static void warn_print_header_(Location where) {
 	SourcePos start_pos = where.start->pos;
 	ErrCtx *ctx = start_pos.ctx;
 	err_text_warn(ctx, "warning");
-	if (!where.start)
-		err_fprint(":\n");
-	else {
-		err_fprint(" at line %lu of %s:\n", (unsigned long)start_pos.line, ctx->filename);
-	}
+	err_print_line_file(where);
 }
 
 static void err_print_pos_text(ErrCtx *ctx, U32 start_pos, U32 end_pos) {
@@ -162,8 +162,6 @@ static void err_print_location_text(Location where) {
 	if (where.start) {
 		ErrCtx *ctx = where.start->pos.ctx;
 		err_print_pos_text(ctx, where.start->pos.start, where.end[-1].pos.end);
-	} else {
-		err_fprint("\t<no location available>");
 	}
 	
 }
@@ -182,11 +180,12 @@ static void err_print_footer_(Location where) {
 
 /* Write nicely-formatted errors to the error file */
 
-
 static void err_vprint(Location where, const char *fmt, va_list args) {
 	if (location_is_ctx_disabled(where)) return;
 	if (where.start) {
 		where.start->pos.ctx->have_errored = true;
+	} else if (where.simple_location) {
+		where.simple_location->ctx->have_errored = true;
 	}
 	err_print_header_(where);
 	err_vfprint(fmt, args);
