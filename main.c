@@ -18,8 +18,6 @@
 
 /* 
 TODO:
-check for problematic circular dependencies
-test really long type names
 packages
 ---
 X ::= newtype(int); or something

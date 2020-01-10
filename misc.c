@@ -44,7 +44,7 @@ size_t str_copy(char *dest, size_t destsz, const char *src) {
 		}
 		++src; ++dest;
 	}
-	dest[destsz-1] = 0;
+	*dest = 0;
 	return destsz-1;
 }
 

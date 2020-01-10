@@ -21,7 +21,11 @@ Bar ::= struct { f: &Foo; };
 
 Foo ::= struct { b: Bar; };
 
+
+
 main ::= fn() {
 f::=fn(t::Type)Type {t};
 x:f(int) = 5;
+
+		 z : fn(int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int)=5;
 };

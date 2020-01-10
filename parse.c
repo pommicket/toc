@@ -282,7 +282,6 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 
 /* return value should be freed by caller */
 static char *type_to_str(Type *t) {
-	/* TODO allow types >255 chars */
 	char *ret = err_malloc(256);
 	type_to_str_(t, ret, 256);
 	return ret;
