@@ -812,6 +812,9 @@ typedef struct Importer {
 	Identifier *ident_map; /* [i] = value of identifier with ID i */
 	ErrCtx err_ctx;
 	Declaration *decls;
+	size_t max_ident_id;
+	Location import_location;
+	StructDef *structs;
 } Importer;
 
 typedef struct CGenerator {

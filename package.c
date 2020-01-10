@@ -107,6 +107,12 @@ static inline U64 import_vlq(Importer *i) {
 	return read_vlq(i->in);
 }
 
+static void imptr_arr_create_(Importer *im, void **arr, size_t sz, size_t len) {
+	*arr = NULL;
+	arr_set_lena_(arr, len, sz, im->allocr);
+}
+#define imptr_arr_create(im, arr, len) imptr_arr_create_(im, (void **)arr, sizeof **(arr), len)
+
 static inline void export_str(Exporter *ex, const char *str, size_t len) {
 #ifdef TOC_DEBUG
 	for (size_t i = 0; i < len; ++i)
@@ -143,6 +149,11 @@ static inline void export_ident(Exporter *ex, Identifier i) {
 		i->export_id = ++ex->ident_id;
 	}
 	export_vlq(ex, i->export_id);
+}
+static inline Identifier import_ident(Importer *im) {
+	U64 id = import_vlq(im);
+	assert(id <= im->max_ident_id);
+	return im->ident_map[id];
 }
 
 static inline void export_optional_ident(Exporter *ex, Identifier i) {
@@ -191,6 +202,7 @@ static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname
 	idents_create(&p->idents);
 	i.pkg = p;
 	i.in = f;
+	i.import_location = where;
 	i.allocr = allocr;
 	*err_ctx = *parent_ctx;
 	err_ctx->filename = fname;
@@ -626,7 +638,16 @@ static bool export_decl(Exporter *ex, Declaration *d) {
 }
 
 static void import_decl(Importer *im, Declaration *d) {
-	
+	d->where = import_location(im);
+	d->idents = NULL;
+	size_t n_idents = import_len(im);
+	arr_set_lena(&d->idents, n_idents, im->allocr);
+	for (size_t i = 0; i < n_idents; ++i) {
+		d->idents[i] = import_ident(im);
+	}
+	/* import_type(im, &d->type); */
+	/* printf("%s\n",type_to_str(&d->type)); */
+	exit(0);
 }
 
 /* exports a declaration. to be used by other files instead of export_decl. */
@@ -694,6 +715,15 @@ static bool export_struct(Exporter *ex, StructDef *s) {
 	return true;
 }
 
+static void import_struct(Importer *im, StructDef *s) {
+	size_t nfields = import_len(im);
+    imptr_arr_create(im, &s->fields, nfields);
+	for (size_t i = 0; i < nfields; ++i) {
+		s->fields[i].name = import_ident(im);
+		import_type(im, &s->fields[i].type);
+	}
+}
+
 /* does NOT close the file */
 static bool exptr_finish(Exporter *ex) {
 	export_u8(ex, 0); /* no more declarations */
@@ -717,13 +747,6 @@ static bool exptr_finish(Exporter *ex) {
 		fprint_ident(ex->out, i);
 	}
 	
-	export_len(ex, arr_len(ex->exported_fns));
-	typedef FnExpr *FnExprPtr;
-	arr_foreach(ex->exported_fns, FnExprPtr, f) {
-		if (!export_fn(ex, *f))
-			return false;
-	}
-	arr_clear(&ex->exported_fns);
 	export_len(ex, arr_len(ex->exported_structs));
 	typedef StructDef *StructDefPtr;
 	arr_foreach(ex->exported_structs, StructDefPtr, s) {
@@ -732,19 +755,27 @@ static bool exptr_finish(Exporter *ex) {
 	}
 	arr_clear(&ex->exported_structs);
 
+	export_len(ex, arr_len(ex->exported_fns));
+	typedef FnExpr *FnExprPtr;
+	arr_foreach(ex->exported_fns, FnExprPtr, f) {
+		if (!export_fn(ex, *f))
+			return false;
+	}
+	arr_clear(&ex->exported_fns);
+
+	arr_clear(&ex->exported_idents);
+	
 	if (ferror(ex->out)) {
 		warn_print(LOCATION_NONE, "An error occured while writing the package output. It may be incorrect.");
 	}
-
-	arr_clear(&ex->exported_idents);
 	
 	return true;
 }
 
 static bool import_footer(Importer *im) {
 	size_t i;
-	size_t max_ident_id = import_len(im);
-	im->ident_map = err_calloc(max_ident_id + 1, sizeof *im->ident_map);
+	im->max_ident_id = import_len(im);
+	im->ident_map = err_calloc(im->max_ident_id + 1, sizeof *im->ident_map);
 	size_t n_named_idents = import_len(im);
 	for (i = 0; i < n_named_idents; ++i) {
 		U64 id = import_vlq(im);
@@ -756,12 +787,21 @@ static bool import_footer(Importer *im) {
 		im->ident_map[id] = ident_insert(&im->pkg->idents, &copy);
 		free(name);
 	}
-	for (i = 1; i <= max_ident_id; ++i) {
+	for (i = 1; i <= im->max_ident_id; ++i) {
 		if (!im->ident_map[i]) {
 			im->ident_map[i] = ident_new_anonymous(&im->pkg->idents);
 		}
 	}
+
+	size_t n_structs = import_len(im);
+	imptr_arr_create(im, &im->structs, n_structs);
+	for (i = 0; i < n_structs; ++i) {
+		import_struct(im, &im->structs[i]);
+	}
 	
+	if (ferror(im->in)) {
+		warn_print(im->import_location, "An error occured while reading the package. It may be incorrect.");
+	}
 	
 	return true;
 }

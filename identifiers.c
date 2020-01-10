@@ -92,12 +92,17 @@ static Identifier ident_insert(Identifiers *ids, char **s) {
 }
 
 static inline size_t ident_len(Identifier i) {
+	if (i->anonymous) return 3;
 	return (size_t)(i->depth / 2);
 }
 
 static char *ident_to_str(Identifier i) {
 	size_t i_len = ident_len(i);
 	char *str = err_malloc(i_len + 1);
+	if (i->anonymous) {
+		strcpy(str, "???");
+		return str;
+	}
 	str += i_len;
 	*str = 0;
 	while (i->parent) {
@@ -134,6 +139,9 @@ static void print_ident(Identifier id) {
 /* reduced charset = a-z, A-Z, 0-9, _ */
 static void fprint_ident_reduced_charset(FILE *out, Identifier id) {
 	assert(id);
+	if (id->anonymous) {
+		fprintf(out, "x___");
+	}
 	if (id->parent == NULL) return; /* at root */
 	fprint_ident_reduced_charset(out, id->parent->parent); /* to go up one character, we need to go to the grandparent */
 	int c_low = id->parent->index_in_parent;
