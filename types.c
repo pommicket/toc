@@ -414,7 +414,9 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 			err_print(where, "Variables cannot be captured into inner functions (but constants can).");
 			return false;
 		}
-		if ((d->flags & DECL_HAS_EXPR) && (d->expr.kind == EXPR_TYPE)) {
+		if (arr_len(tr->is_reference_stack)
+			&& *(bool *)arr_last(tr->is_reference_stack)
+			&& (d->flags & DECL_HAS_EXPR) && (d->expr.kind == EXPR_TYPE)) {
 			/* allow using a type before declaring it */
 			t->kind = TYPE_BUILTIN;
 			t->builtin = BUILTIN_TYPE;
@@ -494,8 +496,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 	return true;
 }
 
-/* fixes the type (replaces [5+3]int with [8]int, etc.) */
-static bool type_resolve(Typer *tr, Type *t, Location where) {
+static bool type_resolve_(Typer *tr, Type *t, Location where, bool is_reference) {
 	Evaluator *ev = tr->evalr;
 	if (t->flags & TYPE_IS_RESOLVED) return true;
 	t->was_expr = NULL;
@@ -530,39 +531,41 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 			size = val_to_u64(&val, n_expr->type.builtin);
 		}
 		t->arr.n = (U64)size;
-		if (!type_resolve(tr, t->arr.of, where))
+		if (!type_resolve_(tr, t->arr.of, where, is_reference))
 			return false;
 	} break;
 	case TYPE_FN:
 		arr_foreach(t->fn.types, Type, child_type) {
-			if (!type_resolve(tr, child_type, where))
+			if (!type_resolve_(tr, child_type, where, true))
 				return false;
 		}
 		break;
 	case TYPE_TUPLE:
 		arr_foreach(t->tuple, Type, child_type) {
-			if (!type_resolve(tr, child_type, where))
+			if (!type_resolve_(tr, child_type, where, is_reference))
 				return false;
 		}
 		break;
 	case TYPE_PTR:
-		if (!type_resolve(tr, t->ptr, where))
+		if (!type_resolve_(tr, t->ptr, where, true))
 			return false;
 		break;
 	case TYPE_SLICE:
-		if (!type_resolve(tr, t->slice, where))
+		if (!type_resolve_(tr, t->slice, where, true))
 			return false;
 		break;
 	case TYPE_STRUCT:
 		arr_foreach(t->struc->fields, Field, f) {
-			if (!type_resolve(tr, f->type, where))
+			if (!type_resolve_(tr, f->type, where, is_reference))
 				return false;
 		}
 		break;
 	case TYPE_EXPR: {
 		Value typeval;
-		if (!types_expr(tr, t->expr))
-			return false;
+		*(bool *)arr_add(&tr->is_reference_stack) = is_reference;
+		bool success = types_expr(tr, t->expr);
+	    arr_remove_last(&tr->is_reference_stack);
+		if (!success) return false;
 		if (t->expr->type.kind == TYPE_UNKNOWN && tr->err_ctx->have_errored)
 			return false; /* silently fail (e.g. if a function couldn't be typed) */
 		if (!type_is_builtin(&t->expr->type, BUILTIN_TYPE)) {
@@ -584,6 +587,11 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 	assert(t->kind != TYPE_EXPR);
 	t->flags |= TYPE_IS_RESOLVED;
 	return true;
+}
+
+/* fixes the type (replaces [5+3]int with [8]int, etc.) */
+static bool type_resolve(Typer *tr, Type *t, Location where) {
+	return type_resolve_(tr, t, where, false);
 }
 
 
@@ -2266,6 +2274,7 @@ static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *a
 	tr->pkg_name = NULL;
 	tr->allocr = allocr;
 	tr->idents = idents;
+	tr->is_reference_stack = NULL;
 	*(Block **)arr_adda(&tr->blocks, allocr) = NULL;
 }
 

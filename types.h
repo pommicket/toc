@@ -777,6 +777,8 @@ typedef struct Typer {
 	FnExpr *fn; /* the function we're currently parsing. */
 	char *pkg_name;
 	ErrCtx *err_ctx;
+	/* for checking for problematic struct circular dependencies */
+	bool *is_reference_stack;
 } Typer;
 
 typedef struct Package {

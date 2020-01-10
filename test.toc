@@ -16,7 +16,10 @@ putf ::= fn(x: float) {
 	// f: Foo;
 // };
 
-Foo ::= struct { p: &Foo; };
+
+Bar ::= struct { f: &Foo; };
+
+Foo ::= struct { b: Bar; };
 
 main ::= fn() {
 f::=fn(t::Type)Type {t};
