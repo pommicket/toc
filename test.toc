@@ -6,26 +6,6 @@ putf ::= fn(x: float) {
 	 #C("printf(\"%f\\n\", (double)x);
 ");
 };
-// point ::= pkg "point";
-
-// Foo ::= struct {
-	// b: Bar;
-// };
-
-// Bar ::= struct {
-	// f: Foo;
-// };
-
-
-Bar ::= struct { f: &Foo; };
-
-Foo ::= struct { b: Bar; };
-
-
-
+point ::= pkg "point";
 main ::= fn() {
-f::=fn(t::Type)Type {t};
-x:f(int) = 5;
-
-		 z : fn(int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int,int, int)=5;
 };

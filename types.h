@@ -83,7 +83,7 @@ typedef U32 IdentID; /* identifier ID for cgen (anonymous variables). not to be 
 
 typedef struct ErrCtx {
 	const char *filename;
-	char *str; /* file contents */
+	char *str; /* file contents, or NULL if none are available */
 	bool enabled;
 	bool color_enabled;
 	bool have_errored;
@@ -183,6 +183,7 @@ typedef struct IdentTree {
 	uint16_t depth;
 	unsigned char index_in_parent; /* index of this in .parent.children */
 	bool export_name; /* is this identifier's name important? */
+	bool anonymous; /* is this identifier not part of a tree? */
 	U64 export_id; /* 0 if there's no exported identifier here, otherwise unique positive integer associated with this identifier */
 	struct Package *pkg; /* NULL if this is not associated with a package */
 	struct IdentTree *parent;
@@ -802,6 +803,7 @@ typedef struct Importer {
 	Package *pkg;
 	Allocator *allocr;
 	Identifier *ident_map; /* [i] = value of identifier with ID i */
+	ErrCtx err_ctx;
 } Importer;
 
 typedef struct CGenerator {

@@ -114,14 +114,12 @@ static void warn_print_header_(Location where) {
 	}
 }
 
-
-/* 
-   before_pos and after_pos could be things like TEXT_ERR_START or TEXT_ERR_END. 
-   they will not be printed if color output is disabled. 
-*/
 static void err_print_pos_text(ErrCtx *ctx, U32 start_pos, U32 end_pos) {
-	(void)end_pos; /* TODO */
 	char *str = ctx->str;
+	if (!str) {
+		return;
+	}
+	
 	char *start = str + start_pos;
 	char *line_start = start;
 	char *end = str + end_pos;

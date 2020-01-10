@@ -18,6 +18,7 @@
 
 /* 
 TODO:
+test EOF error
 packages
 ---
 X ::= newtype(int); or something
@@ -148,7 +149,6 @@ int main(int argc, char **argv) {
 	
 	block_exit(NULL, f.stmts); /* exit global scope */
 	
-	tokr_free(&t);
 	free(contents - 1); /* -1 because we put a 0 byte at the beginning */
 	allocr_free_all(&main_allocr);
 	evalr_free(&ev);

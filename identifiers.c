@@ -27,16 +27,24 @@ static int isident(int c) {
 }
 
 
+static Identifier ident_new_anonymous(Identifiers *ids) {
+	IdentTree *node = block_arr_add(&ids->trees);
+	memset(node, 0, sizeof *node);
+	node->anonymous = true;
+	return node;
+}
+
 /* used internally to allocate identifiers */
 static Identifier ident_new(Identifiers *ids, Identifier parent, unsigned char index_in_parent) {
-	IdentTree *tree = block_arr_add(&ids->trees);
-	memset(tree, 0, sizeof *tree); /* use zero value of IdentTree */
-	tree->parent = parent;
+	IdentTree *node = ident_new_anonymous(ids);
+	node->parent = parent;
 	if (parent)
-		tree->depth = (uint16_t)(parent->depth + 1);
-	tree->index_in_parent = index_in_parent;
-	return tree;
+		node->depth = (uint16_t)(parent->depth + 1);
+	node->index_in_parent = index_in_parent;
+	node->anonymous = false;
+	return node;
 }
+
 
 /* Initialize Identifiers. */
 static void idents_create(Identifiers *ids) {

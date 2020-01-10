@@ -228,7 +228,7 @@ static inline void *tokr_malloc(Tokenizer *t, size_t bytes) {
 }
 
 static Token *tokr_add(Tokenizer *t) {
-	Token *token = arr_add(&t->tokens);
+	Token *token = arr_adda(&t->tokens, t->allocr);
 	tokr_put_start_pos(t, token);
 	return token;
 }
@@ -295,7 +295,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 				tokr_put_end_pos(t, &token);
 				token.kind = TOKEN_DIRECT;
 				token.direct = direct;
-				*(Token *)arr_add(&t->tokens) = token;
+				*(Token *)arr_adda(&t->tokens, t->allocr) = token;
 				continue;
 			}
 			--t->s; /* go back to # */
@@ -312,7 +312,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 				tokr_put_end_pos(t, &token);
 				token.kind = TOKEN_KW;
 				token.kw = kw;
-				*(Token *)arr_add(&t->tokens) = token;
+				*(Token *)arr_adda(&t->tokens, t->allocr) = token;
 				continue;
 			}
 		}
@@ -558,9 +558,4 @@ static void tokr_skip_semicolon(Tokenizer *t) {
 
 static inline void tokr_skip_to_eof(Tokenizer *t) {
 	while (t->token->kind != TOKEN_EOF) ++t->token; /* move to end of file */
-}
-
-/* only frees tokens, not string literals (because those are on the allocator). */
-static void tokr_free(Tokenizer *t) {
-	arr_clear(&t->tokens);
 }

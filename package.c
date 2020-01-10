@@ -176,12 +176,17 @@ static void exptr_start(Exporter *ex, const char *pkg_name, size_t pkg_name_len)
 }
 
 /* where = where was this imported */
-static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname, Location where) {
+static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname, Identifiers *parent_idents, ErrCtx *parent_ctx, Location where) {
 	Importer i = {0};
+	ErrCtx *err_ctx = &i.err_ctx;
 	idents_create(&p->idents);
 	i.pkg = p;
 	i.in = f;
 	i.allocr = allocr;
+	*err_ctx = *parent_ctx;
+	err_ctx->filename = fname;
+	err_ctx->instance_stack = NULL;
+	err_ctx->str = NULL;
 	/* read header */
 	U8 toc[3];
 	toc[0] = import_u8(&i);
@@ -202,12 +207,12 @@ static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname
 	U64 ident_offset = import_u64(&i);
 	size_t pkg_name_len = import_len(&i);
 	char *pkg_name = import_str(&i, pkg_name_len);
-	puts(pkg_name);
+	p->name = ident_get(parent_idents, pkg_name);
 	bool has_code = import_bool(&i);
 	if (has_code) {
 		size_t code_len = import_len(&i);
 		char *code = import_str(&i, code_len);
-		puts(code);
+	    err_ctx->str = code;
 	}
 	long code_offset = ftell(f);
 	if (ident_offset > LONG_MAX) {
@@ -729,8 +734,10 @@ static bool import_footer(Importer *im) {
 	}
 	for (i = 1; i <= max_ident_id; ++i) {
 		if (!im->ident_map[i]) {
-			/* TODO (maybe generate random identifier -- or just use malloc and set a certain field to indicate it's not part of a tree?) */
+			im->ident_map[i] = ident_new_anonymous(&im->pkg->idents);
 		}
 	}
+	
+	
 	return true;
 }
