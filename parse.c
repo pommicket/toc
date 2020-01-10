@@ -228,13 +228,15 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 		return written;
 	}
 	case TYPE_STRUCT: {
-		size_t written = str_copy(buffer, bufsize, "struct { ");
-		arr_foreach(t->struc->fields, Field, f) {
-			written += type_to_str_(f->type, buffer + written, bufsize - written);
-			written += str_copy(buffer + written, bufsize - written, "; ");
-		}
-		written += str_copy(buffer + written, bufsize - written, " }");
-		return written;
+		/* size_t written = str_copy(buffer, bufsize, "struct { "); */
+		/* arr_foreach(t->struc->fields, Field, f) { */
+			/* written += type_to_str_(f->type, buffer + written, bufsize - written); */
+			/* written += str_copy(buffer + written, bufsize - written, "; "); */
+		/* } */
+		/* written += str_copy(buffer + written, bufsize - written, " }"); */
+		/* TODO: show name or something (to allow circular dependencies)? */
+		return str_copy(buffer, bufsize, "struct { ... }");
+		
 	}
 	case TYPE_ARR: {
 		size_t written = str_copy(buffer, bufsize, "[");

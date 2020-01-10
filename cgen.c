@@ -158,9 +158,7 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 #define cgen_recurse_subtypes(f, g, type, extra)	\
 	switch (type->kind) {							\
 	case TYPE_STRUCT:								\
-		arr_foreach(type->struc->fields, Field, fl)	\
-			if (!f(g, fl->type, extra))				\
-				return false;						\
+		/* don't descend into fields */				\
 		break;										\
 	case TYPE_FN:									\
 		arr_foreach(type->fn.types, Type, sub) {	\

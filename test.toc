@@ -6,7 +6,15 @@ putf ::= fn(x: float) {
 	 #C("printf(\"%f\\n\", (double)x);
 ");
 };
-point ::= pkg "point";
+// point ::= pkg "point";
+
+Foo ::= struct {
+	b: &Bar;
+};
+
+Bar ::= struct {
+	f: &Foo;
+};
 
 main ::= fn() {
 f::=fn(t::Type)Type {t};

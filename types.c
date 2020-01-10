@@ -441,6 +441,12 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 				/* allow using a function before declaring it */
 				if (!type_of_fn(tr, d->expr.fn, t, 0)) return false;
 				return true;
+			} else if ((d->flags & DECL_HAS_EXPR) && (d->expr.kind == EXPR_TYPE)) {
+				/* allow using a type before declaring it */
+				t->kind = TYPE_BUILTIN;
+				t->builtin = BUILTIN_TYPE;
+				t->flags = TYPE_IS_RESOLVED;
+				return true;
 			} else {
 				if (where.start <= d->where.end) {
 					char *s = ident_to_str(i);

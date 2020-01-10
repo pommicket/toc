@@ -1320,8 +1320,16 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		Declaration *d = NULL;
 		if (is_decl) {
 			d = idecl->decl;
-			if (!types_decl(ev->typer, d)) return false;
-			assert(d->type.flags & TYPE_IS_RESOLVED);
+			if ((d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_TYPE && d->expr.typeval.kind == TYPE_STRUCT) {
+				v->type = allocr_malloc(ev->allocr, sizeof *v->type);
+				v->type->flags = TYPE_IS_RESOLVED;
+				v->type->kind = TYPE_STRUCT;
+				v->type->struc = d->expr.typeval.struc;
+				break;
+			} else {
+				if (!types_decl(ev->typer, d)) return false;
+				assert(d->type.flags & TYPE_IS_RESOLVED);
+			}
 		}
 		if (idecl->flags & IDECL_HAS_VAL) {
 			*v = idecl->val;
