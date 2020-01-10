@@ -2199,7 +2199,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 				err_print(d->where, "Declaration marked for exporting, but no package output was specified."); 
 				success = false;
 			} else {
-				success = export_decl(tr->exptr, d);
+				success = export_decl_external(tr->exptr, d);
 			}
 		}
 	} else {

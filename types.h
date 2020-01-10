@@ -811,6 +811,7 @@ typedef struct Importer {
 	Allocator *allocr;
 	Identifier *ident_map; /* [i] = value of identifier with ID i */
 	ErrCtx err_ctx;
+	Declaration *decls;
 } Importer;
 
 typedef struct CGenerator {

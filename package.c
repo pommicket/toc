@@ -10,6 +10,7 @@ static bool export_decl(Exporter *ex, Declaration *d);
 static bool export_block(Exporter *ex, Block *b);
 static bool export_expr(Exporter *ex, Expression *e);
 static bool import_footer(Importer *i);
+static void import_decl(Importer *im, Declaration *d);
 
 static void exptr_create(Exporter *ex, FILE *out) {
 	ex->out = out;
@@ -222,16 +223,19 @@ static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname
 		char *code = import_str(&i, code_len);
 	    err_ctx->str = code;
 	}
-	long code_offset = ftell(f);
+	long decls_offset = ftell(f);
 	if (ident_offset > LONG_MAX) {
 		err_print(where, "File %s is too large.", fname);
 	}
 	fseek(f, (long)ident_offset, SEEK_SET);
+	/* read footer */
 	if (!import_footer(&i))
 		return false;
-	fseek(f, code_offset, SEEK_SET);
-
-
+	fseek(f, decls_offset, SEEK_SET);
+	/* read declarations */
+	while (import_u8(&i)) {
+		import_decl(&i, arr_add(&i.decls));
+	}
 
 	free(i.ident_map);
 	return true;
@@ -621,6 +625,16 @@ static bool export_decl(Exporter *ex, Declaration *d) {
 	return true;
 }
 
+static void import_decl(Importer *im, Declaration *d) {
+	
+}
+
+/* exports a declaration. to be used by other files instead of export_decl. */
+static bool export_decl_external(Exporter *ex, Declaration *d) {
+	export_u8(ex, 1); /* indicate that there are more declarations */
+	return export_decl(ex, d);
+}
+
 static bool export_stmt(Exporter *ex, Statement *s) {
 	export_u8(ex, (U8)s->kind);
 	switch (s->kind) {
@@ -682,6 +696,8 @@ static bool export_struct(Exporter *ex, StructDef *s) {
 
 /* does NOT close the file */
 static bool exptr_finish(Exporter *ex) {
+	export_u8(ex, 0); /* no more declarations */
+	
 	long ident_offset = ftell(ex->out);
 
 	fseek(ex->out, 7L, SEEK_SET);
