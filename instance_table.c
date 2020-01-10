@@ -85,8 +85,7 @@ static U64 type_hash(Type *t) {
 											 0x50da97f1211b2423,
 											 0xc3977306abd0ae6c,
 											 0x87ea684427e1c521,
-											 0xcee5fd6d6cbdfe23,
-											 0xd80dd2469d6e7c1b
+											 0xcee5fd6d6cbdfe23
 	};
 	U64 hash = starters[t->kind];
 	assert(t->flags & TYPE_IS_RESOLVED);
@@ -95,8 +94,6 @@ static U64 type_hash(Type *t) {
 		return hash + (U64)t->builtin * 0x1307787dfff73417;
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
-	case TYPE_TYPE:
-	case TYPE_PKG:
 		return hash;
 	case TYPE_TUPLE:
 		arr_foreach(t->tuple, Type, sub)
@@ -144,6 +141,12 @@ static U64 val_ptr_hash(void *v, Type *t) {
 		case BUILTIN_F64: return f64_hash(*(F64 *)v);
 		case BUILTIN_CHAR: return (U64)*(char *)v;
 		case BUILTIN_BOOL: return (U64)*(bool *)v;
+		case BUILTIN_TYPE:
+			return type_hash(*(Type **)v);
+		case BUILTIN_PKG: {
+			Package *pkg = *(Package **)v;
+			return (U64)pkg;
+		} break;
 		}
 		assert(0);
 		return 0;
@@ -159,8 +162,6 @@ static U64 val_ptr_hash(void *v, Type *t) {
 		return hash;
 	}
 	case TYPE_PTR: return (U64)*(void **)v;
-	case TYPE_TYPE:
-		return type_hash(*(Type **)v);
 	case TYPE_ARR: {
 		U32 x = 1;
 		U64 hash = 0;
@@ -191,10 +192,6 @@ static U64 val_ptr_hash(void *v, Type *t) {
 		}
 		return hash;
 	}
-	case TYPE_PKG: {
-		Package *pkg = *(Package **)v;
-		return (U64)pkg;
-	} break;
 	case TYPE_EXPR: break;
 	}
 	assert(0);
@@ -222,6 +219,12 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 		case BUILTIN_F64: return *(F64 *)u == *(F64 *)v;
 		case BUILTIN_BOOL: return *(bool *)u == *(bool *)v;
 		case BUILTIN_CHAR: return *(char *)u == *(char *)v;
+		case BUILTIN_TYPE: {
+			bool ret = type_eq(*(Type **)u, *(Type **)v);
+			return ret;
+		}
+		case BUILTIN_PKG:
+			return *(Package **)u == *(Package **)v;
 		}
 		break;
 	case TYPE_VOID:
@@ -232,10 +235,6 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 		return *(FnExpr **)u == *(FnExpr **)v;
 	case TYPE_PTR:
 		return *(void **)u == *(void **)v;
-	case TYPE_TYPE: {
-		bool ret = type_eq(*(Type **)u, *(Type **)v);
-		return ret;
-	}
 	case TYPE_TUPLE: {
 		Value *us = *(Value **)u;
 		Value *vs = *(Value **)v;
@@ -276,8 +275,6 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 				return false;
 		}
 		return true;
-	case TYPE_PKG:
-		return *(Package **)u == *(Package **)v;
 	case TYPE_EXPR: break;
 	}
 	assert(0);

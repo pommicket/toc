@@ -151,6 +151,8 @@ static int kw_to_builtin_type(Keyword kw) {
 	case KW_F64: return BUILTIN_F64;
 	case KW_BOOL: return BUILTIN_BOOL;
 	case KW_CHAR: return BUILTIN_CHAR;
+	case KW_PACKAGE: return BUILTIN_PKG;
+	case KW_TYPE: return BUILTIN_TYPE;
 	default: return -1;
 	}
 	return -1;
@@ -170,6 +172,8 @@ static Keyword builtin_type_to_kw(BuiltinType t) {
 	case BUILTIN_F64: return KW_F64;
 	case BUILTIN_BOOL: return KW_BOOL;
 	case BUILTIN_CHAR: return KW_CHAR;
+	case BUILTIN_PKG: return KW_PACKAGE;
+	case BUILTIN_TYPE: return KW_TYPE;
 	}
 	assert(0);
 	return KW_COUNT;
@@ -265,10 +269,6 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 		written += type_to_str_(t->ptr, buffer + written, bufsize - written);
 		return written;
 	}
-	case TYPE_TYPE:
-		return str_copy(buffer, bufsize, "Type");
-	case TYPE_PKG:
-		return str_copy(buffer, bufsize, "pkg");
 	case TYPE_EXPR:
 		/* TODO: improve this... we're gonna need expr_to_str ): */
 		return str_copy(buffer, bufsize, "<type expression>");
@@ -455,10 +455,6 @@ static bool parse_type(Parser *p, Type *type) {
 		}
 		/* Not a builtin */
 		switch (t->token->kw) {
-		case KW_TYPE:
-			type->kind = TYPE_TYPE;
-			++t->token;
-			break;
 		case KW_FN: {
 			/* function type */
 			type->kind = TYPE_FN;
@@ -1875,6 +1871,12 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 	}
 
 	d->where.end = t->token;
+	switch (ends_with) {
+	case DECL_END_RPAREN_COMMA:
+	case DECL_END_LBRACE_COMMA:
+		--d->where.end; /* don't include the ) / { as part of the declaration */
+	case DECL_END_SEMICOLON: break;
+	}
 	
 	return true;
 	

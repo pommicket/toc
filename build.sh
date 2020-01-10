@@ -27,7 +27,7 @@ RELEASE_FLAGS="-O3 -s -DNDEBUG $WARNINGS -std=c11"
 if [ "$1" = "release" ]; then
 	FLAGS="$RELEASE_FLAGS $ADDITIONAL_FLAGS"
 
-	COMMAND="$CC compatibility.c -Wall -Wextra -std=c99 -Wpedantic -o compatibility"
+	COMMAND="$CC compatibility.c -Wall -Wextra -o compatibility"
 	echo $COMMAND
 	$COMMAND || exit 1
 	FLAGS="$FLAGS $(./compatibility)"

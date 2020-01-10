@@ -86,6 +86,7 @@ typedef struct ErrCtx {
 	char *str; /* file contents */
 	bool enabled;
 	bool color_enabled;
+	bool have_errored;
 	struct Location *instance_stack; /* stack of locations which generate the instances we're dealing with */
 } ErrCtx;
 
@@ -269,6 +270,7 @@ typedef enum {
 			  KW_F32,
 			  KW_F64,
 			  KW_TYPE,
+			  KW_PACKAGE,
 			  KW_CHAR,
 			  KW_BOOL,
 			  KW_TRUE,
@@ -344,8 +346,6 @@ typedef enum {
 			  TYPE_ARR,
 			  TYPE_PTR,
 			  TYPE_SLICE,
-			  TYPE_TYPE,
-			  TYPE_PKG,
 			  TYPE_EXPR, /* just use this expression as the type. this kind of type doesn't exist after resolving. */
 			  TYPE_STRUCT
 #define TYPE_COUNT (TYPE_STRUCT+1)
@@ -364,7 +364,9 @@ typedef enum {
 			  BUILTIN_F32,
 			  BUILTIN_F64,
 			  BUILTIN_CHAR,
-			  BUILTIN_BOOL
+			  BUILTIN_BOOL,
+			  BUILTIN_TYPE,
+			  BUILTIN_PKG
 } BuiltinType;
 
 /* field of a struct */
@@ -774,6 +776,7 @@ typedef struct Typer {
 	Block **blocks; /* dyn array of all the block's we're in ([0] = NULL for global scope) */
 	FnExpr *fn; /* the function we're currently parsing. */
 	char *pkg_name;
+	ErrCtx *err_ctx;
 } Typer;
 
 typedef struct Package {

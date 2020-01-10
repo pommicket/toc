@@ -38,8 +38,6 @@ static void copy_val(Allocator *a, Value *out, Value *in, Type *t) {
 	case TYPE_SLICE:
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
-	case TYPE_PKG:
-	case TYPE_TYPE:
 		*out = *in;
 		break;
 	case TYPE_ARR: {
@@ -63,7 +61,7 @@ static void copy_val(Allocator *a, Value *out, Value *in, Type *t) {
 }
 
 static void copy_val_full(Copier *c, Value *out, Value *in, Type *t) {
-	if (t->kind == TYPE_TYPE) {
+	if (type_is_builtin(t, BUILTIN_TYPE)) {
 		Type *new_type = allocr_malloc(c->allocr, sizeof *new_type);
 		copy_type(c, new_type, in->type);
 		out->type = new_type;
@@ -77,8 +75,6 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 	*out = *in;
 	switch (in->kind) {
 	case TYPE_BUILTIN:
-	case TYPE_TYPE:
-	case TYPE_PKG:
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 		break;

@@ -226,18 +226,18 @@ static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname
 
 static bool export_type(Exporter *ex, Type *type, Location where) {
 	assert(type->flags & TYPE_IS_RESOLVED);
-	export_u8(ex, (U8)type->kind);
+	if (type->kind == TYPE_BUILTIN) {
+		export_u8(ex, (U8)(type->builtin + TYPE_COUNT));
+	} else {	
+		export_u8(ex, (U8)type->kind);
+	} 
 	switch (type->kind) {
 	case TYPE_VOID:
-	case TYPE_TYPE:
-	case TYPE_PKG:
 	case TYPE_UNKNOWN:
+	case TYPE_BUILTIN:
 		break;
 	case TYPE_PTR: export_type(ex, type->ptr, where); break;
 	case TYPE_SLICE: export_type(ex, type->slice, where); break;
-	case TYPE_BUILTIN:
-		export_u8(ex, (U8)type->builtin);
-		break;
 	case TYPE_TUPLE:
 		export_len(ex, arr_len(type->tuple));
 		arr_foreach(type->tuple, Type, sub)
@@ -316,6 +316,14 @@ static bool export_val_ptr(Exporter *ex, void *val, Type *type, Location where) 
 		case BUILTIN_F64: export_f64(ex, *(F64 *)val); break;
 		case BUILTIN_BOOL: export_bool(ex, *(bool *)val); break;
 		case BUILTIN_CHAR: export_char(ex, *(char *)val); break;
+		case BUILTIN_TYPE:
+			if (!export_type(ex, *(Type **)val, where))
+				return false;
+			break;
+		case BUILTIN_PKG: {
+			Package *pkg = *(Package **)val;
+			export_ident(ex, pkg->name);
+		} break;
 		}
 		break;
 	case TYPE_TUPLE: {
@@ -326,10 +334,6 @@ static bool export_val_ptr(Exporter *ex, void *val, Type *type, Location where) 
 				return false;
 		}
 	} break;
-	case TYPE_TYPE:
-		if (!export_type(ex, *(Type **)val, where))
-			return false;
-		break;
 	case TYPE_PTR:
 		err_print(where, "Cannot export pointer.");
 		return false;
@@ -365,10 +369,6 @@ static bool export_val_ptr(Exporter *ex, void *val, Type *type, Location where) 
 		if (!export_fn_ptr(ex, *(FnExpr **)val, where))
 			return false;
 		break;
-	case TYPE_PKG: {
-		Package *pkg = *(Package **)val;
-		export_ident(ex, pkg->name);
-	} break;
 	case TYPE_UNKNOWN:
 	case TYPE_EXPR:
 		assert(0);

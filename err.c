@@ -187,6 +187,9 @@ static void err_print_footer_(Location where) {
 
 static void err_vprint(Location where, const char *fmt, va_list args) {
 	if (location_is_ctx_disabled(where)) return;
+	if (where.start) {
+		where.start->pos.ctx->have_errored = true;
+	}
 	err_print_header_(where);
 	err_vfprint(fmt, args);
 	err_print_footer_(where);

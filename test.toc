@@ -7,9 +7,8 @@ putf ::= fn(x: float) {
 ");
 };
 point ::= pkg "point";
-main ::= fn() {
-	 x := fahfsdkjahksjdfh;
 
-fahfsdkjahksjdfh :=
-5;
+main ::= fn() {
+f::=fn(t::Type)Type {t};
+x:f(int) = 5;
 };

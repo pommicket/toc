@@ -83,7 +83,7 @@ static bool typedefs_decl(CGenerator *g, Declaration *d) {
 		Identifier i = d->idents[idx];
 		Type *type = decl_type_at_index(d, idx);
 		Value *val = decl_val_at_index(d, idx);
-		if (type->kind == TYPE_TYPE) {
+		if (type_is_builtin(type, BUILTIN_TYPE)) {
 			/* generate typedef */
 			typedefs_type(g, val->type, i);
 			
@@ -91,7 +91,7 @@ static bool typedefs_decl(CGenerator *g, Declaration *d) {
 				IdentID id = 0;
 				if (g->block != NULL || g->fn != NULL)
 					id = ++g->ident_counter;
-				if (val->type->kind != TYPE_TYPE) {
+				if (!type_is_compileonly(val->type)) {
 					cgen_write(g, "typedef ");
 					if (!cgen_type_pre(g, val->type, d->where)) return false;
 					cgen_write(g, " ");

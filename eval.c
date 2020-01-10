@@ -50,6 +50,8 @@ static size_t compiler_sizeof_builtin(BuiltinType b) {
 	case BUILTIN_F64: return sizeof(F64);
 	case BUILTIN_CHAR: return sizeof(char); /* = 1 */
 	case BUILTIN_BOOL: return sizeof(bool);
+	case BUILTIN_TYPE: return sizeof(Type *);
+	case BUILTIN_PKG: return sizeof(Package *);
 	}
 	assert(0);
 	return 0;
@@ -101,10 +103,6 @@ static size_t compiler_alignof(Type *t) {
 			return sizeof(void *);
 		else
 			return sizeof(size_t);
-	case TYPE_TYPE:
-		return sizeof v.type;
-	case TYPE_PKG:
-		return sizeof v.pkg;
 	case TYPE_STRUCT: {
 		/* assume the align of a struct is (at most) the greatest align out of its children's */
 		eval_struct_find_offsets(t);
@@ -135,10 +133,6 @@ static size_t compiler_sizeof(Type *t) {
 		return sizeof v.tuple;
 	case TYPE_SLICE:
 		return sizeof v.slice;
-	case TYPE_TYPE:
-		return sizeof v.type;
-	case TYPE_PKG:
-		return sizeof v.pkg;
 	case TYPE_STRUCT: {
 		eval_struct_find_offsets(t);
 		return t->struc->size;
@@ -167,6 +161,9 @@ static bool builtin_truthiness(Value *v, BuiltinType b) {
 	case BUILTIN_F64: return v->f64 != 0;
 	case BUILTIN_BOOL: return v->boolv;
 	case BUILTIN_CHAR: return v->charv != 0;
+	case BUILTIN_TYPE:
+	case BUILTIN_PKG:
+		break;
 	}
 	assert(0); return false;
 }
@@ -181,11 +178,9 @@ static bool val_truthiness(Value *v, Type *t) {
 	case TYPE_FN: return v->fn != NULL;
 	case TYPE_ARR: return t->arr.n > 0;
 	case TYPE_SLICE: return v->slice.n > 0;
-	case TYPE_TYPE:
 	case TYPE_TUPLE:
 	case TYPE_STRUCT:
 	case TYPE_EXPR:
-	case TYPE_PKG:
 		break;
 	}
 	assert(0);
@@ -256,9 +251,7 @@ static void *val_get_ptr(Value *v, Type *t) {
 	case TYPE_UNKNOWN:
 	case TYPE_FN:
 	case TYPE_SLICE:
-	case TYPE_TYPE:
 	case TYPE_TUPLE:
-	case TYPE_PKG:
 		return v;
 	case TYPE_ARR:
 		return v->arr;
@@ -293,6 +286,13 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		case BUILTIN_F64: fprintf(f, F64_FMT, *(F64 *)p); break;
 		case BUILTIN_CHAR: fprint_char_literal(f, *(char *)p); break;
 		case BUILTIN_BOOL: fprintf(f, "%s", *(bool *)p ? "true" : "false"); break;
+		case BUILTIN_PKG: {
+			Package *pkg = *(Package **)p;
+			fprintf(f, "<package at %p>", (void *)pkg);
+		} break;
+		case BUILTIN_TYPE:
+			fprint_type(f, *(Type **)p);
+			break;
 		}
 		break;
 	case TYPE_FN:
@@ -323,10 +323,6 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 	case TYPE_PTR:
 		fprintf(f, "<pointer: %p>", *(void **)p);
 		break;
-	case TYPE_PKG: {
-		Package *pkg = *(Package **)p;
-		fprintf(f, "<package at %p>", (void *)pkg);
-	} break;
 	case TYPE_SLICE: {
 		fprintf(f, "["); /* TODO: change? when slice initializers are added */
 		Slice slice = *(Slice *)p;
@@ -341,9 +337,6 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		}
 		fprintf(f, "]");
 	} break;
-	case TYPE_TYPE:
-		fprint_type(f, *(Type **)p);
-		break;
 	case TYPE_STRUCT:
 		fprintf(f, "["); /* TODO: change? when struct initializers are added */
 		arr_foreach(t->struc->fields, Field, fi) {
@@ -378,8 +371,6 @@ static void *val_ptr_to_free(Value *v, Type *t) {
 	case TYPE_PTR:
 	case TYPE_SLICE:
 	case TYPE_VOID:
-	case TYPE_TYPE:
-	case TYPE_PKG:
 	case TYPE_UNKNOWN:
 		return NULL;
 	case TYPE_ARR:
@@ -429,6 +420,7 @@ static void val_free(Value *v, Type *t) {
 		builtin_casts_to_num(low);							\
 	case BUILTIN_CHAR: vout->charv = (char)vin->low; break;	\
 	case BUILTIN_BOOL: vout->boolv = vin->low != 0; break;	\
+	case BUILTIN_PKG: case BUILTIN_TYPE: assert(0); break;	\
 	} break
 
 #define builtin_float_casts(low, up)							\
@@ -437,6 +429,7 @@ static void val_free(Value *v, Type *t) {
 		builtin_casts_to_num(low);								\
 	case BUILTIN_BOOL: vout->boolv = vin->low != 0.0f; break;	\
 	case BUILTIN_CHAR:											\
+	case BUILTIN_PKG: case BUILTIN_TYPE:						\
 		assert(0); break;										\
 	} break
 	
@@ -465,8 +458,14 @@ static void val_builtin_cast(Value *vin, BuiltinType from, Value *vout, BuiltinT
 		case BUILTIN_F32:
 		case BUILTIN_F64:
 		case BUILTIN_BOOL:
+		case BUILTIN_TYPE:
+		case BUILTIN_PKG:
 			assert(0); break;
 		}
+		break;
+	case BUILTIN_TYPE:
+	case BUILTIN_PKG:
+		assert(0);
 		break;
 	}
 }
@@ -484,10 +483,8 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 	case TYPE_TUPLE:
-	case TYPE_TYPE:
 	case TYPE_STRUCT:
 	case TYPE_EXPR:
-	case TYPE_PKG:
 		assert(0); break;
 	case TYPE_BUILTIN:
 		switch (to->kind) {
@@ -515,8 +512,6 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_TUPLE:
 		case TYPE_FN:
 		case TYPE_ARR:
-		case TYPE_TYPE:
-		case TYPE_PKG:
 			assert(0);
 			break;
 		}
@@ -544,6 +539,8 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 			case BUILTIN_CHAR:
 			case BUILTIN_F32:
 			case BUILTIN_F64:
+			case BUILTIN_TYPE:
+			case BUILTIN_PKG:
 				assert(0); break;
 			}
 			break;
@@ -615,16 +612,16 @@ static void eval_deref(Value *v, void *ptr, Type *type) {
 		case BUILTIN_F64: v->f64 = *(F64 *)ptr; break;
 		case BUILTIN_CHAR: v->charv = *(char *)ptr; break;
 		case BUILTIN_BOOL: v->boolv = *(bool *)ptr; break;
+		case BUILTIN_TYPE:
+			v->type = *(Type **)ptr;
+			break;
+		case BUILTIN_PKG:
+			v->pkg = *(Package **)ptr;
+			break;
 		}
 		break;
 	case TYPE_SLICE:
 		v->slice = *(Slice *)ptr;
-		break;
-	case TYPE_TYPE:
-		v->type = *(Type **)ptr;
-		break;
-	case TYPE_PKG:
-		v->pkg = *(Package **)ptr;
 		break;
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
@@ -656,16 +653,16 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 		case BUILTIN_F64: *(F64 *)set = to->f64; break;
 		case BUILTIN_CHAR: *(char *)set = to->charv; break;
 		case BUILTIN_BOOL: *(bool *)set = to->boolv; break;
+		case BUILTIN_TYPE:
+			*(Type **)set = to->type;
+			break;
+		case BUILTIN_PKG:
+			*(Package **)set = to->pkg;
+			break;
 		}
 		break;
 	case TYPE_SLICE:
 		*(Slice *)set = to->slice;
-		break;
-	case TYPE_TYPE:
-		*(Type **)set = to->type;
-		break;
-	case TYPE_PKG:
-		*(Package **)set = to->pkg;
 		break;
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
@@ -1030,7 +1027,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		switch (e->unary.op) {
 		case UNARY_ADDRESS: {
 			Expression *o = e->unary.of;
-			if (o->type.kind == TYPE_TYPE) {
+			if (type_is_builtin(&o->type, BUILTIN_TYPE)) {
 				if (!eval_expr(ev, e->unary.of, &of)) return false;
 				/* "address" of type (pointer to type) */
 				v->type = evalr_malloc(ev, sizeof *v->type); /* TODO: this might be bad in the future; should free this at some point */

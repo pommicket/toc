@@ -20,14 +20,6 @@ static inline void *typer_arr_add_(Typer *tr, void **arr, size_t sz) {
 	return arr_adda_(arr, sz, tr->allocr);
 }
 
-static inline bool type_is_builtin(Type *t, BuiltinType b) {
-	return t->kind == TYPE_BUILTIN && t->builtin == b;
-}
-
-static inline bool type_is_slicechar(Type *t) {
-	return t->kind == TYPE_SLICE && type_is_builtin(t->slice, BUILTIN_CHAR);
-}
-
 #define typer_arr_add(tr, a) typer_arr_add_(tr, (void **)(a), sizeof **(a))
 
 static bool type_eq(Type *a, Type *b) {
@@ -56,8 +48,6 @@ static bool type_eq(Type *a, Type *b) {
 	switch (a->kind) {
 	case TYPE_VOID: return true;
 	case TYPE_UNKNOWN: assert(0); return false;
-	case TYPE_TYPE: return true;
-	case TYPE_PKG: return true;
 	case TYPE_BUILTIN:
 		return a->builtin == b->builtin;
 	case TYPE_STRUCT: return a->struc == b->struc;
@@ -188,6 +178,48 @@ static bool expr_must_lval(Expression *e) {
 		err_print(e->where, "Cannot use %s as l-value.", expr_kind_to_str(e->kind));
 		return false;
 	}
+	}
+	assert(0);
+	return false;
+}
+
+
+/* does this type have a Type or a Package in it? (e.g. [5]Type, &&Package) */
+static bool type_is_compileonly(Type *t) {
+	assert(t->flags & TYPE_IS_RESOLVED);
+	switch (t->kind) {
+	case TYPE_VOID:
+	case TYPE_UNKNOWN:
+		return false;
+	case TYPE_BUILTIN:
+		return t->builtin == BUILTIN_PKG || t->builtin == BUILTIN_TYPE;
+	case TYPE_PTR:
+		return type_is_compileonly(t->ptr);
+	case TYPE_SLICE:
+		return type_is_compileonly(t->slice);
+	case TYPE_ARR:
+		return type_is_compileonly(t->arr.of);
+	case TYPE_FN:
+		arr_foreach(t->fn.types, Type, sub) {
+			if (sub->flags & TYPE_IS_RESOLVED) /* for templates */ {
+				if (type_is_compileonly(sub))
+					return true;
+			} else {
+				return true;
+			}
+		}
+		return false;
+	case TYPE_TUPLE:
+		arr_foreach(t->tuple, Type, sub)
+			if (type_is_compileonly(sub))
+				return true;
+		return false;
+	case TYPE_STRUCT:
+		arr_foreach(t->struc->fields, Field, f)
+			if (type_is_compileonly(f->type))
+				return true;
+		return false;
+	case TYPE_EXPR: break;
 	}
 	assert(0);
 	return false;
@@ -327,21 +359,23 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 			success = false;
 			goto ret;
 		}
-	}
-	*ret_type = f->ret_type;
-
-	if (ret_type->kind == TYPE_TYPE) {
-		/* 
-		   a function which returns a type but has non-constant parameters is weird...
-		   but might be useful, so let's warn
-		*/
-		arr_foreach(f->params, Declaration, param) {
-			if (!(param->flags & DECL_IS_CONST)) {
-				warn_print(param->where, "Non-constant parameter in function which returns Type. (You can't call functions which return types at run-time, y'know)");
-				break;
+		if (type_is_compileonly(&f->ret_type)) {
+			/* 
+			   a function which returns a compile-only type but has non-constant parameters is weird...
+			   but might be useful, so let's warn
+			*/
+			arr_foreach(f->params, Declaration, param) {
+				if (!(param->flags & DECL_IS_CONST)) {
+					char *s = type_to_str(ret_type);
+					warn_print(param->where, "Non-constant parameter in function which returns %s (which is a type which can only be used at run time).", s);
+					free(s);
+					break;
+				}
 			}
 		}
+		
 	}
+	*ret_type = f->ret_type;
 
  ret:
 	arr_remove_lasta(&tr->blocks, tr->allocr);
@@ -521,7 +555,9 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 		Value typeval;
 		if (!types_expr(tr, t->expr))
 			return false;
-		if (t->expr->type.kind != TYPE_TYPE) {
+		if (t->expr->type.kind == TYPE_UNKNOWN && tr->err_ctx->have_errored)
+			return false; /* silently fail (e.g. if a function couldn't be typed) */
+		if (!type_is_builtin(&t->expr->type, BUILTIN_TYPE)) {
 			err_print(where, "This expression is not a type, but it's being used as one.");
 			return false;
 		}
@@ -534,8 +570,6 @@ static bool type_resolve(Typer *tr, Type *t, Location where) {
 	} break;
 	case TYPE_UNKNOWN:
 	case TYPE_VOID:
-	case TYPE_TYPE:
-	case TYPE_PKG:
 	case TYPE_BUILTIN:
 		break;
 	}
@@ -552,16 +586,32 @@ static bool type_can_be_truthy(Type *t) {
 	case TYPE_VOID:
 	case TYPE_TUPLE:
 	case TYPE_ARR:
-	case TYPE_TYPE:
 	case TYPE_STRUCT:
-	case TYPE_PKG:
 		return false;
 	case TYPE_FN:
 	case TYPE_UNKNOWN:
-	case TYPE_BUILTIN:
 	case TYPE_PTR:
 	case TYPE_SLICE:
 		return true;
+	case TYPE_BUILTIN:
+		switch (t->builtin) {
+		case BUILTIN_TYPE:
+		case BUILTIN_PKG:
+			return false;
+		case BUILTIN_I8:
+		case BUILTIN_U8:
+		case BUILTIN_I16:
+		case BUILTIN_U16:
+		case BUILTIN_I32:
+		case BUILTIN_U32:
+		case BUILTIN_I64:
+		case BUILTIN_U64:
+		case BUILTIN_F32:
+		case BUILTIN_F64:
+		case BUILTIN_CHAR:
+		case BUILTIN_BOOL:
+			return true;
+		}
 	case TYPE_EXPR:
 		break;
 	}
@@ -584,9 +634,7 @@ static Status type_cast_status(Type *from, Type *to) {
 	switch (from->kind) {
 	case TYPE_UNKNOWN: return STATUS_NONE;
 	case TYPE_STRUCT:
-	case TYPE_TYPE:
 	case TYPE_VOID:
-	case TYPE_PKG:
 		return STATUS_ERR;
 	case TYPE_BUILTIN:
 		switch (from->builtin) {
@@ -600,6 +648,26 @@ static Status type_cast_status(Type *from, Type *to) {
 		case BUILTIN_U64:
 			switch (to->kind) {
 			case TYPE_BUILTIN:
+				switch (to->builtin) {
+				case BUILTIN_I8:
+				case BUILTIN_U8:
+				case BUILTIN_I16:
+				case BUILTIN_U16:
+				case BUILTIN_I32:
+				case BUILTIN_U32:
+				case BUILTIN_I64:
+				case BUILTIN_U64:
+				case BUILTIN_F32:
+				case BUILTIN_F64:
+				case BUILTIN_BOOL:
+				case BUILTIN_CHAR:
+					return STATUS_NONE;
+				case BUILTIN_PKG:
+				case BUILTIN_TYPE:
+					return STATUS_ERR;
+				}
+				assert(0);
+				break;
 			case TYPE_UNKNOWN:
 				return STATUS_NONE;
 			case TYPE_PTR:
@@ -610,15 +678,36 @@ static Status type_cast_status(Type *from, Type *to) {
 			break;
 		case BUILTIN_F32:
 		case BUILTIN_F64:
-			if (to->kind == TYPE_BUILTIN && to->builtin != BUILTIN_CHAR)
+			if (to->kind == TYPE_BUILTIN) return STATUS_ERR;
+			switch (to->builtin) {
+			case BUILTIN_I8:
+			case BUILTIN_U8:
+			case BUILTIN_I16:
+			case BUILTIN_U16:
+			case BUILTIN_I32:
+			case BUILTIN_U32:
+			case BUILTIN_I64:
+			case BUILTIN_U64:
+			case BUILTIN_F32:
+			case BUILTIN_F64:
+			case BUILTIN_BOOL:
 				return STATUS_NONE;
-			return STATUS_ERR;
+			case BUILTIN_CHAR:
+			case BUILTIN_TYPE:
+			case BUILTIN_PKG:
+				return STATUS_ERR;
+			}
+			assert(0);
+			break;
 		case BUILTIN_CHAR:
 			if (to->kind == TYPE_BUILTIN && type_builtin_is_int(to->builtin))
 				return STATUS_NONE;
 			return STATUS_ERR;
 		case BUILTIN_BOOL:
 			return type_can_be_truthy(to) ? STATUS_NONE : STATUS_ERR;
+		case BUILTIN_TYPE:
+		case BUILTIN_PKG:
+			return STATUS_ERR;
 		}
 		break;
 	case TYPE_TUPLE: return STATUS_ERR;
@@ -855,7 +944,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 		t->builtin = BUILTIN_CHAR;
 		break;
 	case EXPR_PKG: {
-		t->kind = TYPE_PKG;
+		t->kind = TYPE_BUILTIN;
+		t->builtin = BUILTIN_PKG;
 		Expression *name_expr = e->pkg.name_expr;
 		if (!types_expr(tr, name_expr)) return false;
 		if (!type_is_slicechar(&name_expr->type)) {
@@ -1357,7 +1447,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 						Value *val = &inferred_vals[i];
 						Type *type = &inferred_types[i];
 						/* if we have an inferred type argument, it shouldn't be flexible */
-						if (type->kind == TYPE_TYPE)
+						if (type_is_builtin(type, BUILTIN_TYPE))
 							val->type->flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE;
 						param->val = *val;
 						param->type = *type;
@@ -1544,7 +1634,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		Expression *of = e->kind == EXPR_DSIZEOF ? e->dsizeof.of : e->dalignof.of;
 		if (!types_expr(tr, of))
 			return false;
-		if (of->type.kind == TYPE_TYPE) {
+		if (type_is_builtin(&of->type, BUILTIN_TYPE)) {
 			Value val;
 			if (!eval_expr(tr->evalr, of, &val))
 				return false;
@@ -1579,9 +1669,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 			*t = *of_type;
 			break;
 		case UNARY_ADDRESS:
-			if (of_type->kind == TYPE_TYPE) {
+			if (type_is_builtin(of_type, BUILTIN_TYPE)) {
 				/* oh it's a type! */
-				t->kind = TYPE_TYPE;
+				t->kind = TYPE_BUILTIN;
+				t->builtin = BUILTIN_TYPE;
 				break;
 			}
 			if (!expr_must_lval(of)) {
@@ -1678,10 +1769,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 			
 			if (o == BINARY_SET) {
 				valid = type_eq(lhs_type, rhs_type);
-				if (lhs_type->kind == TYPE_TYPE) {
-					err_print(e->where, "Cannot set type.");
-					return false;
-				}
 			} else {
 				/* numerical binary ops */
 				if (lhs_type->kind == TYPE_BUILTIN && type_eq(lhs_type, rhs_type)) {
@@ -1925,7 +2012,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 	case EXPR_TYPE:
 		if (!type_resolve(tr, &e->typeval, e->where))
 			return false;
-		t->kind = TYPE_TYPE;
+		t->kind = TYPE_BUILTIN;
+		t->builtin = BUILTIN_TYPE;
 		break;
 	case EXPR_VAL:
 		assert(0);
@@ -2043,12 +2131,16 @@ static bool types_decl(Typer *tr, Declaration *d) {
 	}
 	for (size_t i = 0; i < arr_len(d->idents); ++i) {
 		Type *t = d->type.kind == TYPE_TUPLE ? &d->type.tuple[i] : &d->type;
-		if (t->kind == TYPE_TYPE) {
+		if (type_is_compileonly(&d->type)) {
 			if (!(d->flags & DECL_IS_CONST)) {
-				err_print(d->where, "Cannot declare non-constant type.");
+				char *s = type_to_str(&d->type);
+				err_print(d->where, "Declarations with type %s must be constant.", s);
+				free(s);
 				success = false;
 				goto ret;
 			}
+		}
+		if (type_is_builtin(t, BUILTIN_TYPE)) {
 			if (d->flags & DECL_HAS_EXPR) {
 				Value *val = d->type.kind == TYPE_TUPLE ? &d->val.tuple[i] : &d->val;
 				if (!type_resolve(tr, val->type, d->where)) return false;
@@ -2154,11 +2246,12 @@ static bool types_stmt(Typer *tr, Statement *s) {
 	return true;
 }
 
-static void typer_create(Typer *tr, Evaluator *ev, Allocator *allocr, Identifiers *idents) {
+static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *allocr, Identifiers *idents) {
 	tr->block = NULL;
 	tr->blocks = NULL;
 	tr->fn = NULL;
 	tr->evalr = ev;
+	tr->err_ctx = err_ctx;
 	tr->exptr = NULL; /* by default, don't set an exporter */
 	tr->in_decls = NULL;
 	tr->in_expr_decls = NULL;

@@ -152,7 +152,7 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 			for (int i = 0, n_idents = (int)arr_len(d->idents); i < n_idents; ++i) {
 				Identifier ident = d->idents[i];
 				Type *type = decl_type_at_index(d, i);
-				if (!type_contains_compileonly_type(type)) {
+				if (!type_is_compileonly(type)) {
 					if (ident->export_name)
 						cgen_write(g, "extern ");
 					else

@@ -187,8 +187,6 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 		break;										\
 	case TYPE_VOID:									\
 	case TYPE_BUILTIN:								\
-	case TYPE_PKG:									\
-	case TYPE_TYPE:									\
 	case TYPE_UNKNOWN:								\
 		break;										\
 	case TYPE_EXPR: assert(0);						\
@@ -278,10 +276,8 @@ static bool cgen_uses_ptr(Type *t) {
 	case TYPE_SLICE:
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
-	case TYPE_TYPE:
 		return false;
 	case TYPE_EXPR:
-	case TYPE_PKG:
 		break;
 	}
 	assert(0);
@@ -332,6 +328,9 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
 		case BUILTIN_BOOL: cgen_write(g, "bool"); break;
 		case BUILTIN_F32: cgen_write(g, "f32"); break;
 		case BUILTIN_F64: cgen_write(g, "f64"); break;
+		case BUILTIN_TYPE:
+		case BUILTIN_PKG:
+			assert(0); break;
 		} break;
 	case TYPE_PTR:
 		if (!cgen_type_pre(g, t->ptr, where))
@@ -370,9 +369,7 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
 		}
 		break;
 	case TYPE_TUPLE:
-	case TYPE_TYPE:
 	case TYPE_EXPR:
-	case TYPE_PKG:
 		/* We should never try to generate this type */
 		assert(0);
 		return false;
@@ -441,12 +438,10 @@ static bool cgen_type_post(CGenerator *g, Type *t, Location where) {
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 	case TYPE_TUPLE:
-	case TYPE_TYPE:
 	case TYPE_SLICE:
 	case TYPE_STRUCT:
 		break;
 	case TYPE_EXPR:
-	case TYPE_PKG:
 		assert(0);
 		break;
 	}
@@ -465,53 +460,15 @@ static inline void cgen_fn_instance_number(CGenerator *g, U64 instance) {
 	cgen_write(g, U64_FMT"_", instance);
 }
 
-/* does this type have a Type or a Package in it? (e.g. [5]Type, &&Package) */
-static bool type_contains_compileonly_type(Type *t) {
-	assert(t->flags & TYPE_IS_RESOLVED);
-	switch (t->kind) {
-	case TYPE_BUILTIN:
-	case TYPE_VOID:
-	case TYPE_UNKNOWN:
-		return false;
-	case TYPE_PKG:
-	case TYPE_TYPE:
-		return true;
-	case TYPE_PTR:
-		return type_contains_compileonly_type(t->ptr);
-	case TYPE_SLICE:
-		return type_contains_compileonly_type(t->slice);
-	case TYPE_ARR:
-		return type_contains_compileonly_type(t->arr.of);
-	case TYPE_FN:
-		arr_foreach(t->fn.types, Type, sub)
-			if (type_contains_compileonly_type(sub))
-				return true;
-		return false;
-	case TYPE_TUPLE:
-		arr_foreach(t->tuple, Type, sub)
-			if (type_contains_compileonly_type(sub))
-				return true;
-		return false;
-	case TYPE_STRUCT:
-		arr_foreach(t->struc->fields, Field, f)
-			if (type_contains_compileonly_type(f->type))
-				return true;
-		return false;
-	case TYPE_EXPR: break;
-	}
-	assert(0);
-	return false;
-}
-
 /* should we generate this function? (or is it just meant for compile time) */
 static bool cgen_should_gen_fn(FnExpr *f) {
 	if (f->ret_decls) {
 		arr_foreach(f->ret_decls, Declaration, decl)
-			if (type_contains_compileonly_type(&decl->type))
+			if (type_is_compileonly(&decl->type))
 				return false;
 		return true;
 	} else {
-		return !type_contains_compileonly_type(&f->ret_type);
+		return !type_is_compileonly(&f->ret_type);
 	}
 }
 
@@ -669,9 +626,7 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 			return false;
 		break;
 	case TYPE_VOID:
-	case TYPE_TYPE:
 	case TYPE_EXPR:
-	case TYPE_PKG:
 		assert(0);
 		return false;
 	}
@@ -1567,12 +1522,10 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 	case TYPE_STRUCT:
 		cgen_write(g, "{0}");
 		break;
-	case TYPE_TYPE:
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 	case TYPE_TUPLE:
 	case TYPE_EXPR:
-	case TYPE_PKG:
 		assert(0);
 		break;
 	}
@@ -1605,7 +1558,7 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where, U64 instance, Valu
 					Type *type = param->type.kind == TYPE_TUPLE ? &param->type.tuple[i]
 						: &param->type;
 					Value arg = compile_time_args[carg_idx];
-					if (type->kind == TYPE_TYPE) {
+					if (type_is_builtin(type, BUILTIN_TYPE)) {
 						/* don't need to do anything; we'll just use the type's id */
 					} else {
 						if (!cgen_val_pre(g, arg, type, where))
@@ -1708,7 +1661,6 @@ static bool cgen_val_ptr_pre(CGenerator *g, void *v, Type *t, Location where) {
 		}
 		break;
 	case TYPE_FN:
-	case TYPE_TYPE:
 	case TYPE_UNKNOWN:
 	case TYPE_TUPLE:
 	case TYPE_VOID:
@@ -1717,7 +1669,6 @@ static bool cgen_val_ptr_pre(CGenerator *g, void *v, Type *t, Location where) {
 	case TYPE_STRUCT:
 		break;
 	case TYPE_EXPR:
-	case TYPE_PKG:
 		assert(0);
 		return false;
 	}
@@ -1731,8 +1682,6 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 	case TYPE_TUPLE:
 	case TYPE_VOID:
 	case TYPE_EXPR:
-	case TYPE_TYPE:
-	case TYPE_PKG:
 		assert(0);
 		return false;
 	case TYPE_UNKNOWN:
@@ -1779,6 +1728,10 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 		case BUILTIN_F64: cgen_write(g, F64_FMT, *(F64 *)v); break;
 		case BUILTIN_CHAR: cgen_write(g, "'\\x%02x'", *(char *)v); break;
 		case BUILTIN_BOOL: cgen_write(g, "%s", *(bool *)v ? "true" : "false"); break;
+		case BUILTIN_TYPE:
+		case BUILTIN_PKG:
+			assert(0);
+			break;
 		}
 		break;
 	}
@@ -1804,7 +1757,7 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 			Identifier i = d->idents[idx];
 			Type *type = decl_type_at_index(d, idx);
 			Value *val = decl_val_at_index(d, idx);
-			if (type_contains_compileonly_type(type)) {
+			if (type_is_compileonly(type)) {
 				continue;
 			}
 			if (g->block == NULL && g->fn == NULL && !i->export_name)

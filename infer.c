@@ -83,8 +83,6 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 	case TYPE_BUILTIN:
-	case TYPE_TYPE:
-	case TYPE_PKG:
 		break; /* nothing we can do here */
 	case TYPE_TUPLE: {
 		if (to->kind != TYPE_TUPLE) return true;
@@ -137,7 +135,8 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 		e.flags = EXPR_FOUND_TYPE;
 		Type *type = &e.type;
 		type->flags = TYPE_IS_RESOLVED;
-		type->kind = TYPE_TYPE;
+		type->kind = TYPE_BUILTIN;
+		type->builtin = BUILTIN_TYPE;
 		if (!to_expr) {
 			to_expr = &e;
 		}

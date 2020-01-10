@@ -3,7 +3,7 @@
   This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
-static const char *keywords[KW_COUNT] =
+static const char *const keywords[KW_COUNT] =
 	{";", ":", ",", "(", ")", "{", "}", "[", "]", "==",
 	 "+=", "-=", "*=", "/=",
 	 "!=", "<=", "<", ">=", ">",
@@ -13,6 +13,7 @@ static const char *keywords[KW_COUNT] =
 	 "new", "del", "struct",
 	 "int", "i8", "i16", "i32", "i64",
 	 "u8", "u16", "u32", "u64", "float", "f32", "f64", "Type",
+	 "Package",
 	 "char", "bool", "true", "false",
 	 "pkg"};
 
