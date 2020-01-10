@@ -8,5 +8,8 @@ putf ::= fn(x: float) {
 };
 point ::= pkg "point";
 main ::= fn() {
-	 x := y;
+	 x := fahfsdkjahksjdfh;
+
+fahfsdkjahksjdfh :=
+5;
 };

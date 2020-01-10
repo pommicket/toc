@@ -13,17 +13,17 @@
 #endif
 #endif
 
-#if USE_COLORED_TEXT
-#define TEXT_ERROR(x) "\x1b[91m" x "\x1b[0m"
-#define TEXT_INFO(x) "\x1b[94m" x "\x1b[0m"
-#define TEXT_WARN(x) "\x1b[93m" x "\x1b[0m"
-#define TEXT_IMPORTANT(x) "\x1b[1m" x "\x1b[0m"
-#else
-#define TEXT_ERROR(x) x
-#define TEXT_INFO(x) x
-#define TEXT_WARN(x) x
-#define TEXT_IMPORTANT(x) x
-#endif
+#define TEXT_ERR_START "\x1b[91m"
+#define TEXT_ERR_END "\x1b[0m"
+
+#define TEXT_INDICATOR_START "\x1b[96m"
+#define TEXT_INDICATOR_END "\x1b[0m"
+#define TEXT_INFO_START "\x1b[94m"
+#define TEXT_INFO_END "\x1b[0m"
+#define TEXT_WARN_START "\x1b[93m"
+#define TEXT_WARN_END "\x1b[0m"
+#define TEXT_IMPORTANT_START "\x1b[1m"
+#define TEXT_IMPORTANT_END "\x1b[0m"
 
 #if defined(TOC_DEBUG) && __STDC_VERSION__ >= 199901
 #define ERR_SHOW_SOURCE_LOCATION 1
@@ -50,57 +50,120 @@ static void err_fprint(const char *fmt, ...) {
 	va_end(args);
 }
 
+static void err_text_err(ErrCtx *ctx, const char *s) {
+	if (ctx->color_enabled)
+		err_fprint(TEXT_ERR_START "%s" TEXT_ERR_END, s);
+	else
+		err_fprint("%s", s);
+}
+static void err_text_warn(ErrCtx *ctx, const char *s) {
+	if (ctx->color_enabled)
+		err_fprint(TEXT_WARN_START "%s" TEXT_WARN_END, s);
+	else
+		err_fprint("%s", s);
+}
+static void err_text_info(ErrCtx *ctx, const char *s) {
+	if (ctx->color_enabled)
+		err_fprint(TEXT_INFO_START "%s" TEXT_INFO_END, s);
+	else
+		err_fprint("%s", s);
+}
+static void err_text_important(ErrCtx *ctx, const char *s) {
+	if (ctx->color_enabled)
+		err_fprint(TEXT_IMPORTANT_START "%s" TEXT_IMPORTANT_END, s);
+	else
+		err_fprint("%s", s);
+}
+
+
+
 static void err_vfprint(const char *fmt, va_list args) {
 	vfprintf(stderr, fmt, args);
 }
 
 static void err_print_header_(Location where) {
+	SourcePos start_pos = where.start->pos;
+	ErrCtx *ctx = start_pos.ctx;
+	err_text_err(ctx, "error");
 	if (!where.start)
-		err_fprint(TEXT_ERROR("error") ":\n");
+		err_fprint(":\n");
 	else {
-		SourcePos start_pos = where.start->pos;
-		err_fprint(TEXT_ERROR("error") " at line %lu of %s:\n", (unsigned long)start_pos.line, start_pos.ctx->filename);
+		err_fprint(" at line %lu of %s:\n", (unsigned long)start_pos.line, ctx->filename);
 	}
 }
 
 static void info_print_header_(Location where) {
+	SourcePos start_pos = where.start->pos;
+	ErrCtx *ctx = start_pos.ctx;
+	err_text_info(ctx, "info");
 	if (!where.start)
-		err_fprint(TEXT_INFO("info") ":\n");
+		err_fprint(":\n");
 	else {
-		SourcePos start_pos = where.start->pos;
-		err_fprint(TEXT_INFO("info") " at line %lu of %s:\n", (unsigned long)start_pos.line, start_pos.ctx->filename);
+		err_fprint(" at line %lu of %s:\n", (unsigned long)start_pos.line, ctx->filename);
 	}
 }
 
 static void warn_print_header_(Location where) {
+	SourcePos start_pos = where.start->pos;
+	ErrCtx *ctx = start_pos.ctx;
+	err_text_warn(ctx, "warning");
 	if (!where.start)
-		err_fprint(TEXT_WARN("warning") ":\n");
+		err_fprint(":\n");
 	else {
-		SourcePos start_pos = where.start->pos;
-		err_fprint(TEXT_WARN("warning") " at line %lu of %s:\n", (unsigned long)start_pos.line, start_pos.ctx->filename);
+		err_fprint(" at line %lu of %s:\n", (unsigned long)start_pos.line, ctx->filename);
 	}
 }
 
-static void err_print_location_text_from_str(char *str, U32 start_pos, U32 end_pos) {
+
+/* 
+   before_pos and after_pos could be things like TEXT_ERR_START or TEXT_ERR_END. 
+   they will not be printed if color output is disabled. 
+*/
+static void err_print_pos_text(ErrCtx *ctx, U32 start_pos, U32 end_pos) {
 	(void)end_pos; /* TODO */
-	const char *text = str + start_pos;
-	const char *end = strchr(text, '\n');
-	int has_newline = end != NULL;
+	char *str = ctx->str;
+	char *start = str + start_pos;
+	char *line_start = start;
+	char *end = str + end_pos;
+
+	/* go back to last newline / 0 byte */
+	while (*line_start != '\0' && *line_start != '\n') --line_start;
+	if (line_start < start) ++line_start;
+		
+	char *line_end = strchr(start, '\n');
+	int has_newline = line_end != NULL;
 	if (!has_newline)
-		end = strchr(text, '\0');
-	assert(end);
-	err_fprint("\there: --> ");
-	if (!text[0])
+		line_end = strchr(start, '\0');
+	assert(line_end);
+	err_fprint("\t");
+	if (!line_start[0])
 		err_fprint("<end of file>");
-	else
-		err_fwrite(text, 1, (size_t)(end - text));
+	else {
+		/* write up to start of error */
+		err_fwrite(line_start, 1, (size_t)(start - line_start));
+		if (ctx->color_enabled)
+			err_fprint(TEXT_INDICATOR_START);
+		if (line_end < end) {
+			/* write error part (only go to end of line) */
+			err_fwrite(start, 1, (size_t)(line_end - start));
+			if (ctx->color_enabled)
+				err_fprint(TEXT_INDICATOR_END);
+		} else {
+			/* write error part */
+			err_fwrite(start, 1, (size_t)(end - start));
+			if (ctx->color_enabled)
+				err_fprint(TEXT_INDICATOR_END);
+			/* write rest of line */
+			err_fwrite(end, 1, (size_t)(line_end - end));
+		}
+	}
 	err_fprint("\n");
 }
 
 static void err_print_location_text(Location where) {
 	if (where.start) {
 		ErrCtx *ctx = where.start->pos.ctx;
-		err_print_location_text_from_str(ctx->str, where.start->pos.start, where.end[-1].pos.end);
+		err_print_pos_text(ctx, where.start->pos.start, where.end[-1].pos.end);
 	} else {
 		err_fprint("\t<no location available>");
 	}

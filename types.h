@@ -85,6 +85,7 @@ typedef struct ErrCtx {
 	const char *filename;
 	char *str; /* file contents */
 	bool enabled;
+	bool color_enabled;
 	struct Location *instance_stack; /* stack of locations which generate the instances we're dealing with */
 } ErrCtx;
 

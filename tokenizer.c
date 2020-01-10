@@ -156,12 +156,13 @@ static Location token_location(Token *t) {
 static void tokenization_err(Tokenizer *t, const char *fmt, ...) {
 	va_list args;
 	va_start(args, fmt);
-	err_fprint(TEXT_ERROR("error") " at line %lu of %s:\n", (unsigned long)t->line, t->err_ctx->filename);
+	err_text_err(t->err_ctx, "error");
+	err_fprint(" at line %lu of %s:\n", (unsigned long)t->line, t->err_ctx->filename);
 	err_vfprint(fmt, args);
 	va_end(args);
 	err_fprint("\n");
 	U32 pos = (U32)(t->s - t->err_ctx->str);
-	err_print_location_text_from_str(t->err_ctx->str, pos, pos + 1);
+	err_print_pos_text(t->err_ctx, pos, pos + 1);
 	while (*t->s) {
 		if (*t->s == '\n') {
 			tokr_nextchar(t);

@@ -61,17 +61,18 @@ int main(int argc, char **argv) {
 	}
 	
 	char *contents = err_malloc(4096);
+	contents[0] = 0; /* put 0 byte at the start of the file. see err.c:err_print_location_text to find out why */
 	long contents_cap = 4095;
-	long contents_len = 0;
+	long contents_len = 1;
 	while (fgets(contents + contents_len, (int)(contents_cap - contents_len), in)) {
 		contents_len += (long)strlen(contents + contents_len);
 		
 		if (contents_len >= (long)contents_cap - 1024) {
 			contents_cap *= 2;
-			/* allocate +1 so that pointers don't overflow */
 			contents = err_realloc(contents, (size_t)contents_cap + 1);
 		}
 	}
+	++contents;
 	if (ferror(in)) {
 		fprintf(stderr, "Error reading input file: %s.\n", argv[1]);
 		return EXIT_FAILURE;
@@ -85,10 +86,10 @@ int main(int argc, char **argv) {
 	ErrCtx err_ctx = {0};
 	err_ctx.filename = in_filename;
 	err_ctx.enabled = true;
+	err_ctx.color_enabled = true;
 	tokr_create(&t, &idents, &err_ctx, &main_allocr);
 	if (!tokenize_string(&t, contents)) {
-		
-		err_fprint(TEXT_IMPORTANT("Errors occured while preprocessing.\n"));
+		err_text_important(&err_ctx, "Errors occured during preprocessing.\n");
 		return EXIT_FAILURE;
 	}
 
@@ -105,8 +106,7 @@ int main(int argc, char **argv) {
 	parser_create(&p, &t, &main_allocr);
 	ParsedFile f;
 	if (!parse_file(&p, &f)) {
-		
-		err_fprint(TEXT_IMPORTANT("Errors occured while parsing.\n"));
+		err_text_important(&err_ctx, "Errors occured during parsing.\n");
 		return EXIT_FAILURE;
 	}
 	/* fprint_parsed_file(stdout, &f); */
@@ -125,7 +125,7 @@ int main(int argc, char **argv) {
 
 	if (!types_file(&tr, &f)) {
 		/* TODO(eventually): fix this if the error occured while exporting something */
-		err_fprint(TEXT_IMPORTANT("Errors occured while determining types.\n"));
+		err_text_important(&err_ctx, "Errors occured while determining types.\n");
 		return EXIT_FAILURE;
 	}
 #ifdef TOC_DEBUG
@@ -134,21 +134,22 @@ int main(int argc, char **argv) {
 #endif
 	FILE *out = fopen(out_filename, "w");
 	if (!out) {
-		err_fprint(TEXT_IMPORTANT("Could not open output file (out.c).\n"));
+		err_text_important(&err_ctx, "Could not open output file: ");
+		err_fprint("%s\n", out_filename);
 		return EXIT_FAILURE;
 	}
 	CGenerator g;
 	cgen_create(&g, out, &idents, &ev, &main_allocr);
 	if (!cgen_file(&g, &f)) {
 		fclose(out);
-		err_fprint(TEXT_IMPORTANT("Errors occured while generating C code.\n"));
+		err_text_important(&err_ctx, "Errors occured while generating C code.\n");
 		return EXIT_FAILURE;
 	}
 	
 	block_exit(NULL, f.stmts); /* exit global scope */
 	
 	tokr_free(&t);
-	free(contents);
+	free(contents - 1); /* -1 because we put a 0 byte at the beginning */
 	allocr_free_all(&main_allocr);
 	evalr_free(&ev);
 	
