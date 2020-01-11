@@ -36,8 +36,6 @@ static const char *expr_kind_to_str(ExprKind k) {
 	case EXPR_EACH: return "each expression";
 	case EXPR_CALL: return "function call";
 	case EXPR_C: return "c code";
-	case EXPR_DSIZEOF: return "#sizeof";
-	case EXPR_DALIGNOF: return "#alignof";
 	case EXPR_NEW: return "new expression";
 	case EXPR_CAST: return "cast expression";
 	case EXPR_UNARY_OP: return "unary operator";
@@ -63,6 +61,8 @@ static const char *unary_op_to_str(UnaryOp u) {
 	case UNARY_NOT: return "!";
 	case UNARY_DEL: return "del";
 	case UNARY_LEN: return "len";
+	case UNARY_DSIZEOF: return "#sizeof";
+	case UNARY_DALIGNOF: return "#alignof";
 	}
 	assert(0);
 	return "";
@@ -1667,12 +1667,14 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					single_arg = e->c.code = parser_new_expr(p);
 					break;
 				case DIRECT_SIZEOF:
-					e->kind = EXPR_DSIZEOF;
-					single_arg = e->dsizeof.of = parser_new_expr(p);
+					e->kind = EXPR_UNARY_OP;
+					e->unary.op = UNARY_DSIZEOF;
+					single_arg = e->unary.of = parser_new_expr(p);
 					break;
 				case DIRECT_ALIGNOF:
-					e->kind = EXPR_DALIGNOF;
-					single_arg = e->dalignof.of = parser_new_expr(p);
+					e->kind = EXPR_UNARY_OP;
+					e->unary.op = UNARY_DALIGNOF;
+					single_arg = e->unary.of = parser_new_expr(p);
 					break;
 				case DIRECT_EXPORT:
 					tokr_err(t, "Unrecognized expression.");
@@ -2222,16 +2224,6 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprint_expr(out, e->c.code);
 		fprintf(out, ")");
 		break;
-	case EXPR_DSIZEOF:
-		fprintf(out, "#sizeof(");
-		fprint_expr(out, e->dsizeof.of);
-		fprintf(out, ")");
-		break;
-	case EXPR_DALIGNOF:
-		fprintf(out, "#alignof(");
-		fprint_expr(out, e->dalignof.of);
-		fprintf(out, ")");
-		break;
 	case EXPR_SLICE: {
 		SliceExpr *s = &e->slice;
 		fprint_expr(out, s->of);
@@ -2349,8 +2341,6 @@ static bool expr_is_definitely_const(Expression *e) {
 	case EXPR_LITERAL_CHAR:
 	case EXPR_LITERAL_STR:
 	case EXPR_LITERAL_BOOL:
-	case EXPR_DSIZEOF:
-	case EXPR_DALIGNOF:
 	case EXPR_TYPE:
 	case EXPR_VAL:
 	case EXPR_PKG:

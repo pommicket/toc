@@ -1074,6 +1074,10 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			default: assert(0); break;
 			}
 			break;
+		case UNARY_DSIZEOF:
+		case UNARY_DALIGNOF:
+			assert(0);
+			return false;
 		}
 	} break;
 	case EXPR_BINARY_OP: {
@@ -1522,10 +1526,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	case EXPR_PKG:
 		v->pkg = e->pkg.name_ident->pkg;
 		break;
-	case EXPR_DSIZEOF:
-	case EXPR_DALIGNOF:
-		assert(0);
-		return false;
 	}
 	return true;
 }

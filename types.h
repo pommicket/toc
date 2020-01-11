@@ -476,8 +476,6 @@ typedef enum {
 			  EXPR_BLOCK,
 			  EXPR_TUPLE,
 			  EXPR_C,
-			  EXPR_DSIZEOF,
-			  EXPR_DALIGNOF,
 			  EXPR_SLICE,
 			  EXPR_TYPE,
 			  EXPR_PKG,
@@ -495,7 +493,9 @@ typedef enum {
 			  UNARY_DEREF, /* *x */
 			  UNARY_NOT, /* !x */
 			  UNARY_DEL, /* del x */
-			  UNARY_LEN	 /* x.len ; replaces BINARY_DOT len when typing  */
+			  UNARY_LEN, /* x.len ; replaces BINARY_DOT len when typing  */
+			  UNARY_DSIZEOF,
+			  UNARY_DALIGNOF
 } UnaryOp;
 
 typedef enum {
@@ -655,12 +655,6 @@ typedef struct Expression {
 		struct {
 			struct Expression *code;
 		} c;
-		struct {
-			struct Expression *of;
-		} dsizeof; /* #sizeof directive */
-		struct {
-			struct Expression *of;
-		} dalignof; /* #alignof directive */
 		Identifier ident;
 		NewExpr new;
 		struct {

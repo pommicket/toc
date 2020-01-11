@@ -247,12 +247,6 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 	case EXPR_C:
 		copy_expr(c, out->c.code = allocr_malloc(a, sizeof *out->c.code), in->c.code);
 		break;
-	case EXPR_DSIZEOF:
-		copy_expr(c, out->dsizeof.of = allocr_malloc(a, sizeof *out->dsizeof.of), in->dsizeof.of);
-		break;
-	case EXPR_DALIGNOF:
-		copy_expr(c, out->dalignof.of = allocr_malloc(a, sizeof *out->dalignof.of), in->dalignof.of);
-		break;
 	case EXPR_SLICE: {
 		SliceExpr *sin = &in->slice;
 		SliceExpr *sout = &out->slice;

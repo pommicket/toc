@@ -317,7 +317,7 @@ static bool export_type(Exporter *ex, Type *type, Location where) {
 				
 			struc->export.id = (U32)nexported_structs;
 		}
-		export_len(ex, (size_t)struc->export.id);
+		export_vlq(ex, (U64)struc->export.id);
 	} break;
 	case TYPE_EXPR:
 		if (!export_expr(ex, type->expr))
@@ -378,6 +378,13 @@ static void import_type(Importer *im, Type *type) {
 				type->fn.constness[i] = import_u8(im);
 		} else type->fn.constness = NULL;
 	} break;
+	case TYPE_STRUCT: {
+		U64 struct_id = import_vlq(im);
+		type->struc = &im->structs[struct_id];
+	} break;
+	case TYPE_EXPR:
+		import_expr(im, type->expr = imptr_new_expr(im));
+		break;
 	}
 }
 
@@ -655,10 +662,6 @@ static bool export_expr(Exporter *ex, Expression *e) {
 		if (!export_block(ex, &ea->body))
 			return false;
 	} break;
-	case EXPR_DSIZEOF:
-	case EXPR_DALIGNOF:
-		assert(0);
-		break;
 	}
 	return true;
 }

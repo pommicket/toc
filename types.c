@@ -168,8 +168,6 @@ static bool expr_must_lval(Expression *e) {
 	case EXPR_EACH:
 	case EXPR_CALL:
 	case EXPR_C:
-	case EXPR_DALIGNOF:
-	case EXPR_DSIZEOF:
 	case EXPR_BLOCK:
 	case EXPR_SLICE:
 	case EXPR_TYPE:
@@ -1645,23 +1643,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 		code->kind = EXPR_VAL;
 		t->kind = TYPE_UNKNOWN;
 	} break;
-	case EXPR_DSIZEOF:
-	case EXPR_DALIGNOF: {
-		Expression *of = e->kind == EXPR_DSIZEOF ? e->dsizeof.of : e->dalignof.of;
-		if (!types_expr(tr, of))
-			return false;
-		if (type_is_builtin(&of->type, BUILTIN_TYPE)) {
-			Value val;
-			if (!eval_expr(tr->evalr, of, &val))
-				return false;
-			e->val.i64 = (I64)(e->kind == EXPR_DSIZEOF ? compiler_sizeof : compiler_alignof)(val.type);
-		} else {
-			e->val.i64 = (I64)(e->kind == EXPR_DSIZEOF ? compiler_sizeof : compiler_alignof)(&of->type);
-		}
-		e->kind = EXPR_VAL;
-		t->kind = TYPE_BUILTIN;
-		t->builtin = BUILTIN_I64;
-	} break;
 	case EXPR_UNARY_OP: {
 		Expression *of = e->unary.of;
 		Type *of_type = &of->type;
@@ -1741,7 +1722,28 @@ static bool types_expr(Typer *tr, Expression *e) {
 				return false;
 			}
 			break;
-		}
+		case UNARY_DSIZEOF:
+		case UNARY_DALIGNOF: {
+			if (!types_expr(tr, of))
+				return false;
+			Type *queried_type;
+			if (type_is_builtin(&of->type, BUILTIN_TYPE)) {
+				Value val;
+				if (!eval_expr(tr->evalr, of, &val))
+					return false;
+				queried_type = val.type;
+			} else {
+				queried_type = &of->type;
+			}
+			if (e->unary.op == UNARY_DSIZEOF)
+				e->val.i64 = (I64)compiler_sizeof(queried_type);
+			else
+				e->val.i64 = (I64)compiler_alignof(queried_type);
+			e->kind = EXPR_VAL;
+			t->kind = TYPE_BUILTIN;
+			t->builtin = BUILTIN_I64;
+		} break;
+		} 
 	} break;
 	case EXPR_BINARY_OP: {
 		Expression *lhs = e->binary.lhs;

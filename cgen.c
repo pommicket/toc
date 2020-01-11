@@ -55,8 +55,6 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 	case EXPR_TYPE:														\
 	case EXPR_VAL:														\
 	case EXPR_C:														\
-	case EXPR_DSIZEOF:													\
-	case EXPR_DALIGNOF:													\
 	case EXPR_IDENT:													\
 	case EXPR_LITERAL_BOOL:												\
 	case EXPR_LITERAL_INT:												\
@@ -737,8 +735,6 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 	case EXPR_CAST:
 	case EXPR_NEW:
 	case EXPR_C:
-	case EXPR_DSIZEOF:
-	case EXPR_DALIGNOF:
 	case EXPR_TYPE:
 	case EXPR_PKG:
 		assert(0);
@@ -1148,8 +1144,6 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 	case EXPR_IDENT:
 	case EXPR_FN:
 	case EXPR_C:
-	case EXPR_DSIZEOF:
-	case EXPR_DALIGNOF:
 	case EXPR_TYPE:
 	case EXPR_PKG:
 		break;
@@ -1340,6 +1334,10 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			}
 			handled = true;
 		} break;
+		case UNARY_DSIZEOF:
+		case UNARY_DALIGNOF:
+			assert(0);
+			return false;
 		}
 		if (handled) break;
 		cgen_write(g, "(");
@@ -1443,8 +1441,6 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			cgen_write(g, ")");
 		}
 	} break;
-	case EXPR_DSIZEOF:
-	case EXPR_DALIGNOF: /* handled by types.c */
 	case EXPR_TUPLE:
 		/* the only time this should happen is if you're stating
 		   a tuple, e.g. 3, 5;, but we've errored about that before
