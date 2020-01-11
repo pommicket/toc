@@ -994,9 +994,16 @@ static Value val_alloc(Allocator *a, Type *t) {
 	case TYPE_ARR:
 		val.arr = allocr_calloc(a, t->arr.n, compiler_sizeof(t->arr.of));
 		break;
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsometimes-uninitialized"
+#endif
 	default: break;
 	}
 	return val;
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 }
 
 static bool val_is_nonnegative(Value *v, Type *t) {
@@ -1517,8 +1524,8 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			err_print(e->where, "Slice index out of bounds (to = %lu, length = %lu).", (unsigned long)to, (unsigned long)n);
 			return false;
 		}
-		void *ptr1, *ptr2;
 		if (from < to) {
+			void *ptr1 = NULL, *ptr2 = NULL;
 			if (!eval_val_ptr_at_index(e->where, &ofv, from, of_type, &ptr1, NULL))
 				return false;
 			if (!eval_val_ptr_at_index(e->where, &ofv, to, of_type, &ptr2, NULL))
