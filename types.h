@@ -704,7 +704,6 @@ enum {
 
 typedef U16 DeclFlags;
 
-/* OPTIM: Instead of using dynamic arrays, do two passes. */
 typedef struct Declaration {
 	Location where;
 	Identifier *idents;
@@ -792,7 +791,6 @@ typedef struct Package {
 
 typedef struct Exporter {
 	FILE *out; /* .top (toc package) to output to */
-	bool export_locations;
 	bool started;
 	U64 ident_id;
 	FnExpr **exported_fns;

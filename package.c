@@ -16,7 +16,6 @@ static void import_expr(Importer *im, Expression *e);
 static void exptr_create(Exporter *ex, FILE *out) {
 	ex->out = out;
 	ex->ident_id = 0;
-	ex->export_locations = true;
 	ex->exported_fns = NULL;
 	ex->exported_structs = NULL;
 	ex->exported_idents = NULL;
@@ -144,10 +143,8 @@ static inline char *import_str(Importer *i, size_t len) {
 }
 
 static void export_location(Exporter *ex, Location where) {
-	if (ex->export_locations) {
-		/* for now, we only export the line */
-		export_vlq(ex, (U64)where.start->pos.line);
-	}
+	/* for now, we only export the line */
+	export_vlq(ex, (U64)where.start->pos.line);
 }
 static Location import_location(Importer *im) {
 	Location l;
@@ -342,7 +339,7 @@ static void import_type(Importer *im, Type *type) {
 		type->kind = (TypeKind)kind;
 	}
 	type->flags = import_u8(im);
-	int is_resolved = type->flags & TYPE_IS_RESOLVED;
+	unsigned is_resolved = type->flags & TYPE_IS_RESOLVED;
 	switch (type->kind) {
 	case TYPE_VOID:
 	case TYPE_BUILTIN:
@@ -508,7 +505,7 @@ static inline bool export_optional_expr(Exporter *ex, Expression *e) {
 static bool export_expr(Exporter *ex, Expression *e) {
 	possibly_static_assert(sizeof e->flags == 1);
 	export_u8(ex, (U8)e->flags);
-	int found_type = e->flags & EXPR_FOUND_TYPE;
+	unsigned found_type = e->flags & EXPR_FOUND_TYPE;
     if (found_type) {
 		if (!export_type(ex, &e->type, e->where))
 			return false;
@@ -679,8 +676,10 @@ enum {
 
 static bool export_decl(Exporter *ex, Declaration *d) {
 	assert(ex->started);
-	bool found_type = (d->flags & DECL_FOUND_TYPE) != 0;
-	export_bool(ex, found_type);
+	possibly_static_assert(sizeof d->flags == 2);
+	export_u16(ex, d->flags);
+
+	unsigned found_type = d->flags & DECL_FOUND_TYPE;
 	
 	if (found_type && d->type.kind == TYPE_UNKNOWN) {
 		err_print(d->where, "Can't export declaration of unknown type.");
@@ -730,15 +729,16 @@ static bool export_decl(Exporter *ex, Declaration *d) {
 }
 
 static void import_decl(Importer *im, Declaration *d) {
+	d->flags = import_u16(im);
+	possibly_static_assert(sizeof d->flags == 2);
 	d->where = import_location(im);
 	d->idents = NULL;
-	size_t n_idents = import_len(im);
-	arr_set_lena(&d->idents, n_idents, im->allocr);
+	size_t n_idents = import_arr(im, &d->idents);
 	for (size_t i = 0; i < n_idents; ++i) {
 		d->idents[i] = import_ident(im);
 	}
-	/* import_type(im, &d->type); */
-	/* printf("%s\n",type_to_str(&d->type)); */
+	import_type(im, &d->type);
+	printf("%s\n",type_to_str(&d->type));
 	exit(0);
 }
 
@@ -808,7 +808,6 @@ static bool export_struct(Exporter *ex, StructDef *s) {
 }
 
 static void import_struct(Importer *im, StructDef *s) {
-	fprintf(stderr,"%lx\n",ftell(im->in));
 	size_t nfields = import_arr(im, &s->fields);
 	for (size_t i = 0; i < nfields; ++i) {
 		s->fields[i].name = import_ident(im);
