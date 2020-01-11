@@ -560,7 +560,7 @@ typedef struct EachExpr {
 	struct {
 		IdentID id;
 	} c;
-	Type type;
+	Type type; /* uninitialized unless typed or flags & EACH_ANNOTATED_TYPE */
 	Identifier index; /* NULL = no index */
 	Identifier value; /* NULL = no value */
 	Block body;
@@ -735,7 +735,7 @@ enum {
 typedef struct Statement {
 	Location where;
 	StatementKind kind;
-	U16 flags;
+	U8 flags;
 	union {
 		Declaration decl;
 		Expression expr;

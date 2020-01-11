@@ -12,6 +12,8 @@ static bool export_expr(Exporter *ex, Expression *e);
 static bool import_footer(Importer *i);
 static void import_decl(Importer *im, Declaration *d);
 static void import_expr(Importer *im, Expression *e);
+static void import_block(Importer *im, Block *b);
+static inline Expression *import_expr_(Importer *im);
 
 static void exptr_create(Exporter *ex, FILE *out) {
 	ex->out = out;
@@ -356,7 +358,7 @@ static void import_type(Importer *im, Type *type) {
 		if (is_resolved)
 			type->arr.n = import_vlq(im);
 		else
-			import_expr(im, type->arr.n_expr = imptr_new_expr(im));
+			type->arr.n_expr = import_expr_(im);
 		import_type(im, type->arr.of = imptr_new_type(im));
 		break;
 	case TYPE_FN: {
@@ -376,7 +378,7 @@ static void import_type(Importer *im, Type *type) {
 		type->struc = &im->structs[struct_id - 1];
 	} break;
 	case TYPE_EXPR:
-		import_expr(im, type->expr = imptr_new_expr(im));
+		type->expr = import_expr_(im);
 		break;
 	}
 }
@@ -554,6 +556,7 @@ static void import_val_ptr(Importer *im, void *v, Type *type) {
 	}
 }
 
+
 static inline bool export_val(Exporter *ex, Value val, Type *type, Location where) {
 	return export_val_ptr(ex, val_get_ptr(&val, type), type, where);
 }
@@ -575,6 +578,15 @@ static inline bool export_optional_val(Exporter *ex, Value *val, Type *type, Loc
 	}
 }
 
+static inline Value *import_optional_val(Importer *im, Type *type) {
+	if (import_bool(im)) {
+		Value *val = imptr_malloc(im, sizeof *val);
+		*val = import_val(im, type);
+		return val;
+	}
+	return NULL;
+}
+
 /* e can be NULL! */
 static inline bool export_optional_expr(Exporter *ex, Expression *e) {
 	bool has_e = e != NULL;
@@ -585,9 +597,18 @@ static inline bool export_optional_expr(Exporter *ex, Expression *e) {
 		return true;
 }
 
+static inline Expression *import_optional_expr(Importer *im) {
+	if (import_bool(im)) {
+		return import_expr_(im);
+	}
+	return NULL;
+}
+
 static bool export_expr(Exporter *ex, Expression *e) {
 	possibly_static_assert(sizeof e->flags == 1);
 	export_u8(ex, (U8)e->flags);
+	assert(e->kind < 256);
+	export_u8(ex, (U8)e->kind);
 	unsigned found_type = e->flags & EXPR_FOUND_TYPE;
     if (found_type) {
 		if (!export_type(ex, &e->type, e->where))
@@ -599,7 +620,7 @@ static bool export_expr(Exporter *ex, Expression *e) {
 		export_vlq(ex, e->intl);
 		break;
 	case EXPR_LITERAL_FLOAT:
-		if (e->type.flags & TYPE_IS_FLEXIBLE || e->type.builtin == BUILTIN_F64)
+		if ((e->type.flags & TYPE_IS_FLEXIBLE) || e->type.builtin == BUILTIN_F64)
 			export_f64(ex, (F64)e->floatl);
 		else
 			export_f32(ex, (F32)e->floatl);
@@ -611,6 +632,7 @@ static bool export_expr(Exporter *ex, Expression *e) {
 		export_char(ex, e->charl);
 		break;
 	case EXPR_LITERAL_STR:
+		export_len(ex, e->strl.len);
 		fwrite(e->strl.str, 1, e->strl.len, ex->out);
 		break;
 	case EXPR_C:
@@ -718,8 +740,9 @@ static bool export_expr(Exporter *ex, Expression *e) {
 	case EXPR_EACH: {
 		EachExpr *ea = e->each;
 		export_u8(ex, ea->flags);
-		if (!export_type(ex, &ea->type, e->where))
-			return false;
+		if ((ea->flags & EACH_ANNOTATED_TYPE) || found_type)
+			if (!export_type(ex, &ea->type, e->where))
+				return false;
 		export_ident(ex, ea->index);
 		export_ident(ex, ea->value);
 		if (ea->flags & EACH_IS_RANGE) {
@@ -745,9 +768,138 @@ static bool export_expr(Exporter *ex, Expression *e) {
 	return true;
 }
 
+/* returns a pointer, unlinke import_expr */
+static inline Expression *import_expr_(Importer *im) {
+	Expression *e = imptr_new_expr(im);
+	import_expr(im, e);
+	return e;
+}
+
 static void import_expr(Importer *im, Expression *e) {
-	/* TODO */
-	(void)im,(void)e;
+	e->flags = import_u8(im);
+	e->kind = import_u8(im);
+	unsigned found_type = e->flags & EXPR_FOUND_TYPE;
+	if (found_type) {
+		import_type(im, &e->type);
+	}
+	switch (e->kind) {
+	case EXPR_LITERAL_INT:
+		e->intl = import_vlq(im);
+		break;
+	case EXPR_LITERAL_FLOAT:
+		if ((e->type.flags & TYPE_IS_FLEXIBLE) || e->type.builtin == BUILTIN_F64)
+			e->floatl = (Floating)import_f64(im);
+		else
+			e->floatl = (Floating)import_f32(im);
+		break;
+	case EXPR_LITERAL_BOOL:
+		e->booll = import_bool(im);
+		break;
+	case EXPR_LITERAL_CHAR:
+		e->charl = import_char(im);
+		break;
+	case EXPR_LITERAL_STR: {
+		size_t len = import_len(im);
+		fread(e->strl.str = malloc(len), 1, len, im->in);
+	} break;
+	case EXPR_C:
+		e->c.code = import_expr_(im);
+		break;
+	case EXPR_IDENT:
+		e->ident = import_ident(im);
+		break;
+	case EXPR_UNARY_OP:
+		e->unary.op = import_u8(im);
+		e->unary.of = import_expr_(im);
+		break;
+	case EXPR_BINARY_OP:
+		e->binary.op = import_u8(im);
+		e->binary.lhs = import_expr_(im);
+		e->binary.rhs = import_expr_(im);
+		break;
+	case EXPR_VAL:
+		e->val = import_val(im, &e->type);
+		break;
+	case EXPR_TUPLE:
+		import_arr(im, &e->tuple);
+		arr_foreach(e->tuple, Expression, sub) {
+			import_expr(im, sub);
+		}
+		break;
+	case EXPR_TYPE:
+		import_type(im, &e->typeval);
+		break;
+	case EXPR_FN:
+		e->fn = import_fn_ptr(im);
+		break;
+	case EXPR_BLOCK:
+		import_block(im, &e->block);
+		break;
+	case EXPR_NEW:
+		import_type(im, &e->new.type);
+		e->new.n = import_optional_expr(im);
+		break;
+	case EXPR_CAST:
+		e->cast.expr = import_expr_(im);
+		import_type(im, &e->cast.type);
+		break;
+	case EXPR_CALL: {
+		CallExpr *c = &e->call;
+		c->fn = import_expr_(im);
+		if (found_type) {
+			import_arr(im, &c->arg_exprs);
+			arr_foreach(c->arg_exprs, Expression, arg)
+				import_expr(im, arg);
+		} else {
+			import_arr(im, &c->args);
+			arr_foreach(c->args, Argument, arg) {
+				arg->where = import_location(im);
+				arg->name = import_ident(im);
+				import_expr(im, &arg->val);
+			}
+		}
+	} break;
+	case EXPR_IF: {
+		IfExpr *i = &e->if_;
+		i->cond = import_optional_expr(im);
+		import_block(im, &i->body);
+		i->next_elif = import_optional_expr(im);
+	} break;
+	case EXPR_WHILE: {
+		WhileExpr *w = &e->while_;
+		w->cond = import_optional_expr(im);
+		import_block(im, &w->body);
+	} break;
+	case EXPR_PKG:
+		/* TODO (see also: val) */
+		break;
+	case EXPR_SLICE: {
+		SliceExpr *s = &e->slice;
+		s->of = import_expr_(im);
+		s->from = import_optional_expr(im);
+		s->to = import_optional_expr(im);
+	} break;
+	case EXPR_EACH: {
+		EachExpr *ea = e->each = imptr_malloc(im, sizeof *ea);
+		ea->flags = import_u8(im);
+		if ((ea->flags & EACH_ANNOTATED_TYPE) || found_type)
+			import_type(im, &ea->type);
+		ea->index = import_ident(im);
+		ea->value = import_ident(im);
+		if (ea->flags & EACH_IS_RANGE) {
+			ea->range.from = import_expr_(im);
+			ea->range.to = import_optional_expr(im);
+			if (found_type) {
+				ea->range.stepval = import_optional_val(im, &ea->type);
+			} else {
+				ea->range.step = import_expr_(im);
+			}
+		} else {
+			ea->of = import_expr_(im);
+		}
+		import_block(im, &ea->body);
+	} break;
+	}
 }
 
 
@@ -813,7 +965,9 @@ static void import_decl(Importer *im, Declaration *d) {
 		printf("VALUE: ");
 		print_val(d->val, &d->type);
 	} else if (d->flags & DECL_HAS_EXPR) {
-		exit(0);
+		import_expr(im, &d->expr);
+		printf("EXPRESSION: ");
+		print_expr(&d->expr);
 	}
 }
 
@@ -824,6 +978,8 @@ static bool export_decl_external(Exporter *ex, Declaration *d) {
 }
 
 static bool export_stmt(Exporter *ex, Statement *s) {
+	possibly_static_assert(sizeof s->flags == 1);
+	export_u8(ex, s->flags);
 	export_u8(ex, (U8)s->kind);
 	switch (s->kind) {
 	case STMT_EXPR:
@@ -834,15 +990,33 @@ static bool export_stmt(Exporter *ex, Statement *s) {
 		if (!export_decl(ex, &s->decl))
 			return false;
 		break;
-	case STMT_RET:
-		assert(sizeof s->ret.flags == 1);
+	case STMT_RET: {
+		possibly_static_assert(sizeof s->ret.flags == 1);
 		export_u8(ex, (U8)s->ret.flags);
 		if (s->ret.flags & RET_HAS_EXPR)
 			if (!export_expr(ex, &s->ret.expr))
 				return false;
-		break;
+	} break;
 	}
 	return true;
+}
+
+static void import_stmt(Importer *im, Statement *s) {
+	s->flags = import_u8(im);
+	s->kind = import_u8(im);
+	switch (s->kind) {
+	case STMT_EXPR:
+		import_expr(im, &s->expr);
+		break;
+	case STMT_DECL:
+		import_decl(im, &s->decl);
+		break;
+	case STMT_RET:
+		s->ret.flags = import_u8(im);
+		if (s->ret.flags & RET_HAS_EXPR)
+			import_expr(im, &s->expr);
+		break;
+	}
 }
 
 static bool export_block(Exporter *ex, Block *b) {
@@ -855,6 +1029,15 @@ static bool export_block(Exporter *ex, Block *b) {
 	if (!export_optional_expr(ex, b->ret_expr))
 		return false;
 	return true;
+}
+
+static void import_block(Importer *im, Block *b) {
+	b->where = import_location(im);
+	import_arr(im, &b->stmts);
+	arr_foreach(b->stmts, Statement, s) {
+		import_stmt(im, s);
+	}
+	b->ret_expr = import_optional_expr(im);
 }
 
 static bool export_fn(Exporter *ex, FnExpr *f) {
@@ -870,6 +1053,17 @@ static bool export_fn(Exporter *ex, FnExpr *f) {
 	if (!export_block(ex, &f->body))
 		return false;
 	return true;
+}
+
+static void import_fn(Importer *im, FnExpr *f) {
+    import_arr(im, &f->params);
+	arr_foreach(f->params, Declaration, param) {
+		import_decl(im, param);
+	}
+	import_arr(im, &f->ret_decls);
+	arr_foreach(f->ret_decls, Declaration, ret_decl)
+		import_decl(im, ret_decl);
+	import_block(im, &f->body);
 }
 
 static bool export_struct(Exporter *ex, StructDef *s) {
@@ -979,19 +1173,17 @@ static bool import_footer(Importer *im) {
 
 	fseek(im->in, main_footer_offset, SEEK_SET);
 
-	size_t n_structs = import_arr(im, &im->structs);
+	import_arr(im, &im->structs);
 #ifdef TOC_DEBUG
 	/* for debugging: so that struct names show up as "anonymous struct" if they haven't been imported yet */
 	arr_zero(im->structs);
 #endif
-	for (i = 0; i < n_structs; ++i) {
-		import_struct(im, &im->structs[i]);
-	}
+	arr_foreach(im->structs, StructDef, s)
+		import_struct(im, s);
 
-	size_t n_fns = import_arr(im, &im->fns);
-	for (i = 0; i < n_fns; ++i) {
-		/* TODO */
-	}
+	import_arr(im, &im->fns);
+	arr_foreach(im->fns, FnExpr, f)
+		import_fn(im, f);
 	
 	if (ferror(im->in)) {
 		warn_print(im->import_location, "An error occured while reading the package. It may be incorrect.");
