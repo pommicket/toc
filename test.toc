@@ -9,11 +9,9 @@ putf ::= fn(x: float) {
 
 
 
-// point ::= pkg "point";
+point ::= pkg "point";
 
 
 main ::= fn() {
-	 puti(#alignof(struct { x,y,z:int; f:f64; });
-	 puti(#sizeof(struct { x,y,z:int; f:f64; });
 	 
 };

@@ -283,7 +283,6 @@ static bool export_type(Exporter *ex, Type *type, Location where) {
 				return false;
 		break;
 	case TYPE_ARR:
-		/* smaller arrays are more common */
 		if (type->flags & TYPE_IS_RESOLVED)
 			export_vlq(ex, type->arr.n);
 		else
@@ -342,8 +341,8 @@ static void import_type(Importer *im, Type *type) {
 	} else {
 		type->kind = (TypeKind)kind;
 	}
-	int is_resolved = type->flags & TYPE_IS_RESOLVED;
 	type->flags = import_u8(im);
+	int is_resolved = type->flags & TYPE_IS_RESOLVED;
 	switch (type->kind) {
 	case TYPE_VOID:
 	case TYPE_BUILTIN:
@@ -809,6 +808,7 @@ static bool export_struct(Exporter *ex, StructDef *s) {
 }
 
 static void import_struct(Importer *im, StructDef *s) {
+	fprintf(stderr,"%lx\n",ftell(im->in));
 	size_t nfields = import_arr(im, &s->fields);
 	for (size_t i = 0; i < nfields; ++i) {
 		s->fields[i].name = import_ident(im);
@@ -827,8 +827,9 @@ static bool exptr_finish(Exporter *ex) {
 	fseek(ex->out, 0L, SEEK_END);
 
 	/* export total number of identifiers */
-	export_len(ex, ex->ident_id);
-
+	long n_idents_offset = ftell(ex->out);
+	export_u64(ex, 0); /* leave space for # of identifiers */
+	
 	/* export number of identifiers *whose names matter* */
 	export_len(ex, arr_len(ex->exported_idents));
 	arr_foreach(ex->exported_idents, Identifier, ident) {
@@ -856,7 +857,10 @@ static bool exptr_finish(Exporter *ex) {
 	arr_clear(&ex->exported_fns);
 
 	arr_clear(&ex->exported_idents);
-	
+
+	fseek(ex->out, n_idents_offset, SEEK_SET);
+	export_u64(ex, ex->ident_id);
+
 	if (ferror(ex->out)) {
 		warn_print(LOCATION_NONE, "An error occured while writing the package output. It may be incorrect.");
 	}
@@ -866,7 +870,8 @@ static bool exptr_finish(Exporter *ex) {
 
 static bool import_footer(Importer *im) {
 	size_t i;
-	im->max_ident_id = import_len(im);
+	im->max_ident_id = import_u64(im);
+	
 	im->ident_map = err_calloc(im->max_ident_id + 1, sizeof *im->ident_map);
 	size_t n_named_idents = import_len(im);
 	for (i = 0; i < n_named_idents; ++i) {
