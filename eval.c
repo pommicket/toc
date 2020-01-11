@@ -970,7 +970,6 @@ static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value 
 	}
 }
 
-
 static Value val_zero(Type *t) {
 	Value val = {0};
 	switch (t->kind) {
@@ -985,7 +984,21 @@ static Value val_zero(Type *t) {
 	}
 	return val;
 }
-	
+
+static Value val_alloc(Allocator *a, Type *t) {
+	Value val;
+	switch (t->kind) {
+	case TYPE_STRUCT:
+		val.struc = allocr_malloc(a, compiler_sizeof(t));
+		break;
+	case TYPE_ARR:
+		val.arr = allocr_calloc(a, t->arr.n, compiler_sizeof(t->arr.of));
+		break;
+	default: break;
+	}
+	return val;
+}
+
 static bool val_is_nonnegative(Value *v, Type *t) {
 	switch (t->builtin) {
 	case BUILTIN_BOOL: assert(0); return false;

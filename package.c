@@ -155,7 +155,13 @@ static Location import_location(Importer *im) {
 	return l;
 }
 
+/* handles NULL */
 static inline void export_ident(Exporter *ex, Identifier i) {
+	if (!i) {
+		export_vlq(ex, 0);
+		return;
+	}
+	
 	if (!i->export_id) {
 		i->export_id = ++ex->ident_id;
 	}
@@ -165,14 +171,6 @@ static inline Identifier import_ident(Importer *im) {
 	U64 id = import_vlq(im);
 	assert(id <= im->max_ident_id);
 	return im->ident_map[id];
-}
-
-static inline void export_optional_ident(Exporter *ex, Identifier i) {
-	bool has_i = i != NULL;
-	export_bool(ex, has_i);
-	if (has_i) {
-		export_ident(ex, i);
-	}
 }
 
 static const U8 toc_package_indicator[3] = {116, 111, 112};
@@ -376,7 +374,8 @@ static void import_type(Importer *im, Type *type) {
 	} break;
 	case TYPE_STRUCT: {
 		U64 struct_id = import_vlq(im);
-		type->struc = &im->structs[struct_id];
+		assert(struct_id);
+		type->struc = &im->structs[struct_id - 1];
 	} break;
 	case TYPE_EXPR:
 		import_expr(im, type->expr = imptr_new_expr(im));
@@ -478,8 +477,43 @@ static bool export_val_ptr(Exporter *ex, void *val, Type *type, Location where) 
 	return true;
 }
 
+static void import_val_ptr(Importer *im, void *v, Type *type) {
+	switch (type->kind) {
+	case TYPE_VOID: break;
+	case TYPE_BUILTIN:
+		switch (type->builtin) {
+		case BUILTIN_I8: *(I8 *)v = import_i8(im); break;
+		case BUILTIN_U8: *(U8 *)v = import_u8(im); break;
+		case BUILTIN_I16: *(I16 *)v = import_i16(im); break;
+		case BUILTIN_U16: *(U16 *)v = import_u16(im); break;
+		case BUILTIN_I32: *(I32 *)v = import_i32(im); break;
+		case BUILTIN_U32: *(U32 *)v = import_u32(im); break;
+		case BUILTIN_I64: *(I64 *)v = import_i64(im); break;
+		case BUILTIN_U64: *(U64 *)v = import_u64(im); break;
+		case BUILTIN_F32: *(F32 *)v = import_f32(im); break;
+		case BUILTIN_F64: *(F64 *)v = import_f64(im); break;
+		case BUILTIN_BOOL: *(bool *)v = import_bool(im); break;
+		case BUILTIN_CHAR: *(char *)v = import_char(im); break;
+		case BUILTIN_TYPE:
+			import_type(im, *(Type **)v = imptr_new_type(im));
+			break;
+		case BUILTIN_PKG:
+			/* TODO */
+			assert(0);
+			break;
+		}
+	}
+}
+
 static inline bool export_val(Exporter *ex, Value val, Type *type, Location where) {
 	return export_val_ptr(ex, val_get_ptr(&val, type), type, where);
+}
+
+static inline Value import_val(Importer *im, Type *type) {
+	Value val;
+	val = val_alloc(im->allocr, type);
+	import_val_ptr(im, val_get_ptr(&val, type), type);
+	return val;
 }
 
 static inline bool export_optional_val(Exporter *ex, Value *val, Type *type, Location where) {
@@ -637,8 +671,8 @@ static bool export_expr(Exporter *ex, Expression *e) {
 		export_u8(ex, ea->flags);
 		if (!export_type(ex, &ea->type, e->where))
 			return false;
-		export_optional_ident(ex, ea->index);
-		export_optional_ident(ex, ea->value);
+		export_ident(ex, ea->index);
+		export_ident(ex, ea->value);
 		if (ea->flags & EACH_IS_RANGE) {
 			if (!export_expr(ex, ea->range.from))
 				return false;
@@ -667,12 +701,6 @@ static void import_expr(Importer *im, Expression *e) {
 	(void)im,(void)e;
 }
 
-
-enum {
-	  DECL_EXPORT_NONE,
-	  DECL_EXPORT_EXPR,
-	  DECL_EXPORT_VAL
-};
 
 static bool export_decl(Exporter *ex, Declaration *d) {
 	assert(ex->started);
@@ -705,24 +733,11 @@ static bool export_decl(Exporter *ex, Declaration *d) {
 		if (!export_type(ex, &d->type, d->where))
 			return false;
 	}
-	
-	U8 constness = 0;
-	if (d->flags & DECL_IS_CONST) constness = 1;
-	else if (d->flags & DECL_SEMI_CONST) constness = 2;
-	export_u8(ex, constness);
-
-	U8 expr_kind = DECL_EXPORT_NONE;
-	if (d->flags & DECL_HAS_EXPR)
-		expr_kind = DECL_EXPORT_EXPR;
-	if (d->flags & DECL_FOUND_VAL)
-		expr_kind = DECL_EXPORT_VAL;
-	
-	export_u8(ex, expr_kind);
-	if (expr_kind == DECL_EXPORT_EXPR) {
-		if (!export_expr(ex, &d->expr))
-			return false;
-	} else if (expr_kind == DECL_EXPORT_VAL) {
+	if (d->flags & DECL_FOUND_VAL) {
 		if (!export_val(ex, d->val, &d->type, d->where))
+			return false;
+	} else if (d->flags & DECL_HAS_EXPR) {
+		if (!export_expr(ex, &d->expr))
 			return false;
 	}
 	return true;
@@ -737,8 +752,14 @@ static void import_decl(Importer *im, Declaration *d) {
 	for (size_t i = 0; i < n_idents; ++i) {
 		d->idents[i] = import_ident(im);
 	}
-	import_type(im, &d->type);
-	printf("%s\n",type_to_str(&d->type));
+	if (d->flags & DECL_FOUND_TYPE) {
+		import_type(im, &d->type);
+	}
+	if (d->flags & DECL_FOUND_VAL) {
+		d->val = import_val(im, &d->type);
+		print_val(d->val, &d->type);
+	} else if (d->flags & DECL_HAS_EXPR) {
+	}
 	exit(0);
 }
 
@@ -798,6 +819,9 @@ static bool export_fn(Exporter *ex, FnExpr *f) {
 }
 
 static bool export_struct(Exporter *ex, StructDef *s) {
+	export_ident(ex, s->name);
+	if (s->name)
+		*(Identifier *)arr_add(&ex->exported_idents) = s->name;
 	export_len(ex, arr_len(s->fields));
 	arr_foreach(s->fields, Field, f) {
 		export_ident(ex, f->name);
@@ -808,6 +832,7 @@ static bool export_struct(Exporter *ex, StructDef *s) {
 }
 
 static void import_struct(Importer *im, StructDef *s) {
+	s->name = import_ident(im);
 	size_t nfields = import_arr(im, &s->fields);
 	for (size_t i = 0; i < nfields; ++i) {
 		s->fields[i].name = import_ident(im);
@@ -890,6 +915,10 @@ static bool import_footer(Importer *im) {
 	}
 
 	size_t n_structs = import_arr(im, &im->structs);
+#ifdef TOC_DEBUG
+	/* for debugging: so that struct names show up as "anonymous struct" if they haven't been imported yet */
+	arr_zero(im->structs);
+#endif
 	for (i = 0; i < n_structs; ++i) {
 		import_struct(im, &im->structs[i]);
 	}

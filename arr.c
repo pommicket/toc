@@ -21,6 +21,10 @@ static inline size_t arr_len(void *arr) {
 	return arr_hdr(arr)->len;
 }
 
+static inline void arr_zero_(void *arr, size_t item_sz) {
+	memset(arr, 0, item_sz * arr_len(arr));
+}
+
 static void arr_resv_(void **arr, size_t n, size_t item_sz) {
 	if (*arr == NULL) {
 		ArrHeader *hdr = err_malloc(item_sz * n + sizeof(ArrHeader) + 1); /* +1 => prevent ptr overflow */
@@ -175,6 +179,7 @@ You shouldn't rely on this, though, e.g. by doing
 #define arr_ptr_type(arr) void *
 #endif
 
+#define arr_zero(arr) arr_zero_(arr, sizeof *(arr))
 #define arr_add(arr) (arr_ptr_type(arr))arr_add_((void **)(arr), sizeof **(arr))
 #define arr_adda(arr, allocr) (arr_ptr_type(arr))arr_adda_((void **)(arr), sizeof **(arr), (allocr))
 #define arr_resv(arr, n) arr_resv_((void **)(arr), n, sizeof **(arr))
@@ -190,7 +195,7 @@ You shouldn't rely on this, though, e.g. by doing
 #define arr_remove_last(arr) arr_remove_last_((void **)(arr)), (void)sizeof **(arr)
 #define arr_remove_lasta(arr, a) arr_remove_lasta_((void **)(arr), sizeof **(arr), (a))
 #define arr_copya(out, in, a) do { assert(sizeof *(in) == sizeof **(out)); arr_copya_((void **)(out), (in), sizeof **(out), (a)); } while(0)
-	
+
 #ifdef TOC_DEBUG
 static void arr_test(void) {
 	int *foos = NULL;
