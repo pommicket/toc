@@ -377,13 +377,6 @@ typedef enum {
 			  BUILTIN_PKG
 } BuiltinType;
 
-/* field of a struct */
-typedef struct Field {
-	Identifier name;
-	struct Type *type;
-	size_t offset; /* offset during compile time */
-} Field;
-
 
 typedef U8 Constness;
 
@@ -400,21 +393,6 @@ enum {
 	  STRUCT_DEF_FOUND_OFFSETS = 0x01,
 	  STRUCT_DEF_CGENERATED = 0x02,
 };
-
-typedef struct {
-	Field *fields;
-	Location where;
-	U16 flags;
-	size_t size; /* size of this struct during compile time */
-	size_t align;
-	struct {
-		Identifier name;
-		IdentID id;
-	} c;
-	struct {
-		U32 id; /* (index into exptr->exported_structs) + 1, or 0 if hasn't been exported */
-	} export;
-} StructDef;
 
 enum {
 	  TYPE_IS_FLEXIBLE = 0x01,
@@ -439,10 +417,34 @@ typedef struct Type {
 		} arr;
 		struct Type *ptr;
 		struct Type *slice;
-		StructDef *struc; /* it's a pointer so that multiple Types can reference the same struct definition */
+		struct StructDef *struc; /* it's a pointer so that multiple Types can reference the same struct definition */
 		struct Expression *expr;
 	};
 } Type;
+
+
+/* field of a struct */
+typedef struct Field {
+	Identifier name;
+	Type type;
+	size_t offset; /* offset during compile time */
+} Field;
+
+typedef struct StructDef {
+	Field *fields;
+	Location where;
+	U16 flags;
+	size_t size; /* size of this struct during compile time */
+	size_t align;
+	struct {
+		Identifier name;
+		IdentID id;
+	} c;
+	struct {
+		U32 id; /* (index into exptr->exported_structs) + 1, or 0 if hasn't been exported */
+	} export;
+} StructDef;
+
 
 enum {
 	  BLOCK_IS_FN = 0x01,

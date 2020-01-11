@@ -25,10 +25,10 @@ static bool cgen_decls_type(CGenerator *g, Type *type, Location where) {
 			cgen_nl(g);
 			++g->indent_lvl;
 			arr_foreach(sdef->fields, Field, f) {
-				if (!cgen_type_pre(g, f->type, where)) return false;
+				if (!cgen_type_pre(g, &f->type, where)) return false;
 				cgen_write(g, " ");
 				cgen_ident(g, f->name);
-				if (!cgen_type_post(g, f->type, where)) return false;
+				if (!cgen_type_post(g, &f->type, where)) return false;
 				cgen_write(g, ";");
 				cgen_nl(g);
 			}

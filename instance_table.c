@@ -187,7 +187,7 @@ static U64 val_ptr_hash(void *v, Type *t) {
 		U32 x = 1;
 		U64 hash = 0;
 		arr_foreach(t->struc->fields, Field, f) {
-			hash += (U64)x * val_ptr_hash((char *)v + f->offset, f->type);
+			hash += (U64)x * val_ptr_hash((char *)v + f->offset, &f->type);
 			x = rand_u32(x);
 		}
 		return hash;
@@ -271,7 +271,7 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 	}
 	case TYPE_STRUCT:
 		arr_foreach(t->struc->fields, Field, f) {
-			if (!val_ptr_eq((char *)u + f->offset, (char *)v + f->offset, f->type))
+			if (!val_ptr_eq((char *)u + f->offset, (char *)v + f->offset, &f->type))
 				return false;
 		}
 		return true;

@@ -603,8 +603,7 @@ static bool parse_type(Parser *p, Type *type) {
 						Type *ftype = field_decl.type.kind == TYPE_TUPLE ? &field_decl.type.tuple[idx] : &field_decl.type;
 						Field *f = parser_arr_add(p, &type->struc->fields);
 						f->name = *fident;
-						f->type = parser_malloc(p, sizeof *f->type);
-						*f->type = *ftype;
+						f->type = *ftype;
 						++idx;
 					}
 				}

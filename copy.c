@@ -126,7 +126,7 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 			Field *fout = &out->struc->fields[i];
 			Field *fin = &in->struc->fields[i];
 			*fout = *fin;
-			copy_type(c, fout->type = allocr_malloc(c->allocr, sizeof *fout->type), fin->type);
+			copy_type(c, &fout->type, &fin->type);
 		}
 	} break;
 	}

@@ -123,7 +123,7 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 		size_t i, len = arr_len(fields_m);
 		if (len != arr_len(fields_t)) return true;
 		for (i = 0; i < len; ++i) {
-			if (!infer_from_type(tr, fields_m[i].type, fields_t[i].type, idents, vals, types))
+			if (!infer_from_type(tr, &fields_m[i].type, &fields_t[i].type, idents, vals, types))
 				return false;
 		}
 	} break;

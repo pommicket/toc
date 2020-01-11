@@ -1702,7 +1702,7 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 		arr_foreach(t->struc->fields, Field, f) {
 			if (f != t->struc->fields)
 				cgen_write(g, ", ");
-			cgen_val_ptr(g, (char *)v + f->offset, f->type, where);
+			cgen_val_ptr(g, (char *)v + f->offset, &f->type, where);
 		}
 		cgen_write(g, "}");
 		break;

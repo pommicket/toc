@@ -216,7 +216,7 @@ static bool type_is_compileonly(Type *t) {
 		return false;
 	case TYPE_STRUCT:
 		arr_foreach(t->struc->fields, Field, f)
-			if (type_is_compileonly(f->type))
+			if (type_is_compileonly(&f->type))
 				return true;
 		return false;
 	case TYPE_EXPR: break;
@@ -556,7 +556,7 @@ static bool type_resolve_(Typer *tr, Type *t, Location where, bool is_reference)
 		break;
 	case TYPE_STRUCT:
 		arr_foreach(t->struc->fields, Field, f) {
-			if (!type_resolve_(tr, f->type, where, is_reference))
+			if (!type_resolve_(tr, &f->type, where, is_reference))
 				return false;
 		}
 		break;
@@ -1898,7 +1898,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				arr_foreach(lhs_type->struc->fields, Field, f) {
 					if (ident_eq_str(f->name, field_name.slice.data)) {
 						is_field = true;
-						*t = *f->type;
+						*t = f->type;
 						e->binary.field = f;
 					}
 				}
@@ -1937,7 +1937,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 					arr_foreach(struct_type->struc->fields, Field, f) {
 						if (f->name == rhs->ident) {
 							is_field = true;
-							*t = *f->type;
+							*t = f->type;
 							e->binary.field = f;
 						}
 					}

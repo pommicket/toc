@@ -65,7 +65,7 @@ static void eval_struct_find_offsets(Type *t) {
 		size_t bytes = 0;
 		size_t total_align = 0;
 		arr_foreach(t->struc->fields, Field, f) {
-			size_t falign = compiler_alignof(f->type);
+			size_t falign = compiler_alignof(&f->type);
 			if (falign > total_align)
 				total_align = falign;
 			/* align */
@@ -73,7 +73,7 @@ static void eval_struct_find_offsets(Type *t) {
 			assert(bytes % falign == 0);
 			f->offset = bytes;
 			/* add size */
-			bytes += compiler_sizeof(f->type);
+			bytes += compiler_sizeof(&f->type);
 		}
 		bytes += ((total_align - bytes) % total_align + total_align) % total_align; /* = -bytes mod align */
 		t->struc->size = bytes;
@@ -344,7 +344,7 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 				fprintf(f, ", ");
 			fprint_ident_debug(f, fi->name);
 			fprintf(f, ": ");
-			fprint_val_ptr(f, (char *)p + fi->offset, fi->type);
+			fprint_val_ptr(f, (char *)p + fi->offset, &fi->type);
 		}
 		fprintf(f, "]");
 		break;
@@ -843,7 +843,7 @@ static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 		case BINARY_DOT: {
 			void *ptr = eval_ptr_to_struct_field(ev, set);
 			if (!ptr) return false;
-			eval_deref_set(ptr, to, set->binary.field->type);
+			eval_deref_set(ptr, to, &set->binary.field->type);
 		} break;
 		default: assert(0); break;
 		}

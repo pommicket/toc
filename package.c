@@ -256,7 +256,7 @@ static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname
 static bool export_type(Exporter *ex, Type *type, Location where) {
 	assert(type->flags & TYPE_IS_RESOLVED);
 	if (type->kind == TYPE_BUILTIN) {
-		export_u8(ex, (U8)(type->builtin + TYPE_COUNT));
+		export_u8(ex, (U8)((int)type->builtin + TYPE_COUNT));
 	} else {	
 		export_u8(ex, (U8)type->kind);
 	} 
@@ -310,6 +310,16 @@ static bool export_type(Exporter *ex, Type *type, Location where) {
 		return false;
 	}
 	return true;
+}
+
+static void import_type(Importer *im, Type *type) {
+	U8 kind = import_u8(im);
+	if (kind > TYPE_COUNT) {
+		type->kind = TYPE_BUILTIN;
+		type->builtin = (BuiltinType)(kind - TYPE_COUNT);
+	} else {
+		
+	}
 }
 
 static bool export_fn_ptr(Exporter *ex, FnExpr *f, Location where) {
@@ -378,7 +388,7 @@ static bool export_val_ptr(Exporter *ex, void *val, Type *type, Location where) 
 	case TYPE_STRUCT:
 		eval_struct_find_offsets(type);
 		arr_foreach(type->struc->fields, Field, f) {
-			if (!export_val_ptr(ex, (char *)val + f->offset, f->type, where))
+			if (!export_val_ptr(ex, (char *)val + f->offset, &f->type, where))
 				return false;
 		}
 		break;
@@ -709,7 +719,7 @@ static bool export_struct(Exporter *ex, StructDef *s) {
 	export_len(ex, arr_len(s->fields));
 	arr_foreach(s->fields, Field, f) {
 		export_ident(ex, f->name);
-		if (!export_type(ex, f->type, s->where))
+		if (!export_type(ex, &f->type, s->where))
 			return false;
 	}
 	return true;
