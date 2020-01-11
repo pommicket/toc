@@ -12,6 +12,13 @@ putf ::= fn(x: float) {
 // point ::= pkg "point";
 Foo ::= struct { x, y : int; };
 
+f ::= fn(t :: Type) int {
+  5 as t
+}
+;
 main ::= fn() {
+	 i ::= int;
+	 puti(f(i));
+
 	 
 };

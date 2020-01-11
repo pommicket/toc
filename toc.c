@@ -81,7 +81,7 @@ static inline bool type_is_slicechar(Type *t) {
 #include "package.c"
 #include "types.c"
 static bool cgen_decls_file(CGenerator *g, ParsedFile *f);
-static bool typedefs_file(CGenerator *g, ParsedFile *f);
+static bool cgen_sdecls_file(CGenerator *g, ParsedFile *f);
 #include "cgen.c"
 #include "typedefs_cgen.c"
 #include "decls_cgen.c"

@@ -7,7 +7,7 @@
 /* 
    NOTE:
    Structure of the toc compiler:
-   tokenizer => parser => typing (types.c) => typdefs_cgen, decls_cgen, cgen 
+   tokenizer => parser => typing (types.c) => cgen 
    (lexing)
 
    toc tries to continue even after the first error. 

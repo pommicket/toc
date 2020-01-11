@@ -1987,7 +1987,7 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 			   "static void free_(void *data) { extern void free(void *data); free(data); }\n" /* don't introduce free to global namespace */
 			   "static void *e__calloc(size_t n, size_t sz) { extern void *calloc(size_t n, size_t size); extern void abort(void); void *ret = calloc(n, sz); if (!ret) { fprintf(stderr, \"Out of memory.\\n\"); abort(); } return ret; }\n\n\n");
 
-	if (!typedefs_file(g, f))
+	if (!cgen_sdecls_file(g, f))
 		return false;
 	if (!cgen_decls_file(g, f))
 		return false;
