@@ -398,7 +398,7 @@ enum {
 	  TYPE_IS_FLEXIBLE = 0x01,
 	  TYPE_IS_RESOLVED = 0x02,
 };
-typedef U16 TypeFlags;
+typedef U8 TypeFlags;
 typedef struct Type {
 	Location where;
 	TypeKind kind;
@@ -521,8 +521,8 @@ typedef enum {
 typedef struct CallExpr {
 	struct Expression *fn;
 	union {
-		struct Argument *args;
-		struct Expression *arg_exprs;
+		struct Argument *args; /* before typing */
+		struct Expression *arg_exprs; /* after typing */
 	};
 	struct Instance *instance; /* NULL = ordinary function, no compile time args */
 	struct {
@@ -633,7 +633,7 @@ typedef struct Expression {
 	Type type;
 	Location where;
 	ExprKind kind;
-	U16 flags;
+	U8 flags;
 	union {
 		Floating floatl;
 		/* Floating floatl; */
@@ -667,8 +667,8 @@ typedef struct Expression {
 			Type type;
 		} del;
 		union {
-			struct Expression *name_expr;
-			Identifier name_ident;
+			struct Expression *name_expr; /* before typing */
+			Identifier name_ident; /* after typing */
 		} pkg;
 		IfExpr if_;
 		WhileExpr while_;

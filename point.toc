@@ -13,3 +13,8 @@ pkg "point";
 mk_point2 ::= fn(x, y:int) p: Point {
 		  p = mk_point(x*x, y*y);
 };
+
+#export foo ::= fn(x :: int) int {
+		k : Point = 95;
+		p:=x[3];
+};

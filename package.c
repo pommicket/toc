@@ -11,6 +11,7 @@ static bool export_block(Exporter *ex, Block *b);
 static bool export_expr(Exporter *ex, Expression *e);
 static bool import_footer(Importer *i);
 static void import_decl(Importer *im, Declaration *d);
+static void import_expr(Importer *im, Expression *e);
 
 static void exptr_create(Exporter *ex, FILE *out) {
 	ex->out = out;
@@ -106,12 +107,25 @@ static inline void export_vlq(Exporter *ex, U64 x) {
 static inline U64 import_vlq(Importer *i) {
 	return read_vlq(i->in);
 }
-
-static void imptr_arr_create_(Importer *im, void **arr, size_t sz, size_t len) {
-	*arr = NULL;
-	arr_set_lena_(arr, len, sz, im->allocr);
+static inline void export_len(Exporter *ex, size_t len) {
+	export_vlq(ex, (U64)len);
 }
-#define imptr_arr_create(im, arr, len) imptr_arr_create_(im, (void **)arr, sizeof **(arr), len)
+static inline size_t import_len(Importer *i) {
+	return (size_t)import_vlq(i);
+}
+
+
+static size_t import_arr_(Importer *im, void **arr, size_t sz) {
+	*arr = NULL;
+	size_t len = import_len(im);
+	arr_set_lena_(arr, len, sz, im->allocr);
+	return len;
+}
+/* 
+reads length and allocates an array of that length
+returns length 
+*/
+#define import_arr(im, arr) import_arr_(im, (void **)arr, sizeof **(arr))
 
 static inline void export_str(Exporter *ex, const char *str, size_t len) {
 #ifdef TOC_DEBUG
@@ -162,13 +176,6 @@ static inline void export_optional_ident(Exporter *ex, Identifier i) {
 	if (has_i) {
 		export_ident(ex, i);
 	}
-}
-
-static inline void export_len(Exporter *ex, size_t len) {
-	export_vlq(ex, (U64)len);
-}
-static inline size_t import_len(Importer *i) {
-	return (size_t)import_vlq(i);
 }
 
 static const U8 toc_package_indicator[3] = {116, 111, 112};
@@ -253,13 +260,15 @@ static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname
 	return true;
 }
 
+/* needs to handle unresolved AND resolved types! (for fns with const params) */
 static bool export_type(Exporter *ex, Type *type, Location where) {
-	assert(type->flags & TYPE_IS_RESOLVED);
 	if (type->kind == TYPE_BUILTIN) {
 		export_u8(ex, (U8)((int)type->builtin + TYPE_COUNT));
 	} else {	
 		export_u8(ex, (U8)type->kind);
-	} 
+	}
+	assert(sizeof type->flags == 1);
+	export_u8(ex, type->flags);
 	switch (type->kind) {
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
@@ -275,7 +284,12 @@ static bool export_type(Exporter *ex, Type *type, Location where) {
 		break;
 	case TYPE_ARR:
 		/* smaller arrays are more common */
-		export_vlq(ex, type->arr.n);
+		if (type->flags & TYPE_IS_RESOLVED)
+			export_vlq(ex, type->arr.n);
+		else
+			if (!export_expr(ex, type->arr.n_expr))
+				return false;
+		
 		if (!export_type(ex, type->arr.of, where))
 			return false;
 		break;
@@ -286,7 +300,7 @@ static bool export_type(Exporter *ex, Type *type, Location where) {
 				return false;
 		export_bool(ex, type->fn.constness != NULL);
 		/* [implied] if (type->fn.constness) */
-		assert(sizeof(Constness) == 1); /* future-proofing */
+		possibly_static_assert(sizeof(Constness) == 1); /* future-proofing */
 		arr_foreach(type->fn.constness, Constness, c)
 			export_u8(ex, *c);
 		break;
@@ -306,10 +320,18 @@ static bool export_type(Exporter *ex, Type *type, Location where) {
 		export_len(ex, (size_t)struc->export.id);
 	} break;
 	case TYPE_EXPR:
-		assert(0);
-		return false;
+		if (!export_expr(ex, type->expr))
+			return false;
+		break;
 	}
 	return true;
+}
+
+static inline Type *imptr_new_type(Importer *im) {
+	return imptr_malloc(im, sizeof(Type));
+}
+static inline Expression *imptr_new_expr(Importer *im) {
+	return imptr_malloc(im, sizeof(Expression));
 }
 
 static void import_type(Importer *im, Type *type) {
@@ -318,7 +340,44 @@ static void import_type(Importer *im, Type *type) {
 		type->kind = TYPE_BUILTIN;
 		type->builtin = (BuiltinType)(kind - TYPE_COUNT);
 	} else {
-		
+		type->kind = (TypeKind)kind;
+	}
+	int is_resolved = type->flags & TYPE_IS_RESOLVED;
+	type->flags = import_u8(im);
+	switch (type->kind) {
+	case TYPE_VOID:
+	case TYPE_BUILTIN:
+	case TYPE_UNKNOWN:
+		break;
+	case TYPE_PTR:
+		import_type(im, type->ptr = imptr_new_type(im));
+		break;
+	case TYPE_SLICE:
+		import_type(im, type->slice = imptr_new_type(im));
+		break;
+	case TYPE_TUPLE: {
+		size_t ntypes = import_arr(im, &type->tuple);
+		for (size_t i = 0; i < ntypes; ++i) {
+			import_type(im, &type->tuple[i]);
+		}
+	} break;
+	case TYPE_ARR:
+		if (is_resolved)
+			type->arr.n = import_vlq(im);
+		else
+			import_expr(im, type->arr.n_expr = imptr_new_expr(im));
+		import_type(im, type->arr.of = imptr_new_type(im));
+		break;
+	case TYPE_FN: {
+		size_t i, ntypes = import_arr(im, &type->fn.types);
+		for (i = 0; i < ntypes; ++i)
+			import_type(im, &type->fn.types[i]);
+		bool has_constness = import_bool(im);
+		if (has_constness) {
+			for (i = 0; i < ntypes; ++i)
+				type->fn.constness[i] = import_u8(im);
+		} else type->fn.constness = NULL;
+	} break;
 	}
 }
 
@@ -441,19 +500,23 @@ static inline bool export_optional_expr(Exporter *ex, Expression *e) {
 }
 
 static bool export_expr(Exporter *ex, Expression *e) {
-	assert(e->flags & EXPR_FOUND_TYPE);
-	if (!export_type(ex, &e->type, e->where))
-		return false;
+	possibly_static_assert(sizeof e->flags == 1);
+	export_u8(ex, (U8)e->flags);
+	int found_type = e->flags & EXPR_FOUND_TYPE;
+    if (found_type) {
+		if (!export_type(ex, &e->type, e->where))
+			return false;
+	}
 	switch (e->kind) {
 	case EXPR_LITERAL_INT:
 		/* smaller int literals are more common */
 		export_vlq(ex, e->intl);
 		break;
 	case EXPR_LITERAL_FLOAT:
-		if (e->type.builtin == BUILTIN_F32)
-			export_f32(ex, (F32)e->floatl);
-		else
+		if (e->type.flags & TYPE_IS_FLEXIBLE || e->type.builtin == BUILTIN_F64)
 			export_f64(ex, (F64)e->floatl);
+		else
+			export_f32(ex, (F32)e->floatl);
 		break;
 	case EXPR_LITERAL_BOOL:
 		export_bool(ex, e->booll);
@@ -465,8 +528,7 @@ static bool export_expr(Exporter *ex, Expression *e) {
 		fwrite(e->strl.str, 1, e->strl.len, ex->out);
 		break;
 	case EXPR_C:
-		assert(e->c.code->kind == EXPR_VAL);
-		if (!export_val(ex, e->c.code->val, &e->c.code->type, e->where))
+		if (!export_expr(ex, e->c.code))
 			return false;
 		break;
 	case EXPR_IDENT:
@@ -481,17 +543,6 @@ static bool export_expr(Exporter *ex, Expression *e) {
 		export_u8(ex, (U8)e->binary.op);
 		if (!export_expr(ex, e->binary.lhs))
 			return false;
-		if (e->binary.op == BINARY_DOT) {
-			/* rhs may not typed (if it's a string it will be)! */
-			Expression *rhs = e->binary.rhs;
-			bool rhs_found_type = (rhs->flags & EXPR_FOUND_TYPE) != 0;
-			export_bool(ex, rhs_found_type);
-			if (!rhs_found_type) {
-				assert(rhs->kind == EXPR_IDENT);
-				export_ident(ex, rhs->ident);
-				break;
-			}
-		}
 		if (!export_expr(ex, e->binary.rhs))
 			return false;
 		break;
@@ -532,10 +583,20 @@ static bool export_expr(Exporter *ex, Expression *e) {
 		CallExpr *c = &e->call;
 		if (!export_expr(ex, c->fn))
 			return false;
-		export_len(ex, arr_len(c->arg_exprs));
-		arr_foreach(c->arg_exprs, Expression, arg)
-			if (!export_expr(ex, arg))
-				return false;
+		if (found_type) {
+			export_len(ex, arr_len(c->arg_exprs));
+			arr_foreach(c->arg_exprs, Expression, arg)
+				if (!export_expr(ex, arg))
+					return false;
+		} else {
+			export_len(ex, arr_len(c->args));
+			arr_foreach(c->args, Argument, arg) {
+				export_location(ex, arg->where);
+				export_ident(ex, arg->name);
+				if (!export_expr(ex, &arg->val))
+					return false;
+			}
+		}
 	} break;
 	case EXPR_IF: {
 		IfExpr *i = &e->if_;
@@ -553,7 +614,12 @@ static bool export_expr(Exporter *ex, Expression *e) {
 			return false;
 	} break;
 	case EXPR_PKG:
-		export_ident(ex, e->pkg.name_ident);
+		if (found_type) {
+			export_ident(ex, e->pkg.name_ident);
+		} else {
+			if (!export_expr(ex, e->pkg.name_expr))
+				return false;
+		}
 		break;
 	case EXPR_SLICE: {
 		SliceExpr *s = &e->slice;
@@ -570,19 +636,22 @@ static bool export_expr(Exporter *ex, Expression *e) {
 			return false;
 		export_optional_ident(ex, ea->index);
 		export_optional_ident(ex, ea->value);
-		
 		if (ea->flags & EACH_IS_RANGE) {
 			if (!export_expr(ex, ea->range.from))
 				return false;
 			if (!export_optional_expr(ex, ea->range.to))
 				return false;
-			if (!export_optional_val(ex, ea->range.stepval, &ea->type, e->where))
-				return false;
+			if (found_type) {
+				if (!export_optional_val(ex, ea->range.stepval, &ea->type, e->where))
+					return false;
+			} else {
+				if (!export_optional_expr(ex, ea->range.step))
+					return false;
+			}
 		} else {
 			if (!export_expr(ex, ea->of))
 				return false;
 		}
-		
 		if (!export_block(ex, &ea->body))
 			return false;
 	} break;
@@ -594,6 +663,12 @@ static bool export_expr(Exporter *ex, Expression *e) {
 	return true;
 }
 
+static void import_expr(Importer *im, Expression *e) {
+	/* TODO */
+	(void)im,(void)e;
+}
+
+
 enum {
 	  DECL_EXPORT_NONE,
 	  DECL_EXPORT_EXPR,
@@ -602,7 +677,10 @@ enum {
 
 static bool export_decl(Exporter *ex, Declaration *d) {
 	assert(ex->started);
-	if (d->type.kind == TYPE_UNKNOWN) {
+	bool found_type = (d->flags & DECL_FOUND_TYPE) != 0;
+	export_bool(ex, found_type);
+	
+	if (found_type && d->type.kind == TYPE_UNKNOWN) {
 		err_print(d->where, "Can't export declaration of unknown type.");
 		return false;
 	}
@@ -622,8 +700,10 @@ static bool export_decl(Exporter *ex, Declaration *d) {
 		export_ident(ex, *ident);
 	}
 
-	if (!export_type(ex, &d->type, d->where))
-		return false;
+	if (found_type) {
+		if (!export_type(ex, &d->type, d->where))
+			return false;
+	}
 	
 	U8 constness = 0;
 	if (d->flags & DECL_IS_CONST) constness = 1;
@@ -726,8 +806,7 @@ static bool export_struct(Exporter *ex, StructDef *s) {
 }
 
 static void import_struct(Importer *im, StructDef *s) {
-	size_t nfields = import_len(im);
-    imptr_arr_create(im, &s->fields, nfields);
+	size_t nfields = import_arr(im, &s->fields);
 	for (size_t i = 0; i < nfields; ++i) {
 		s->fields[i].name = import_ident(im);
 		import_type(im, &s->fields[i].type);
@@ -803,8 +882,7 @@ static bool import_footer(Importer *im) {
 		}
 	}
 
-	size_t n_structs = import_len(im);
-	imptr_arr_create(im, &im->structs, n_structs);
+	size_t n_structs = import_arr(im, &im->structs);
 	for (i = 0; i < n_structs; ++i) {
 		import_struct(im, &im->structs[i]);
 	}

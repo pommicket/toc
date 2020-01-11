@@ -6,6 +6,9 @@ putf ::= fn(x: float) {
 	 #C("printf(\"%f\\n\", (double)x);
 ");
 };
+
+
+
 point ::= pkg "point";
 main ::= fn() {
 };

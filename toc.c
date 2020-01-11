@@ -27,6 +27,13 @@
 #define inline
 #endif
 
+#if __STDC_VERSION__ >= 201112
+#define possibly_static_assert(cond) static_assert(cond, "Assertion " #cond " failed.")
+#else
+#define possibly_static_assert assert
+#endif
+
+
 #include "types.h"
 
 /* forward declarations for debugging */
