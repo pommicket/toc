@@ -184,7 +184,7 @@ static void exptr_start(Exporter *ex, const char *pkg_name, size_t pkg_name_len)
 	export_u8(ex, toc_package_indicator[2]);
 	export_u32(ex, TOP_FMT_VERSION);
 	assert(ftell(ex->out) == 7L);
-	export_u64(ex, 0); /* placeholder for identifier offset in file */
+	export_u64(ex, 0); /* placeholder for footer offset in file */
 	export_len(ex, pkg_name_len);
 	export_str(ex, pkg_name, pkg_name_len);
 	
@@ -227,7 +227,7 @@ static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname
 				   "The package may be read incorrectly.",
 				   version_written);
 	}
-	U64 ident_offset = import_u64(&i);
+	U64 footer_offset = import_u64(&i);
 	size_t pkg_name_len = import_len(&i);
 	char *pkg_name = import_str(&i, pkg_name_len);
 	p->name = ident_get(parent_idents, pkg_name);
@@ -238,10 +238,7 @@ static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname
 	    err_ctx->str = code;
 	}
 	long decls_offset = ftell(f);
-	if (ident_offset > LONG_MAX) {
-		err_print(where, "File %s is too large.", fname);
-	}
-	fseek(f, (long)ident_offset, SEEK_SET);
+	fseek(f, (long)footer_offset, SEEK_SET);
 	/* read footer */
 	if (!import_footer(&i))
 		return false;
@@ -368,6 +365,7 @@ static void import_type(Importer *im, Type *type) {
 			import_type(im, &type->fn.types[i]);
 		bool has_constness = import_bool(im);
 		if (has_constness) {
+			type->fn.constness = imptr_malloc(im, ntypes * sizeof *type->fn.constness);
 			for (i = 0; i < ntypes; ++i)
 				type->fn.constness[i] = import_u8(im);
 		} else type->fn.constness = NULL;
@@ -394,41 +392,45 @@ static bool export_fn_ptr(Exporter *ex, FnExpr *f, Location where) {
 		}
 		f->export.id = (U32)nexported_fns;
 	}
-	export_len(ex, (size_t)f->export.id);
+	export_vlq(ex, f->export.id);
 	return true;
 }
 
+static FnExpr *import_fn_ptr(Importer *im) {
+	return &im->fns[import_vlq(im) - 1];
+}
+
 static bool export_val(Exporter *ex, Value val, Type *type, Location where);
-static bool export_val_ptr(Exporter *ex, void *val, Type *type, Location where) {
+static bool export_val_ptr(Exporter *ex, void *v, Type *type, Location where) {
 	switch (type->kind) {
 	case TYPE_VOID: break;
 	case TYPE_BUILTIN:
 		switch (type->builtin) {
-		case BUILTIN_I8: export_i8(ex, *(I8 *)val); break;
-		case BUILTIN_U8: export_u8(ex, *(U8 *)val); break;
-		case BUILTIN_I16: export_i16(ex, *(I16 *)val); break;
-		case BUILTIN_U16: export_u16(ex, *(U16 *)val); break;
-		case BUILTIN_I32: export_i32(ex, *(I32 *)val); break;
-		case BUILTIN_U32: export_u32(ex, *(U32 *)val); break;
-		case BUILTIN_I64: export_i64(ex, *(I64 *)val); break;
-		case BUILTIN_U64: export_u64(ex, *(U64 *)val); break;
-		case BUILTIN_F32: export_f32(ex, *(F32 *)val); break;
-		case BUILTIN_F64: export_f64(ex, *(F64 *)val); break;
-		case BUILTIN_BOOL: export_bool(ex, *(bool *)val); break;
-		case BUILTIN_CHAR: export_char(ex, *(char *)val); break;
+		case BUILTIN_I8: export_i8(ex, *(I8 *)v); break;
+		case BUILTIN_U8: export_u8(ex, *(U8 *)v); break;
+		case BUILTIN_I16: export_i16(ex, *(I16 *)v); break;
+		case BUILTIN_U16: export_u16(ex, *(U16 *)v); break;
+		case BUILTIN_I32: export_i32(ex, *(I32 *)v); break;
+		case BUILTIN_U32: export_u32(ex, *(U32 *)v); break;
+		case BUILTIN_I64: export_i64(ex, *(I64 *)v); break;
+		case BUILTIN_U64: export_u64(ex, *(U64 *)v); break;
+		case BUILTIN_F32: export_f32(ex, *(F32 *)v); break;
+		case BUILTIN_F64: export_f64(ex, *(F64 *)v); break;
+		case BUILTIN_BOOL: export_bool(ex, *(bool *)v); break;
+		case BUILTIN_CHAR: export_char(ex, *(char *)v); break;
 		case BUILTIN_TYPE:
-			if (!export_type(ex, *(Type **)val, where))
+			if (!export_type(ex, *(Type **)v, where))
 				return false;
 			break;
 		case BUILTIN_PKG: {
-			Package *pkg = *(Package **)val;
+			Package *pkg = *(Package **)v;
 			export_ident(ex, pkg->name);
 		} break;
 		}
 		break;
 	case TYPE_TUPLE: {
 		size_t n = arr_len(type->tuple);
-		Value *vals = *(Value **)val;
+		Value *vals = *(Value **)v;
 		for (size_t i = 0; i < n; ++i) {
 			if (!export_val(ex, vals[i], &type->tuple[i], where))
 				return false;
@@ -439,7 +441,7 @@ static bool export_val_ptr(Exporter *ex, void *val, Type *type, Location where) 
 		return false;
 	case TYPE_ARR: {
 		size_t item_size = compiler_sizeof(type->arr.of);
-		char *ptr = val;
+		char *ptr = v;
 		for (U64 i = 0; i < type->arr.n; ++i) {
 			if (!export_val_ptr(ex, ptr, type->arr.of, where))
 				return false;
@@ -447,14 +449,14 @@ static bool export_val_ptr(Exporter *ex, void *val, Type *type, Location where) 
 		}
 	} break;
 	case TYPE_STRUCT:
-		eval_struct_find_offsets(type);
+		eval_struct_find_offsets(type->struc);
 		arr_foreach(type->struc->fields, Field, f) {
-			if (!export_val_ptr(ex, (char *)val + f->offset, &f->type, where))
+			if (!export_val_ptr(ex, (char *)v + f->offset, &f->type, where))
 				return false;
 		}
 		break;
 	case TYPE_SLICE: {
-		Slice slice = *(Slice *)val;
+		Slice slice = *(Slice *)v;
 		I64 n = slice.n;
 		size_t item_size = compiler_sizeof(type->slice);
 		export_i64(ex, n);
@@ -466,7 +468,7 @@ static bool export_val_ptr(Exporter *ex, void *val, Type *type, Location where) 
 		}
 	} break;
 	case TYPE_FN:
-		if (!export_fn_ptr(ex, *(FnExpr **)val, where))
+		if (!export_fn_ptr(ex, *(FnExpr **)v, where))
 			return false;
 		break;
 	case TYPE_UNKNOWN:
@@ -477,6 +479,7 @@ static bool export_val_ptr(Exporter *ex, void *val, Type *type, Location where) 
 	return true;
 }
 
+static inline Value import_val(Importer *im, Type *type);
 static void import_val_ptr(Importer *im, void *v, Type *type) {
 	switch (type->kind) {
 	case TYPE_VOID: break;
@@ -502,6 +505,52 @@ static void import_val_ptr(Importer *im, void *v, Type *type) {
 			assert(0);
 			break;
 		}
+		break;
+	case TYPE_TUPLE: {
+		Value **vals = (Value **)v;
+		size_t n = arr_len(type->tuple);
+		*vals = imptr_malloc(im, n * sizeof **vals);
+		for (size_t i = 0; i < n; ++i) {
+			(*vals)[i] = import_val(im, &type->tuple[i]);
+		}
+	} break;
+	case TYPE_ARR: {
+		size_t item_size = compiler_sizeof(type->arr.of);
+		U64 n = type->arr.n;
+		char *ptr = v;
+		for (U64 i = 0; i < n; ++i) {
+			import_val_ptr(im, ptr, type->arr.of);
+			ptr += item_size;
+		}
+	} break;
+	case TYPE_STRUCT: {
+		eval_struct_find_offsets(type->struc);
+		arr_foreach(type->struc->fields, Field, f) {
+			import_val_ptr(im, (char *)v + f->offset, &f->type);
+		}
+	} break;
+	case TYPE_FN:
+		*(FnExpr **)v = import_fn_ptr(im);
+		break;
+	case TYPE_SLICE: {
+		Slice *slice = v;
+		I64 n = slice->n = import_i64(im);
+		size_t item_size = compiler_sizeof(type->slice);
+		if (n <= 0) {
+			slice->data = NULL;
+		} else {
+			char *ptr = slice->data = imptr_malloc(im, (U64)n * item_size);
+			for (I64 i = 0; i < n; ++i) {
+				import_val_ptr(im, ptr, type->slice);
+				ptr += item_size;
+			}
+		}
+	} break;
+	case TYPE_PTR:
+	case TYPE_UNKNOWN:
+	case TYPE_EXPR:
+		assert(0);
+		break;
 	}
 }
 
@@ -702,6 +751,12 @@ static void import_expr(Importer *im, Expression *e) {
 }
 
 
+static void export_ident_name(Exporter *ex, Identifier ident) {
+	if (ident->export_name) return;
+	*(Identifier *)arr_add(&ex->exported_idents) = ident;
+	ident->export_name = true;
+}
+
 static bool export_decl(Exporter *ex, Declaration *d) {
 	assert(ex->started);
 	possibly_static_assert(sizeof d->flags == 2);
@@ -715,11 +770,7 @@ static bool export_decl(Exporter *ex, Declaration *d) {
 	}
 	if (d->flags & DECL_EXPORT) {
 		arr_foreach(d->idents, Identifier, ident) {
-			if (!(*ident)->export_name) {
-				Identifier *iptr = arr_add(&ex->exported_idents);
-				*iptr = *ident;
-				(*ident)->export_name = true;
-			}
+			export_ident_name(ex, *ident);
 		}
 	}
 	
@@ -757,10 +808,13 @@ static void import_decl(Importer *im, Declaration *d) {
 	}
 	if (d->flags & DECL_FOUND_VAL) {
 		d->val = import_val(im, &d->type);
+		printf("TYPE: ");
+		print_type(&d->type);
+		printf("VALUE: ");
 		print_val(d->val, &d->type);
 	} else if (d->flags & DECL_HAS_EXPR) {
+		exit(0);
 	}
-	exit(0);
 }
 
 /* exports a declaration. to be used by other files instead of export_decl. */
@@ -821,10 +875,11 @@ static bool export_fn(Exporter *ex, FnExpr *f) {
 static bool export_struct(Exporter *ex, StructDef *s) {
 	export_ident(ex, s->name);
 	if (s->name)
-		*(Identifier *)arr_add(&ex->exported_idents) = s->name;
+		export_ident_name(ex, s->name);
 	export_len(ex, arr_len(s->fields));
 	arr_foreach(s->fields, Field, f) {
 		export_ident(ex, f->name);
+		export_ident_name(ex, f->name);
 		if (!export_type(ex, &f->type, s->where))
 			return false;
 	}
@@ -844,25 +899,15 @@ static void import_struct(Importer *im, StructDef *s) {
 static bool exptr_finish(Exporter *ex) {
 	export_u8(ex, 0); /* no more declarations */
 	
-	long ident_offset = ftell(ex->out);
+	long footer_offset = ftell(ex->out);
 
 	fseek(ex->out, 7L, SEEK_SET);
-	export_u64(ex, (U64)ident_offset);
+	export_u64(ex, (U64)footer_offset);
 	fseek(ex->out, 0L, SEEK_END);
 
-	/* export total number of identifiers */
-	long n_idents_offset = ftell(ex->out);
-	export_u64(ex, 0); /* leave space for # of identifiers */
-	
-	/* export number of identifiers *whose names matter* */
-	export_len(ex, arr_len(ex->exported_idents));
-	arr_foreach(ex->exported_idents, Identifier, ident) {
-		Identifier i = *ident;
-		assert(i->export_name);
-		export_vlq(ex, i->export_id);
-		export_len(ex, ident_len(i));
-		fprint_ident(ex->out, i);
-	}
+	/* position in file of where the position in file of identifier info is */
+	long ident_info_offset_offset = ftell(ex->out);
+	export_u64(ex, 0); /* identifier info offset */
 	
 	export_len(ex, arr_len(ex->exported_structs));
 	typedef StructDef *StructDefPtr;
@@ -880,11 +925,24 @@ static bool exptr_finish(Exporter *ex) {
 	}
 	arr_clear(&ex->exported_fns);
 
-	arr_clear(&ex->exported_idents);
-
-	fseek(ex->out, n_idents_offset, SEEK_SET);
+	long ident_info_offset = ftell(ex->out);
+	/* export number of identifiers *whose names matter* */
+	fseek(ex->out, ident_info_offset, SEEK_SET);
 	export_u64(ex, ex->ident_id);
+	export_len(ex, arr_len(ex->exported_idents));
+	arr_foreach(ex->exported_idents, Identifier, ident) {
+		Identifier i = *ident;
+		assert(i->export_name);
+		export_vlq(ex, i->export_id);
+		export_len(ex, ident_len(i));
+		fprint_ident(ex->out, i);
+	}
 
+	fseek(ex->out, ident_info_offset_offset, SEEK_SET);
+	export_u64(ex, (U64)ident_info_offset);
+	
+	arr_clear(&ex->exported_idents);
+	
 	if (ferror(ex->out)) {
 		warn_print(LOCATION_NONE, "An error occured while writing the package output. It may be incorrect.");
 	}
@@ -894,7 +952,12 @@ static bool exptr_finish(Exporter *ex) {
 
 static bool import_footer(Importer *im) {
 	size_t i;
+	U64 ident_info_offset = import_u64(im);
+	long main_footer_offset = ftell(im->in);
+	fseek(im->in, (long)ident_info_offset, SEEK_SET);
+	
 	im->max_ident_id = import_u64(im);
+
 	
 	im->ident_map = err_calloc(im->max_ident_id + 1, sizeof *im->ident_map);
 	size_t n_named_idents = import_len(im);
@@ -914,6 +977,8 @@ static bool import_footer(Importer *im) {
 		}
 	}
 
+	fseek(im->in, main_footer_offset, SEEK_SET);
+
 	size_t n_structs = import_arr(im, &im->structs);
 #ifdef TOC_DEBUG
 	/* for debugging: so that struct names show up as "anonymous struct" if they haven't been imported yet */
@@ -921,6 +986,11 @@ static bool import_footer(Importer *im) {
 #endif
 	for (i = 0; i < n_structs; ++i) {
 		import_struct(im, &im->structs[i]);
+	}
+
+	size_t n_fns = import_arr(im, &im->fns);
+	for (i = 0; i < n_fns; ++i) {
+		/* TODO */
 	}
 	
 	if (ferror(im->in)) {

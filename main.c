@@ -121,7 +121,7 @@ int main(int argc, char **argv) {
 	tr.exptr = &exptr;
 	
 	if (!block_enter(NULL, f.stmts, SCOPE_CHECK_REDECL)) /* enter global scope */
-		return false;
+		return EXIT_FAILURE;
 
 	if (!types_file(&tr, &f)) {
 		/* TODO(eventually): fix this if the error occured while exporting something */

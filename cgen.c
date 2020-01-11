@@ -1985,7 +1985,7 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 			   "#define true ((bool)1)\n"
 			   "static slice_ mkslice_(void *data, i64 n) { slice_ ret; ret.data = data; ret.n = n; return ret; }\n"
 			   "static void free_(void *data) { extern void free(void *data); free(data); }\n" /* don't introduce free to global namespace */
-			   "static void *e__calloc(size_t n, size_t sz) { extern void *calloc(size_t n, size_t size); extern void abort(void); void *ret = calloc(n, sz); if (!ret) { fprintf(stderr, \"Out of memory.\\n\"); abort(); } return ret; }\n\n\n");
+			   "static void *e__calloc(size_t n, size_t sz) { extern void *calloc(size_t n, size_t size); extern void abort(void); void *ret = calloc(n, sz); if (n && sz && !ret) { fprintf(stderr, \"Out of memory.\\n\"); abort(); } return ret; }\n\n\n");
 
 	if (!cgen_sdecls_file(g, f))
 		return false;

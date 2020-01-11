@@ -1,5 +1,15 @@
 pkg "point";
 
+bar ::= fn() []int {
+	x:[]int = new(int,20);
+	each p, i := &x {
+		 *p = i; 
+	}
+	x
+};
+
+
+#export x ::= bar();
 
 #export Point ::= struct {
 	x, y: int;

@@ -811,6 +811,7 @@ typedef struct Importer {
 	size_t max_ident_id;
 	Location import_location;
 	StructDef *structs;
+	FnExpr *fns;
 } Importer;
 
 typedef struct CGenerator {

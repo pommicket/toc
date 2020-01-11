@@ -59,12 +59,11 @@ static size_t compiler_sizeof_builtin(BuiltinType b) {
 
 static size_t compiler_alignof(Type *t);
 /* finds offsets and size */
-static void eval_struct_find_offsets(Type *t) {
-	assert(t->kind == TYPE_STRUCT);
-	if (!(t->struc->flags & STRUCT_DEF_FOUND_OFFSETS)) {
+static void eval_struct_find_offsets(StructDef *s) {
+	if (!(s->flags & STRUCT_DEF_FOUND_OFFSETS)) {
 		size_t bytes = 0;
 		size_t total_align = 0;
-		arr_foreach(t->struc->fields, Field, f) {
+		arr_foreach(s->fields, Field, f) {
 			size_t falign = compiler_alignof(&f->type);
 			if (falign > total_align)
 				total_align = falign;
@@ -76,9 +75,9 @@ static void eval_struct_find_offsets(Type *t) {
 			bytes += compiler_sizeof(&f->type);
 		}
 		bytes += ((total_align - bytes) % total_align + total_align) % total_align; /* = -bytes mod align */
-		t->struc->size = bytes;
-		t->struc->align = total_align;
-		t->struc->flags |= STRUCT_DEF_FOUND_OFFSETS;
+		s->size = bytes;
+		s->align = total_align;
+		s->flags |= STRUCT_DEF_FOUND_OFFSETS;
 	}
 }
 
@@ -105,7 +104,7 @@ static size_t compiler_alignof(Type *t) {
 			return sizeof(size_t);
 	case TYPE_STRUCT: {
 		/* assume the align of a struct is (at most) the greatest align out of its children's */
-		eval_struct_find_offsets(t);
+		eval_struct_find_offsets(t->struc);
 		return t->struc->align;
 	}
 	case TYPE_UNKNOWN:
@@ -134,7 +133,7 @@ static size_t compiler_sizeof(Type *t) {
 	case TYPE_SLICE:
 		return sizeof v.slice;
 	case TYPE_STRUCT: {
-		eval_struct_find_offsets(t);
+		eval_struct_find_offsets(t->struc);
 		return t->struc->size;
 	} break;
 	case TYPE_VOID:
@@ -725,7 +724,8 @@ static void *eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr) {
 	if (is_ptr) {
 		struct_type = struct_type->ptr;
 	}
-	eval_struct_find_offsets(struct_type);
+	assert(struct_type->kind == TYPE_STRUCT);
+	eval_struct_find_offsets(struct_type->struc);
 			
 	Value struc;
 	if (!eval_expr(ev, dot_expr->binary.lhs, &struc))
