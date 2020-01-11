@@ -153,32 +153,32 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 	}
 
 
-#define cgen_recurse_subtypes(f, g, type, extra)	\
+#define cgen_recurse_subtypes(f, g, type)			\
 	switch (type->kind) {							\
 	case TYPE_STRUCT:								\
 		/* don't descend into fields */				\
 		break;										\
 	case TYPE_FN:									\
 		arr_foreach(type->fn.types, Type, sub) {	\
-			if (!f(g, sub, extra))					\
+			if (!f(g, sub))							\
 				return false;						\
 		}											\
 		break;										\
 	case TYPE_TUPLE:								\
 		arr_foreach(type->tuple, Type, sub)			\
-			if (!f(g, sub, extra))					\
+			if (!f(g, sub))							\
 				return false;						\
 		break;										\
 	case TYPE_ARR:									\
-		if (!f(g, type->arr.of, extra))				\
+		if (!f(g, type->arr.of))					\
 			return false;							\
 		break;										\
 	case TYPE_SLICE:								\
-		if (!f(g, type->slice, extra))				\
+		if (!f(g, type->slice))						\
 			return false;							\
 		break;										\
 	case TYPE_PTR:									\
-		if (!f(g, type->ptr, extra))				\
+		if (!f(g, type->ptr))						\
 			return false;							\
 		break;										\
 	case TYPE_VOID:									\
@@ -356,8 +356,8 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
 		return false;
 	case TYPE_STRUCT:
 		cgen_write(g, "struct ");
-		if (t->struc->c.name) {
-			cgen_ident(g, t->struc->c.name);
+		if (t->struc->name) {
+			cgen_ident(g, t->struc->name);
 		} else if (t->struc->c.id) {
 			cgen_ident_id(g, t->struc->c.id);
 		} else {

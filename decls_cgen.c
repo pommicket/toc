@@ -7,16 +7,16 @@ static bool cgen_decls_stmt(CGenerator *g, Statement *s);
 static bool cgen_decls_block(CGenerator *g, Block *b);
 static bool cgen_decls_decl(CGenerator *g, Declaration *d);
 
-static bool cgen_decls_type(CGenerator *g, Type *type, Location where) {
+static bool cgen_decls_type(CGenerator *g, Type *type) {
 	if (!(type->flags & TYPE_IS_RESOLVED)) /* non-instance constant fn parameter type */
 		return true;
 	if (type->kind == TYPE_STRUCT) {
 		StructDef *sdef = type->struc;
-		if (!(sdef->flags & STRUCT_DEF_CGENERATED)) {
+		if (!(sdef->flags & STRUCT_DEF_CGEN_DEFINED)) {
 			/* generate struct definition */
 			cgen_write(g, "struct ");
-			if (sdef->c.name) {
-				cgen_ident(g, sdef->c.name);
+			if (sdef->name) {
+				cgen_ident(g, sdef->name);
 			} else {
 				assert(sdef->c.id);
 				cgen_ident_id(g, sdef->c.id);
@@ -25,20 +25,20 @@ static bool cgen_decls_type(CGenerator *g, Type *type, Location where) {
 			cgen_nl(g);
 			++g->indent_lvl;
 			arr_foreach(sdef->fields, Field, f) {
-				if (!cgen_type_pre(g, &f->type, where)) return false;
+				if (!cgen_type_pre(g, &f->type, sdef->where)) return false;
 				cgen_write(g, " ");
 				cgen_ident(g, f->name);
-				if (!cgen_type_post(g, &f->type, where)) return false;
+				if (!cgen_type_post(g, &f->type, sdef->where)) return false;
 				cgen_write(g, ";");
 				cgen_nl(g);
 			}
 			--g->indent_lvl;
 			cgen_write(g, "};");
 			cgen_nl(g);
-			sdef->flags |= STRUCT_DEF_CGENERATED;
+			sdef->flags |= STRUCT_DEF_CGEN_DEFINED;
 		}
 	}
-	cgen_recurse_subtypes(cgen_decls_type, g, type, where);
+	cgen_recurse_subtypes(cgen_decls_type, g, type);
 	return true;
 }
 
@@ -104,11 +104,11 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 	} break;
 	case EXPR_TYPE: {
 		Type *type = &e->typeval;
-		if (!cgen_decls_type(g, type, e->where))
+		if (!cgen_decls_type(g, type))
 			return false;
 	} break;
 	case EXPR_CAST:
-		if (!cgen_decls_type(g, &e->cast.type, e->where))
+		if (!cgen_decls_type(g, &e->cast.type))
 			return false;
 	default:
 		break;
@@ -131,7 +131,7 @@ static bool cgen_decls_block(CGenerator *g, Block *b) {
 }
 
 static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
-	if (!cgen_decls_type(g, &d->type, d->where))
+	if (!cgen_decls_type(g, &d->type))
 		return false;
 	if (cgen_fn_is_direct(g, d)) {
 		d->expr.fn->c.name = d->idents[0];

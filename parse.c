@@ -570,8 +570,8 @@ static bool parse_type(Parser *p, Type *type) {
 			type->kind = TYPE_STRUCT;
 			StructDef *struc = type->struc = parser_malloc(p, sizeof *type->struc);
 			struc->flags = 0;
+			struc->name = NULL;
 			/* help cgen out */
-			struc->c.name = NULL;
 			struc->c.id = 0;
 			struc->fields = NULL;
 			struc->export.id = 0;
@@ -1879,7 +1879,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 		tokr_err(t, "You must have an expression at the end of this constant declaration.");
 		goto ret_false;
 	}
-
+	
 	d->where.end = t->token;
 	switch (ends_with) {
 	case DECL_END_RPAREN_COMMA:

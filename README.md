@@ -80,8 +80,6 @@ Here are the major versions of `toc`.
 <tr><th>Version</th><th>Description</th><th>Date</th></tr>
 <tr><td>0.0</td><td>Initial version.</td><td>2019 Dec 6</td></tr>
 <tr><td>0.1</td><td>Constant parameter inference.</td><td>2019 Dec 15</td></tr>
-<tr><td>0.1.1</td><td>Better constant parameter inference.</td><td>2019 Dec 16</td></tr>
-<tr><td>0.1.2</td><td>Minor bug fixes</td><td>2020 Jan 2</td></tr>
 </table>
 
 ---

@@ -2098,6 +2098,13 @@ static bool types_block(Typer *tr, Block *b) {
 static bool types_decl(Typer *tr, Declaration *d) {
 	bool success = true;
 	if (d->flags & DECL_FOUND_TYPE) return true;
+
+	if ((d->flags & DECL_HAS_EXPR)
+		&& d->expr.kind == EXPR_TYPE
+		&& d->expr.typeval.kind == TYPE_STRUCT) {
+		d->expr.typeval.struc->name = d->idents[0];
+	}
+	
 	if (d->flags & DECL_INFER) {
 		d->type.kind = TYPE_UNKNOWN;
 		d->type.flags = 0;
@@ -2191,6 +2198,8 @@ static bool types_decl(Typer *tr, Declaration *d) {
 			}
 		}
 	}
+
+	
  ret:
 	/* pretend we found the type even if we didn't to prevent too many errors */
 	d->flags |= DECL_FOUND_TYPE;

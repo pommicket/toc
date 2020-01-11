@@ -390,11 +390,6 @@ typedef struct FnType {
 } FnType;
 
 enum {
-	  STRUCT_DEF_FOUND_OFFSETS = 0x01,
-	  STRUCT_DEF_CGENERATED = 0x02,
-};
-
-enum {
 	  TYPE_IS_FLEXIBLE = 0x01,
 	  TYPE_IS_RESOLVED = 0x02,
 };
@@ -430,14 +425,21 @@ typedef struct Field {
 	size_t offset; /* offset during compile time */
 } Field;
 
+enum {
+	  STRUCT_DEF_FOUND_OFFSETS = 0x01,
+	  STRUCT_DEF_CGEN_DECLARED = 0x02,
+	  STRUCT_DEF_CGEN_DEFINED = 0x04
+};
+
 typedef struct StructDef {
 	Field *fields;
 	Location where;
-	U16 flags;
+	U8 flags;
 	size_t size; /* size of this struct during compile time */
 	size_t align;
+	Identifier name;
 	struct {
-		Identifier name;
+		/* if name is NULL, use this */
 		IdentID id;
 	} c;
 	struct {

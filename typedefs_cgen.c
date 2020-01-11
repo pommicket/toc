@@ -9,20 +9,19 @@ static bool typedefs_expr(CGenerator *g, Expression *e);
 
 /* i is the name for this type, NULL if not available */
 /* ALWAYS RETURNS TRUE. it just returns a bool for cgen_recurse_into_type to work */
-static bool typedefs_type(CGenerator *g, Type *type, Identifier i) {
+static bool typedefs_type(CGenerator *g, Type *type) {
 	if (!(type->flags & TYPE_IS_RESOLVED)) /* non-instance constant fn parameter type */
 		return true;
 	if (type->kind == TYPE_STRUCT) {
 		StructDef *sdef = type->struc;
 		/* we'll actually define the struct later; here we can just declare it */
 	
-		if (sdef->c.id || sdef->c.name) {
+		if (sdef->flags & STRUCT_DEF_CGEN_DECLARED) {
 			/* we've already done this */
 		} else {
 			cgen_write(g, "struct ");
-			if (i) {
-				cgen_ident(g, i);
-				sdef->c.name = i;
+			if (sdef->name) {
+				cgen_ident(g, sdef->name);
 			} else {
 				IdentID id = ++g->ident_counter;
 				cgen_ident_id(g, id);
@@ -30,9 +29,10 @@ static bool typedefs_type(CGenerator *g, Type *type, Identifier i) {
 			}
 			cgen_write(g, ";");
 			cgen_nl(g);
+			sdef->flags |= STRUCT_DEF_CGEN_DECLARED;
 		}
 	}
-	cgen_recurse_subtypes(typedefs_type, g, type, NULL);
+	cgen_recurse_subtypes(typedefs_type, g, type);
 	return true;
 }
 
@@ -52,30 +52,22 @@ static bool typedefs_block(CGenerator *g, Block *b) {
 static bool typedefs_expr(CGenerator *g, Expression *e) {
 	cgen_recurse_subexprs(g, e, typedefs_expr, typedefs_block, typedefs_decl);
 	if (e->kind == EXPR_CAST) {
-		typedefs_type(g, &e->cast.type, NULL);
+		typedefs_type(g, &e->cast.type);
 	}
 	if (e->kind == EXPR_FN) {
 		/* needs to go before decls_cgen.c... */
 		e->fn->c.id = ++g->ident_counter;
 	}
-	if (e->kind == EXPR_TYPE && e->typeval.kind == TYPE_STRUCT) {
-		StructDef *sdef = e->typeval.struc;
-		if (sdef->c.id || sdef->c.name) {
-			/* we've already done this */
-		} else {
-			cgen_write(g, "struct ");
-			IdentID id = ++g->ident_counter;
-			cgen_ident_id(g, id);
-			sdef->c.id = id;
-			cgen_write(g, ";");
-		}
+	if (e->kind == EXPR_TYPE) {
+		if (!typedefs_type(g, &e->typeval))
+			return false;
 	}
 	return true;
 
 }
 
 static bool typedefs_decl(CGenerator *g, Declaration *d) {
-	typedefs_type(g, &d->type, NULL);
+	typedefs_type(g, &d->type);
 	if (cgen_fn_is_direct(g, d)) {
 		d->expr.fn->c.name = d->idents[0];
 	}
@@ -85,7 +77,8 @@ static bool typedefs_decl(CGenerator *g, Declaration *d) {
 		Value *val = decl_val_at_index(d, idx);
 		if (type_is_builtin(type, BUILTIN_TYPE)) {
 			/* generate typedef */
-			typedefs_type(g, val->type, i);
+			if (!typedefs_type(g, val->type))
+				return false;
 			
 			if (val->type->kind != TYPE_STRUCT) {
 				IdentID id = 0;
