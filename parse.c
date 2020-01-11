@@ -1286,16 +1286,24 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 
 		if (paren_level > 0) {
 			t->token = start;
+			while (!token_is_kw(t->token, KW_LPAREN))
+				++t->token;
+			
 			tokr_err(t, "Too many opening parentheses (.");
 			return false;
 		}
 		if (brace_level > 0) {
 			t->token = start;
+			while (!token_is_kw(t->token, KW_LBRACE))
+				++t->token;
+			
 			tokr_err(t, "Too many opening braces {.");
 			return false;
 		}
 		if (square_level > 0) {
 			t->token = start;
+			while (!token_is_kw(t->token, KW_LSQUARE))
+				++t->token;
 			tokr_err(t, "Too many opening square brackets [.");
 			return false;
 		}

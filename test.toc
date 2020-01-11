@@ -13,16 +13,7 @@ putf ::= fn(x: float) {
 
 
 main ::= fn() {
-	 s ::= struct { x,y,z:int; f:f32; };
-	 puti(#alignof(s));
-	 puti(#sizeof(s));
-	 
-};
-/*
-something's wrong  (should be too few opening parentheses!)
-main ::= fn() {
 	 puti(#alignof(struct { x,y,z:int; f:f64; });
 	 puti(#sizeof(struct { x,y,z:int; f:f64; });
 	 
 };
-*/
