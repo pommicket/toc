@@ -30,12 +30,9 @@ static void *block_arr_add(BlockArr *arr) {
 		block->n = 1;
 		size_t bytes = arr->item_sz << arr->lg_block_sz;
 		block->data = err_malloc(bytes);
-		block->last = block->data;
 		return block->data;
 	} else {
-		last_block->last = (char*)last_block->last + arr->item_sz;
-		++last_block->n;
-		return last_block->last;
+		return (char *)last_block->data + arr->item_sz * (last_block->n++);
 	}
 }
 

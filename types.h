@@ -105,7 +105,6 @@ typedef struct Allocator {
 typedef struct ArrBlock {
 	void *data;
 	size_t n; /* number of things in this block so far */
-	void *last; /* last one of them */
 } ArrBlock;
 
 typedef struct BlockArr {
@@ -170,33 +169,23 @@ typedef struct IdentDecl {
 	U16 flags;
 } IdentDecl;
 
-/* 
-The way you search an identifier in a tree is:
-root.children[low part of 1st char].children[high part of 1st char]
-.children[low part of 2nd char]...
-
-*/
-
-#define TREE_NCHILDREN 16
-typedef struct IdentTree {
-	/* zero value is an empty trie */
-	uint16_t depth;
-	unsigned char index_in_parent; /* index of this in .parent.children */
+typedef struct IdentSlot {
 	bool export_name; /* is this identifier's name important? */
 	bool anonymous; /* is this identifier not part of a tree? */
+	char *text; /* actual name of the identifier */
+	size_t len; /* length of name */
 	U64 export_id; /* 0 if there's no exported identifier here, otherwise unique positive integer associated with this identifier */
 	struct Package *pkg; /* NULL if this is not associated with a package */
-	struct IdentTree *parent;
-	struct IdentTree *children[TREE_NCHILDREN];
 	IdentDecl *decls; /* array of declarations of this identifier */
-} IdentTree;
+} IdentSlot;
 
-typedef IdentTree *Identifier;
+typedef IdentSlot *Identifier;
 
+typedef IdentSlot *IdentSlotPtr;
 typedef struct Identifiers {
-	BlockArr trees;
-	IdentTree *root;
+    IdentSlot **slots;
 	U64 nidents;
+	U32 rseed;
 } Identifiers;
 
 typedef enum {

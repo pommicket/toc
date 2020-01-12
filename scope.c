@@ -42,7 +42,7 @@ static void remove_ident_decls(Block *b, Declaration *d) {
 	U64 i = 0;
 	bool is_tuple = d->type.kind == TYPE_TUPLE;
 	arr_foreach(d->idents, Identifier, ident) {
-		IdentTree *id_info = *ident;
+		IdentSlot *id_info = *ident;
 		IdentDecl **decls = &id_info->decls;
 		IdentDecl *last_decl = arr_last(*decls);
 		if (last_decl && last_decl->scope == b) {

@@ -1133,7 +1133,7 @@ static bool exptr_finish(Exporter *ex) {
 		Identifier i = *ident;
 		assert(i->export_name);
 		export_vlq(ex, i->export_id);
-		export_len(ex, ident_len(i));
+		export_len(ex, i->len);
 		fprint_ident(ex->out, i);
 	}
 
@@ -1163,12 +1163,10 @@ static bool import_footer(Importer *im) {
 	for (i = 0; i < n_named_idents; ++i) {
 		U64 id = import_vlq(im);
 		size_t name_len = import_vlq(im);
-		char *name = err_malloc(name_len+1);
+		char *name = imptr_malloc(im, name_len+1);
 		name[name_len] = 0;
 		fread(name, 1, name_len, im->in);
-		char *copy = name; /* don't change the value of name */
-		im->ident_map[id] = ident_insert(&im->pkg->idents, &copy);
-		free(name);
+		im->ident_map[id] = ident_insert(&im->pkg->idents, &name);
 	}
 	for (i = 1; i <= im->max_ident_id; ++i) {
 		if (!im->ident_map[i]) {
