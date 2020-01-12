@@ -762,6 +762,12 @@ typedef struct Evaluator {
 	bool enabled;
 } Evaluator;
 
+typedef struct Package {
+	Identifier name;
+	Identifiers idents;
+	Statement *stmts;
+} Package;
+
 typedef struct Typer {
 	Allocator *allocr;
 	Evaluator *evalr;
@@ -776,12 +782,8 @@ typedef struct Typer {
 	ErrCtx *err_ctx;
 	/* for checking for problematic struct circular dependencies */
 	bool *is_reference_stack;
+	Package **pkgs; /* all packages which have been imported */
 } Typer;
-
-typedef struct Package {
-	Identifier name;
-	Identifiers idents;
-} Package;
 
 typedef struct Exporter {
 	FILE *out; /* .top (toc package) to output to */

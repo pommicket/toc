@@ -214,8 +214,10 @@ static IdentDecl *ident_decl(Identifier i) {
 }
 
 static void idents_free(Identifiers *ids) {
-	arr_foreach(ids->slots, IdentSlotPtr, slot) {
-		free(*slot);
+	arr_foreach(ids->slots, IdentSlotPtr, slotp) {
+		IdentSlot *slot = *slotp;
+		if (slot) arr_clear(&slot->decls);
+		free(slot);
 	}
 	arr_clear(&ids->slots);
 }

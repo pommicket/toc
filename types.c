@@ -986,7 +986,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		e->pkg.name_ident = name_ident;
 		if (!name_ident->pkg) {
 			char *filename = typer_malloc(tr, name_str_len + 5);
-			Package *pkg = name_ident->pkg = allocr_calloc(tr->allocr, 1, sizeof *pkg);
+			Package *pkg = name_ident->pkg = err_calloc(1, sizeof *pkg);
 			memcpy(filename, name_str.data, name_str_len);
 			strcpy(filename + name_str.n, ".top");
 			/* TODO: library paths */
@@ -999,6 +999,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			if (!import_pkg(tr->allocr, pkg, fp, filename, tr->idents, tr->err_ctx, e->where)) {
 				return false;
 			}
+			*(Package **)arr_add(&tr->pkgs) = pkg;
 			fclose(fp);
 		}
 	} break;
@@ -2288,6 +2289,7 @@ static bool types_stmt(Typer *tr, Statement *s) {
 static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *allocr, Identifiers *idents) {
 	tr->block = NULL;
 	tr->blocks = NULL;
+	tr->pkgs = NULL;
 	tr->fn = NULL;
 	tr->evalr = ev;
 	tr->err_ctx = err_ctx;
@@ -2352,3 +2354,11 @@ static bool types_file(Typer *tr, ParsedFile *f) {
 	return ret;
 }
 
+static void typer_free(Typer *tr) {
+	typedef Package *PackagePtr;
+	arr_foreach(tr->pkgs, PackagePtr, pkg) {
+		package_free(*pkg);
+		free(*pkg);
+	}
+	arr_clear(&tr->pkgs);
+}

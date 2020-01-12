@@ -246,16 +246,15 @@ static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname
 		return false;
 	fseek(f, decls_offset, SEEK_SET);
 	/* read declarations */
-	Statement *stmts = NULL;
+	p->stmts = NULL;
 	while (import_u8(&i)) {
-		Statement *s = arr_add(&stmts);
+		Statement *s = arr_add(&p->stmts);
 		s->kind = STMT_DECL;
 		import_decl(&i, &s->decl);
 	}
 
 	free(i.ident_map);
-	/* TOOD: LEAK! exit at some point */
-	if (!block_enter(NULL, stmts, 0))
+	if (!block_enter(NULL, p->stmts, 0))
 		return false;
 	
 	return true;
@@ -1194,4 +1193,9 @@ static bool import_footer(Importer *im) {
 	}
 	
 	return true;
+}
+
+static void package_free(Package *pkg) {
+	idents_free(&pkg->idents);
+	arr_clear(&pkg->stmts);
 }

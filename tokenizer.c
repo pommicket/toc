@@ -217,7 +217,7 @@ until everything is done
 */
 static void tokr_create(Tokenizer *t, Identifiers *idents, ErrCtx *err_ctx, Allocator *allocr) {
 	t->tokens = NULL;
-	arr_resv(&t->tokens, 256);
+	arr_resva(&t->tokens, 256, allocr);
 	t->allocr = allocr;
 	t->idents = idents;
 	t->err_ctx = err_ctx;
