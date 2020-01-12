@@ -9,7 +9,11 @@ static Location const LOCATION_NONE = {0};
 /* for debugging */
 static void fprint_location(FILE *out, Location location) {
 	if (!location.start) {
-		fprintf(out, "No location available.");
+		if (location.simple_location) {
+			fprintf(out, "Line %lu of %s\n", (unsigned long)location.simple_location->line, location.simple_location->ctx->filename);
+		} else {
+			fprintf(out, "No location available.");
+		}
 		return;
 	}
 	/* TODO: show end */

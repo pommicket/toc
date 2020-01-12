@@ -736,7 +736,7 @@ static void *eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr) {
 	} else {
 		struc_data = struc.struc;
 	}
-	return (char *)struc_data + dot_expr->binary.field->offset;
+	return (char *)struc_data + dot_expr->binary.dot.field->offset;
 }
 
 static bool eval_address_of(Evaluator *ev, Expression *e, void **ptr) {
@@ -843,7 +843,7 @@ static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 		case BINARY_DOT: {
 			void *ptr = eval_ptr_to_struct_field(ev, set);
 			if (!ptr) return false;
-			eval_deref_set(ptr, to, &set->binary.field->type);
+			eval_deref_set(ptr, to, &set->binary.dot.field->type);
 		} break;
 		default: assert(0); break;
 		}
@@ -1019,6 +1019,51 @@ static bool val_is_nonnegative(Value *v, Type *t) {
 	return val_to_i64(v, t->builtin) >= 0;
 }
 
+static bool eval_ident(Evaluator *ev, Identifier ident, Value *v, Location where) {
+	IdentDecl *idecl = ident_decl(ident);
+	if (!idecl) {
+		char *s = ident_to_str(ident);
+		err_print(where, "Undeclared identifier: %s.", s);
+		free(s);
+		return false;
+	}
+	bool is_decl = idecl->kind == IDECL_DECL;
+	Declaration *d = NULL;
+	if (is_decl) {
+		d = idecl->decl;
+		
+		if ((d->flags & DECL_FOUND_VAL) && type_is_builtin(&d->type, BUILTIN_TYPE) && d->val.type->kind == TYPE_STRUCT) {
+			v->type = allocr_malloc(ev->allocr, sizeof *v->type);
+			v->type->flags = TYPE_IS_RESOLVED;
+			v->type->kind = TYPE_STRUCT;
+			v->type->struc = d->val.type->struc;
+			return true;
+		} else {
+			if (!types_decl(ev->typer, d)) return false;
+			assert(d->type.flags & TYPE_IS_RESOLVED);
+		}
+	}
+	if (idecl->flags & IDECL_HAS_VAL) {
+		*v = idecl->val;
+	} else if (is_decl && (d->flags & DECL_IS_CONST)) {
+		if (!(d->flags & DECL_FOUND_VAL)) {
+			assert(d->flags & DECL_HAS_EXPR);
+			if (!eval_expr(ev, &d->expr, &d->val)) return false;
+			d->flags |= DECL_FOUND_VAL;
+		}
+		int index = ident_index_in_decl(ident, d);
+		assert(index != -1);
+		*v = *decl_val_at_index(d, index); 
+	} else {
+		char *s = ident_to_str(ident);
+			
+		err_print(where, "Cannot evaluate non-constant '%s' at compile time.", s);
+		free(s);
+		return false;
+	}
+	return true;
+}
+
 static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	
 #define eval_unary_op_one(low, up, op)			\
@@ -1109,6 +1154,11 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (!eval_expr(ev, rhs_expr, &rhs)) return false;
 		switch (e->binary.op) {
 		case BINARY_DOT: {
+			if (type_is_builtin(&lhs_expr->type, BUILTIN_PKG)) {
+				if (!eval_ident(ev, e->binary.dot.pkg_ident, v, rhs_expr->where))
+					return false;
+				break;
+			}
 			void *ptr = eval_ptr_to_struct_field(ev, e);
 			if (!ptr) return false;
 			eval_deref(v, ptr, &e->type);
@@ -1332,48 +1382,10 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	case EXPR_FN:
 		v->fn = e->fn;
 		break;
-	case EXPR_IDENT: {
-		IdentDecl *idecl = ident_decl(e->ident);
-		if (!idecl) {
-			char *s = ident_to_str(e->ident);
-			err_print(e->where, "Undeclared identifier: %s.", s);
-			free(s);
+	case EXPR_IDENT:
+		if (!eval_ident(ev, e->ident, v, e->where))
 			return false;
-		}
-		bool is_decl = idecl->kind == IDECL_DECL;
-		Declaration *d = NULL;
-		if (is_decl) {
-			d = idecl->decl;
-			if ((d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_TYPE && d->expr.typeval.kind == TYPE_STRUCT) {
-				v->type = allocr_malloc(ev->allocr, sizeof *v->type);
-				v->type->flags = TYPE_IS_RESOLVED;
-				v->type->kind = TYPE_STRUCT;
-				v->type->struc = d->expr.typeval.struc;
-				break;
-			} else {
-				if (!types_decl(ev->typer, d)) return false;
-				assert(d->type.flags & TYPE_IS_RESOLVED);
-			}
-		}
-		if (idecl->flags & IDECL_HAS_VAL) {
-			*v = idecl->val;
-		} else if (is_decl && (d->flags & DECL_IS_CONST)) {
-			if (!(d->flags & DECL_FOUND_VAL)) {
-				assert(d->flags & DECL_HAS_EXPR);
-				if (!eval_expr(ev, &d->expr, &d->val)) return false;
-				d->flags |= DECL_FOUND_VAL;
-			}
-			int index = ident_index_in_decl(e->ident, d);
-			assert(index != -1);
-			*v = *decl_val_at_index(d, index); 
-		} else {
-			char *s = ident_to_str(e->ident);
-			
-			err_print(e->where, "Cannot evaluate non-constant '%s' at compile time.", s);
-			free(s);
-			return false;
-		}
-	} break;
+		break;
 	case EXPR_TUPLE: {
 		size_t i, n = arr_len(e->tuple);
 		v->tuple = err_malloc(n * sizeof *v->tuple);

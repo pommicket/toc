@@ -1280,7 +1280,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			cgen_expr(g, e->binary.lhs);
 			bool is_ptr = e->binary.lhs->type.kind == TYPE_PTR;
 			cgen_write(g, is_ptr ? "->" :".");
-			cgen_ident(g, e->binary.field->name);
+			cgen_ident(g, e->binary.dot.field->name);
 			cgen_write(g, ")");
 			handled = true;
 		} break;

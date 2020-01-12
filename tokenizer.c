@@ -32,7 +32,7 @@ static Keyword tokenize_kw(char **s) {
 				/* 
 				   it's not a symbol, so we need to check if it's something like "intfoo"
 				 */
-				if (isident((*s)[len])) {
+				if (is_ident((*s)[len])) {
 					continue;
 				}
 			}
@@ -50,7 +50,7 @@ static Directive tokenize_direct(char **s) {
 	for (Directive d = 0; d < DIRECT_COUNT; d = d + 1) {
 		size_t len = strlen(directives[d]);
 		if (strncmp(*s, directives[d], len) == 0) {
-			if (isident((*s)[len])) {
+			if (is_ident((*s)[len])) {
 				continue;
 			}
 			*s += len;
@@ -517,7 +517,7 @@ static bool tokenize_string(Tokenizer *t, char *str) {
 			continue;
 		}
 
-		if (isident(*t->s)) {
+		if (is_ident(*t->s)) {
 			/* it's an identifier */
 			Token *token = tokr_add(t);
 			Identifier ident = ident_insert(t->idents, &t->s);

@@ -651,7 +651,10 @@ typedef struct Expression {
 			BinaryOp op;
 			struct Expression *lhs;
 			struct Expression *rhs;
-			Field *field; /* for . only */
+			union {
+				Field *field; /* for struct. */
+				Identifier pkg_ident; /* for Package. */
+			} dot;
 		} binary;
 		CallExpr call;
 		struct {

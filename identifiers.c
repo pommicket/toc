@@ -9,7 +9,7 @@
 #endif
 
 /* can this character be used in an identifier? */
-static int isident(int c) {
+static int is_ident(int c) {
 	if (c >= 'a' && c <= 'z')
 		return 1;
 	if (c >= 'A' && c <= 'Z')
@@ -71,7 +71,7 @@ static void idents_create(Identifiers *ids) {
 static Identifier ident_insert(Identifiers *ids, char **s) {
 	IdentTree *tree = ids->root;
 	while (1) {
-		if (!isident(**s)) {
+		if (!is_ident(**s)) {
 			return tree;
 		}
 		int c = ident_char_to_uchar(**s);
@@ -116,6 +116,7 @@ static char *ident_to_str(Identifier i) {
 	
 	return str;
 }
+
 
 static void fprint_ident(FILE *out, Identifier id) {
 	char *str = ident_to_str(id);
@@ -170,6 +171,15 @@ static Identifier ident_get(Identifiers *ids, const char *s) {
 		++s;
 	}
 	return tree;
+}
+
+static Identifier ident_translate(Identifier i, Identifiers *to_idents) {
+	/* OPTIM */
+	if (!i || i->anonymous) return NULL;
+	char *s = ident_to_str(i);
+	Identifier new_ident = ident_get(to_idents, s);
+	free(s);
+	return new_ident;
 }
 
 static IdentDecl *ident_add_decl(Identifier i, struct Declaration *d, struct Block *b) {

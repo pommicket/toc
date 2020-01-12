@@ -987,7 +987,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		free(name_cstr);
 		e->pkg.name_ident = name_ident;
 		if (!name_ident->pkg) {
-			char *filename = err_malloc(name_str_len + 5);
+			char *filename = typer_malloc(tr, name_str_len + 5);
 			Package *pkg = name_ident->pkg = allocr_calloc(tr->allocr, 1, sizeof *pkg);
 			memcpy(filename, name_str.data, name_str_len);
 			strcpy(filename + name_str.n, ".top");
@@ -999,10 +999,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 				return false;
 			}
 			if (!import_pkg(tr->allocr, pkg, fp, filename, tr->idents, tr->err_ctx, e->where)) {
-				free(filename);
 				return false;
 			}
-			free(filename);
 			fclose(fp);
 		}
 	} break;
@@ -1901,7 +1899,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 					if (ident_eq_str(f->name, field_name.slice.data)) {
 						is_field = true;
 						*t = f->type;
-						e->binary.field = f;
+						e->binary.dot.field = f;
 					}
 				}
 				if (!is_field) {
@@ -1925,6 +1923,22 @@ static bool types_expr(Typer *tr, Expression *e) {
 		case BINARY_DOT: {
 			if (!types_expr(tr, lhs)) return false;
 			Type *struct_type = lhs_type;
+			if (type_is_builtin(struct_type, BUILTIN_PKG)) {
+				if (rhs->kind != EXPR_IDENT) {
+					err_print(rhs->where, "Expected identifier for package access, but got %s.",
+							  expr_kind_to_str(rhs->kind));
+					return false;
+				}
+				Value pkg_val;
+				if (!eval_expr(tr->evalr, lhs, &pkg_val))
+					return false;
+				e->binary.dot.pkg_ident = ident_translate(rhs->ident, &pkg_val.pkg->idents);
+				if (!type_of_ident(tr, e->where, e->binary.dot.pkg_ident, t)) {
+					return false;
+				}
+				break;
+			}
+			
 			if (struct_type->kind == TYPE_PTR)
 				struct_type = struct_type->ptr;
 			if (rhs->kind != EXPR_IDENT) {
@@ -1940,7 +1954,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 						if (f->name == rhs->ident) {
 							is_field = true;
 							*t = f->type;
-							e->binary.field = f;
+							e->binary.dot.field = f;
 						}
 					}
 				}
