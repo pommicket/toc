@@ -160,10 +160,18 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 					if (!cgen_type_pre(g, type, d->where))
 						return false;
 					cgen_write(g, " ");
+					if (ident->export_name) {
+						cgen_write(g, "%s__", g->pkg_prefix);
+					}
 					cgen_ident(g, ident);
 					if (!cgen_type_post(g, type, d->where))
 						return false;
 					cgen_write(g, ";");
+					cgen_nl(g);
+					cgen_write(g, "#define ");
+					cgen_ident(g, ident);
+					cgen_write(g, " %s__", g->pkg_prefix);
+					cgen_ident(g, ident);
 					cgen_nl(g);
 				}
 			}

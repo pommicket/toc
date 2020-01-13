@@ -18,7 +18,6 @@
 
 /* 
 TODO:
-compile without -Wno-unused-function
 packages
 ---
 X ::= newtype(int); or something
@@ -27,7 +26,7 @@ better printing of types (take was_expr into account)
 any odd number of "s for a string
 make sure futurely/currently-declared types are only used by pointer/slice
 allow omission of trailing ; in foo ::= fn() {}?
- */
+*/
 
 
 #include "toc.c"

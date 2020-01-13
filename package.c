@@ -292,17 +292,21 @@ static bool export_type(Exporter *ex, Type *type, Location where) {
 		if (!export_type(ex, type->arr.of, where))
 			return false;
 		break;
-	case TYPE_FN:
-		export_len(ex, arr_len(type->fn.types));
+	case TYPE_FN: {
+		size_t ntypes = arr_len(type->fn.types);
+		export_len(ex, ntypes);
 		arr_foreach(type->fn.types, Type, sub)
 			if (!export_type(ex, sub, where))
 				return false;
 		export_bool(ex, type->fn.constness != NULL);
-		/* [implied] if (type->fn.constness) */
-		possibly_static_assert(sizeof(Constness) == 1); /* future-proofing */
-		arr_foreach(type->fn.constness, Constness, c)
-			export_u8(ex, *c);
-		break;
+
+		if (type->fn.constness) {
+			possibly_static_assert(sizeof(Constness) == 1); /* future-proofing */
+			size_t nparams = ntypes - 1;
+			for (size_t i = 0; i < nparams; ++i)
+				export_u8(ex, type->fn.constness[i]);
+		}
+	} break;
 	case TYPE_STRUCT: {
 		StructDef *struc = type->struc;
 		if (struc->export.id == 0) {
@@ -373,8 +377,9 @@ static void import_type(Importer *im, Type *type) {
 			import_type(im, &type->fn.types[i]);
 		bool has_constness = import_bool(im);
 		if (has_constness) {
-			type->fn.constness = imptr_malloc(im, ntypes * sizeof *type->fn.constness);
-			for (i = 0; i < ntypes; ++i)
+			size_t nparams = ntypes - 1;
+			type->fn.constness = imptr_malloc(im, nparams * sizeof *type->fn.constness);
+			for (i = 0; i < nparams; ++i)
 				type->fn.constness[i] = import_u8(im);
 		} else type->fn.constness = NULL;
 	} break;
@@ -916,6 +921,7 @@ static void export_ident_name(Exporter *ex, Identifier ident) {
 }
 
 static bool export_decl(Exporter *ex, Declaration *d) {
+	print_location(d->where);
 	assert(ex->started);
 	possibly_static_assert(sizeof d->flags == 2);
 	export_u16(ex, d->flags);
@@ -1166,10 +1172,12 @@ static bool import_footer(Importer *im) {
 		name[name_len] = 0;
 		fread(name, 1, name_len, im->in);
 		im->ident_map[id] = ident_insert(&im->pkg->idents, &name);
+		im->ident_map[id]->imported = true;
 	}
 	for (i = 1; i <= im->max_ident_id; ++i) {
 		if (!im->ident_map[i]) {
 			im->ident_map[i] = ident_new_anonymous(&im->pkg->idents);
+			im->ident_map[i]->imported = true;
 		}
 	}
 

@@ -172,6 +172,7 @@ typedef struct IdentDecl {
 typedef struct IdentSlot {
 	bool export_name; /* is this identifier's name important? */
 	bool anonymous; /* is this identifier not part of a tree? */
+	bool imported; /* was this identifier imported from a package? */
 	char *text; /* actual name of the identifier */
 	size_t len; /* length of name */
 	U64 export_id; /* 0 if there's no exported identifier here, otherwise unique positive integer associated with this identifier */
@@ -766,6 +767,9 @@ typedef struct Package {
 	Identifier name;
 	Identifiers idents;
 	Statement *stmts;
+	struct {
+		char *prefix; /* prefix for C things (not incl. __) */
+	} c;
 } Package;
 
 typedef struct Typer {
@@ -821,6 +825,7 @@ typedef struct CGenerator {
 	Exporter *exptr;
 	Identifier main_ident;
 	Identifiers *idents;
+	char *pkg_prefix;
 } CGenerator;
 
 

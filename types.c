@@ -981,12 +981,18 @@ static bool types_expr(Typer *tr, Expression *e) {
 		char *name_cstr = typer_malloc(tr, name_str_len + 1);
 		memcpy(name_cstr, name_str.data, name_str_len);
 		name_cstr[name_str.n] = '\0';
-		Identifier name_ident = ident_insert(tr->idents, &name_cstr);
-		assert(!*name_cstr);
+		char *name_ptr = name_cstr;
+		Identifier name_ident = ident_insert(tr->idents, &name_ptr);
+		if (*name_ptr) {
+			err_print(name_expr->where, "Package name (\"%s\") is not a valid identifier.",
+					  name_cstr);
+			return false;
+		}
 		e->pkg.name_ident = name_ident;
 		if (!name_ident->pkg) {
 			char *filename = typer_malloc(tr, name_str_len + 5);
 			Package *pkg = name_ident->pkg = err_calloc(1, sizeof *pkg);
+			pkg->c.prefix = name_cstr;
 			memcpy(filename, name_str.data, name_str_len);
 			strcpy(filename + name_str.n, ".top");
 			/* TODO: library paths */
@@ -1931,7 +1937,18 @@ static bool types_expr(Typer *tr, Expression *e) {
 				Value pkg_val;
 				if (!eval_expr(tr->evalr, lhs, &pkg_val))
 					return false;
+				lhs->kind = EXPR_VAL;
+				lhs->val = pkg_val;
 				e->binary.dot.pkg_ident = ident_translate(rhs->ident, &pkg_val.pkg->idents);
+				if (!e->binary.dot.pkg_ident) {
+					char *ident_name = ident_to_str(rhs->ident),
+						*pkg_name = ident_to_str(pkg_val.pkg->name);
+					
+					err_print(e->where, "%s was not imported from package %s.", ident_name, pkg_name);
+					free(ident_name);
+					free(pkg_name);
+					return false;
+				}
 				if (!type_of_ident(tr, e->where, e->binary.dot.pkg_ident, t)) {
 					return false;
 				}

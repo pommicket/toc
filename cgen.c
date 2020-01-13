@@ -479,7 +479,6 @@ static void cgen_full_fn_name(CGenerator *g, FnExpr *f, U64 instance) {
 static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where, U64 instance, U64 which_are_const) {
 	bool out_param = cgen_uses_ptr(&f->ret_type);
 	bool any_params = false;
-	char *pkg_name = g->evalr->typer->pkg_name;
 	assert(cgen_should_gen_fn(f));
 	if (!f->export.id) /* local to this translation unit */
 		cgen_write(g, "static ");
@@ -490,8 +489,8 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where, U64 instanc
 		cgen_write(g, " ");
 	}
 	if (f->export.id) {
-		assert(pkg_name);
-		cgen_write(g, "%s__", pkg_name);
+		assert(g->pkg_prefix);
+		cgen_write(g, "%s__", g->pkg_prefix);
 	}
 	cgen_full_fn_name(g, f, instance);	
 	if (!out_param) {
@@ -1123,6 +1122,8 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			return false;
 		break;
 	case EXPR_VAL:
+		if (type_is_compileonly(&e->type))
+			break;
 		if (!cgen_val_pre(g, e->val, &e->type, e->where))
 			return false;
 		if (!cgen_type_pre(g, &e->type, e->where)) return false;
@@ -1276,13 +1277,20 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			handled = true;
 			break;
 		case BINARY_DOT: {
-			cgen_write(g, "(");
-			cgen_expr(g, e->binary.lhs);
-			bool is_ptr = e->binary.lhs->type.kind == TYPE_PTR;
-			cgen_write(g, is_ptr ? "->" :".");
-			cgen_ident(g, e->binary.dot.field->name);
-			cgen_write(g, ")");
-			handled = true;
+			if (type_is_builtin(&e->binary.lhs->type, BUILTIN_PKG)) {
+				assert(e->binary.lhs->kind == EXPR_VAL);
+				cgen_write(g, "%s__", e->binary.lhs->val.pkg->c.prefix);
+				cgen_ident(g, e->binary.dot.pkg_ident);
+				handled = true;
+			} else {
+				cgen_write(g, "(");
+				cgen_expr(g, e->binary.lhs);
+				bool is_ptr = e->binary.lhs->type.kind == TYPE_PTR;
+				cgen_write(g, is_ptr ? "->" :".");
+				cgen_ident(g, e->binary.dot.field->name);
+				cgen_write(g, ")");
+				handled = true;
+			}
 		} break;
 		}
 		if (handled) break;
@@ -1750,10 +1758,10 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 		for (int idx = 0, nidents = (int)arr_len(d->idents); idx < nidents; ++idx) {
 			Identifier i = d->idents[idx];
 			Type *type = decl_type_at_index(d, idx);
-			Value *val = decl_val_at_index(d, idx);
-			if (type_is_compileonly(type)) {
-				continue;
+			if (type_is_compileonly(&d->type)) {
+			    continue;
 			}
+			Value *val = decl_val_at_index(d, idx);
 			if (g->block == NULL && g->fn == NULL && !i->export_name)
 				cgen_write(g, "static ");
 			if (has_expr) {
@@ -1964,6 +1972,8 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 	g->block = NULL;
 	g->fn = NULL;
 	g->file = f;
+	g->pkg_prefix = g->evalr->typer->pkg_name;
+
 	/* 
 	   TODO: don't include stdio.h with posix file descriptors
 	*/

@@ -100,7 +100,7 @@ static Identifier ident_new_anonymous(Identifiers *ids) {
 /* advances past identifier */
 static Identifier ident_insert(Identifiers *ids, char **s) {
 	size_t nslots = arr_len(ids->slots);
-	if (nslots <= ids->nidents) {
+	if (nslots <= 2*ids->nidents) {
 		IdentSlot **slots = ids->slots;
 		/* reserve more space */
 		IdentSlot **new_slots = NULL;
