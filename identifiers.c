@@ -33,24 +33,12 @@ static void idents_create(Identifiers *ids) {
 	ids->rseed = 0x27182818;
 }
 
-#if CHAR_MIN < 0
-#define ident_char_to_uchar(c) (unsigned char)((c) < 0 ? (256 + (c)) : (c))
-#else
-#define ident_char_to_uchar(c) (unsigned char)(c)
-#endif
-
-#if CHAR_MIN < 0
-#define ident_uchar_to_char(c) (unsigned char)((c) > 127 ? ((c) - 256) : (c))
-#else
-#define ident_uchar_to_char(c) (unsigned char)(c)
-#endif
-
 static U64 ident_hash(char **s) {
 	U32 x = 0xabcdef01;
 	U32 y = 0x31415926;
 	U64 hash = 0;
 	while (is_ident(**s)) {
-		hash += (U64)x * ident_char_to_uchar(**s) + y;
+		hash += (U64)x * (unsigned char)(**s) + y;
 		x = rand_u32(x);
 		y = rand_u32(y);
 		++*s;
@@ -58,14 +46,17 @@ static U64 ident_hash(char **s) {
 	return hash;
 }
 
-
-static bool ident_eq_str(Identifier i, const char *s) {
-	char *t = i->text;
+/* are these strings equal, up to the first non-ident character? */
+static bool ident_str_eq_str(const char *s, const char *t) {
 	while (is_ident(*s) && is_ident(*t)) {
 		if (*s != *t) return false;
 		++s, ++t;
 	}
 	return !is_ident(*s) && !is_ident(*t);
+}
+
+static inline bool ident_eq_str(Identifier i, const char *s) {
+	return ident_str_eq_str(i->text, s);
 }
 
 
@@ -177,7 +168,7 @@ static void fprint_ident_reduced_charset(FILE *out, Identifier id) {
 		return;
 	}
 	for (char *s = id->text; is_ident(*s); ++s) {
-		int c = ident_char_to_uchar(*s);
+		int c = (unsigned char)(*s);
 		if (c > 127) {
 			fprintf(out, "x__%x", c);
 		} else {
@@ -211,6 +202,11 @@ static IdentDecl *ident_add_decl(Identifier i, struct Declaration *d, struct Blo
 
 static IdentDecl *ident_decl(Identifier i) {
 	return (IdentDecl *)arr_last(i->decls);
+}
+
+/* returns true if i and j are equal, even if they're not in the same table */
+static bool ident_eq(Identifier i, Identifier j) {
+	return ident_str_eq_str(i->text, j->text);
 }
 
 static void idents_free(Identifiers *ids) {

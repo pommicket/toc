@@ -1967,7 +1967,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				if (rhs->kind == EXPR_IDENT) {
 					/* maybe accessing a field? */
 					arr_foreach(struct_type->struc->fields, Field, f) {
-						if (f->name == rhs->ident) {
+						if (ident_eq(f->name, rhs->ident)) {
 							is_field = true;
 							*t = f->type;
 							e->binary.dot.field = f;
