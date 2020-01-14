@@ -27,7 +27,7 @@ static bool cgen_decls_type(CGenerator *g, Type *type) {
 			arr_foreach(sdef->fields, Field, f) {
 				if (!cgen_type_pre(g, &f->type, sdef->where)) return false;
 				cgen_write(g, " ");
-				cgen_ident(g, f->name);
+				cgen_ident_simple(g, f->name);
 				if (!cgen_type_post(g, &f->type, sdef->where)) return false;
 				cgen_write(g, ";");
 				cgen_nl(g);

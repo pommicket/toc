@@ -280,17 +280,21 @@ static bool cgen_uses_ptr(Type *t) {
 	return false;
 }
 
+/* used for fields */
+static inline void cgen_ident_simple(CGenerator *g, Identifier i) {
+	cgen_indent(g);
+	fprint_ident_reduced_charset(cgen_writing_to(g), i);
+}
+
 static void cgen_ident(CGenerator *g, Identifier i) {
-	if (i->export_id) {
+	IdentDecl *idecl = ident_decl(i);
+	if (idecl && idecl->kind == IDECL_DECL && idecl->decl->flags & DECL_EXPORT)
 		cgen_write(g, "%s__", g->pkg_prefix);
-	}
 	if (i == g->main_ident) {
 		/* don't conflict with C's main! */
 		cgen_write(g, "main__");
 	} else {
-		
-		cgen_indent(g);
-		fprint_ident_reduced_charset(cgen_writing_to(g), i);
+	    cgen_ident_simple(g, i);
 	}
 }
 
@@ -1287,7 +1291,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 				cgen_expr(g, e->binary.lhs);
 				bool is_ptr = e->binary.lhs->type.kind == TYPE_PTR;
 				cgen_write(g, is_ptr ? "->" :".");
-				cgen_ident(g, e->binary.dot.field->name);
+				cgen_ident_simple(g, e->binary.dot.field->name);
 				cgen_write(g, ")");
 				handled = true;
 			}
