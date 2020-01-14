@@ -13,4 +13,5 @@ point ::= pkg "point";
 
 main ::= fn() {
 	 x : point.Point = point.mk_point(13, 14);
+	 puti(x.x + x.y);
 };

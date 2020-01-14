@@ -281,10 +281,14 @@ static bool cgen_uses_ptr(Type *t) {
 }
 
 static void cgen_ident(CGenerator *g, Identifier i) {
+	if (i->export_id) {
+		cgen_write(g, "%s__", g->pkg_prefix);
+	}
 	if (i == g->main_ident) {
 		/* don't conflict with C's main! */
 		cgen_write(g, "main__");
 	} else {
+		
 		cgen_indent(g);
 		fprint_ident_reduced_charset(cgen_writing_to(g), i);
 	}
@@ -487,10 +491,6 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where, U64 instanc
 	} else {
 		if (!cgen_type_pre(g, &f->ret_type, where)) return false;
 		cgen_write(g, " ");
-	}
-	if (f->export.id) {
-		assert(g->pkg_prefix);
-		cgen_write(g, "%s__", g->pkg_prefix);
 	}
 	cgen_full_fn_name(g, f, instance);	
 	if (!out_param) {

@@ -51,15 +51,6 @@ static bool cgen_fn_decl(CGenerator *g, FnExpr *f, Location where, U64 instance,
 		cgen_write(g, ";");
 		cgen_nl(g);
 		fn_exit(f);
-		char *pkg_name = g->evalr->typer->pkg_name;
-		if (pkg_name && f->export.id) {
-			/* allow use of function without referring to package in this file */
-			cgen_write(g, "#define ");
-			cgen_full_fn_name(g, f, instance);
-			cgen_write(g, " %s__", pkg_name);
-			cgen_full_fn_name(g, f, instance);
-			cgen_nl(g);
-		}
 	}
 	return true;
 }
@@ -153,25 +144,17 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 				Identifier ident = d->idents[i];
 				Type *type = decl_type_at_index(d, i);
 				if (!type_is_compileonly(type)) {
-					if (ident->export_name)
+					if (ident->export_name) {
 						cgen_write(g, "extern ");
-					else
+					} else
 						cgen_write(g, "static ");
 					if (!cgen_type_pre(g, type, d->where))
 						return false;
 					cgen_write(g, " ");
-					if (ident->export_name) {
-						cgen_write(g, "%s__", g->pkg_prefix);
-					}
 					cgen_ident(g, ident);
 					if (!cgen_type_post(g, type, d->where))
 						return false;
 					cgen_write(g, ";");
-					cgen_nl(g);
-					cgen_write(g, "#define ");
-					cgen_ident(g, ident);
-					cgen_write(g, " %s__", g->pkg_prefix);
-					cgen_ident(g, ident);
 					cgen_nl(g);
 				}
 			}
