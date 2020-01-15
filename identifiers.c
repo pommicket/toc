@@ -56,6 +56,7 @@ static bool ident_str_eq_str(const char *s, const char *t) {
 }
 
 static inline bool ident_eq_str(Identifier i, const char *s) {
+	if (i->anonymous) return false;
 	return ident_str_eq_str(i->text, s);
 }
 

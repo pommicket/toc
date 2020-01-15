@@ -27,6 +27,7 @@ static bool DEBUG_UNDERSCORE(add_ident_decls)(SOURCE_LOCATION_PARAMS Block *b, D
 				continue;
 			}
 		}
+		
 		IdentDecl *idecl = ident_add_decl(*ident, d, b);
 #ifdef TOC_DEBUG
 		idecl->src_file = src_file;

@@ -152,7 +152,7 @@ static Location import_location(Importer *im) {
 	Location l;
 	l.start = NULL;
 	l.simple_location = imptr_malloc(im, sizeof *l.simple_location);
-	l.simple_location->ctx = &im->err_ctx;
+	l.simple_location->ctx = im->err_ctx;
 	l.simple_location->line = (U32)import_vlq(im);
 	return l;
 }
@@ -202,7 +202,7 @@ static void exptr_start(Exporter *ex, const char *pkg_name, size_t pkg_name_len)
 /* where = where was this imported. don't free fname while imported stuff is in use. */
 static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname, Identifiers *parent_idents, ErrCtx *parent_ctx, Location where) {
 	Importer i = {0};
-	ErrCtx *err_ctx = &i.err_ctx;
+	ErrCtx *err_ctx = i.err_ctx = allocr_malloc(allocr, sizeof *i.err_ctx);
 	idents_create(&p->idents);
 	i.pkg = p;
 	i.in = f;
@@ -921,7 +921,6 @@ static void export_ident_name(Exporter *ex, Identifier ident) {
 }
 
 static bool export_decl(Exporter *ex, Declaration *d) {
-	print_location(d->where);
 	assert(ex->started);
 	possibly_static_assert(sizeof d->flags == 2);
 	export_u16(ex, d->flags);
@@ -977,6 +976,7 @@ static void import_decl(Importer *im, Declaration *d) {
 			d->expr.kind = EXPR_VAL;
 			d->expr.val = d->val;
 		}
+		d->flags &= (DeclFlags)~(DeclFlags)DECL_HAS_EXPR;
 	} else if (d->flags & DECL_HAS_EXPR) {
 		import_expr(im, &d->expr);
 	}

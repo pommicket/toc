@@ -2339,6 +2339,12 @@ static inline Type *decl_type_at_index(Declaration *d, int i) {
 	return ret;
 }
 
+static bool ident_is_definitely_const(Identifier i) {
+	IdentDecl *idecl = ident_decl(i);
+	assert(idecl);
+	return idecl->kind == IDECL_DECL && (idecl->decl->flags & DECL_IS_CONST);
+}
+
 
 static bool expr_is_definitely_const(Expression *e) {
 	switch (e->kind) {
@@ -2366,18 +2372,21 @@ static bool expr_is_definitely_const(Expression *e) {
 		return expr_is_definitely_const(e->unary.of);
 	case EXPR_BINARY_OP:
 		if (e->binary.op == BINARY_DOT) {
-			return expr_is_definitely_const(e->binary.lhs);
+			if (!expr_is_definitely_const(e->binary.lhs))
+				return false;
+			Type *lhs_type = &e->binary.lhs->type;
+			if (lhs_type->kind == TYPE_PTR) lhs_type = lhs_type->ptr;
+			if (type_is_builtin(lhs_type, BUILTIN_PKG)) {
+				return ident_is_definitely_const(e->binary.dot.pkg_ident);
+			}
+			return true;
 		}
 		return expr_is_definitely_const(e->binary.lhs)
 			&& expr_is_definitely_const(e->binary.rhs);
 	case EXPR_SLICE:
 		return expr_is_definitely_const(e->slice.of);
-	case EXPR_IDENT: {
-		IdentDecl *idecl = ident_decl(e->ident);
-		assert(idecl);
-		return idecl->kind == IDECL_DECL
-			&& (idecl->decl->flags & DECL_IS_CONST);
-	}
+	case EXPR_IDENT:
+		return ident_is_definitely_const(e->ident);
 	}
 	assert(0);
 	return false;

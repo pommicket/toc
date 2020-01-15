@@ -101,6 +101,37 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 	case EXPR_CAST:
 		if (!cgen_decls_type(g, &e->cast.type))
 			return false;
+		break;
+	case EXPR_BINARY_OP: {
+		Type *lhs_type = &e->binary.lhs->type;
+		if (lhs_type->kind == TYPE_PTR)
+			lhs_type = lhs_type->ptr;
+		if (e->binary.op == BINARY_DOT && type_is_builtin(lhs_type, BUILTIN_PKG)) {
+			assert(e->binary.lhs->kind == EXPR_VAL);
+			Identifier ident = e->binary.dot.pkg_ident;
+			IdentDecl *idecl = ident_decl(ident);
+			assert(idecl);
+
+			if (idecl->kind == IDECL_DECL) {
+				Declaration *d = idecl->decl;
+				if (((d->flags & DECL_FOUND_VAL) && e->type.kind == TYPE_FN)
+					|| (d->expr.kind == EXPR_FN)) {
+					/* extern function declaration */
+					break;
+				}
+			}
+			/* extern variable declaration */
+			cgen_write(g, "extern ");
+			if (!cgen_type_pre(g, &e->type, e->where))
+				return false;
+			cgen_write(g, " %s__", e->binary.lhs->val.pkg->c.prefix);
+			cgen_ident(g, ident);
+			if (!cgen_type_post(g, &e->type, e->where))
+				return false;
+			cgen_write(g, ";");
+			cgen_nl(g);
+		}
+	} break;
 	default:
 		break;
 	}

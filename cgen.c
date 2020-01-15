@@ -254,7 +254,7 @@ static void cgen_ident_id(CGenerator *g, IdentID id) {
 	cgen_write(g, "a%lu_", (unsigned long)id);
 }
 
-/* should declaration be a direct function declaration C (as opposed to using a function pointer or not being a function) */
+/* should this declaration be a direct function declaration C? (as opposed to using a function pointer or not being a function) */
 static bool cgen_fn_is_direct(CGenerator *g, Declaration *d) {
 	return g->block == NULL && (d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_FN && arr_len(d->idents) == 1;
 }

@@ -19,6 +19,7 @@
 /* 
 TODO:
 packages
+make sure (&Package).something works
 ---
 X ::= newtype(int); or something
 don't allow while {3; 5} (once break is added)
@@ -129,8 +130,8 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 #ifdef TOC_DEBUG
-	printf("\n\n");	
-	fprint_parsed_file(stdout, &f);
+	/* printf("\n\n");	 */
+	/* fprint_parsed_file(stdout, &f); */
 #endif
 	FILE *out = fopen(out_filename, "w");
 	if (!out) {
