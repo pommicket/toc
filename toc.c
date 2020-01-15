@@ -24,7 +24,9 @@
 #define this this_
 #define export export_
 #elif __STDC_VERSION__ < 199901
+#ifndef inline
 #define inline
+#endif
 #endif
 
 #if __STDC_VERSION__ >= 201112

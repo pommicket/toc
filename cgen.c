@@ -288,7 +288,7 @@ static inline void cgen_ident_simple(CGenerator *g, Identifier i) {
 
 static void cgen_ident(CGenerator *g, Identifier i) {
 	IdentDecl *idecl = ident_decl(i);
-	if (idecl && idecl->kind == IDECL_DECL && idecl->decl->flags & DECL_EXPORT) {
+	if (idecl && idecl->kind == IDECL_DECL && (idecl->decl->flags & DECL_EXPORT)) {
 		assert(g->pkg_prefix);
 		cgen_write(g, "%s__", g->pkg_prefix);
 	}
@@ -485,23 +485,10 @@ static void cgen_full_fn_name(CGenerator *g, FnExpr *f, U64 instance) {
 	}
 }
 
-/* unless f has const/semi-const args, instance and which_are_const can be set to 0 */
-static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where, U64 instance, U64 which_are_const) {
+static bool cgen_fn_args(CGenerator *g, FnExpr *f, Location where, U64 instance, U64 which_are_const) {
+	(void)instance; /* not needed atm */
 	bool out_param = cgen_uses_ptr(&f->ret_type);
 	bool any_params = false;
-	assert(cgen_should_gen_fn(f));
-	if (!f->export.id) /* local to this translation unit */
-		cgen_write(g, "static ");
-	if (out_param) {
-		cgen_write(g, "void ");
-	} else {
-		if (!cgen_type_pre(g, &f->ret_type, where)) return false;
-		cgen_write(g, " ");
-	}
-	cgen_full_fn_name(g, f, instance);	
-	if (!out_param) {
-		if (!cgen_type_post(g, &f->ret_type, where)) return false;
-	}
 	cgen_write(g, "(");
 	int semi_const_idx = 0;
 	bool any_args = false;
@@ -550,6 +537,25 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where, U64 instanc
 		cgen_write(g, "void");
 	cgen_write(g, ")");
 	return true;
+}
+
+/* unless f has const/semi-const args, instance and which_are_const can be set to 0 */
+static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where, U64 instance, U64 which_are_const) {
+	bool out_param = cgen_uses_ptr(&f->ret_type);
+	assert(cgen_should_gen_fn(f));
+	if (!f->export.id) /* local to this translation unit */
+		cgen_write(g, "static ");
+	if (out_param) {
+		cgen_write(g, "void ");
+	} else {
+		if (!cgen_type_pre(g, &f->ret_type, where)) return false;
+		cgen_write(g, " ");
+	}
+	cgen_full_fn_name(g, f, instance);	
+	if (!out_param) {
+		if (!cgen_type_post(g, &f->ret_type, where)) return false;
+	}
+	return cgen_fn_args(g, f, where, instance, which_are_const);
 }
 
 

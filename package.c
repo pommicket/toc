@@ -29,6 +29,9 @@ static inline void *imptr_malloc(Importer *i, size_t n) {
 	return allocr_malloc(i->allocr, n);
 }
 
+static inline void *imptr_calloc(Importer *i, size_t n, size_t s) {
+	return allocr_calloc(i->allocr, n, s);
+}
 
 static inline void export_u8(Exporter *ex, U8 u8) {
 	write_u8(ex->out, u8);
@@ -331,10 +334,10 @@ static bool export_type(Exporter *ex, Type *type, Location where) {
 }
 
 static inline Type *imptr_new_type(Importer *im) {
-	return imptr_malloc(im, sizeof(Type));
+	return imptr_calloc(im, 1, sizeof(Type));
 }
 static inline Expression *imptr_new_expr(Importer *im) {
-	return imptr_malloc(im, sizeof(Expression));
+	return imptr_calloc(im, 1, sizeof(Expression));
 }
 
 static void import_type(Importer *im, Type *type) {
@@ -891,7 +894,7 @@ static void import_expr(Importer *im, Expression *e) {
 		s->to = import_optional_expr(im);
 	} break;
 	case EXPR_EACH: {
-		EachExpr *ea = e->each = imptr_malloc(im, sizeof *ea);
+		EachExpr *ea = e->each = imptr_calloc(im, 1, sizeof *ea);
 		ea->flags = import_u8(im);
 		if ((ea->flags & EACH_ANNOTATED_TYPE) || found_type)
 			import_type(im, &ea->type);
@@ -1061,6 +1064,8 @@ static bool export_fn(Exporter *ex, FnExpr *f) {
 			export_ident_name(ex, *ident);
 		}
 	}
+	if (!export_type(ex, &f->ret_type, f->where))
+		return false;
 	export_len(ex, arr_len(f->ret_decls));
 	arr_foreach(f->ret_decls, Declaration, ret_decl)
 		if (!export_decl(ex, ret_decl))
@@ -1077,6 +1082,7 @@ static void import_fn(Importer *im, FnExpr *f) {
 	arr_foreach(f->params, Declaration, param) {
 		import_decl(im, param);
 	}
+	import_type(im, &f->ret_type);
 	import_arr(im, &f->ret_decls);
 	arr_foreach(f->ret_decls, Declaration, ret_decl)
 		import_decl(im, ret_decl);
@@ -1199,6 +1205,7 @@ static bool import_footer(Importer *im) {
 		import_struct(im, s);
 
 	import_arr(im, &im->fns);
+	arr_zero(im->fns);
 	arr_foreach(im->fns, FnExpr, f) {
 		import_fn(im, f);
 	}

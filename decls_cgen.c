@@ -112,12 +112,36 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 			IdentDecl *idecl = ident_decl(ident);
 			assert(idecl);
 
-			if (idecl->kind == IDECL_DECL) {
+			if (idecl->kind == IDECL_DECL && e->type.kind == TYPE_FN) {
 				Declaration *d = idecl->decl;
-				if (((d->flags & DECL_FOUND_VAL) && e->type.kind == TYPE_FN)
-					|| (d->expr.kind == EXPR_FN)) {
-					/* extern function declaration */
-					break;
+				FnExpr *f = NULL;
+				if (d->flags & DECL_FOUND_VAL)
+					f = d->val.fn;
+				else if (d->expr.kind == EXPR_FN)
+					f = d->expr.fn;
+				if (f) {
+					if (e->binary.lhs->type.flags & TYPE_IS_RESOLVED) { /* no declarations for templates */
+						bool out_param = cgen_uses_ptr(&f->ret_type);
+						/* extern function declaration */
+						cgen_write(g, "extern ");
+						if (out_param) {
+							cgen_write(g, "void");
+						} else {
+							if (!cgen_type_pre(g, &f->ret_type, e->where))
+								return false;
+						}
+						cgen_write(g, " %s__", e->binary.lhs->val.pkg->c.prefix);
+						cgen_ident(g, ident);
+						if (!out_param) {
+							if (!cgen_type_post(g, &f->ret_type, e->where))
+								return false;
+						}
+						if (!cgen_fn_args(g, f, e->where, 0, 0))
+							return false;
+						cgen_write(g, ";");
+						cgen_nl(g);
+						break;
+					}
 				}
 			}
 			/* extern variable declaration */
