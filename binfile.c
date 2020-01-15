@@ -1,7 +1,7 @@
 #define BINFILE_PORTABLE 1
 
 #ifdef TOC_DEBUG
-#define BINFILE_PRINT
+/* #define BINFILE_PRINT */
 static bool binfile_printing_enabled = true;
 #endif
 

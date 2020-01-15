@@ -20,7 +20,7 @@ static bool cgen_sdecls_type(CGenerator *g, Type *type) {
 			/* we've already done this */
 		} else {
 			cgen_write(g, "struct ");
-			if (sdef->name->imported) sdef->name = NULL; /* don't use imported names */
+			if (sdef->name && sdef->name->imported) sdef->name = NULL; /* don't use imported names */
 			if (sdef->name) {
 				cgen_ident(g, sdef->name);
 			} else {
