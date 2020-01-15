@@ -148,6 +148,10 @@ static void fprint_ident(FILE *out, Identifier id) {
 }
 
 static void fprint_ident_debug(FILE *out, Identifier id) {
+	if (id->anonymous) {
+		fprintf(out, "???");
+		return;
+	}
 #ifdef TOC_DEBUG
 	if (id->export_id)
 		printf(U64_FMT "-", id->export_id);

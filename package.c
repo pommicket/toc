@@ -959,8 +959,9 @@ static bool export_decl(Exporter *ex, Declaration *d) {
 }
 
 static void import_decl(Importer *im, Declaration *d) {
-	d->flags = import_u16(im);
 	possibly_static_assert(sizeof d->flags == 2);
+	d->flags = import_u16(im);
+	d->flags &= (DeclFlags)~(DeclFlags)DECL_EXPORT;
 	d->where = import_location(im);
 	d->idents = NULL;
 	size_t n_idents = import_arr(im, &d->idents);
@@ -1051,10 +1052,15 @@ static void import_block(Importer *im, Block *b) {
 }
 
 static bool export_fn(Exporter *ex, FnExpr *f) {
+	export_location(ex, f->where);
 	export_len(ex, arr_len(f->params));
-	arr_foreach(f->params, Declaration, param)
+	arr_foreach(f->params, Declaration, param) {
 		if (!export_decl(ex, param))
 			return false;
+		arr_foreach(param->idents, Identifier, ident) {
+			export_ident_name(ex, *ident);
+		}
+	}
 	export_len(ex, arr_len(f->ret_decls));
 	arr_foreach(f->ret_decls, Declaration, ret_decl)
 		if (!export_decl(ex, ret_decl))
@@ -1066,6 +1072,7 @@ static bool export_fn(Exporter *ex, FnExpr *f) {
 }
 
 static void import_fn(Importer *im, FnExpr *f) {
+	f->where = import_location(im);
     import_arr(im, &f->params);
 	arr_foreach(f->params, Declaration, param) {
 		import_decl(im, param);

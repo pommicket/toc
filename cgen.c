@@ -288,8 +288,10 @@ static inline void cgen_ident_simple(CGenerator *g, Identifier i) {
 
 static void cgen_ident(CGenerator *g, Identifier i) {
 	IdentDecl *idecl = ident_decl(i);
-	if (idecl && idecl->kind == IDECL_DECL && idecl->decl->flags & DECL_EXPORT)
+	if (idecl && idecl->kind == IDECL_DECL && idecl->decl->flags & DECL_EXPORT) {
+		assert(g->pkg_prefix);
 		cgen_write(g, "%s__", g->pkg_prefix);
+	}
 	if (i == g->main_ident) {
 		/* don't conflict with C's main! */
 		cgen_write(g, "main__");

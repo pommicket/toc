@@ -16,7 +16,7 @@ bar ::= fn() []int {
 #export x ::= bar();
 
 
-#export mk_point ::= fn(x, y: int) p : Point {
+#export mk_point ::= fn(x, y:=0) p : Point {
 		 p.x = x;
 		 p.y = y;
 };

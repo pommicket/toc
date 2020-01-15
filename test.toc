@@ -7,11 +7,9 @@ putf ::= fn(x: float) {
 ");
 };
 
-
-
 point ::= pkg "point";
 
 main ::= fn() {
-	 x : point.Point = point.mk_point(13, 14);
+	 x : point.Point = point.mk_point(y = 13, 14);
 	 puti(x.x + x.y);
 };

@@ -572,6 +572,7 @@ typedef struct EachExpr {
 typedef struct FnExpr {
 	struct Declaration *params; /* declarations of the parameters to this function */
 	struct Declaration *ret_decls; /* array of decls, if this has named return values. otherwise, NULL */
+	Location where;
 	Type ret_type;
 	Block body;
 	HashTable instances; /* for fns with constant parameters. the key is a tuple where

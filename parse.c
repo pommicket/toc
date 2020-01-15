@@ -834,7 +834,6 @@ static bool parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end
 static bool parse_fn_expr(Parser *p, FnExpr *f) {
 	Tokenizer *t = p->tokr;
 	f->ret_decls = NULL;
-	
 	{
 		/* help types.c */
 		HashTable z = {0};
@@ -1733,6 +1732,10 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	}
  success:
 	e->where.end = t->token;
+
+	if (e->kind == EXPR_FN) {
+		e->fn->where = e->where;
+	}
 	return true;
 }
 
@@ -2362,6 +2365,9 @@ static bool expr_is_definitely_const(Expression *e) {
 	case EXPR_UNARY_OP:
 		return expr_is_definitely_const(e->unary.of);
 	case EXPR_BINARY_OP:
+		if (e->binary.op == BINARY_DOT) {
+			return expr_is_definitely_const(e->binary.lhs);
+		}
 		return expr_is_definitely_const(e->binary.lhs)
 			&& expr_is_definitely_const(e->binary.rhs);
 	case EXPR_SLICE:

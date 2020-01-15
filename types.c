@@ -863,7 +863,7 @@ static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Location fn_wher
 			bool found = false;
 			arr_foreach(fn->params, Declaration, pa) {
 				arr_foreach(pa->idents, Identifier, id) {
-					if (*id == arg->name) {
+					if (ident_eq(*id, arg->name)) {
 						found = true;
 						break;
 					}
@@ -1287,21 +1287,16 @@ static bool types_expr(Typer *tr, Expression *e) {
 		Expression *arg_exprs = NULL;
 		arr_set_lena(&arg_exprs, nparams, tr->allocr);
 		bool *params_set = nparams ? typer_calloc(tr, nparams, sizeof *params_set) : NULL;
-		if (f->kind == EXPR_IDENT) {
-			IdentDecl *decl = ident_decl(f->ident);
-			assert(decl);
-			if (decl->kind == IDECL_DECL) {
-				if (decl->decl->flags & DECL_HAS_EXPR) {
-					Expression *expr = &decl->decl->expr;
-					if (expr->kind == EXPR_FN)
-						fn_decl = decl->decl->expr.fn;
-				}
-			}
+		if (expr_is_definitely_const(f)) {
+			Value val;
+			if (!eval_expr(tr->evalr, f, &val))
+				return false;
+			fn_decl = val.fn;
 		}
 
 		if (fn_decl) {
 			U16 *order;
-			if (!call_arg_param_order(tr->allocr, fn_decl, ident_decl(f->ident)->decl->where, &f->type, c->args, e->where, &order))
+			if (!call_arg_param_order(tr->allocr, fn_decl, fn_decl->where, &f->type, c->args, e->where, &order))
 				return false;
 			size_t arg;
 			for (arg = 0; arg < nargs; ++arg) {
