@@ -80,6 +80,8 @@ static void arr_set_len_(void **arr, size_t n, size_t item_sz) {
 static void arr_set_lena_(void **arr, size_t n, size_t item_sz, Allocator *a) {
 	if (n == 0) {
 		/* OPTIM: arr_cleara */
+		*arr = NULL;
+		return;
 	}
 	arr_resva_(arr, n, item_sz, a);
 	arr_hdr(*arr)->len = n;

@@ -2140,7 +2140,6 @@ static bool types_decl(Typer *tr, Declaration *d) {
 	if (d->flags & DECL_ANNOTATES_TYPE) {
 		/* type supplied */
 		assert(d->type.kind != TYPE_VOID); /* there's no way to annotate void */
-		print_location(d->where);
 		if (!type_resolve(tr, &d->type, d->where)) {
 			success = false;
 			goto ret;

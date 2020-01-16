@@ -7,7 +7,6 @@ pkg "a";
 		   len, cap : int;
 	}
 };
-/*
 #export arr_add ::= fn(t ::=, a : &Arr(t), x : t) {
 		if a.len >= a.cap {
 		   a.cap = a.cap * 2 + 2;
@@ -20,9 +19,10 @@ pkg "a";
 		a.data[a.len] = x;
 		a.len += 1;
 };
-
+/*
 #export arr_foreach ::= fn(t ::=, a : Arr(t), f : fn(&t)) {
 		each i := 0..a.len-1 {
 			 f(&a.data[i]);
 		}
-};*/
+};
+*/

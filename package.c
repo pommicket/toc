@@ -634,7 +634,7 @@ static bool export_expr(Exporter *ex, Expression *e) {
 		export_vlq(ex, e->intl);
 		break;
 	case EXPR_LITERAL_FLOAT:
-		if ((e->type.flags & TYPE_IS_FLEXIBLE) || e->type.builtin == BUILTIN_F64)
+		if (!found_type || (e->type.flags & TYPE_IS_FLEXIBLE) || e->type.builtin == BUILTIN_F64)
 			export_f64(ex, (F64)e->floatl);
 		else
 			export_f32(ex, (F32)e->floatl);
@@ -801,7 +801,7 @@ static void import_expr(Importer *im, Expression *e) {
 		e->intl = import_vlq(im);
 		break;
 	case EXPR_LITERAL_FLOAT:
-		if ((e->type.flags & TYPE_IS_FLEXIBLE) || e->type.builtin == BUILTIN_F64)
+		if (!found_type || (e->type.flags & TYPE_IS_FLEXIBLE) || e->type.builtin == BUILTIN_F64)
 			e->floatl = (Floating)import_f64(im);
 		else
 			e->floatl = (Floating)import_f32(im);
@@ -1104,7 +1104,6 @@ static bool export_struct(Exporter *ex, StructDef *s) {
 }
 
 static void import_struct(Importer *im, StructDef *s) {
-	printf("---IMPORT %p\n",s);
 	s->name = import_ident(im);
 	size_t nfields = import_arr(im, &s->fields);
 	for (size_t i = 0; i < nfields; ++i) {
