@@ -7,10 +7,8 @@ putf ::= fn(x: float) {
 ");
 };
 
-point ::= pkg "point";
+arr ::= pkg "a";
 
 main ::= fn() {
-	 x : point.Point = point.mk_point(y = 13, 14);
-	 puti(x.x + x.y);
-	 point.x = new(int,10);
+	 x : arr.Arr(int);
 };

@@ -70,7 +70,7 @@ static void copy_val_full(Copier *c, Value *out, Value *in, Type *t) {
 	}
 }
 
-/* only works on unresolved and resolved types */
+/* works on unresolved and resolved types */
 static void copy_type(Copier *c, Type *out, Type *in) {
 	*out = *in;
 	switch (in->kind) {
@@ -118,6 +118,7 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 	case TYPE_STRUCT: {
 		out->struc = allocr_malloc(c->allocr, sizeof *out->struc);
 		*out->struc = *in->struc;
+		printf("\n--- USE %p\n",in->struc);
 		size_t nfields = arr_len(in->struc->fields);
 		out->struc->fields = NULL;
 

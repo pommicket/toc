@@ -925,12 +925,11 @@ static void export_ident_name(Exporter *ex, Identifier ident) {
 
 static bool export_decl(Exporter *ex, Declaration *d) {
 	assert(ex->started);
+	/* printf("EXPORT %ld\n",ftell(ex->out)); */
 	possibly_static_assert(sizeof d->flags == 2);
 	export_u16(ex, d->flags);
 
-	unsigned found_type = d->flags & DECL_FOUND_TYPE;
-	
-	if (found_type && d->type.kind == TYPE_UNKNOWN) {
+	if ((d->flags & DECL_FOUND_TYPE) && d->type.kind == TYPE_UNKNOWN) {
 		err_print(d->where, "Can't export declaration of unknown type.");
 		return false;
 	}
@@ -946,7 +945,7 @@ static bool export_decl(Exporter *ex, Declaration *d) {
 		export_ident(ex, *ident);
 	}
 
-	if (found_type) {
+	if (d->flags & (DECL_FOUND_TYPE | DECL_ANNOTATES_TYPE)) {
 		if (!export_type(ex, &d->type, d->where))
 			return false;
 	}
@@ -962,6 +961,7 @@ static bool export_decl(Exporter *ex, Declaration *d) {
 
 static void import_decl(Importer *im, Declaration *d) {
 	possibly_static_assert(sizeof d->flags == 2);
+	/* printf("IMPORT %ld\n",ftell(im->in)); */
 	d->flags = import_u16(im);
 	d->flags &= (DeclFlags)~(DeclFlags)DECL_EXPORT;
 	d->where = import_location(im);
@@ -970,7 +970,7 @@ static void import_decl(Importer *im, Declaration *d) {
 	for (size_t i = 0; i < n_idents; ++i) {
 		d->idents[i] = import_ident(im);
 	}
-	if (d->flags & DECL_FOUND_TYPE) {
+	if (d->flags & (DECL_FOUND_TYPE | DECL_ANNOTATES_TYPE)) {
 		import_type(im, &d->type);
 	}
 	if (d->flags & DECL_FOUND_VAL) {
@@ -1104,6 +1104,7 @@ static bool export_struct(Exporter *ex, StructDef *s) {
 }
 
 static void import_struct(Importer *im, StructDef *s) {
+	printf("---IMPORT %p\n",s);
 	s->name = import_ident(im);
 	size_t nfields = import_arr(im, &s->fields);
 	for (size_t i = 0; i < nfields; ++i) {
@@ -1125,15 +1126,10 @@ static bool exptr_finish(Exporter *ex) {
 	/* position in file of where the position in file of identifier info is */
 	long ident_info_offset_offset = ftell(ex->out);
 	export_u64(ex, 0); /* identifier info offset */
+	long struct_info_offset_offset = ftell(ex->out);
+	export_u64(ex, 0); /* struct info offset */
 	
-	export_len(ex, arr_len(ex->exported_structs));
-	typedef StructDef *StructDefPtr;
-	arr_foreach(ex->exported_structs, StructDefPtr, s) {
-		if (!export_struct(ex, *s))
-			return false;
-	}
-	arr_clear(&ex->exported_structs);
-
+	
 	export_len(ex, arr_len(ex->exported_fns));
 	typedef FnExpr *FnExprPtr;
 	arr_foreach(ex->exported_fns, FnExprPtr, f) {
@@ -1141,6 +1137,15 @@ static bool exptr_finish(Exporter *ex) {
 			return false;
 	}
 	arr_clear(&ex->exported_fns);
+
+	long struct_info_offset = ftell(ex->out);
+	export_len(ex, arr_len(ex->exported_structs));
+	typedef StructDef *StructDefPtr;
+	arr_foreach(ex->exported_structs, StructDefPtr, s) {
+		if (!export_struct(ex, *s))
+			return false;
+	}
+	arr_clear(&ex->exported_structs);
 
 	long ident_info_offset = ftell(ex->out);
 	/* export number of identifiers *whose names matter* */
@@ -1159,6 +1164,9 @@ static bool exptr_finish(Exporter *ex) {
 	export_u64(ex, (U64)ident_info_offset);
 	
 	arr_clear(&ex->exported_idents);
+
+	fseek(ex->out, struct_info_offset_offset, SEEK_SET);
+	export_u64(ex, (U64)struct_info_offset);
 	
 	if (ferror(ex->out)) {
 		warn_print(LOCATION_NONE, "An error occured while writing the package output. It may be incorrect.");
@@ -1169,8 +1177,8 @@ static bool exptr_finish(Exporter *ex) {
 
 static bool import_footer(Importer *im) {
 	size_t i;
+	long footer_offset = ftell(im->in);
 	U64 ident_info_offset = import_u64(im);
-	long main_footer_offset = ftell(im->in);
 	fseek(im->in, (long)ident_info_offset, SEEK_SET);
 	
 	im->max_ident_id = import_u64(im);
@@ -1194,8 +1202,11 @@ static bool import_footer(Importer *im) {
 		}
 	}
 
-	fseek(im->in, main_footer_offset, SEEK_SET);
-
+	fseek(im->in, footer_offset + 8, SEEK_SET);
+	U64 struct_offset = import_u64(im);
+	fseek(im->in, (long)struct_offset, SEEK_SET);
+	
+	
 	import_arr(im, &im->structs);
 #ifdef TOC_DEBUG
 	/* for debugging: so that struct names show up as "anonymous struct" if they haven't been imported yet */
@@ -1204,6 +1215,8 @@ static bool import_footer(Importer *im) {
 	arr_foreach(im->structs, StructDef, s)
 		import_struct(im, s);
 
+	fseek(im->in, footer_offset + 16, SEEK_SET);
+	
 	import_arr(im, &im->fns);
 	arr_zero(im->fns);
 	arr_foreach(im->fns, FnExpr, f) {
