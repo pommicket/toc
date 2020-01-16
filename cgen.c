@@ -291,6 +291,8 @@ static void cgen_ident(CGenerator *g, Identifier i) {
 	if (idecl && idecl->kind == IDECL_DECL && (idecl->decl->flags & DECL_EXPORT)) {
 		assert(g->pkg_prefix);
 		cgen_write(g, "%s__", g->pkg_prefix);
+	} else if (i->from_pkg) {
+		cgen_write(g, "%s__", i->from_pkg->c.prefix);
 	}
 	if (i == g->main_ident) {
 		/* don't conflict with C's main! */
@@ -1291,7 +1293,6 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		case BINARY_DOT: {
 			if (type_is_builtin(&e->binary.lhs->type, BUILTIN_PKG)) {
 				assert(e->binary.lhs->kind == EXPR_VAL);
-				cgen_write(g, "%s__", e->binary.lhs->val.pkg->c.prefix);
 				cgen_ident(g, e->binary.dot.pkg_ident);
 				handled = true;
 			} else {
@@ -1909,34 +1910,52 @@ static bool cgen_stmt(CGenerator *g, Statement *s) {
 	return true;
 }
 
+static bool cgen_defs_fn(CGenerator *g, FnExpr *f, Type *t) {
+	if (f->c.defined) return true;
+	f->c.defined = true;
+	FnType *fn_type = &t->fn;
+	bool any_const = false;
+	if (fn_type->constness) {
+		for (size_t i = 0; i < arr_len(fn_type->types)-1; ++i) {
+			if (fn_type->constness[i] == CONSTNESS_YES)
+				any_const = true;
+		}
+	}
+	if (fn_type->constness) {
+		HashTable *instances = &f->instances;
+		/* generate each instance */
+		Instance **is = instances->data;
+		for (U64 i = 0; i < instances->cap; ++i) {
+			if (instances->occupied[i]) {
+				/* generate this instance */
+				if (!cgen_fn(g, &is[i]->fn, f->where, is[i]->c.id, is[i]->val.tuple))
+					return false;
+			}
+		}
+	}
+	if (!any_const) {
+		if (!cgen_fn(g, f, f->where, 0, NULL))
+			return false;
+	}
+	return true;
+}
+
 static bool cgen_defs_expr(CGenerator *g, Expression *e) {
 	if (e->kind == EXPR_FN) {
-		FnExpr *f = e->fn;
-		FnType *fn_type = &e->type.fn;
-		bool any_const = false;
-		if (fn_type->constness) {
-			for (size_t i = 0; i < arr_len(fn_type->types)-1; ++i) {
-				if (fn_type->constness[i] == CONSTNESS_YES)
-					any_const = true;
+	    if (!cgen_defs_fn(g, e->fn, &e->type))
+			return false;
+	} else if (e->kind == EXPR_BINARY_OP) {
+		if (e->binary.op == BINARY_DOT && type_is_builtin(&e->binary.lhs->type, BUILTIN_PKG)
+			&& e->type.kind == TYPE_FN) {
+			Identifier ident = e->binary.dot.pkg_ident;
+			Declaration *d = ident_decl(ident)->decl;
+			FnExpr *f = (d->flags & DECL_FOUND_VAL) ? d->val.fn : d->expr.fn;
+			if (fn_has_any_const_params(f)) {
+				/* define instances */
+				if (!cgen_defs_fn(g, f, &e->type))
+					return false;
 			}
 		}
-		if (fn_type->constness) {
-			HashTable *instances = &f->instances;
-			/* generate each instance */
-			Instance **is = instances->data;
-			for (U64 i = 0; i < instances->cap; ++i) {
-				if (instances->occupied[i]) {
-					/* generate this instance */
-					if (!cgen_fn(g, &is[i]->fn, e->where, is[i]->c.id, is[i]->val.tuple))
-						return false;
-				}
-			}
-		}
-		if (!any_const) {
-			if (!cgen_fn(g, e->fn, e->where, 0, NULL))
-				return false;
-		}
-		
 	}
 	cgen_recurse_subexprs(g, e, cgen_defs_expr, cgen_defs_block, cgen_defs_decl);
 	return true;

@@ -58,6 +58,8 @@ static bool cgen_sdecls_expr(CGenerator *g, Expression *e) {
 	if (e->kind == EXPR_FN) {
 		/* needs to go before decls_cgen.c... */
 		e->fn->c.id = ++g->ident_counter;
+		e->fn->c.declared = false;
+		e->fn->c.defined = false;
 	}
 	if (e->kind == EXPR_TYPE) {
 		if (!cgen_sdecls_type(g, &e->typeval))

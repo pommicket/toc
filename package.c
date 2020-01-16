@@ -753,6 +753,7 @@ static bool export_expr(Exporter *ex, Expression *e) {
 	} break;
 	case EXPR_EACH: {
 		EachExpr *ea = e->each;
+		possibly_static_assert(sizeof ea->flags == 1);
 		export_u8(ex, ea->flags);
 		if ((ea->flags & EACH_ANNOTATED_TYPE) || found_type)
 			if (!export_type(ex, &ea->type, e->where))
@@ -906,7 +907,7 @@ static void import_expr(Importer *im, Expression *e) {
 			if (found_type) {
 				ea->range.stepval = import_optional_val(im, &ea->type);
 			} else {
-				ea->range.step = import_expr_(im);
+				ea->range.step = import_optional_expr(im);
 			}
 		} else {
 			ea->of = import_expr_(im);
@@ -1034,6 +1035,8 @@ static void import_stmt(Importer *im, Statement *s) {
 }
 
 static bool export_block(Exporter *ex, Block *b) {
+	possibly_static_assert(sizeof b->flags == 1);
+	export_u8(ex, b->flags);
 	export_location(ex, b->where);
 	export_len(ex, arr_len(b->stmts));
 	arr_foreach(b->stmts, Statement, s) {
@@ -1046,6 +1049,7 @@ static bool export_block(Exporter *ex, Block *b) {
 }
 
 static void import_block(Importer *im, Block *b) {
+	b->flags = import_u8(im);
 	b->where = import_location(im);
 	import_arr(im, &b->stmts);
 	arr_foreach(b->stmts, Statement, s) {
@@ -1070,7 +1074,6 @@ static bool export_fn(Exporter *ex, FnExpr *f) {
 	arr_foreach(f->ret_decls, Declaration, ret_decl)
 		if (!export_decl(ex, ret_decl))
 			return false;
-	/* no need to export the return type */
 	if (!export_block(ex, &f->body))
 		return false;
 	return true;
@@ -1193,11 +1196,13 @@ static bool import_footer(Importer *im) {
 		fread(name, 1, name_len, im->in);
 		im->ident_map[id] = ident_insert(&im->pkg->idents, &name);
 		im->ident_map[id]->imported = true;
+		im->ident_map[id]->from_pkg = im->pkg;
 	}
 	for (i = 1; i <= im->max_ident_id; ++i) {
 		if (!im->ident_map[i]) {
 			im->ident_map[i] = ident_new_anonymous(&im->pkg->idents);
 			im->ident_map[i]->imported = true;
+			im->ident_map[i]->from_pkg = im->pkg;
 		}
 	}
 

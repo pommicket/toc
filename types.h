@@ -176,6 +176,7 @@ typedef struct IdentSlot {
 	char *text; /* actual name of the identifier */
 	size_t len; /* length of name */
 	U64 export_id; /* 0 if there's no exported identifier here, otherwise unique positive integer associated with this identifier */
+	struct Package *from_pkg;
 	struct Package *pkg; /* NULL if this is not associated with a package */
 	IdentDecl *decls; /* array of declarations of this identifier */
 } IdentSlot;
@@ -443,7 +444,7 @@ enum {
 	  BLOCK_FOUND_TYPES = 0x02,
 };
 typedef struct Block {
-	U16 flags;
+	U8 flags;
 	Location where;
 	struct Statement *stmts;
 	struct Expression *ret_expr; /* the return expression of this block, e.g. {foo(); 3} => 3  NULL for no expression. */
@@ -588,6 +589,9 @@ typedef struct FnExpr {
 		/* if name = NULL, this is an anonymous function, and id will be the ID of the fn. */
 		Identifier name;
 		IdentID id;
+		/* needed for imported templates atm */
+		bool declared;
+		bool defined;
 	} c;
 } FnExpr; /* an expression such as fn(x: int) int { 2 * x } */
 

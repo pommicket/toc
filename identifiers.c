@@ -169,7 +169,8 @@ static void print_ident(Identifier id) {
 static void fprint_ident_reduced_charset(FILE *out, Identifier id) {
 	assert(id);
 	if (id->anonymous) {
-		fprintf(out, "x___");
+		/* hack to generate unique C identifiers */
+		fprintf(out, "a%p__",(void *)id);
 		return;
 	}
 	for (char *s = id->text; is_ident(*s); ++s) {

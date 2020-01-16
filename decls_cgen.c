@@ -42,7 +42,7 @@ static bool cgen_decls_type(CGenerator *g, Type *type) {
 	return true;
 }
 
-static bool cgen_fn_decl(CGenerator *g, FnExpr *f, Location where, U64 instance, U64 which_are_const) {
+static bool cgen_single_fn_decl(CGenerator *g, FnExpr *f, Location where, U64 instance, U64 which_are_const) {
 	if (cgen_should_gen_fn(f)) {
 		if (!fn_enter(f, 0))
 			return false;
@@ -55,17 +55,16 @@ static bool cgen_fn_decl(CGenerator *g, FnExpr *f, Location where, U64 instance,
 	return true;
 }
 
-static bool cgen_decls_fn_instances(CGenerator *g, Expression *e) {
-	assert(e->kind == EXPR_FN);
-	FnExpr *f = e->fn;
-	assert(e->type.fn.constness);
+
+static bool cgen_decls_fn_instances(CGenerator *g, FnExpr *f, Type *type) {
+	assert(type->fn.constness);
 	Instance **data = f->instances.data;
 	for (U64 i = 0; i < f->instances.cap; ++i) {
 		if (f->instances.occupied[i]) {
 			if (cgen_should_gen_fn(&(*data)->fn)) {
 				(*data)->fn.c.name = f->c.name;
 				(*data)->fn.c.id = f->c.id;
-				if (!cgen_fn_decl(g, &(*data)->fn, e->where, (*data)->c.id, (*data)->val.tuple[0].u64))
+				if (!cgen_single_fn_decl(g, &(*data)->fn, f->where, (*data)->c.id, (*data)->val.tuple[0].u64))
 					return false;
 				cgen_write(g, ";");
 				cgen_nl(g);
@@ -76,7 +75,22 @@ static bool cgen_decls_fn_instances(CGenerator *g, Expression *e) {
 	return true;
 }
 
+static bool cgen_fn_decl(CGenerator *g, FnExpr *f, Type *t) {
+	FnType *fn_type = &t->fn;
+	if (f->c.declared) return true;
+	f->c.declared = true;
+	if (fn_type->constness) {
+		if (!cgen_decls_fn_instances(g, f, t))
+			return false;
+	} else {
+		if (!cgen_single_fn_decl(g, f, f->where, 0, 0))
+			return false;
+	}
+	return true;
+}
+
 static bool cgen_decls_expr(CGenerator *g, Expression *e) {
+	assert(e->flags & EXPR_FOUND_TYPE);
 	cgen_recurse_subexprs(g, e, cgen_decls_expr, cgen_decls_block, cgen_decls_decl);
 	switch (e->kind) {
 	case EXPR_FN: {
@@ -84,14 +98,8 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 		f->c.name = NULL;
 		if (!f->c.id)
 			f->c.id = ++g->ident_counter;
-		FnType *fn_type = &e->type.fn;
-		if (fn_type->constness) {
-			if (!cgen_decls_fn_instances(g, e))
-				return false;
-		} else {
-			if (!cgen_fn_decl(g, e->fn, e->where, 0, 0))
-				return false;
-		}
+		if (!cgen_fn_decl(g, e->fn, &e->type))
+			return false;
 	} break;
 	case EXPR_TYPE: {
 		Type *type = &e->typeval;
@@ -107,20 +115,24 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 		if (lhs_type->kind == TYPE_PTR)
 			lhs_type = lhs_type->ptr;
 		if (e->binary.op == BINARY_DOT && type_is_builtin(lhs_type, BUILTIN_PKG)) {
-			assert(e->binary.lhs->kind == EXPR_VAL);
 			Identifier ident = e->binary.dot.pkg_ident;
 			IdentDecl *idecl = ident_decl(ident);
 			assert(idecl);
-
-			if (idecl->kind == IDECL_DECL && e->type.kind == TYPE_FN) {
-				Declaration *d = idecl->decl;
+			assert(idecl->kind == IDECL_DECL);
+			Declaration *d = idecl->decl;
+			if (e->type.kind == TYPE_FN) {
 				FnExpr *f = NULL;
 				if (d->flags & DECL_FOUND_VAL)
 					f = d->val.fn;
 				else if (d->expr.kind == EXPR_FN)
 					f = d->expr.fn;
 				if (f) {
-					if (e->binary.lhs->type.flags & TYPE_IS_RESOLVED) { /* no declarations for templates */
+					if (fn_has_any_const_params(f)) {
+						/* declare the instances */
+						f->c.name = ident;
+						if (!cgen_fn_decl(g, f, &e->type))
+							return false;
+					} else {
 						bool out_param = cgen_uses_ptr(&f->ret_type);
 						/* extern function declaration */
 						cgen_write(g, "extern ");
@@ -130,7 +142,7 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 							if (!cgen_type_pre(g, &f->ret_type, e->where))
 								return false;
 						}
-						cgen_write(g, " %s__", e->binary.lhs->val.pkg->c.prefix);
+						cgen_write(g, " ");
 						cgen_ident(g, ident);
 						if (!out_param) {
 							if (!cgen_type_post(g, &f->ret_type, e->where))
@@ -140,15 +152,15 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 							return false;
 						cgen_write(g, ";");
 						cgen_nl(g);
-						break;
 					}
+					break;
 				}
 			}
 			/* extern variable declaration */
 			cgen_write(g, "extern ");
 			if (!cgen_type_pre(g, &e->type, e->where))
 				return false;
-			cgen_write(g, " %s__", e->binary.lhs->val.pkg->c.prefix);
+			cgen_write(g, " ");
 			cgen_ident(g, ident);
 			if (!cgen_type_post(g, &e->type, e->where))
 				return false;
@@ -181,13 +193,8 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 		return false;
 	if (cgen_fn_is_direct(g, d)) {
 		d->expr.fn->c.name = d->idents[0];
-		if (d->expr.type.fn.constness) {
-			if (!cgen_decls_fn_instances(g, &d->expr))
-				return false;
-		} else {
-			if (!cgen_fn_decl(g, d->expr.fn, d->expr.where, 0, 0))
-				return false;
-		}
+		if (!cgen_fn_decl(g, d->expr.fn, &d->expr.type))
+			return false;
 		cgen_recurse_subexprs(g, (&d->expr), cgen_decls_expr, cgen_decls_block, cgen_decls_decl);
 	} else {
 		if (d->flags & DECL_HAS_EXPR) {

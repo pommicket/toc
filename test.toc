@@ -9,8 +9,16 @@ putf ::= fn(x: float) {
 
 arr ::= pkg "a";
 
-
+putptri ::= fn(x: &int) {
+		puti(*x);
+};
 
 main ::= fn() {
 	 x : arr.Arr(int);
+	 arr.arr_add(&x, 10);
+	 arr.arr_add(&x, 20);
+	 arr.arr_add(&x, 80);
+	 arr.arr_add(&x, 5430);
+	 arr.arr_add(&x, -6546);
+	 arr.arr_foreach(x, putptri);
 };

@@ -19,6 +19,7 @@
 /* 
 TODO:
 packages
+clean up anywhere we used FnExpr *f, Location where
 make sure (&Package).something works
 ---
 X ::= newtype(int); or something
