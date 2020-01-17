@@ -1,4 +1,4 @@
-static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Location fn_where, Type *fn_type, Argument *args, Location where, U16 **param_indices);
+static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Type *fn_type, Argument *args, Location where, U16 **param_indices);
 static bool types_expr(Typer *tr, Expression *e);
 
 /* resolved_to should have the same value as to, but not consist of any identifiers which aren't in scope right now */
@@ -52,7 +52,7 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Expres
 			if (!types_expr(tr, f))
 				return false;
 			FnExpr *fn_decl = idecl->decl->expr.fn;
-			if (!call_arg_param_order(tr->allocr, fn_decl, idecl->decl->where, &f->type, m_args, match->where, &order))
+			if (!call_arg_param_order(tr->allocr, fn_decl, &f->type, m_args, match->where, &order))
 				return false;
 		}
 		for (size_t i = 0; i < nargs; ++i) {

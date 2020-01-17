@@ -487,7 +487,7 @@ static void cgen_full_fn_name(CGenerator *g, FnExpr *f, U64 instance) {
 	}
 }
 
-static bool cgen_fn_args(CGenerator *g, FnExpr *f, Location where, U64 instance, U64 which_are_const) {
+static bool cgen_fn_args(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_const) {
 	(void)instance; /* not needed atm */
 	bool out_param = cgen_uses_ptr(&f->ret_type);
 	bool any_params = false;
@@ -504,11 +504,11 @@ static bool cgen_fn_args(CGenerator *g, FnExpr *f, Location where, U64 instance,
 				any_args = true;
 				Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx++] : &d->type;
 				any_params = true;
-				if (!cgen_type_pre(g, type, where))
+				if (!cgen_type_pre(g, type, f->where))
 					return false;
 				cgen_write(g, " ");
 				cgen_ident(g, *i);
-				if (!cgen_type_post(g, type, where))
+				if (!cgen_type_post(g, type, f->where))
 					return false;
 			}
 		}
@@ -521,17 +521,17 @@ static bool cgen_fn_args(CGenerator *g, FnExpr *f, Location where, U64 instance,
 				Type *x = &f->ret_type.tuple[i];
 				if (any_params || i > 0)
 					cgen_write(g, ", ");
-				if (!cgen_type_pre(g, x, where)) return false;
+				if (!cgen_type_pre(g, x, f->where)) return false;
 				cgen_write(g, "(*ret%lu_)", (unsigned long)i);
-				if (!cgen_type_post(g, x, where)) return false;
+				if (!cgen_type_post(g, x, f->where)) return false;
 			}
 		} else {
 			if (any_params)
 				cgen_write(g, ", ");
-			if (!cgen_type_pre(g, &f->ret_type, where))
+			if (!cgen_type_pre(g, &f->ret_type, f->where))
 				return false;
 			cgen_write(g, " (*ret_)");
-			if (!cgen_type_post(g, &f->ret_type, where))
+			if (!cgen_type_post(g, &f->ret_type, f->where))
 				return false;
 		}
 	}
@@ -542,7 +542,7 @@ static bool cgen_fn_args(CGenerator *g, FnExpr *f, Location where, U64 instance,
 }
 
 /* unless f has const/semi-const args, instance and which_are_const can be set to 0 */
-static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where, U64 instance, U64 which_are_const) {
+static bool cgen_fn_header(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_const) {
 	bool out_param = cgen_uses_ptr(&f->ret_type);
 	assert(cgen_should_gen_fn(f));
 	if (!f->export.id) /* local to this translation unit */
@@ -550,14 +550,14 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, Location where, U64 instanc
 	if (out_param) {
 		cgen_write(g, "void ");
 	} else {
-		if (!cgen_type_pre(g, &f->ret_type, where)) return false;
+		if (!cgen_type_pre(g, &f->ret_type, f->where)) return false;
 		cgen_write(g, " ");
 	}
 	cgen_full_fn_name(g, f, instance);	
 	if (!out_param) {
-		if (!cgen_type_post(g, &f->ret_type, where)) return false;
+		if (!cgen_type_post(g, &f->ret_type, f->where)) return false;
 	}
-	return cgen_fn_args(g, f, where, instance, which_are_const);
+	return cgen_fn_args(g, f, instance, which_are_const);
 }
 
 
@@ -1179,10 +1179,13 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		cgen_write(g, U64_FMT, e->intl);
 		break;
 	case EXPR_LITERAL_STR: {
-		size_t c;
+		char *p = e->strl.str;
 		cgen_write(g, "mkslice_(\"");
-		for (c = 0; c < e->strl.len; ++c) {
-			cgen_write(g, "\\x%x", e->strl.str[c]);
+		for (size_t i = 0; i < e->strl.len; ++i, ++p) {
+			if (isprint(*p) && *p != '"')
+				cgen_write(g, "%c", *p);
+			else
+				cgen_write(g, "\\x%x", *p);
 		}
 		cgen_write(g, "\", %lu)", (unsigned long)e->strl.len);
 	} break;
@@ -1547,7 +1550,7 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 }
 
 /* pass 0 for instance and NULL for compile_time_args if there are no compile time arguments. */
-static bool cgen_fn(CGenerator *g, FnExpr *f, Location where, U64 instance, Value *compile_time_args) {
+static bool cgen_fn(CGenerator *g, FnExpr *f, U64 instance, Value *compile_time_args) {
 	/* see also cgen_defs_expr */
 	FnExpr *prev_fn = g->fn;
 	Block *prev_block = g->block;
@@ -1555,7 +1558,7 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where, U64 instance, Valu
 	if (!cgen_should_gen_fn(f))
 		return true;
 	fn_enter(f, 0);
-	if (!cgen_fn_header(g, f, where, instance, which_are_const))
+	if (!cgen_fn_header(g, f, instance, which_are_const))
 		return false;
 	g->fn = f;
 	cgen_write(g, " {");
@@ -1576,14 +1579,14 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, Location where, U64 instance, Valu
 					if (type_is_builtin(type, BUILTIN_TYPE)) {
 						/* don't need to do anything; we'll just use the type's id */
 					} else {
-						if (!cgen_val_pre(g, arg, type, where))
+						if (!cgen_val_pre(g, arg, type, f->where))
 							return false;
-						if (!cgen_type_pre(g, type, where)) return false;
+						if (!cgen_type_pre(g, type, f->where)) return false;
 						cgen_write(g, " const ");
 						cgen_ident(g, *ident);
-						if (!cgen_type_post(g, type, where)) return false;
+						if (!cgen_type_post(g, type, f->where)) return false;
 						cgen_write(g, " = ");
-						if (!cgen_val(g, arg, type, where))
+						if (!cgen_val(g, arg, type, f->where))
 							return false;
 						cgen_write(g, ";");
 						cgen_nl(g);
@@ -1928,13 +1931,13 @@ static bool cgen_defs_fn(CGenerator *g, FnExpr *f, Type *t) {
 		for (U64 i = 0; i < instances->cap; ++i) {
 			if (instances->occupied[i]) {
 				/* generate this instance */
-				if (!cgen_fn(g, &is[i]->fn, f->where, is[i]->c.id, is[i]->val.tuple))
+				if (!cgen_fn(g, &is[i]->fn, is[i]->c.id, is[i]->val.tuple))
 					return false;
 			}
 		}
 	}
 	if (!any_const) {
-		if (!cgen_fn(g, f, f->where, 0, NULL))
+		if (!cgen_fn(g, f, 0, NULL))
 			return false;
 	}
 	return true;

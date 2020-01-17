@@ -18,9 +18,10 @@
 
 /* 
 TODO:
-packages
-clean up anywhere we used FnExpr *f, Location where
 make sure (&Package).something works
+C functions (#foreign)
+#include
+variadic fns
 ---
 X ::= newtype(int); or something
 don't allow while {3; 5} (once break is added)

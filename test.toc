@@ -1,17 +1,5 @@
-arr ::= pkg "std/arr";
 io ::= pkg "std/io";
-
-putptri ::= fn(x: &int) {
-		io.puti(*x);
-};
 
 main ::= fn() {
 	 io.puts("Hello, world!");
-	 x : arr.Arr(int);
-	 arr.arr_add(&x, 10);
-	 arr.arr_add(&x, 20);
-	 arr.arr_add(&x, 80);
-	 arr.arr_add(&x, 5430);
-	 arr.arr_add(&x, -6546);
-	 arr.arr_foreach(x, putptri);
 };

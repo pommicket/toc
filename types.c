@@ -764,8 +764,7 @@ static bool arg_is_const(Expression *arg, Constness constness) {
 
 /* MUST be called after type_of_fn. */
 /* pass NULL for instance if this isn't an instance */
-static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where,
-					 Instance *instance) {
+static bool types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 	FnExpr *prev_fn = tr->fn;
 	bool success = true;
 	bool entered_fn = false;
@@ -801,7 +800,7 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where,
 			if (!instance) /* where will only actually be at the function declaration if it isn't
 							  an instance. otherwise, where will be at the calling site, which will already be
 							  printed */
-				info_print(where, "Function declaration is here.");
+				info_print(f->where, "Function declaration is here.");
 			free(got); free(expected);
 			success = false;
 			goto ret;
@@ -823,7 +822,7 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where,
 		char *expected = type_to_str(ret_type);
 		err_print(token_location(f->body.where.end), "No return value in function which returns %s.", expected);
 		free(expected);
-		info_print(where, "Function was declared here:");
+		info_print(f->where, "Function was declared here:");
 		success = false;
 		goto ret;
 	}
@@ -835,7 +834,7 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Location where,
 }
 
 /* puts a dynamic array of the parameter indices of the arguments into param_indices. */
-static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Location fn_where, Type *fn_type, Argument *args, Location where, U16 **param_indices) {
+static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Type *fn_type, Argument *args, Location where, U16 **param_indices) {
 	size_t nparams = arr_len(fn_type->fn.types)-1;
 	size_t nargs = arr_len(args);
 	if (nargs > nparams) {
@@ -875,14 +874,14 @@ static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Location fn_wher
 				char *s = ident_to_str(arg->name);
 				err_print(arg->where, "Argument '%s' does not appear in declaration of function.", s);
 				free(s);
-				info_print(fn_where, "Declaration is here.");
+				info_print(fn->where, "Declaration is here.");
 				return false;
 			}
 			param_idx = index;
 		} else {
 			if (param > (Declaration *)arr_last(fn->params)) {
 				err_print(arg->where, "Too many arguments to function!");
-				info_print(fn_where, "Declaration is here.");
+				info_print(fn->where, "Declaration is here.");
 				return false;
 			}
 		
@@ -927,7 +926,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			HashTable z = {0};
 			e->fn->instances = z;
 		} else {
-			if (!types_fn(tr, e->fn, &e->type, e->where, NULL))
+			if (!types_fn(tr, e->fn, &e->type, NULL))
 				return false;
 		}
 	} break;
@@ -1286,7 +1285,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 
 		if (fn_decl) {
 			U16 *order;
-			if (!call_arg_param_order(tr->allocr, fn_decl, fn_decl->where, &f->type, c->args, e->where, &order))
+			if (!call_arg_param_order(tr->allocr, fn_decl, &f->type, c->args, e->where, &order))
 				return false;
 			size_t arg;
 			for (arg = 0; arg < nargs; ++arg) {
@@ -1595,7 +1594,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				/* if anything happens, make sure we let the user know that this happened while generating a fn */
 				ErrCtx *err_ctx = e->where.start->pos.ctx;
 				*(Location *)typer_arr_add(tr, &err_ctx->instance_stack) = e->where;
-				bool success = types_fn(tr, &c->instance->fn, &f->type, e->where, c->instance);
+				bool success = types_fn(tr, &c->instance->fn, &f->type, c->instance);
 				arr_remove_lasta(&err_ctx->instance_stack, tr->allocr);
 				if (!success) return false;
 				arr_cleara(&table_index_type.tuple, tr->allocr);

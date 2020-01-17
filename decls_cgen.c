@@ -42,11 +42,11 @@ static bool cgen_decls_type(CGenerator *g, Type *type) {
 	return true;
 }
 
-static bool cgen_single_fn_decl(CGenerator *g, FnExpr *f, Location where, U64 instance, U64 which_are_const) {
+static bool cgen_single_fn_decl(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_const) {
 	if (cgen_should_gen_fn(f)) {
 		if (!fn_enter(f, 0))
 			return false;
-		if (!cgen_fn_header(g, f, where, instance, which_are_const))
+		if (!cgen_fn_header(g, f, instance, which_are_const))
 			return false;
 		cgen_write(g, ";");
 		cgen_nl(g);
@@ -56,15 +56,14 @@ static bool cgen_single_fn_decl(CGenerator *g, FnExpr *f, Location where, U64 in
 }
 
 
-static bool cgen_decls_fn_instances(CGenerator *g, FnExpr *f, Type *type) {
-	assert(type->fn.constness);
+static bool cgen_decls_fn_instances(CGenerator *g, FnExpr *f) {
 	Instance **data = f->instances.data;
 	for (U64 i = 0; i < f->instances.cap; ++i) {
 		if (f->instances.occupied[i]) {
 			if (cgen_should_gen_fn(&(*data)->fn)) {
 				(*data)->fn.c.name = f->c.name;
 				(*data)->fn.c.id = f->c.id;
-				if (!cgen_single_fn_decl(g, &(*data)->fn, f->where, (*data)->c.id, (*data)->val.tuple[0].u64))
+				if (!cgen_single_fn_decl(g, &(*data)->fn, (*data)->c.id, (*data)->val.tuple[0].u64))
 					return false;
 				cgen_write(g, ";");
 				cgen_nl(g);
@@ -80,10 +79,10 @@ static bool cgen_fn_decl(CGenerator *g, FnExpr *f, Type *t) {
 	if (f->c.declared) return true;
 	f->c.declared = true;
 	if (fn_type->constness) {
-		if (!cgen_decls_fn_instances(g, f, t))
+		if (!cgen_decls_fn_instances(g, f))
 			return false;
 	} else {
-		if (!cgen_single_fn_decl(g, f, f->where, 0, 0))
+		if (!cgen_single_fn_decl(g, f, 0, 0))
 			return false;
 	}
 	return true;
@@ -148,7 +147,7 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 							if (!cgen_type_post(g, &f->ret_type, e->where))
 								return false;
 						}
-						if (!cgen_fn_args(g, f, e->where, 0, 0))
+						if (!cgen_fn_args(g, f, 0, 0))
 							return false;
 						cgen_write(g, ";");
 						cgen_nl(g);

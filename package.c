@@ -402,13 +402,13 @@ static void import_type(Importer *im, Type *type) {
 	}
 }
 
-static bool export_fn_ptr(Exporter *ex, FnExpr *f, Location where) {
+static bool export_fn_ptr(Exporter *ex, FnExpr *f) {
 	if (f->export.id == 0) {
 		FnExpr **fptr = arr_add(&ex->exported_fns);
 		*fptr = f;
 		size_t nexported_fns = arr_len(ex->exported_fns);
 		if (nexported_fns > U32_MAX) {
-			err_print(where, "Too many exported functions (the maximum is " STRINGIFY(U32_MAX) ").");
+			err_print(f->where, "Too many exported functions (the maximum is " STRINGIFY(U32_MAX) ").");
 			return false;
 		}
 		f->export.id = (U32)nexported_fns;
@@ -488,7 +488,7 @@ static bool export_val_ptr(Exporter *ex, void *v, Type *type, Location where) {
 		}
 	} break;
 	case TYPE_FN:
-		if (!export_fn_ptr(ex, *(FnExpr **)v, where))
+		if (!export_fn_ptr(ex, *(FnExpr **)v))
 			return false;
 		break;
 	case TYPE_UNKNOWN:
@@ -687,7 +687,7 @@ static bool export_expr(Exporter *ex, Expression *e) {
 			return false;
 		break;
 	case EXPR_FN:
-		if (!export_fn_ptr(ex, e->fn, e->where))
+		if (!export_fn_ptr(ex, e->fn))
 			return false;
 		break;
 	case EXPR_BLOCK:

@@ -132,6 +132,7 @@ static char *ident_to_str(Identifier i) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstringop-overflow"
 #pragma GCC diagnostic ignored "-Wrestrict"
+#pragma GCC diagnostic ignored "-Warray-bounds"
 #endif
 	memcpy(str, i->text, i->len);
 	
