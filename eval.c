@@ -1556,7 +1556,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		*v = e->val;
 		break;
 	case EXPR_PKG:
-		v->pkg = e->pkg.name_ident->pkg;
+		assert(0);
 		break;
 	}
 	return true;

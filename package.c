@@ -15,7 +15,9 @@ static void import_expr(Importer *im, Expression *e);
 static void import_block(Importer *im, Block *b);
 static inline Expression *import_expr_(Importer *im);
 
+
 static void exptr_create(Exporter *ex, FILE *out) {
+	/* construct full filename */
 	ex->out = out;
 	ex->ident_id = 0;
 	ex->exported_fns = NULL;
@@ -203,7 +205,7 @@ static void exptr_start(Exporter *ex, const char *pkg_name, size_t pkg_name_len)
 }
 
 /* where = where was this imported. don't free fname while imported stuff is in use. */
-static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname, Identifiers *parent_idents, ErrCtx *parent_ctx, Location where) {
+static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname, ErrCtx *parent_ctx, Location where) {
 	Importer i = {0};
 	ErrCtx *err_ctx = i.err_ctx = allocr_malloc(allocr, sizeof *i.err_ctx);
 	idents_create(&p->idents);
@@ -235,7 +237,10 @@ static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname
 	U64 footer_offset = import_u64(&i);
 	size_t pkg_name_len = import_len(&i);
 	char *pkg_name = import_str(&i, pkg_name_len);
-	p->name = ident_get(parent_idents, pkg_name);
+	p->name = allocr_malloc(allocr, pkg_name_len + 1);
+	p->c.prefix = p->name;
+	memcpy(p->name, pkg_name, pkg_name_len);
+	p->name[pkg_name_len] = 0;
 	bool has_code = import_bool(&i);
 	if (has_code) {
 		size_t code_len = import_len(&i);
@@ -438,10 +443,9 @@ static bool export_val_ptr(Exporter *ex, void *v, Type *type, Location where) {
 			if (!export_type(ex, *(Type **)v, where))
 				return false;
 			break;
-		case BUILTIN_PKG: {
-			Package *pkg = *(Package **)v;
-			export_ident(ex, pkg->name);
-		} break;
+		case BUILTIN_PKG:
+			/* TODO */
+			break;
 		}
 		break;
 	case TYPE_TUPLE: {
@@ -736,12 +740,9 @@ static bool export_expr(Exporter *ex, Expression *e) {
 			return false;
 	} break;
 	case EXPR_PKG:
-		if (found_type) {
-			export_ident(ex, e->pkg.name_ident);
-		} else {
-			if (!export_expr(ex, e->pkg.name_expr))
-				return false;
-		}
+		assert(!found_type);
+		if (!export_expr(ex, e->pkg.name_expr))
+			return false;
 		break;
 	case EXPR_SLICE: {
 		SliceExpr *s = &e->slice;
@@ -886,7 +887,8 @@ static void import_expr(Importer *im, Expression *e) {
 		import_block(im, &w->body);
 	} break;
 	case EXPR_PKG:
-		/* TODO (see also: val) */
+		assert(!found_type);
+		e->pkg.name_expr = import_expr_(im);
 		break;
 	case EXPR_SLICE: {
 		SliceExpr *s = &e->slice;

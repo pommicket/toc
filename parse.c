@@ -2247,11 +2247,8 @@ static void fprint_expr(FILE *out, Expression *e) {
 		break;
 	case EXPR_PKG:
 		fprintf(out, "(pkg ");
-		if (found_type) {
-			fprint_ident(out, e->pkg.name_ident);
-		} else {
-			fprint_expr(out, e->pkg.name_expr);
-		}
+		assert(!found_type);
+		fprint_expr(out, e->pkg.name_expr);
 		fprintf(out, ")");
 		break;
 	}

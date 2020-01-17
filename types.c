@@ -981,33 +981,23 @@ static bool types_expr(Typer *tr, Expression *e) {
 		char *name_cstr = typer_malloc(tr, name_str_len + 1);
 		memcpy(name_cstr, name_str.data, name_str_len);
 		name_cstr[name_str.n] = '\0';
-		char *name_ptr = name_cstr;
-		Identifier name_ident = ident_insert(tr->idents, &name_ptr);
-		if (*name_ptr) {
-			err_print(name_expr->where, "Package name (\"%s\") is not a valid identifier.",
-					  name_cstr);
+		/* TODO: only import packages once */
+		Package *pkg = arr_add(&tr->pkgs);
+		char *filename = typer_malloc(tr, name_str_len + 6);
+		memcpy(filename, name_str.data, name_str_len);
+		strcpy(filename + name_str.n, ".top");
+		/* TODO: package paths */
+		FILE *fp = fopen(filename, "rb");
+		if (!fp) {
+			err_print(e->where, "Could not open package: %s (does this file exist?)", filename);
 			return false;
 		}
-		e->pkg.name_ident = name_ident;
-		if (!name_ident->pkg) {
-			char *filename = typer_malloc(tr, name_str_len + 5);
-			Package *pkg = name_ident->pkg = err_calloc(1, sizeof *pkg);
-			pkg->c.prefix = name_cstr;
-			memcpy(filename, name_str.data, name_str_len);
-			strcpy(filename + name_str.n, ".top");
-			/* TODO: library paths */
-			FILE *fp = fopen(filename, "rb");
-			if (!fp) {
-				err_print(e->where, "Could not open package: %s (does this file exist?)", filename);
-				free(filename);
-				return false;
-			}
-			if (!import_pkg(tr->allocr, pkg, fp, filename, tr->idents, tr->err_ctx, e->where)) {
-				return false;
-			}
-			*(Package **)arr_add(&tr->pkgs) = pkg;
-			fclose(fp);
+		if (!import_pkg(tr->allocr, pkg, fp, filename, tr->err_ctx, e->where)) {
+			return false;
 		}
+		e->kind = EXPR_VAL;
+		e->val.pkg = pkg;
+		fclose(fp);
 	} break;
 	case EXPR_EACH: {
 		EachExpr *ea = e->each;
@@ -1923,6 +1913,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		case BINARY_DOT: {
 			if (!types_expr(tr, lhs)) return false;
 			Type *struct_type = lhs_type;
+			if (struct_type->kind == TYPE_UNKNOWN) return true;
 			if (type_is_builtin(struct_type, BUILTIN_PKG)) {
 				if (rhs->kind != EXPR_IDENT) {
 					err_print(rhs->where, "Expected identifier for package access, but got %s.",
@@ -1936,12 +1927,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 				lhs->val = pkg_val;
 				e->binary.dot.pkg_ident = ident_translate(rhs->ident, &pkg_val.pkg->idents);
 				if (!e->binary.dot.pkg_ident) {
-					char *ident_name = ident_to_str(rhs->ident),
-						*pkg_name = ident_to_str(pkg_val.pkg->name);
+					char *ident_name = ident_to_str(rhs->ident);
 					
-					err_print(e->where, "%s was not imported from package %s.", ident_name, pkg_name);
+					err_print(e->where, "%s was not imported from package %s.", ident_name, pkg_val.pkg->name);
 					free(ident_name);
-					free(pkg_name);
 					return false;
 				}
 				if (!type_of_ident(tr, e->where, e->binary.dot.pkg_ident, t)) {
@@ -2367,10 +2356,8 @@ static bool types_file(Typer *tr, ParsedFile *f) {
 }
 
 static void typer_free(Typer *tr) {
-	typedef Package *PackagePtr;
-	arr_foreach(tr->pkgs, PackagePtr, pkg) {
-		package_free(*pkg);
-		free(*pkg);
+	arr_foreach(tr->pkgs, Package, pkg) {
+		package_free(pkg);
 	}
 	arr_clear(&tr->pkgs);
 }

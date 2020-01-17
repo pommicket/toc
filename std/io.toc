@@ -1,0 +1,14 @@
+pkg "io";
+
+#export puti ::= fn(x: int) {
+	#C("printf(\"%ld\\n\", (long)x)");
+};
+
+#export putf ::= fn(x: float) {
+	#C("printf(\"%f\\n\", (double)x)");
+};
+
+#export puts ::= fn(x: []char) {
+	#C("fwrite(x.data, 1, x.n, stdout)");
+	#C("printf(\"\\n\")");
+};

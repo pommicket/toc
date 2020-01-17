@@ -1,19 +1,12 @@
-puti ::= fn(x: int) {
-	 #C("printf(\"%ld\\n\", (long)x);
-");
-};
-putf ::= fn(x: float) {
-	 #C("printf(\"%f\\n\", (double)x);
-");
-};
-
-arr ::= pkg "a";
+arr ::= pkg "std/arr";
+io ::= pkg "std/io";
 
 putptri ::= fn(x: &int) {
-		puti(*x);
+		io.puti(*x);
 };
 
 main ::= fn() {
+	 io.puts("Hello, world!");
 	 x : arr.Arr(int);
 	 arr.arr_add(&x, 10);
 	 arr.arr_add(&x, 20);

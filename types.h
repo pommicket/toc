@@ -660,10 +660,9 @@ typedef struct Expression {
 		struct {
 			Type type;
 		} del;
-		union {
-			struct Expression *name_expr; /* before typing */
-			Identifier name_ident; /* after typing */
-		} pkg;
+		struct {
+			struct Expression *name_expr;
+		} pkg; /* only can exist before typing */
 		IfExpr if_;
 		WhileExpr while_;
 		EachExpr *each;
@@ -769,7 +768,7 @@ typedef struct Evaluator {
 } Evaluator;
 
 typedef struct Package {
-	Identifier name;
+	char *name; /* package name, not file name */
 	Identifiers idents;
 	Statement *stmts;
 	struct {
@@ -791,7 +790,7 @@ typedef struct Typer {
 	ErrCtx *err_ctx;
 	/* for checking for problematic struct circular dependencies */
 	bool *is_reference_stack;
-	Package **pkgs; /* all packages which have been imported */
+	Package *pkgs; /* all packages which have been imported */
 } Typer;
 
 typedef struct Exporter {
