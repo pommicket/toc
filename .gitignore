@@ -11,3 +11,4 @@ TAGS
 tags
 *.o
 compatibility
+std/*.c
