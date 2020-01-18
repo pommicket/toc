@@ -18,7 +18,6 @@
 
 /* 
 TODO:
-make sure (&Package).something works
 C functions (#foreign)
 #include
 variadic fns

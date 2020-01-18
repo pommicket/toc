@@ -777,7 +777,6 @@ static bool parse_block(Parser *p, Block *b) {
 	++t->token;	/* move past { */
 	b->stmts = NULL;
 	bool ret = true;
-	b->ret_expr = NULL; /* default to no return unless overwritten later */
 	if (!token_is_kw(t->token, KW_RBRACE)) {
 		/* non-empty block */
 		while (1) {
@@ -946,7 +945,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			if (!parse_type(p, &e->typeval))
 				return false;
 			if (t->token == end) goto success;
-			/* there's more stuff after. maybe it's, e.g. int, float */
+			/* there's more stuff after */
 		}
 		t->token = before;
 		if (end - t->token == 1) {
@@ -1400,7 +1399,9 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				++t->token;
 				Expression *of = parser_new_expr(p);
 				e->unary.of = of;
-				return parse_expr(p, of, end);
+			    if (!parse_expr(p, of, end))
+					return false;
+				goto success;
 			}
 
 			if (lowest_precedence_op->kw == KW_AS) {
@@ -1587,7 +1588,9 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 						return false;
 					}
 					t->token = opening_bracket;
-					return parse_args(p, &e->call.args);
+				    if (!parse_args(p, &e->call.args))
+						return false;
+					goto success;
 				}
 				case KW_LSQUARE: {
 					Expression *arr = parser_new_expr(p);
@@ -1732,6 +1735,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	}
  success:
 	e->where.end = t->token;
+	assert(t->token == end);
 
 	if (e->kind == EXPR_FN) {
 		e->fn->where = e->where;
@@ -1991,7 +1995,6 @@ static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			tokr_skip_to_eof(t);
 			return false;
 		}
-		
 		bool success = parse_expr(p, &s->expr, end);
 		
 		/* go past end of expr regardless of whether successful or not */

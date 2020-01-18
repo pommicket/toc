@@ -118,6 +118,11 @@ static void fprint_token(FILE *out, Token *t) {
 	}
 }
 
+static void print_token(Token *t) {
+	fprint_token(stdout, t);
+	printf("\n");
+}
+
 static inline void tokr_nextchar(Tokenizer *t) {
 	if (*(t->s) == '\n') {
 		++t->line;

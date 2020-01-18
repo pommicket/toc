@@ -1,5 +1,11 @@
-io ::= pkg "std/io";
+import ::= fn(x :: []char) &Package {
+	p ::= pkg x;
+	p_ptr ::= new(Package);
+	*p_ptr = p;
+	p_ptr
+};
 
 main ::= fn() {
+	 io ::= import("std/io");
 	 io.puts("Hello, world!");
 };

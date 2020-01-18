@@ -1913,22 +1913,38 @@ static bool types_expr(Typer *tr, Expression *e) {
 			if (!types_expr(tr, lhs)) return false;
 			Type *struct_type = lhs_type;
 			if (struct_type->kind == TYPE_UNKNOWN) return true;
+			if (struct_type->kind == TYPE_PTR)
+				struct_type = struct_type->ptr;
+			
 			if (type_is_builtin(struct_type, BUILTIN_PKG)) {
 				if (rhs->kind != EXPR_IDENT) {
 					err_print(rhs->where, "Expected identifier for package access, but got %s.",
 							  expr_kind_to_str(rhs->kind));
 					return false;
 				}
-				Value pkg_val;
-				if (!eval_expr(tr->evalr, lhs, &pkg_val))
-					return false;
-				lhs->kind = EXPR_VAL;
-				lhs->val = pkg_val;
-				e->binary.dot.pkg_ident = ident_translate(rhs->ident, &pkg_val.pkg->idents);
+				{
+					Value pkg_val;
+					if (!eval_expr(tr->evalr, lhs, &pkg_val))
+						return false;
+					lhs->kind = EXPR_VAL;
+					if (lhs_type->kind == TYPE_PTR) {
+						/* that's a pointer to a package! */
+
+						/* soon it will be a package... */
+						lhs->type.kind = TYPE_BUILTIN;
+						lhs->type.builtin = BUILTIN_PKG;
+					
+						eval_deref(&lhs->val, pkg_val.ptr, &lhs->type);
+					} else {
+						lhs->val = pkg_val;
+					}
+				}
+				Package *pkg = lhs->val.pkg;
+				e->binary.dot.pkg_ident = ident_translate(rhs->ident, &pkg->idents);
 				if (!e->binary.dot.pkg_ident) {
 					char *ident_name = ident_to_str(rhs->ident);
 					
-					err_print(e->where, "%s was not imported from package %s.", ident_name, pkg_val.pkg->name);
+					err_print(e->where, "%s was not imported from package %s.", ident_name, pkg->name);
 					free(ident_name);
 					return false;
 				}
@@ -1938,8 +1954,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 				break;
 			}
 			
-			if (struct_type->kind == TYPE_PTR)
-				struct_type = struct_type->ptr;
 			if (rhs->kind != EXPR_IDENT) {
 				err_print(rhs->where, "Expected identifier for struct member access, but got %s.",
 						  expr_kind_to_str(rhs->kind));
@@ -2074,7 +2088,6 @@ static bool types_block(Typer *tr, Block *b) {
 	bool success = true;
 	if (!typer_block_enter(tr, b))
 		return false;
-	b->ret_expr = NULL;
 	arr_foreach(b->stmts, Statement, s) {
 		if (!types_stmt(tr, s))
 			success = false;
@@ -2243,6 +2256,7 @@ static bool types_stmt(Typer *tr, Statement *s) {
 		if (!types_expr(tr, &s->expr)) {
 			return false;
 		}
+				
 		if (s->expr.type.kind == TYPE_TUPLE && !(s->flags & STMT_EXPR_NO_SEMICOLON)) {
 			err_print(s->where, "Statement of a tuple is not allowed. Use a semicolon instead of a comma here.");
 			return false;
