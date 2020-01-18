@@ -19,8 +19,8 @@
 /* 
 TODO:
 C functions (#foreign)
-#include
 variadic fns
+#include
 ---
 X ::= newtype(int); or something
 don't allow while {3; 5} (once break is added)

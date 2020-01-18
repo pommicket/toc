@@ -314,8 +314,8 @@ static Token *expr_find_end(Parser *p, ExprEndFlags flags)  {
 	Token *token = t->token;
 	bool could_be_vbs = false; /* could this be a void block statement (whose semicolons can be omitted)? e.g. {x := 5;} */
 	while (1) {
+		bool all_levels_0 = paren_level == 0 && brace_level == 0 && square_level == 0;
 		if (token->kind == TOKEN_KW) {
-			bool all_levels_0 = paren_level == 0 && brace_level == 0 && square_level == 0;
 			switch (token->kw) {
 			case KW_COMMA:
 				if ((flags & EXPR_CAN_END_WITH_COMMA) && all_levels_0)
@@ -853,8 +853,6 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 	} else {
 		if (!parse_decl_list(p, &f->params, DECL_END_RPAREN_COMMA))
 			return false;
-		arr_foreach(f->params, Declaration, param)
-			param->flags |= DECL_IS_PARAM;
 	}
 	
 	if (t->token->kind == TOKEN_EOF) {
@@ -1681,6 +1679,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					e->unary.op = UNARY_DALIGNOF;
 					single_arg = e->unary.of = parser_new_expr(p);
 					break;
+				case DIRECT_FOREIGN:
 				case DIRECT_EXPORT:
 					tokr_err(t, "Unrecognized expression.");
 					return false;
@@ -1831,7 +1830,17 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 			
 		if (token_is_kw(t->token, KW_EQ)) {
 			++t->token;
-			if ((flags & PARSE_DECL_ALLOW_INFER) && ends_decl(t->token, ends_with)) {
+			if (token_is_direct(t->token, DIRECT_FOREIGN)) {
+				d->flags |= DECL_FOREIGN;
+				++t->token;
+				/* TODO: foreign name */
+				if (!ends_decl(t->token, ends_with)) {
+					tokr_err(t, "Expected declaration to stop after #foreign, but it continues.");
+					goto ret_false;
+				}
+				++t->token;
+				
+			} else if ((flags & PARSE_DECL_ALLOW_INFER) && ends_decl(t->token, ends_with)) {
 				/* inferred expression */
 				d->flags |= DECL_INFER;
 				if (arr_len(d->idents) > 1) {
@@ -1875,7 +1884,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 		}
 	}
 	
-	if ((d->flags & DECL_IS_CONST) && !(d->flags & DECL_HAS_EXPR) && !(flags & PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR)) {
+	if ((d->flags & DECL_IS_CONST) && !(d->flags & (DECL_HAS_EXPR | DECL_FOREIGN)) && !(flags & PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR)) {
 		--t->token;
 		/* disallowed constant without an expression, e.g. x :: int; */
 		tokr_err(t, "You must have an expression at the end of this constant declaration.");

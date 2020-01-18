@@ -5,6 +5,10 @@ import ::= fn(x :: []char) &Package {
 	p_ptr
 };
 
+// n should be size_t
+memcpy :: fn (&u8, &u8, u64) = #foreign;
+
+
 main ::= fn() {
 	 io ::= import("std/io");
 	 io.puts("Hello, world!");

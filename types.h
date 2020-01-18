@@ -205,6 +205,7 @@ typedef enum {
 			  DIRECT_SIZEOF,
 			  DIRECT_ALIGNOF,
 			  DIRECT_EXPORT,
+			  DIRECT_FOREIGN,
 			  DIRECT_COUNT
 } Directive;
 
@@ -696,9 +697,9 @@ enum {
 	  DECL_FOUND_TYPE = 0x0010,
 	  DECL_ERRORED_ABOUT_SELF_REFERENCE = 0x0020, /* has there been an error about this decl referencing itself? */
 	  DECL_FOUND_VAL = 0x0040,
-	  DECL_IS_PARAM = 0x0080,
-	  DECL_INFER = 0x0100, /* infer the value (e.g. fn(t::Type=, x:t)) */
-	  DECL_EXPORT = 0x0200
+	  DECL_INFER = 0x0080, /* infer the value (e.g. fn(t::Type=, x:t)) */
+	  DECL_EXPORT = 0x0100,
+	  DECL_FOREIGN = 0x0200
 };
 
 typedef U16 DeclFlags;
