@@ -79,6 +79,7 @@ static inline bool type_is_slicechar(Type *t) {
 #include "tokenizer.c"
 #include "parse.c"
 #include "scope.c"
+#include "foreign.c"
 #include "eval.c"
 #include "infer.c"
 #include "package.c"

@@ -1428,26 +1428,36 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				return false;
 			fn = fnv.fn;
 		}
+		if (fn->flags & FN_EXPR_FOREIGN) {
+			size_t nargs = arr_len(e->call.arg_exprs);
+			Value *args = err_malloc(nargs * sizeof *args);
+			for (size_t i = 0; i < nargs; ++i) {
+				if (!eval_expr(ev, &e->call.arg_exprs[i], &args[i]))
+					return false;
+			}
+			bool success = foreign_call(fn, &e->call.fn->type, args, e->where);
+			free(args);
+			if (!success)
+				return false;
+			break;
+		}
+		
 		/* make sure function body is typed before calling it */
 		if (!types_block(ev->typer, &fn->body))
 			return false;
-		/* set parameter declaration values */
+		/* set parameter values */
 		Declaration *params = fn->params;
-		/* OPTIM (NOTE: currently needed for recursion) */
-		Value *args = NULL;
-		arr_resv(&args, arr_len(e->call.arg_exprs));
-		for (size_t i = 0; i < arr_len(e->call.arg_exprs); ++i) {
-			if (!eval_expr(ev, &e->call.arg_exprs[i], &args[i]))
-				return false;
-		}
 		fn_enter(fn, 0);
 		long arg = 0;
 		arr_foreach(params, Declaration, p) {
 			int idx = 0;
 			arr_foreach(p->idents, Identifier, i) {
+				Value arg_val;
+				if (!eval_expr(ev, &e->call.arg_exprs[arg], &arg_val))
+					return false;
 				Type *type = p->type.kind == TYPE_TUPLE ? &p->type.tuple[idx++] : &p->type;
 				IdentDecl *id = ident_decl(*i);
-				copy_val(NULL, &id->val, &args[arg], type);
+				copy_val(NULL, &id->val, &arg_val, type);
 				id->flags |= IDECL_HAS_VAL;
 				++arg;
 			}
@@ -1472,7 +1482,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				++idx;
 			}
 		}
-		arr_clear(&args);
 		if (!eval_block(ev, &fn->body, &e->type, v)) {
 			fn_exit(fn);
 			return false;
