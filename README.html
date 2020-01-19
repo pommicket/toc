@@ -48,7 +48,7 @@ it is nearly as fast in theory.</p>
 
 <p>Most of the source code for the <code>toc</code> compiler is licensed under the GNU General Public License, version 3. See <code>LICENSE</code> for more information.</p>
 
-<p><code>toc</code> is written in C, for speed and portability. It has no dependencies, other than the C runtime library.</p>
+<p><code>toc</code> is written in C, for speed and portability. It has no dependencies, other than the C runtime library. If you want to be able to call external C functions at compile time, however, you will need <code>libffcall</code> and <code>libdl</code> (so this is only currently supported on Unix-y systems).</p>
 
 <h4>Build system</h4>
 

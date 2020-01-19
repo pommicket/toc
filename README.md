@@ -45,7 +45,7 @@ On other systems, you can just compile main.c with a C compiler. `toc` uses seve
 
 Most of the source code for the `toc` compiler is licensed under the GNU General Public License, version 3. See `LICENSE` for more information.
 
-`toc` is written in C, for speed and portability. It has no dependencies, other than the C runtime library.
+`toc` is written in C, for speed and portability. It has no dependencies, other than the C runtime library. If you want to be able to call external C functions at compile time, however, you will need `libffcall` and `libdl` (so this is only currently supported on Unix-y systems).
 
 #### Build system
 `toc` is set up as a unity build, meaning that there is only one translation unit. So, `main.c` `#include`s `toc.c`, which `#include`s all of `toc`'s files.

@@ -165,6 +165,10 @@ static bool arg_list_add(av_alist *arg_list, Value *val, Type *type, Location wh
 	case TYPE_PTR:
 		av_ptr(*arg_list, void *, val->ptr);
 		break;
+	case TYPE_FN:
+		warn_print(where, "Passing toc function pointer to foreign function. This will not work if the function expects a C-style function pointer.");
+		av_ptr(*arg_list, FnExpr *, val->fn);
+		break;
 	case TYPE_BUILTIN:
 		switch (type->builtin) {
 		case BUILTIN_I8:
@@ -261,8 +265,8 @@ static bool foreign_call(FnExpr *fn, Type *fn_type, Value *args, Location call_w
 	return true;
 }
 #else
-static bool foreign_call(FnExpr *fn, Type *fn_type, Value *args, Location call_where) {
-	(void)fn; (void)fn_type; (void)args;
+static bool foreign_call(FnExpr *fn, Type *fn_type, Value *args, Location call_where, Value *ret) {
+	(void)fn; (void)fn_type; (void)args; (void)ret;
 	err_print(call_where, "You have not compiled toc with compile time foreign function support.");
 	return false;
 }
