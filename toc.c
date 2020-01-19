@@ -46,6 +46,10 @@ static void print_token(Token *t);
 /* misc */
 #define STRINGIFY2(x) #x
 #define STRINGIFY(x) STRINGIFY2(x)
+#define join3(a,b) a##b
+#define join2(a,b) join3(a,b)
+#define join(a,b) join2(a,b)
+#define eval(x) x
 
 static void fprint_char_literal(FILE *f, char c) {
 	if (isprint(c))

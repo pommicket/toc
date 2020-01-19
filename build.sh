@@ -21,7 +21,7 @@ else
 	WARNINGS=''
 fi
 
-DEBUG_FLAGS="-O0 -g3 $WARNINGS -std=c11 -DTOC_DEBUG"
+DEBUG_FLAGS="-O0 -g3 $WARNINGS -std=c11 -DTOC_DEBUG -DCOMPILE_TIME_FOREIGN_FN_SUPPORT=1 -lffcall -ldl"
 RELEASE_FLAGS="-O3 -s -DNDEBUG $WARNINGS -std=c11"
 
 if [ "$1" = "release" ]; then

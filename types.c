@@ -692,7 +692,7 @@ static Status type_cast_status(Type *from, Type *to) {
 			break;
 		case BUILTIN_F32:
 		case BUILTIN_F64:
-			if (to->kind == TYPE_BUILTIN) return STATUS_ERR;
+			if (to->kind != TYPE_BUILTIN) return STATUS_ERR;
 			switch (to->builtin) {
 			case BUILTIN_I8:
 			case BUILTIN_U8:
@@ -1589,6 +1589,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 				char *gstr = type_to_str(got);
 				err_print(arg->where, "Expected type %s as argument to function, but got %s.", estr, gstr);
 				return false;
+			}
+			if (got->flags & TYPE_IS_FLEXIBLE) {
+				/* "cast" */
+				*got = *expected;
 			}
 		}
 		

@@ -1435,7 +1435,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				if (!eval_expr(ev, &e->call.arg_exprs[i], &args[i]))
 					return false;
 			}
-			bool success = foreign_call(fn, &e->call.fn->type, args, e->where);
+			bool success = foreign_call(fn, &e->call.fn->type, args, e->where, v);
 			free(args);
 			if (!success)
 				return false;
