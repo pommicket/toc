@@ -149,6 +149,18 @@ static inline char *import_str(Importer *i, size_t len) {
 	return str;
 }
 
+static inline void export_cstr(Exporter *ex, const char *str) {
+	size_t len = strlen(str);
+	export_len(ex, len);
+	export_str(ex, str, len);
+}
+							   
+static inline char *import_cstr(Importer *i) {
+	size_t len = import_len(i);
+	return import_str(i, len);
+}
+
+
 static void export_location(Exporter *ex, Location where) {
 	/* for now, we only export the line */
 	export_vlq(ex, (U64)where.start->pos.line);
@@ -958,6 +970,13 @@ static bool export_decl(Exporter *ex, Declaration *d) {
 	} else if (d->flags & DECL_HAS_EXPR) {
 		if (!export_expr(ex, &d->expr))
 			return false;
+	} else if (d->flags & DECL_FOREIGN) {
+		if (!(d->flags & DECL_FOUND_TYPE)) {
+			if (!export_expr(ex, d->foreign.name))
+				return false;
+			if (!export_expr(ex, d->foreign.lib))
+				return false;
+		}
 	}
 	return true;
 }
@@ -985,6 +1004,11 @@ static void import_decl(Importer *im, Declaration *d) {
 		d->flags &= (DeclFlags)~(DeclFlags)DECL_HAS_EXPR;
 	} else if (d->flags & DECL_HAS_EXPR) {
 		import_expr(im, &d->expr);
+	} else if (d->flags & DECL_FOREIGN) {
+		if (!(d->flags & DECL_FOUND_TYPE)) {
+			d->foreign.name = import_expr_(im);
+			d->foreign.lib = import_expr_(im);
+		}
 	}
 }
 
@@ -1061,37 +1085,52 @@ static void import_block(Importer *im, Block *b) {
 }
 
 static bool export_fn(Exporter *ex, FnExpr *f) {
-	export_location(ex, f->where);
-	export_len(ex, arr_len(f->params));
-	arr_foreach(f->params, Declaration, param) {
-		if (!export_decl(ex, param))
-			return false;
-		arr_foreach(param->idents, Identifier, ident) {
-			export_ident_name(ex, *ident);
+	possibly_static_assert(sizeof f->flags == 1);
+	export_u8(ex, f->flags);
+	if (f->flags & FN_EXPR_FOREIGN) {
+		export_cstr(ex, f->foreign.name);
+		export_cstr(ex, f->foreign.lib);
+	} else {
+	
+		export_location(ex, f->where);
+		export_len(ex, arr_len(f->params));
+		arr_foreach(f->params, Declaration, param) {
+			if (!export_decl(ex, param))
+				return false;
+			arr_foreach(param->idents, Identifier, ident) {
+				export_ident_name(ex, *ident);
+			}
 		}
-	}
-	if (!export_type(ex, &f->ret_type, f->where))
-		return false;
-	export_len(ex, arr_len(f->ret_decls));
-	arr_foreach(f->ret_decls, Declaration, ret_decl)
-		if (!export_decl(ex, ret_decl))
+		if (!export_type(ex, &f->ret_type, f->where))
 			return false;
-	if (!export_block(ex, &f->body))
-		return false;
+		export_len(ex, arr_len(f->ret_decls));
+		arr_foreach(f->ret_decls, Declaration, ret_decl)
+			if (!export_decl(ex, ret_decl))
+				return false;
+		if (!export_block(ex, &f->body))
+			return false;
+	}
 	return true;
 }
 
 static void import_fn(Importer *im, FnExpr *f) {
-	f->where = import_location(im);
-    import_arr(im, &f->params);
-	arr_foreach(f->params, Declaration, param) {
-		import_decl(im, param);
+	memset(f, 0, sizeof *f);
+	f->flags = import_u8(im);
+	if (f->flags & FN_EXPR_FOREIGN) {
+		f->foreign.name = import_cstr(im);
+		f->foreign.lib = import_cstr(im);
+	} else {
+		f->where = import_location(im);
+		import_arr(im, &f->params);
+		arr_foreach(f->params, Declaration, param) {
+			import_decl(im, param);
+		}
+		import_type(im, &f->ret_type);
+		import_arr(im, &f->ret_decls);
+		arr_foreach(f->ret_decls, Declaration, ret_decl)
+			import_decl(im, ret_decl);
+		import_block(im, &f->body);
 	}
-	import_type(im, &f->ret_type);
-	import_arr(im, &f->ret_decls);
-	arr_foreach(f->ret_decls, Declaration, ret_decl)
-		import_decl(im, ret_decl);
-	import_block(im, &f->body);
 }
 
 static bool export_struct(Exporter *ex, StructDef *s) {

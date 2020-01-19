@@ -70,6 +70,10 @@ static bool cgen_sdecls_expr(CGenerator *g, Expression *e) {
 }
 
 static bool cgen_sdecls_decl(CGenerator *g, Declaration *d) {
+	if (d->flags & DECL_FOREIGN) {
+		/* handled by cgen_decls */
+		return true;
+	}
 	cgen_sdecls_type(g, &d->type);
 	if (cgen_fn_is_direct(g, d)) {
 		d->expr.fn->c.name = d->idents[0];

@@ -571,12 +571,22 @@ typedef struct EachExpr {
 } EachExpr;
 
 
+enum {
+	  FN_EXPR_FOREIGN = 0x01
+};
+
 typedef struct FnExpr {
 	struct Declaration *params; /* declarations of the parameters to this function */
 	struct Declaration *ret_decls; /* array of decls, if this has named return values. otherwise, NULL */
 	Location where;
-	Type ret_type;
-	Block body;
+	Type ret_type;	
+	union {
+		Block body;
+		struct {
+			const char *name;
+			const char *lib;
+		} foreign;
+	};
 	HashTable instances; /* for fns with constant parameters. the key is a tuple where
 							the first element is a u64 value whose ith bit (1<<i) is 1
 							if the ith semi-constant parameter is constant.
@@ -594,6 +604,7 @@ typedef struct FnExpr {
 		bool declared;
 		bool defined;
 	} c;
+	U8 flags;
 } FnExpr; /* an expression such as fn(x: int) int { 2 * x } */
 
 typedef struct Instance {
@@ -709,7 +720,14 @@ typedef struct Declaration {
 	Identifier *idents;
 	Type type;
 	DeclFlags flags;
-	Expression expr;
+	union {
+		Expression expr;
+		struct {
+			/* only exist before typing */
+			Expression *name;
+			Expression *lib;
+		} foreign;
+	};
 	Value val; /* only for constant decls. */
 } Declaration;
 

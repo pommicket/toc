@@ -188,6 +188,10 @@ static bool cgen_decls_block(CGenerator *g, Block *b) {
 }
 
 static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
+	if (d->flags & DECL_FOREIGN) {
+		/* TODO */
+		return true;
+	}
 	if (!cgen_decls_type(g, &d->type))
 		return false;
 	if (cgen_fn_is_direct(g, d)) {

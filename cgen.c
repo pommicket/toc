@@ -1185,7 +1185,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			if (isprint(*p) && *p != '"')
 				cgen_write(g, "%c", *p);
 			else
-				cgen_write(g, "\\x%x", *p);
+				cgen_write(g, "\\x%02x", *p);
 		}
 		cgen_write(g, "\", %lu)", (unsigned long)e->strl.len);
 	} break;
@@ -1766,6 +1766,9 @@ static bool cgen_val(CGenerator *g, Value v, Type *t, Location where) {
 }
 
 static bool cgen_decl(CGenerator *g, Declaration *d) {
+	if (d->flags & DECL_FOREIGN)
+		return true; /* already dealt with */
+	
 	int has_expr = d->flags & DECL_HAS_EXPR;
 	if (cgen_fn_is_direct(g, d))
 		return true; /* dealt with in cgen_defs_ */
@@ -1965,6 +1968,9 @@ static bool cgen_defs_expr(CGenerator *g, Expression *e) {
 }
 
 static bool cgen_defs_decl(CGenerator *g, Declaration *d) {
+	if (d->flags & DECL_FOREIGN) {
+		return true; /* dealt with by decls_cgen */
+	}
 	if (d->flags & DECL_HAS_EXPR) {
 		if (!cgen_defs_expr(g, &d->expr))
 			return false;

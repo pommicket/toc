@@ -179,10 +179,6 @@ static Keyword builtin_type_to_kw(BuiltinType t) {
 	return KW_COUNT;
 }
 
-/* TODO: DELME */
-static void fprint_expr(FILE *out, Expression *expr);
-
-
 /* returns the number of characters written, not including the null character */
 static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 	switch (t->kind) {
@@ -290,6 +286,10 @@ static inline void *parser_arr_add_(Parser *p, void **a, size_t sz) {
 
 static inline void *parser_malloc(Parser *p, size_t bytes) {
 	return allocr_malloc(p->allocr, bytes);
+}
+
+static inline void *parser_calloc(Parser *p, size_t n, size_t bytes) {
+	return allocr_calloc(p->allocr, n, bytes);
 }
 
 /* allocate a new expression. */
@@ -1010,7 +1010,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			case KW_FN: {
 				/* this is a function */
 				e->kind = EXPR_FN;
-				if (!parse_fn_expr(p, e->fn = parser_malloc(p, sizeof *e->fn)))
+				if (!parse_fn_expr(p, e->fn = parser_calloc(p, 1, sizeof *e->fn)))
 					return false;
 				e->fn->export.id = 0;
 				if (t->token != end) {
@@ -1831,9 +1831,30 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 		if (token_is_kw(t->token, KW_EQ)) {
 			++t->token;
 			if (token_is_direct(t->token, DIRECT_FOREIGN)) {
+				if (!(d->flags & DECL_ANNOTATES_TYPE)) {
+					err_print(d->where, "Foreign declaration must have a type.");
+					return false;
+				}
 				d->flags |= DECL_FOREIGN;
+				/* foreign name */
 				++t->token;
-				/* TODO: foreign name */
+				d->foreign.name = parser_new_expr(p);
+				if (!parse_expr(p, d->foreign.name, expr_find_end(p, EXPR_CAN_END_WITH_COMMA))) {
+					goto ret_false;
+				}
+				if (!ends_decl(t->token, ends_with)) {
+					if (!token_is_kw(t->token, KW_COMMA)) {
+						tokr_err(t, "Expected comma, followed by foreign library.");
+						goto ret_false;
+					}
+					++t->token;
+					/* foreign library */
+					d->foreign.lib = parser_new_expr(p);
+					if (!parse_expr(p, d->foreign.lib, expr_find_end(p, 0))) {
+						goto ret_false;
+					}
+				}
+				
 				if (!ends_decl(t->token, ends_with)) {
 					tokr_err(t, "Expected declaration to stop after #foreign, but it continues.");
 					goto ret_false;

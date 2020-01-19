@@ -19,6 +19,8 @@
 /* 
 TODO:
 C functions (#foreign)
+foreign non-functions
+no foreign parameter declarations
 variadic fns
 #include
 ---

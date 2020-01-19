@@ -842,6 +842,21 @@ static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Type *fn_type, A
 				  nparams, nargs);
 		return false;
 	}
+
+	U16 *order = NULL;
+	if (fn->flags & FN_EXPR_FOREIGN) {
+		U16 i = 0;
+		arr_foreach(args, Argument, arg) {
+			if (arg->name) {
+				err_print(arg->where, "Foreign function calls cannot use named arguments.");
+				return false;
+			}
+			*(U16 *)arr_adda(&order, allocr) = i++;
+		}
+		*param_indices = order;
+		return true;
+	}
+	
 	int p = 0; /* counter for sequential parameters */
 
 	Declaration *last_param_without_default_value = NULL;
@@ -852,7 +867,6 @@ static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Type *fn_type, A
 	}
 	Declaration *param = fn->params;
 	size_t ident_idx = 0;
-	U16 *order = NULL;
 	arr_foreach(args, Argument, arg) {
 		bool named = arg->name != NULL;
 		int param_idx = -1;
@@ -2121,6 +2135,26 @@ static bool types_block(Typer *tr, Block *b) {
 	return success;
 }
 
+/* returns NULL if an error occured */
+static char *eval_expr_as_cstr(Typer *tr, Expression *e, const char *what_is_this) {
+	Value e_val;
+	if (!types_expr(tr, e))
+		return NULL;
+	if (!type_is_slicechar(&e->type)) {
+		char *got = type_to_str(&e->type);
+		err_print(e->where, "Expected []char for %s, but got %s.", what_is_this, got);
+		free(got);
+		return NULL;
+	}
+	if (!eval_expr(tr->evalr, e, &e_val))
+		return NULL;
+	Slice e_slice = e_val.slice;
+	char *str = typer_malloc(tr, (size_t)e_slice.n + 1);
+	str[e_slice.n] = 0;
+	memcpy(str, e_slice.data, (size_t)e_slice.n);
+	return str;
+}
+
 static bool types_decl(Typer *tr, Declaration *d) {
 	bool success = true;
 	if (d->flags & DECL_FOUND_TYPE) return true;
@@ -2179,7 +2213,35 @@ static bool types_decl(Typer *tr, Declaration *d) {
 			}
 		}
 				
+	} else if (d->flags & DECL_FOREIGN) {
+		if (!type_resolve(tr, &d->type, d->where)) {
+			success = false;
+			goto ret;
+		}
+		char *name_cstr = eval_expr_as_cstr(tr, d->foreign.name, "foreign name");
+		if (!name_cstr) {
+			success = false;
+			goto ret;
+		}
+		if (d->foreign.lib) {
+			char *lib_cstr = eval_expr_as_cstr(tr, d->foreign.lib, "foreign library name");
+			if (!lib_cstr) {
+				success = false;
+				goto ret;
+			}
+			/* make sure no one tries to use these */
+			d->foreign.name = NULL;
+			d->foreign.lib = NULL;
+			FnExpr *f = d->val.fn = typer_calloc(tr, 1, sizeof *d->expr.fn);
+			f->flags = FN_EXPR_FOREIGN;
+			f->where = d->expr.where = d->where;
+			f->foreign.name = name_cstr;
+			f->foreign.lib = lib_cstr;
+			
+			d->flags |= DECL_FOUND_VAL;
+		}
 	}
+	
 	for (size_t i = 0; i < arr_len(d->idents); ++i) {
 		Type *t = d->type.kind == TYPE_TUPLE ? &d->type.tuple[i] : &d->type;
 		if (type_is_compileonly(&d->type)) {

@@ -1031,7 +1031,14 @@ static bool eval_ident(Evaluator *ev, Identifier ident, Value *v, Location where
 	Declaration *d = NULL;
 	if (is_decl) {
 		d = idecl->decl;
-		
+		if (d->flags & DECL_FOREIGN) {
+			if (!(d->flags & DECL_FOUND_VAL)) {
+				err_print(where, "Cannot access foreign declaration at compile time (you can only call foreign functions)");
+				return false;
+			}
+			v->fn = d->val.fn;
+			return true;
+		}
 		if ((d->flags & DECL_FOUND_VAL) && type_is_builtin(&d->type, BUILTIN_TYPE) && d->val.type->kind == TYPE_STRUCT) {
 			v->type = allocr_malloc(ev->allocr, sizeof *v->type);
 			v->type->flags = TYPE_IS_RESOLVED;

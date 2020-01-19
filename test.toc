@@ -5,11 +5,17 @@ import ::= fn(x :: []char) &Package {
 	p_ptr
 };
 
-// n should be size_t
-memcpy :: fn (&u8, &u8, u64) = #foreign;
+puts :: fn(&char) i32 = #foreign "puts", "libc.so.6";
 
+hw ::= fn() int {
+   s := "Hello, world!\0";
+   puts(&s[0]);
+   0
+};
 
 main ::= fn() {
-	 io ::= import("std/io");
-	 io.puts("Hello, world!");
+	 // io ::= import("std/io");
+	 // io.puts("Hello, world!");
+	 hw();
+	 x ::= hw();
 };
