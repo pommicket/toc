@@ -28,22 +28,22 @@ static int is_ident(int c) {
 
 /* Initialize Identifiers. */
 static void idents_create(Identifiers *ids) {
-	ids->slots = NULL;
-	ids->nidents = 0;
+	str_hash_table_create(&ids->table, sizeof(IdentSlot) - sizeof(StrHashTableSlot), NULL);
 	ids->rseed = 0x27182818;
 }
 
-static U64 ident_hash(char **s) {
-	U32 x = 0xabcdef01;
-	U32 y = 0x31415926;
-	U64 hash = 0;
+/* advances s until a non-identifier character is reached, then returns the number of characters advanced */
+static size_t ident_str_len(char **s) {
+	char *original = *s;
 	while (is_ident(**s)) {
-		hash += (U64)x * (unsigned char)(**s) + y;
-		x = rand_u32(x);
-		y = rand_u32(y);
 		++*s;
 	}
-	return hash;
+	return (size_t)(*s - original);
+}
+
+static U64 ident_hash(char **s) {
+	char *original = *s;
+	return str_hash(original, ident_str_len(s));
 }
 
 /* are these strings equal, up to the first non-ident character? */
@@ -57,7 +57,7 @@ static bool ident_str_eq_str(const char *s, const char *t) {
 
 static inline bool ident_eq_str(Identifier i, const char *s) {
 	if (i->anonymous) return false;
-	return ident_str_eq_str(i->text, s);
+	return ident_str_eq_str(i->str, s);
 }
 
 
@@ -78,55 +78,25 @@ static IdentSlot **ident_slots_insert(IdentSlot **slots, char *s, size_t i) {
 static Identifier ident_new_anonymous(Identifiers *ids) {
 	U32 idx = rand_u32(ids->rseed);
 	ids->rseed = idx;
-	IdentSlot **slot = ident_slots_insert(ids->slots, NULL, idx % arr_len(ids->slots));
-	*slot = err_calloc(1, sizeof **slot);
-	++ids->nidents;
-	(*slot)->anonymous = true;
-	(*slot)->len = 3;
-	(*slot)->text = "???";
-	return *slot;
+	IdentSlot *slot = (IdentSlot *)str_hash_table_insert_anonymous_(&ids->table);
+	slot->anonymous = true;
+	return slot;
 }
 
 /* moves s to the char after the identifier */
 /* inserts if does not exist. reads until non-ident char is found. */
 /* advances past identifier */
 static Identifier ident_insert(Identifiers *ids, char **s) {
-	size_t nslots = arr_len(ids->slots);
-	if (nslots <= 2*ids->nidents) {
-		IdentSlot **slots = ids->slots;
-		/* reserve more space */
-		IdentSlot **new_slots = NULL;
-		size_t new_nslots = nslots * 2 + 10;
-		arr_set_len(&new_slots, new_nslots);
-		arr_zero(new_slots);
-		arr_foreach(slots, IdentSlotPtr, slotp) {
-			IdentSlot *slot = *slotp;
-			if (slot) {
-				char *ptr = slot->text;
-				U64 new_hash = ident_hash(&ptr);
-				IdentSlot **new_slot = ident_slots_insert(new_slots, slot->text, new_hash % new_nslots);
-				*new_slot = slot;
-			}
-		}
-		arr_clear(&slots);
-		ids->slots = new_slots;
-		nslots = new_nslots;
-	}
 	char *original = *s;
-	U64 hash = ident_hash(s);
-	IdentSlot **slot = ident_slots_insert(ids->slots, original, hash % arr_len(ids->slots));
-	if (!*slot) {
-		*slot = err_calloc(1, sizeof **slot);
-		++ids->nidents;
-		(*slot)->text = original;
-		(*slot)->len = (size_t)(*s - original);
-	}
-	return *slot;
+	size_t len = ident_str_len(s);
+	return (Identifier)str_hash_table_insert_(&ids->table, original, len);
 }
 
 static char *ident_to_str(Identifier i) {
 	char *str = err_malloc(i->len + 1);
-	/* for some reason, GCC thinks that i->len is -1 when this is called from type_to_str_ (in release mode) */
+	/* for some reason, GCC thinks that i->len is -1 when this is called from type_to_str_ (in release mode)
+	   TODO: test this now (some stuff was changed)
+	*/
 
 #if !defined(__clang__) && defined(__GNUC__)
 #pragma GCC diagnostic push
@@ -134,7 +104,7 @@ static char *ident_to_str(Identifier i) {
 #pragma GCC diagnostic ignored "-Wrestrict"
 #pragma GCC diagnostic ignored "-Warray-bounds"
 #endif
-	memcpy(str, i->text, i->len);
+	memcpy(str, i->str, i->len);
 	
 
 #if !defined(__clang__) && defined(__GNUC__)
@@ -146,7 +116,7 @@ static char *ident_to_str(Identifier i) {
 
 
 static void fprint_ident(FILE *out, Identifier id) {
-	fwrite(id->text, 1, id->len, out);
+	fwrite(id->str, 1, id->len, out);
 }
 
 static void fprint_ident_debug(FILE *out, Identifier id) {
@@ -174,7 +144,7 @@ static void fprint_ident_reduced_charset(FILE *out, Identifier id) {
 		fprintf(out, "a%p__",(void *)id);
 		return;
 	}
-	for (char *s = id->text; is_ident(*s); ++s) {
+	for (const char *s = id->str; is_ident(*s); ++s) {
 		int c = (unsigned char)(*s);
 		if (c > 127) {
 			fprintf(out, "x__%x", c);
@@ -187,14 +157,13 @@ static void fprint_ident_reduced_charset(FILE *out, Identifier id) {
 /* NULL = no such identifier. returns identifier "foo" for both "foo\0" and "foo+92384324..." */
 static Identifier ident_get(Identifiers *ids, char *s) {
 	char *ptr = s;
-	U64 hash = ident_hash(&ptr);
-	IdentSlot **slot = ident_slots_insert(ids->slots, s, hash % arr_len(ids->slots));
-	return *slot;
+	size_t len = ident_str_len(&ptr);
+	return (Identifier)str_hash_table_get_(&ids->table, s, len);
 }
 
 static Identifier ident_translate(Identifier i, Identifiers *to_idents) {
 	if (!i || i->anonymous) return NULL;
-	Identifier new_ident = ident_get(to_idents, i->text);
+	Identifier new_ident = ident_get(to_idents, i->str);
 	return new_ident;
 }
 
@@ -213,16 +182,15 @@ static IdentDecl *ident_decl(Identifier i) {
 
 /* returns true if i and j are equal, even if they're not in the same table */
 static bool ident_eq(Identifier i, Identifier j) {
-	return ident_str_eq_str(i->text, j->text);
+	return i->len == j->len && memcmp(i->str, j->str, i->len) == 0;
 }
 
 static void idents_free(Identifiers *ids) {
-	arr_foreach(ids->slots, IdentSlotPtr, slotp) {
-		IdentSlot *slot = *slotp;
+	arr_foreach(ids->table.slots, StrHashTableSlotPtr, slotp) {
+		IdentSlot *slot = *(IdentSlot **)slotp;
 		if (slot) arr_clear(&slot->decls);
-		free(slot);
 	}
-	arr_clear(&ids->slots);
+	str_hash_table_free(&ids->table);
 }
 
 #ifdef TOC_DEBUG

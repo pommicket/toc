@@ -1,7 +1,27 @@
 /*
-  Copyright (C) 2019, 2020 Leo Tenenbaum.
-  This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
-  You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
+toc's types. Note that although these types are in the public domain,
+the code which uses them (i.e. most of the rest of toc) is not.
+
+This is free and unencumbered software released into the public domain.
+Anyone is free to copy, modify, publish, use, compile, sell, or
+distribute this software, either in source code form or as a compiled
+binary, for any purpose, commercial or non-commercial, and by any
+means.
+In jurisdictions that recognize copyright laws, the author or authors
+of this software dedicate any and all copyright interest in the
+software to the public domain. We make this dedication for the benefit
+of the public at large and to the detriment of our heirs and
+successors. We intend this dedication to be an overt act of
+relinquishment in perpetuity of all present and future rights to this
+software under copyright law.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+For more information, please refer to <http://unlicense.org/>
 */
 /* NOTE: make sure you edit copy.c and package.c and cgen_recurse_subexprs/types when you make a change to expression-related types or type-related types in this file! */
 
@@ -170,23 +190,38 @@ typedef struct IdentDecl {
 } IdentDecl;
 
 typedef struct IdentSlot {
+	char *str;
+	size_t len;
 	bool export_name; /* is this identifier's name important? */
 	bool anonymous; /* is this identifier not part of a tree? */
 	bool imported; /* was this identifier imported from a package? */
-	char *text; /* actual name of the identifier */
-	size_t len; /* length of name */
 	U64 export_id; /* 0 if there's no exported identifier here, otherwise unique positive integer associated with this identifier */
 	struct Package *from_pkg;
 	struct Package *pkg; /* NULL if this is not associated with a package */
 	IdentDecl *decls; /* array of declarations of this identifier */
 } IdentSlot;
 
+typedef struct {
+	const char *str;
+	size_t len;
+	MaxAlign data[];
+} StrHashTableSlot;
+
+typedef StrHashTableSlot *StrHashTableSlotPtr;
+
+typedef struct {
+	StrHashTableSlot **slots;
+	Allocator *allocr;
+	U32 rand_seed;
+	size_t data_size;
+	size_t nentries; /* # of filled slots */
+} StrHashTable;
+
 typedef IdentSlot *Identifier;
 
 typedef IdentSlot *IdentSlotPtr;
 typedef struct Identifiers {
-    IdentSlot **slots;
-	U64 nidents;
+	StrHashTable table;
 	U32 rseed;
 } Identifiers;
 

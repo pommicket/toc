@@ -69,10 +69,10 @@ static inline bool type_is_slicechar(Type *t) {
 
 /* utilities */
 #include "allocator.c"
-#include "arr.c"
+#include "misc.c"
+#include "data_structures.c"
 #include "location.c"
 #include "err.c"
-#include "misc.c"
 #include "blockarr.c"
 #include "instance_table.c"
 #include "copy.c"
