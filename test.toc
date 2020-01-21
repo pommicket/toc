@@ -5,29 +5,25 @@ import ::= fn(x :: []char) &Package {
 	p_ptr
 };
 
-puts :: fn(&char) i32 = #foreign "puts", "libc.so.6";
-dprintf :: fn(i32, &char, f64) i32 = #foreign "dprintf", "libc.so.6";
+cputs :: fn(&char) i32 = #foreign "puts", "libc.so.6";
 
-hw ::= fn() i32 {
-   s := "Hello, world!\0";
-   puts(&s[0])
+puts ::= fn(s: []char) i32 {
+	 cstr := new(char, s.len + 1);
+	 each i := 0..s.len-1 {
+	 	 cstr[i] = s[i];
+	 }
+	 cstr[s.len] = '\0';
+	 ret := cputs(&cstr[0]);
+	 del(cstr);
+	 ret
 };
 
-
-sqrt :: fn(f64) f64 = #foreign "sqrt", "libm.so.6";
-
 foo ::= fn() i32 {
-	x := sqrt(2.0);
-	s := "sqrt(2) = %f\n\0";
-	dprintf(2, &s[0], x)
+	puts("Hi");
+	puts("Hello");
+	puts("Hey")
 };
 
 main ::= fn() {
-	 // io ::= import("std/io");
-	 // io.puts("Hello, world!");
-	 // hw();
-	 x ::= hw();
-	 y ::= foo();
-	 sqrt2 ::= sqrt(2.0);
-	 // y ::= abort_1();
+	 x ::= foo();
 };

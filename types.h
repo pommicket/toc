@@ -620,6 +620,7 @@ typedef struct FnExpr {
 		struct {
 			const char *name;
 			const char *lib;
+			void (*fn_ptr)();
 		} foreign;
 	};
 	HashTable instances; /* for fns with constant parameters. the key is a tuple where

@@ -2236,11 +2236,13 @@ static bool types_decl(Typer *tr, Declaration *d) {
 			/* make sure no one tries to use these */
 			d->foreign.name = NULL;
 			d->foreign.lib = NULL;
+			
 			FnExpr *f = d->val.fn = typer_calloc(tr, 1, sizeof *d->expr.fn);
 			f->flags = FN_EXPR_FOREIGN;
 			f->where = d->expr.where = d->where;
 			f->foreign.name = name_cstr;
 			f->foreign.lib = lib_cstr;
+			f->foreign.fn_ptr = NULL;
 			
 			d->flags |= DECL_FOUND_VAL;
 		}

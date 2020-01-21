@@ -223,29 +223,34 @@ static bool arg_list_add(av_alist *arg_list, Value *val, Type *type, Location wh
 }
 
 static bool foreign_call(FnExpr *fn, Type *fn_type, Value *args, Location call_where, Value *ret) {
-	assert(fn->flags & FN_EXPR_FOREIGN);
-	const char *lib = fn->foreign.lib;
-	const char *name = fn->foreign.name;
+	void (*fn_ptr)() = fn->foreign.fn_ptr;
+	if (!fn_ptr) {
+		assert(fn->flags & FN_EXPR_FOREIGN);
+		const char *lib = fn->foreign.lib;
+		const char *name = fn->foreign.name;
 
-	/* TODO: IMPORTANT: only open libraries once */
-	void *handle = dlopen(lib, RTLD_LAZY);
-	if (!handle) {
-		err_print(call_where, "Could not open dynamic library: %s.", lib);
-		return false;
-	}
+		/* TODO: IMPORTANT: only open libraries once */
+		void *handle = dlopen(lib, RTLD_LAZY);
+		printf("Load %s\n",lib);
+		if (!handle) {
+			err_print(call_where, "Could not open dynamic library: %s.", lib);
+			return false;
+		}
 
 #ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 #endif
-	void (*fn_ptr)() = dlsym(handle, name);
+		fn_ptr = dlsym(handle, name);
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif
-
-	if (!fn_ptr) {
-		err_print(call_where, "Could not get function from dynamic library: %s.", name);
-	    return false;
+		
+		if (!fn_ptr) {
+			err_print(call_where, "Could not get function from dynamic library: %s.", name);
+			return false;
+		}
+		fn->foreign.fn_ptr = fn_ptr;
 	}
 
 	av_alist arg_list;
@@ -260,7 +265,6 @@ static bool foreign_call(FnExpr *fn, Type *fn_type, Value *args, Location call_w
 	
 	(void)fn_type; (void)args;
 
-	dlclose(handle);
 	
 	return true;
 }
