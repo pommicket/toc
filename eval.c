@@ -18,7 +18,7 @@ static void evalr_create(Evaluator *ev, Typer *tr, Allocator *allocr) {
 	ev->typer = tr;
 	ev->enabled = true;
 	ev->allocr = allocr;
-	ffmgr_create(&ev->ffmgr, allocr);
+	ffmgr_create(&ev->ffmgr);
 }
 
 static void evalr_free(Evaluator *ev) {
@@ -27,6 +27,7 @@ static void evalr_free(Evaluator *ev) {
 		free(*f);
 	}
 	arr_clear(&ev->to_free);
+	ffmgr_free(&ev->ffmgr);
 }
 
 static inline void *evalr_malloc(Evaluator *ev, size_t bytes) {
@@ -230,15 +231,29 @@ static void i64_to_val(Value *v, BuiltinType v_type, I64 x) {
 		v->u32 = (U32)x; break;
 	case BUILTIN_U64:
 		v->u64 = (U64)x; break;
+	case BUILTIN_F32:
+		v->f32 = (F32)x; break;
+	case BUILTIN_F64:
+		v->f64 = (F64)x; break;
 	default: assert(0); break;
 	}
 }
 
 static void u64_to_val(Value *v, BuiltinType v_type, U64 x) {
-	if (v_type == BUILTIN_U64)
+	switch (v_type) {
+	case BUILTIN_U64:
 		v->u64 = x;
-	else
+		break;
+	case BUILTIN_F32:
+		v->f32 = (F32)x;
+		break;
+	case BUILTIN_F64:
+		v->f64 = (F64)x;
+		break;
+	default:
 		i64_to_val(v, v_type, (I64)x);
+		break;
+	}
 }
 
 /* rerturns a pointer to the underlying data of v, e.g. an I64 * if t is the builtin BUILTIN_I64 */

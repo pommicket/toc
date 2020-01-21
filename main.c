@@ -18,11 +18,12 @@
 
 /* 
 TODO:
-C functions (#foreign)
+run time foreign functions
 foreign non-functions
 no foreign parameter declarations
 variadic fns
 #include
+constants in structs
 ---
 X ::= newtype(int); or something
 don't allow while {3; 5} (once break is added)

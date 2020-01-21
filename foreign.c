@@ -222,8 +222,8 @@ static bool arg_list_add(av_alist *arg_list, Value *val, Type *type, Location wh
 	return true;
 }
 
-static void ffmgr_create(ForeignFnManager *ffmgr, Allocator *allocr) {
-	str_hash_table_create(&ffmgr->libs_loaded, sizeof(Library), allocr);
+static void ffmgr_create(ForeignFnManager *ffmgr) {
+	str_hash_table_create(&ffmgr->libs_loaded, sizeof(Library), NULL);
 }
 
 static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *fn_type, Value *args, Location call_where, Value *ret) {
@@ -235,9 +235,8 @@ static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *fn_type, Val
 		if (!lib) {
 			/* TODO: IMPORTANT: only open libraries once */
 			void *handle = dlopen(libname, RTLD_LAZY);
-			printf("Load %s\n",libname);
 			if (!handle) {
-				err_print(call_where, "Could not open dynamic library: %s.", lib);
+				err_print(call_where, "Could not open dynamic library: %s.", libname);
 				return false;
 			}
 			lib = str_hash_table_insert(&ffmgr->libs_loaded, libname, strlen(libname));
@@ -275,10 +274,29 @@ static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *fn_type, Val
 	
 	return true;
 }
+
+static void ffmgr_free(ForeignFnManager *ffmgr) {
+	arr_foreach(ffmgr->libs_loaded.slots, StrHashTableSlotPtr, slotp) {
+		if (*slotp) {
+			Library lib = *(Library *)((*slotp)->data);
+			dlclose(lib.handle);
+		}
+	}
+	str_hash_table_free(&ffmgr->libs_loaded);
+}
+
 #else
-static bool foreign_call(FnExpr *fn, Type *fn_type, Value *args, Location call_where, Value *ret) {
-	(void)fn; (void)fn_type; (void)args; (void)ret;
+static void ffmgr_create(ForeignFnManager *ffmgr) {
+	(void)ffmgr;
+}
+
+static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *fn_type, Value *args, Location call_where, Value *ret) {
+	(void)ffmgr; (void)fn; (void)fn_type; (void)args; (void)ret;
 	err_print(call_where, "You have not compiled toc with compile time foreign function support.");
 	return false;
+}
+
+static void ffmgr_free(ForeignFnManager *ffmgr) {
+	(void)ffmgr;
 }
 #endif
