@@ -18,6 +18,7 @@ static void evalr_create(Evaluator *ev, Typer *tr, Allocator *allocr) {
 	ev->typer = tr;
 	ev->enabled = true;
 	ev->allocr = allocr;
+	ffmgr_create(&ev->ffmgr, allocr);
 }
 
 static void evalr_free(Evaluator *ev) {
@@ -1435,7 +1436,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				if (!eval_expr(ev, &e->call.arg_exprs[i], &args[i]))
 					return false;
 			}
-			bool success = foreign_call(fn, &e->call.fn->type, args, e->where, v);
+			bool success = foreign_call(&ev->ffmgr, fn, &e->call.fn->type, args, e->where, v);
 			free(args);
 			if (!success)
 				return false;

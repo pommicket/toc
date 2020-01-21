@@ -66,6 +66,7 @@ int main(int argc, char **argv) {
 	
 	char *contents = err_malloc(4096);
 	contents[0] = 0; /* put 0 byte at the start of the file. see err.c:err_print_location_text to find out why */
+	contents[1] = 0; /* if fgets fails the first time */
 	long contents_cap = 4095;
 	long contents_len = 1;
 	while (fgets(contents + contents_len, (int)(contents_cap - contents_len), in)) {

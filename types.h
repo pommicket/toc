@@ -813,6 +813,20 @@ typedef enum {
 			  DECL_END_LBRACE_COMMA
 } DeclEndKind;
 
+#if COMPILE_TIME_FOREIGN_FN_SUPPORT
+typedef struct {
+	void *handle;
+} Library;
+#endif
+
+typedef struct {
+#if COMPILE_TIME_FOREIGN_FN_SUPPORT
+	StrHashTable libs_loaded; /* of Library */
+#else
+	char unused;
+#endif
+} ForeignFnManager;
+
 typedef struct Evaluator {
 	Allocator *allocr;
 	struct Typer *typer;
@@ -820,6 +834,7 @@ typedef struct Evaluator {
 	Value ret_val;
 	void **to_free; /* an array of data to free for this scope. */
 	bool enabled;
+	ForeignFnManager ffmgr;
 } Evaluator;
 
 typedef struct Package {
@@ -886,7 +901,6 @@ typedef struct CGenerator {
 	Identifiers *idents;
 	char *pkg_prefix;
 } CGenerator;
-
 
 #ifdef TOC_DEBUG
 #define add_ident_decls(b, d, flags) add_ident_decls_(__FILE__, __LINE__, b, d, flags)

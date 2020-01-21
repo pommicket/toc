@@ -222,26 +222,33 @@ static bool arg_list_add(av_alist *arg_list, Value *val, Type *type, Location wh
 	return true;
 }
 
-static bool foreign_call(FnExpr *fn, Type *fn_type, Value *args, Location call_where, Value *ret) {
+static void ffmgr_create(ForeignFnManager *ffmgr, Allocator *allocr) {
+	str_hash_table_create(&ffmgr->libs_loaded, sizeof(Library), allocr);
+}
+
+static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *fn_type, Value *args, Location call_where, Value *ret) {
 	void (*fn_ptr)() = fn->foreign.fn_ptr;
 	if (!fn_ptr) {
 		assert(fn->flags & FN_EXPR_FOREIGN);
-		const char *lib = fn->foreign.lib;
-		const char *name = fn->foreign.name;
-
-		/* TODO: IMPORTANT: only open libraries once */
-		void *handle = dlopen(lib, RTLD_LAZY);
-		printf("Load %s\n",lib);
-		if (!handle) {
-			err_print(call_where, "Could not open dynamic library: %s.", lib);
-			return false;
+		const char *libname = fn->foreign.lib;
+		Library *lib = str_hash_table_get(&ffmgr->libs_loaded, libname, strlen(libname));
+		if (!lib) {
+			/* TODO: IMPORTANT: only open libraries once */
+			void *handle = dlopen(libname, RTLD_LAZY);
+			printf("Load %s\n",libname);
+			if (!handle) {
+				err_print(call_where, "Could not open dynamic library: %s.", lib);
+				return false;
+			}
+			lib = str_hash_table_insert(&ffmgr->libs_loaded, libname, strlen(libname));
+			lib->handle = handle;
 		}
-
+		const char *name = fn->foreign.name;
 #ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 #endif
-		fn_ptr = dlsym(handle, name);
+		fn_ptr = dlsym(lib->handle, name);
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif
@@ -250,7 +257,7 @@ static bool foreign_call(FnExpr *fn, Type *fn_type, Value *args, Location call_w
 			err_print(call_where, "Could not get function from dynamic library: %s.", name);
 			return false;
 		}
-		fn->foreign.fn_ptr = fn_ptr;
+		fn->foreign.fn_ptr = fn_ptr;		
 	}
 
 	av_alist arg_list;

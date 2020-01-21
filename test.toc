@@ -24,6 +24,12 @@ foo ::= fn() i32 {
 	puts("Hey")
 };
 
+malloc :: fn(u64) &u8 = #foreign "malloc", "libc.so.6";
+
+sqrt :: fn(f64) f64 = #foreign "sqrt", "libm.so";
+
 main ::= fn() {
 	 x ::= foo();
+	 y ::= malloc(10);
+	 sq2 ::= sqrt(2);
 };

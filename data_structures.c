@@ -287,7 +287,6 @@ static void str_hash_table_grow(StrHashTable *t) {
 		}
 		arr_cleara(&t->slots, t->allocr);
 		t->slots = new_slots;
-		slots_cap = new_slots_cap;
 	}
 }
 
@@ -340,12 +339,16 @@ static void str_hash_table_free(StrHashTable *t) {
 }
 
 static StrHashTableSlot *str_hash_table_get_(StrHashTable *t, const char *str, size_t len) {
+	size_t nslots = arr_len(t->slots);
+	if (!nslots) return NULL;
 	size_t slot_index = str_hash(str, len) % arr_len(t->slots);
 	return *str_hash_table_slot_get(t->slots, str, len, slot_index);
 }
 
 static inline void *str_hash_table_get(StrHashTable *t, const char *str, size_t len) {
-	return str_hash_table_get_(t, str, len)->data;
+	StrHashTableSlot *slot = str_hash_table_get_(t, str, len);
+	if (!slot) return NULL;
+	return slot->data;
 }
 
 #ifdef TOC_DEBUG
@@ -367,6 +370,7 @@ static void str_hash_table_test(void) {
 	*s = 123;
 	int *u = str_hash_table_get(&t, "Hello", 5);
 	assert(p == u);
+	assert(!str_hash_table_get(&t, "Hellopf", 7));
 	str_hash_table_free(&t);
 }
 #endif

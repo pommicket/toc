@@ -1476,9 +1476,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 			
 
 
-			i = 0;
-			
-			
 			table_index_type.flags = TYPE_IS_RESOLVED;
 			table_index_type.kind = TYPE_TUPLE;
 			table_index_type.tuple = NULL;
