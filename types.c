@@ -2242,6 +2242,8 @@ static bool types_decl(Typer *tr, Declaration *d) {
 			f->foreign.fn_ptr = NULL;
 			
 			d->flags |= DECL_FOUND_VAL;
+		} else {
+			d->foreign.name_str = name_cstr;
 		}
 	}
 	

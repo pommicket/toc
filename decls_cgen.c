@@ -189,7 +189,54 @@ static bool cgen_decls_block(CGenerator *g, Block *b) {
 
 static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 	if (d->flags & DECL_FOREIGN) {
-		/* TODO */
+		cgen_write(g, "extern ");
+	    if ((d->flags & DECL_IS_CONST) && (d->type.kind == TYPE_FN) && arr_len(d->idents) == 1) {
+			/* foreign function declaration */
+			Type *fn_types = d->type.fn.types;
+			const char *foreign_name = (d->flags & DECL_FOUND_VAL)
+				? d->val.fn->foreign.name
+				: d->foreign.name_str;
+			if (!cgen_type_pre(g, &fn_types[0], d->where))
+				return false;
+			cgen_write(g, " %s", foreign_name);
+			cgen_write(g, "(");
+			arr_foreach(fn_types, Type, t) {
+				if (t == fn_types) continue;
+				if (t != fn_types+1)
+					cgen_write(g, ", ");
+				if (!cgen_type_pre(g, t, d->where))
+					return false;
+				if (!cgen_type_post(g, t, d->where))
+					return false;
+			}
+			cgen_write(g, ")");
+			if (!cgen_type_post(g, &fn_types[0], d->where))
+				return false;
+			cgen_write(g, ";");
+			if (!ident_eq_str(d->idents[0], foreign_name)) {
+				cgen_write(g, "static ");
+				if (!cgen_type_pre(g, &d->type, d->where))
+					return false;
+				cgen_write(g, " ");
+				cgen_ident(g, d->idents[0]);
+				if (!cgen_type_post(g, &d->type, d->where))
+					return false;
+				cgen_write(g, " = %s;", foreign_name);
+			}
+			cgen_nl(g);
+			if (d->flags & DECL_FOUND_VAL)
+				d->val.fn->c.name = d->idents[0];
+			return true;
+		} else {
+			const char *foreign_name = d->foreign.name_str;
+			if (!cgen_type_pre(g, &d->type, d->where))
+				return false;
+			cgen_write(g, " %s", foreign_name);
+			if (!cgen_type_post(g, &d->type, d->where))
+				return false;
+			cgen_write(g, ";");
+			cgen_nl(g);
+		}
 		return true;
 	}
 	if (!cgen_decls_type(g, &d->type))

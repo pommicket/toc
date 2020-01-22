@@ -300,3 +300,4 @@ static void ffmgr_free(ForeignFnManager *ffmgr) {
 	(void)ffmgr;
 }
 #endif
+

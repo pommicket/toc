@@ -1842,6 +1842,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 				if (!parse_expr(p, d->foreign.name, expr_find_end(p, EXPR_CAN_END_WITH_COMMA))) {
 					goto ret_false;
 				}
+				d->foreign.lib = NULL;
 				if (!ends_decl(t->token, ends_with)) {
 					if (!token_is_kw(t->token, KW_COMMA)) {
 						tokr_err(t, "Expected comma, followed by foreign library.");
@@ -2372,7 +2373,17 @@ static inline Type *decl_type_at_index(Declaration *d, int i) {
 static bool ident_is_definitely_const(Identifier i) {
 	IdentDecl *idecl = ident_decl(i);
 	assert(idecl);
-	return idecl->kind == IDECL_DECL && (idecl->decl->flags & DECL_IS_CONST);
+	Declaration *decl = idecl->decl;
+	if (idecl->kind != IDECL_DECL || !(decl->flags & DECL_IS_CONST))
+		return false;
+	if (decl->flags & DECL_FOREIGN) {
+		if (decl->foreign.lib && COMPILE_TIME_FOREIGN_FN_SUPPORT)
+			return true;
+		else
+			return false;
+	} else {
+		return true;
+	}
 }
 
 

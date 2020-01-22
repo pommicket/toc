@@ -759,9 +759,15 @@ typedef struct Declaration {
 	union {
 		Expression expr;
 		struct {
-			/* only exist before typing */
-			Expression *name;
-			Expression *lib;
+			union {
+				struct {
+					/* only exist before typing */
+					Expression *name;
+					Expression *lib;
+				};
+				/* only set for non-functions */
+				const char *name_str;
+			};
 		} foreign;
 	};
 	Value val; /* only for constant decls. */

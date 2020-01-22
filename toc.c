@@ -18,6 +18,10 @@
 #include <float.h>
 #include <inttypes.h>
 
+#ifndef COMPILE_TIME_FOREIGN_FN_SUPPORT
+#define COMPILE_TIME_FOREIGN_FN_SUPPORT 0
+#endif
+
 
 #ifdef __cplusplus
 #define new new_

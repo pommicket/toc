@@ -12,7 +12,7 @@ fi
 
 valgrind $FLAGS --track-origins=yes --exit-on-first-error=yes --error-exitcode=1 --malloc-fill=0xcd  --free-fill=0xef --num-callers=100 ./toc $tocf || exit 1
 if [ "$1" = "c" ]; then
-	gcc out.c -g && ./a.out
+	gcc out.c -g -Wno-builtin-declaration-mismatch && ./a.out
 elif [ "$1" = "pc" ]; then
 	cat out.c
 fi

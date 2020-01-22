@@ -1203,20 +1203,22 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			if (idecl && idecl->kind == IDECL_DECL) {
 				Declaration *d = idecl->decl;
 				if (d->flags & DECL_IS_CONST) {
-					int index = decl_ident_index(d, e->ident);
-					Value fn_val = *decl_val_at_index(d, index);
-					FnExpr *fn = fn_val.fn;
-					Expression fn_expr;
+					if (!(d->flags & DECL_FOREIGN) || d->foreign.lib) {
+						int index = decl_ident_index(d, e->ident);
+						Value fn_val = *decl_val_at_index(d, index);
+						FnExpr *fn = fn_val.fn;
+						Expression fn_expr;
 					
-					fn_expr.kind = EXPR_FN;
-					fn_expr.fn = allocr_malloc(g->allocr, sizeof *fn_expr.fn);
-					*fn_expr.fn = *fn;
-					fn_expr.flags = EXPR_FOUND_TYPE;
-					fn_expr.type = *decl_type_at_index(d, index);
+						fn_expr.kind = EXPR_FN;
+						fn_expr.fn = allocr_malloc(g->allocr, sizeof *fn_expr.fn);
+						*fn_expr.fn = *fn;
+						fn_expr.flags = EXPR_FOUND_TYPE;
+						fn_expr.type = *decl_type_at_index(d, index);
 					
-					if (!cgen_expr(g, &fn_expr))
-						return false;
-					handled = true;
+						if (!cgen_expr(g, &fn_expr))
+							return false;
+						handled = true;
+					}
 				}
 			}
 		}
@@ -2018,7 +2020,7 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 	   TODO: don't include stdio.h with posix file descriptors
 	*/
 	cgen_write(g, "#include <stdint.h>\n"
-			   "#include <stdio.h>\n"
+			   "#include <stddef.h>\n"
 			   "typedef int8_t i8;\n"
 			   "typedef int16_t i16;\n"
 			   "typedef int32_t i32;\n"
@@ -2035,7 +2037,7 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 			   "#define true ((bool)1)\n"
 			   "static slice_ mkslice_(void *data, i64 n) { slice_ ret; ret.data = data; ret.n = n; return ret; }\n"
 			   "static void free_(void *data) { extern void free(void *data); free(data); }\n" /* don't introduce free to global namespace */
-			   "static void *e__calloc(size_t n, size_t sz) { extern void *calloc(size_t n, size_t size); extern void abort(void); void *ret = calloc(n, sz); if (n && sz && !ret) { fprintf(stderr, \"Out of memory.\\n\"); abort(); } return ret; }\n\n\n");
+			   "static void *e__calloc(size_t n, size_t sz) { extern void *calloc(size_t n, size_t size); extern void abort(void); extern int printf(const char *fmt, ...); void *ret = calloc(n, sz); if (n && sz && !ret) { printf(\"Out of memory.\\n\"); abort(); } return ret; }\n\n\n");
 
 	if (!cgen_sdecls_file(g, f))
 		return false;
