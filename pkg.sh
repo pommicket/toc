@@ -15,5 +15,5 @@ for thing in $std_things; do
 done
 cd ..
 $VALGRIND ./toc test.toc || exit 1
-$CC out.c std/*.c || exit 1
+$CC out.c std/*.c -Wno-builtin-declaration-mismatch || exit 1
 ./a.out

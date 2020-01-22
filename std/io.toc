@@ -1,14 +1,10 @@
 pkg "io";
 
-#export puti ::= fn(x: int) {
-	#C("printf(\"%ld\\n\", (long)x)");
-};
-
-#export putf ::= fn(x: float) {
-	#C("printf(\"%f\\n\", (double)x)");
-};
+c_putchar :: fn(i32) = #foreign "putchar", "libc.so.6";
 
 #export puts ::= fn(x: []char) {
-	#C("fwrite(x.data, 1, x.n, stdout)");
-	#C("printf(\"\\n\")");
+	each c := x {
+		 c_putchar(c as i32);
+	};
+	c_putchar('\n' as i32);
 };

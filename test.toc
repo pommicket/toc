@@ -1,46 +1,4 @@
-import ::= fn(x :: []char) &Package {
-	p ::= pkg x;
-	p_ptr ::= new(Package);
-	*p_ptr = p;
-	p_ptr
-};
-
-cputs :: fn(&char) i32 = #foreign "puts", "libc.so.6";
-
-tocputs ::= fn(s: []char) i32 {
-	 cstr := new(char, s.len + 1);
-	 each i := 0..s.len-1 {
-	 	 cstr[i] = s[i];
-	 }
-	 cstr[s.len] = '\0';
-	 ret := cputs(&cstr[0]);
-	 del(cstr);
-	 ret
-};
-
-foo ::= fn() i32 {
-	tocputs("Hi");
-	tocputs("Hello");
-	tocputs("Hey")
-};
-
-malloc :: fn(u64) &u8 = #foreign "malloc", "libc.so.6";
-
-sqrt :: fn(f64) f64 = #foreign "sqrt", "libm.so.6";
-cos :: fn(f64) f64 = #foreign "cos", "libm.so.6";
-sin :: fn(f64) f64 = #foreign "sin", "libm.so.6";
-
-stderr :: &u8 = #foreign "stderr";
-fprintf :: fn(&u8, &char) = #foreign "fprintf";
-
-
+io ::= pkg "std/io";
 main ::= fn() {
-	 x ::= foo();
-	 // y ::= malloc(10);
-	 sq2 ::= sqrt(2);
-	 cospi ::= cos(3.14159);
-	 sinpi ::= sin(3.14159);
-	 foo();
-	 s := "Hello!\n\0";
-	 fprintf(stderr, &s[0]);
+	 io.puts("Hello, world!");
 };
