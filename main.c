@@ -18,7 +18,7 @@
 
 /* 
 TODO:
-run time foreign functions
+get tests to compile without warnings
 foreign non-functions
 no foreign parameter declarations
 variadic fns

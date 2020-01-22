@@ -12,3 +12,4 @@ tags
 *.o
 compatibility
 std/*.c
+std/*.o
