@@ -228,6 +228,7 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 				d->val.fn->c.name = d->idents[0];
 			return true;
 		} else {
+			/* foreign non-function */
 			const char *foreign_name = d->foreign.name_str;
 			if (!cgen_type_pre(g, &d->type, d->where))
 				return false;

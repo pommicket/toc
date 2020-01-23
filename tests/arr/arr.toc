@@ -1,10 +1,10 @@
 puti ::= fn(x: int) {
-	 #C("printf(\"%ld\\n\", (long)x);
-");
+	 #C("extern int printf(const char *fmt, ...)");
+	 #C("printf(\"%ld\\n\", (long)x)");
 };
 putf ::= fn(x: float) {
-	 #C("printf(\"%f\\n\", (double)x);
-");
+	 #C("extern int printf(const char *fmt, ...)");
+	 #C("printf(\"%f\\n\", (double)x)");
 };
 
 // it would be nice if Arr.data.len == Arr.len (: but this will require some C code...

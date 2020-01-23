@@ -18,12 +18,18 @@
 
 /* 
 TODO:
-get tests to compile without warnings
-foreign non-functions
 no foreign parameter declarations
+see NOTE in test.toc
 variadic fns
 #include
 constants in structs
+#builtin values - accessed via, e.g. #builtin("sizeof(int)")
+- sizeof(int)   (size of C int type), sizeof(long), sizeof(size_t) etc.
+- compiling - true if @ compile time, false otherwise
+- stdout, stderr, stdin - pointers to C FILEs
+
+#if
+
 ---
 X ::= newtype(int); or something
 don't allow while {3; 5} (once break is added)

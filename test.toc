@@ -1,4 +1,16 @@
-io ::= pkg "std/io";
+// io ::= pkg "std/io";
+// main ::= fn() {
+	 // io.puts("Hello, world!");
+// };
+
+stdout :: &u8 = #foreign "stdout";
+fwrite :: fn(&u8, u64, u64, &u8) = #foreign "fwrite";
+
+puts ::= fn(x : []char) {
+// NOTE: removing brackets here causes error! this shouldn't happen!
+	 fwrite((&x[0]) as (&u8), 1, x.len as u64, stdout);
+};
+
 main ::= fn() {
-	 io.puts("Hello, world!");
+	 puts("Hello, world!\n");
 };

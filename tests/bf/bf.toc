@@ -32,10 +32,12 @@ getstdin ::= fn() []char {
 };
 
 puti ::= fn(x: int) {
+	 #C("extern int printf(const char *fmt, ...)");
 	 #C("printf(\"%ld\\n\", x)");
 };
 
 main ::= fn() {
+	 #C("extern int putchar(int c)");
 	 code := getstdin();
 	 tape_sz := 3;
 	 tape := new(int, tape_sz);

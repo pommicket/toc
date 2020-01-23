@@ -1,6 +1,6 @@
 pkg "io";
 
-c_putchar :: fn(i32) = #foreign "putchar", "libc.so.6";
+c_putchar :: fn(i32) i32 = #foreign "putchar", "libc.so.6";
 
 #export puts ::= fn(x: []char) {
 	each c := x {

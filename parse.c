@@ -710,18 +710,18 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 								if (token_is_kw(t->token, KW_LBRACE)) goto end; /* void fn expr */
 								if (is_decl(t)) /* has return declaration */
 									goto end;
-								Type return_type;
-								/* TODO: think of a better way of determining if it's a void fn type. (maybe followed by ;/,/)?)*/
-								bool *enabled = &t->token->pos.ctx->enabled;
-								bool prev_enabled = *enabled;
-								*enabled = false;
-								if (!parse_type(p, &return_type)) {
-									/* couldn't parse a return type. void fn type */
-									*enabled = prev_enabled;
+								
+								if (t->token->kind == TOKEN_KW &&
+									(t->token->kw == KW_SEMICOLON || t->token->kw == KW_COMMA || t->token->kw == KW_RPAREN || t->token->kw == KW_LBRACE)) {
+									/* void fn type */
 									ret = true;
 									goto end;
 								}
-								*enabled = prev_enabled;
+								Type return_type;
+								if (!parse_type(p, &return_type)) {
+									/* couldn't parse a return type. this shouldn't happen in theory. */
+									assert(0);
+								}
 								if (token_is_kw(t->token, KW_LBRACE)) {
 									/* non-void fn expr */
 									goto end;
