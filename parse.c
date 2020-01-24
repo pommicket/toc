@@ -298,12 +298,12 @@ static inline Expression *parser_new_expr(Parser *p) {
 }
 
 typedef enum {
-	  EXPR_CAN_END_WITH_COMMA = 0x01, /* a comma could end the expression */
-	  EXPR_CAN_END_WITH_LBRACE = 0x02,
-	  EXPR_CAN_END_WITH_COLON = 0x04,
-	  EXPR_CAN_END_WITH_DOTDOT = 0x08,
-	  EXPR_CAN_END_WITH_EQ = 0x10,
-	  /* note that parse_type uses -1 for this */
+			  EXPR_CAN_END_WITH_COMMA = 0x01, /* a comma could end the expression */
+			  EXPR_CAN_END_WITH_LBRACE = 0x02,
+			  EXPR_CAN_END_WITH_COLON = 0x04,
+			  EXPR_CAN_END_WITH_DOTDOT = 0x08,
+			  EXPR_CAN_END_WITH_EQ = 0x10,
+			  /* note that parse_type uses -1 for this */
 } ExprEndFlags;
 
 static Token *expr_find_end(Parser *p, ExprEndFlags flags)  {
@@ -593,6 +593,7 @@ static bool parse_type(Parser *p, Type *type) {
 						err_print(field_decl.where, "Non-constant struct members cannot be foreign.");
 						return false;
 					}
+					
 					if (field_decl.flags & DECL_HAS_EXPR) {
 						err_print(field_decl.where, "struct members cannot have initializers.");
 						return false;
@@ -616,13 +617,13 @@ static bool parse_type(Parser *p, Type *type) {
 		break;
 	default:
 	type_expr: {
-		/* TYPE_EXPR */
-		Token *end = expr_find_end(p, (ExprEndFlags)-1 /* end as soon as possible */);
-		if (parse_expr(p, type->expr = parser_new_expr(p), end)) {
-			type->kind = TYPE_EXPR;
-		} else {
-			return false;
-		}
+			/* TYPE_EXPR */
+			Token *end = expr_find_end(p, (ExprEndFlags)-1 /* end as soon as possible */);
+			if (parse_expr(p, type->expr = parser_new_expr(p), end)) {
+				type->kind = TYPE_EXPR;
+			} else {
+				return false;
+			}
 		} break;
 	}
 	type->where.end = t->token;
@@ -631,9 +632,9 @@ static bool parse_type(Parser *p, Type *type) {
 }
 
 /* 
-is the thing we're looking at definitely a type, as opposed to an expression? 
-if end is not NULL, it is set to the token one past the last one in the type,
-assuming it's successful
+   is the thing we're looking at definitely a type, as opposed to an expression? 
+   if end is not NULL, it is set to the token one past the last one in the type,
+   assuming it's successful
 */
 static bool parser_is_definitely_type(Parser *p, Token **end) {
 	Tokenizer *t = p->tokr;
@@ -811,7 +812,7 @@ static bool parse_block(Parser *p, Block *b) {
 	return ret;
 }
 
-/* does NOT handle empty declaration list. */
+/* does NOT handle empty declaration lists */
 static bool parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end) {
 	Tokenizer *t = p->tokr;
 	bool ret = true;
@@ -819,8 +820,8 @@ static bool parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end
 	*decls = NULL;
 	while (t->token->kind != TOKEN_EOF &&
 		   (first || (
-			!token_is_kw(t->token - 1, KW_RPAREN) &&
-			!token_is_kw(t->token - 1, KW_LBRACE)))) {
+					  !token_is_kw(t->token - 1, KW_RPAREN) &&
+					  !token_is_kw(t->token - 1, KW_LBRACE)))) {
 		first = false;
 		Declaration *decl = parser_arr_add(p, decls);
 		if (!parse_decl(p, decl, decl_end, PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR | PARSE_DECL_ALLOW_SEMI_CONST | PARSE_DECL_ALLOW_INFER)) {
@@ -1336,7 +1337,6 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				   && op_precedence(lowest_precedence_op[-1].kw) != NOT_AN_OP) {
 				--lowest_precedence_op;
 			}
-
 			if (lowest_precedence_op == t->token) {
 				/* Unary */
 				UnaryOp op;
@@ -1411,7 +1411,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				++t->token;
 				Expression *of = parser_new_expr(p);
 				e->unary.of = of;
-			    if (!parse_expr(p, of, end))
+				if (!parse_expr(p, of, end))
 					return false;
 				goto success;
 			}

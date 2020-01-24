@@ -3,6 +3,7 @@
 	 // io.puts("Hello, world!");
 // };
 
+<<<<<<< HEAD
 foo ::= fn(bar :: int = #foreign "X") {
 	
 };
@@ -18,3 +19,16 @@ puts ::= fn(x : []char) {
 main ::= fn() {
 	 puts("Hello, world!\n");
 };
+=======
+stdout :: &u8 = #foreign "stdout";
+fwrite :: fn(&u8, u64, u64, &u8) = #foreign "fwrite";
+
+puts ::= fn(x : []char) {
+// NOTE: removing brackets here causes error! this shouldn't happen!
+	 fwrite((&x[0]) as (&u8), 1, x.len as u64, stdout);
+};
+
+main ::= fn() {
+	 puts("Hello, world!\n");
+};
+>>>>>>> 3fa3c17a12cb52edbcc9890cad59d610e0360f90

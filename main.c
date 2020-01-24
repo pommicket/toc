@@ -18,6 +18,10 @@
 
 /* 
 TODO:
+<<<<<<< HEAD
+=======
+no foreign parameter declarations
+>>>>>>> 3fa3c17a12cb52edbcc9890cad59d610e0360f90
 see NOTE in test.toc
 variadic fns
 #include
