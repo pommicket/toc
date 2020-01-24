@@ -912,7 +912,7 @@ static void fprint_expr(FILE *out, Expression *e);
 
 #define NOT_AN_OP -1
 /* cast/new aren't really operators since they operate on types, not exprs. */
-#define CAST_PRECEDENCE 45
+#define CAST_PRECEDENCE -10
 #define NEW_PRECEDENCE 22
 static int op_precedence(Keyword op) {
 	switch (op) {
