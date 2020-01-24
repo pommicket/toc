@@ -1,11 +1,20 @@
 
-stdout :: &u8 = #foreign "stdout";
+getstdout ::= fn() &u8 {
+	  #builtin("stdout")
+};
+
 fwrite :: fn(&u8, u64, u64, &u8) = #foreign "fwrite";
 
 puts ::= fn(x : []char) {
-	 fwrite(&x[0] as &u8 as &u16 as &u8, 1, x.len as u64, stdout);
+	 fwrite(&x[0] as &u8 as &u16 as &u8, 1, x.len as u64, getstdout());
+};
+
+hw ::= fn() int {
+   hw();
+   2
 };
 
 main ::= fn() {
-	 puts("Hello, world!\n");
+	 hw();
+	 x ::= hw();
 };

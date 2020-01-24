@@ -168,6 +168,7 @@ static bool expr_must_lval(Expression *e) {
 	case EXPR_EACH:
 	case EXPR_CALL:
 	case EXPR_C:
+	case EXPR_BUILTIN:
 	case EXPR_BLOCK:
 	case EXPR_SLICE:
 	case EXPR_TYPE:
@@ -925,6 +926,47 @@ static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Type *fn_type, A
 	return true;
 }
 
+static void get_builtin_val(BuiltinVal val, Value *v) {
+	switch (val) {
+	case BUILTIN_STDOUT:
+		v->ptr = stdout;
+		break;
+	}
+}
+
+static void get_builtin_val_type(Allocator *a, BuiltinVal val, Type *t) {
+	t->flags = TYPE_IS_RESOLVED;
+	switch (val) {
+	case BUILTIN_STDOUT:
+		t->kind = TYPE_PTR;
+		t->ptr = allocr_calloc(a, 1, sizeof *t->ptr);
+		t->ptr->flags = TYPE_IS_RESOLVED;
+		t->ptr->kind = TYPE_BUILTIN;
+		t->ptr->builtin = BUILTIN_U8;
+		break;
+	}
+}
+
+/* returns NULL if an error occured */
+static char *eval_expr_as_cstr(Typer *tr, Expression *e, const char *what_is_this) {
+	Value e_val;
+	if (!types_expr(tr, e))
+		return NULL;
+	if (!type_is_slicechar(&e->type)) {
+		char *got = type_to_str(&e->type);
+		err_print(e->where, "Expected []char for %s, but got %s.", what_is_this, got);
+		free(got);
+		return NULL;
+	}
+	if (!eval_expr(tr->evalr, e, &e_val))
+		return NULL;
+	Slice e_slice = e_val.slice;
+	char *str = typer_malloc(tr, (size_t)e_slice.n + 1);
+	str[e_slice.n] = 0;
+	memcpy(str, e_slice.data, (size_t)e_slice.n);
+	return str;
+}
+
 static bool types_expr(Typer *tr, Expression *e) {
 	if (e->flags & EXPR_FOUND_TYPE) return true;
 	Type *t = &e->type;
@@ -1645,6 +1687,23 @@ static bool types_expr(Typer *tr, Expression *e) {
 		code->kind = EXPR_VAL;
 		t->kind = TYPE_UNKNOWN;
 	} break;
+	case EXPR_BUILTIN: {
+		char *builtin_name = eval_expr_as_cstr(tr, e->builtin.which.expr, "#builtin value name");
+		if (!builtin_name) return false;
+		int which = -1;
+		for (BuiltinVal b = 0; b < BUILTIN_VAL_COUNT; b = b + 1) {
+			if (strs_equal(builtin_val_names[b], builtin_name)) {
+				which = b;
+			}
+		}
+		if (which == -1) {
+			err_print(e->where, "Unrecognized builtin value: %s.", builtin_name);
+			return false;
+		}
+		e->builtin.which.val = (BuiltinVal)which;
+		get_builtin_val_type(tr->allocr, e->builtin.which.val, t);
+		assert(t->flags & TYPE_IS_RESOLVED);
+	} break;
 	case EXPR_UNARY_OP: {
 		Expression *of = e->unary.of;
 		Type *of_type = &of->type;
@@ -2134,26 +2193,6 @@ static bool types_block(Typer *tr, Block *b) {
 	typer_block_exit(tr);
 	b->flags |= BLOCK_FOUND_TYPES;
 	return success;
-}
-
-/* returns NULL if an error occured */
-static char *eval_expr_as_cstr(Typer *tr, Expression *e, const char *what_is_this) {
-	Value e_val;
-	if (!types_expr(tr, e))
-		return NULL;
-	if (!type_is_slicechar(&e->type)) {
-		char *got = type_to_str(&e->type);
-		err_print(e->where, "Expected []char for %s, but got %s.", what_is_this, got);
-		free(got);
-		return NULL;
-	}
-	if (!eval_expr(tr->evalr, e, &e_val))
-		return NULL;
-	Slice e_slice = e_val.slice;
-	char *str = typer_malloc(tr, (size_t)e_slice.n + 1);
-	str[e_slice.n] = 0;
-	memcpy(str, e_slice.data, (size_t)e_slice.n);
-	return str;
 }
 
 static bool types_decl(Typer *tr, Declaration *d) {

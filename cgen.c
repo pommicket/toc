@@ -55,6 +55,7 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 	case EXPR_TYPE:														\
 	case EXPR_VAL:														\
 	case EXPR_C:														\
+	case EXPR_BUILTIN:													\
 	case EXPR_IDENT:													\
 	case EXPR_LITERAL_BOOL:												\
 	case EXPR_LITERAL_INT:												\
@@ -554,10 +555,12 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, U64 instance, U64 which_are
 		cgen_write(g, " ");
 	}
 	cgen_full_fn_name(g, f, instance);	
+	if (!cgen_fn_args(g, f, instance, which_are_const))
+		return false;
 	if (!out_param) {
 		if (!cgen_type_post(g, &f->ret_type, f->where)) return false;
 	}
-	return cgen_fn_args(g, f, instance, which_are_const);
+	return true;
 }
 
 
@@ -748,6 +751,7 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 	case EXPR_CAST:
 	case EXPR_NEW:
 	case EXPR_C:
+	case EXPR_BUILTIN:
 	case EXPR_TYPE:
 	case EXPR_PKG:
 		assert(0);
@@ -1151,6 +1155,18 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		cgen_write(g, ";");
 		cgen_nl(g);
 		break;
+	case EXPR_TUPLE:
+		arr_foreach(e->tuple, Expression, x)
+			if (!cgen_expr_pre(g, x)) return false;
+		break;
+	case EXPR_BUILTIN:
+		switch (e->builtin.which.val) {
+		case BUILTIN_STDOUT:
+			cgen_write(g, "extern void *stdout;");
+			cgen_nl(g);
+			break;
+		}
+		break;
 	case EXPR_LITERAL_INT:
 	case EXPR_LITERAL_FLOAT:
 	case EXPR_LITERAL_BOOL:
@@ -1161,10 +1177,6 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 	case EXPR_C:
 	case EXPR_TYPE:
 	case EXPR_PKG:
-		break;
-	case EXPR_TUPLE:
-		arr_foreach(e->tuple, Expression, x)
-			if (!cgen_expr_pre(g, x)) return false;
 		break;
 	}
 	return true;
@@ -1446,6 +1458,13 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		cgen_indent(g);
 		fwrite(code->val.slice.data, 1, (size_t)code->val.slice.n, cgen_writing_to(g));
 	} break;
+	case EXPR_BUILTIN:
+		switch (e->builtin.which.val) {
+		case BUILTIN_STDOUT:
+			cgen_write(g, "stdout");
+			break;
+		}
+		break;
 	case EXPR_CAST: {
 		Type *from = &e->cast.expr->type;
 		Type *to = &e->cast.type;

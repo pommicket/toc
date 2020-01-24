@@ -152,6 +152,7 @@ static void copy_fn_expr(Copier *c, FnExpr *fout, FnExpr *fin, bool copy_body) {
 		copy_block(c, &fout->body, &fin->body);
 }
 
+static Expression *copy_expr_(Copier *c, Expression *in);
 static void copy_expr(Copier *c, Expression *out, Expression *in) {
 	Allocator *a = c->allocr;
 	*out = *in;
@@ -247,6 +248,9 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 	case EXPR_C:
 		copy_expr(c, out->c.code = allocr_malloc(a, sizeof *out->c.code), in->c.code);
 		break;
+	case EXPR_BUILTIN:
+		out->builtin.which.expr = copy_expr_(c, in->builtin.which.expr); 
+		break;
 	case EXPR_SLICE: {
 		SliceExpr *sin = &in->slice;
 		SliceExpr *sout = &out->slice;
@@ -257,7 +261,7 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 			copy_expr(c, sout->to = allocr_malloc(a, sizeof *sout->to), sin->to);
 	} break;
 	case EXPR_PKG:
-		copy_expr(c, out->pkg.name_expr = allocr_malloc(a, sizeof *out->pkg.name_expr), in->pkg.name_expr);
+		out->pkg.name_expr = copy_expr_(c, in->pkg.name_expr);
 		break;
 	case EXPR_TYPE:
 		copy_type(c, &out->typeval, &in->typeval);
@@ -266,6 +270,12 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		copy_val(a, &out->val, &in->val, &in->type);
 		break;
 	}
+}
+
+static Expression *copy_expr_(Copier *c, Expression *in) {
+	Expression *out = allocr_malloc(c->allocr, sizeof *out);
+	copy_expr(c, out, in);
+	return out;
 }
 
 static void copy_decl(Copier *c, Declaration *out, Declaration *in) {

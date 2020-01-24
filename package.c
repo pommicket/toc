@@ -669,6 +669,15 @@ static bool export_expr(Exporter *ex, Expression *e) {
 		if (!export_expr(ex, e->c.code))
 			return false;
 		break;
+	case EXPR_BUILTIN:
+		if (found_type) {
+			possibly_static_assert(BUILTIN_VAL_COUNT <= 256);
+			export_u8(ex, e->builtin.which.val);
+		} else {
+			if (!export_expr(ex, e->builtin.which.expr))
+				return false;
+		}
+		break;
 	case EXPR_IDENT:
 		export_ident(ex, e->ident);
 		break;
@@ -832,6 +841,14 @@ static void import_expr(Importer *im, Expression *e) {
 	} break;
 	case EXPR_C:
 		e->c.code = import_expr_(im);
+		break;
+	case EXPR_BUILTIN:
+		if (found_type) {
+			possibly_static_assert(BUILTIN_VAL_COUNT <= 256);
+			e->builtin.which.val = import_u8(im);
+		} else {
+			e->builtin.which.expr = import_expr_(im);
+		}
 		break;
 	case EXPR_IDENT:
 		e->ident = import_ident(im);

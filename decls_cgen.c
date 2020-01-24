@@ -143,12 +143,12 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 						}
 						cgen_write(g, " ");
 						cgen_ident(g, ident);
+						if (!cgen_fn_args(g, f, 0, 0))
+							return false;
 						if (!out_param) {
 							if (!cgen_type_post(g, &f->ret_type, e->where))
 								return false;
 						}
-						if (!cgen_fn_args(g, f, 0, 0))
-							return false;
 						cgen_write(g, ";");
 						cgen_nl(g);
 					}

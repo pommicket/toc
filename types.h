@@ -241,6 +241,7 @@ typedef enum {
 			  DIRECT_ALIGNOF,
 			  DIRECT_EXPORT,
 			  DIRECT_FOREIGN,
+			  DIRECT_BUILTIN,
 			  DIRECT_COUNT
 } Directive;
 
@@ -505,6 +506,7 @@ typedef enum {
 			  EXPR_BLOCK,
 			  EXPR_TUPLE,
 			  EXPR_C,
+			  EXPR_BUILTIN,
 			  EXPR_SLICE,
 			  EXPR_TYPE,
 			  EXPR_PKG,
@@ -670,6 +672,13 @@ typedef struct SliceExpr {
 	} c;
 } SliceExpr;
 
+typedef enum {
+			  BUILTIN_STDOUT
+#define BUILTIN_VAL_COUNT (BUILTIN_STDOUT+1)
+} BuiltinVal;
+
+const char *const builtin_val_names[BUILTIN_VAL_COUNT] = {"stdout"};
+
 enum {
 	  EXPR_FOUND_TYPE = 0x01
 };
@@ -703,6 +712,12 @@ typedef struct Expression {
 		struct {
 			struct Expression *code;
 		} c;
+		struct {
+			union {
+				struct Expression *expr;
+			    BuiltinVal val;
+			} which;
+		} builtin;
 		Identifier ident;
 		NewExpr new;
 		struct {

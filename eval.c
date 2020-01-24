@@ -11,6 +11,7 @@ static bool eval_block(Evaluator *ev, Block *b, Type *t, Value *v);
 static bool eval_expr(Evaluator *ev, Expression *e, Value *v);
 static bool block_enter(Block *b, Statement *stmts, U16 flags);
 static void block_exit(Block *b, Statement *stmts);
+static void get_builtin_val(BuiltinVal val, Value *v);
 
 static void evalr_create(Evaluator *ev, Typer *tr, Allocator *allocr) {
 	ev->returning = NULL;
@@ -1421,6 +1422,9 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	case EXPR_C:
 		err_print(e->where, "Cannot run C code at compile time.");
 		return false;
+	case EXPR_BUILTIN:
+		get_builtin_val(e->builtin.which.val, v);
+		break;
 	case EXPR_NEW:
 		/* it's not strictly necessary to do the if here */
 		if (e->new.n) {

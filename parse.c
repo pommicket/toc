@@ -35,7 +35,8 @@ static const char *expr_kind_to_str(ExprKind k) {
 	case EXPR_WHILE: return "while expression";
 	case EXPR_EACH: return "each expression";
 	case EXPR_CALL: return "function call";
-	case EXPR_C: return "c code";
+	case EXPR_C: return "C code";
+	case EXPR_BUILTIN: return "#builtin value";
 	case EXPR_NEW: return "new expression";
 	case EXPR_CAST: return "cast expression";
 	case EXPR_UNARY_OP: return "unary operator";
@@ -912,7 +913,7 @@ static void fprint_expr(FILE *out, Expression *e);
 
 #define NOT_AN_OP -1
 /* cast/new aren't really operators since they operate on types, not exprs. */
-#define CAST_PRECEDENCE -10
+#define CAST_PRECEDENCE 2
 #define NEW_PRECEDENCE 22
 static int op_precedence(Keyword op) {
 	switch (op) {
@@ -1683,6 +1684,10 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					e->kind = EXPR_C;
 					single_arg = e->c.code = parser_new_expr(p);
 					break;
+				case DIRECT_BUILTIN:
+					e->kind = EXPR_BUILTIN;
+					single_arg = e->builtin.which.expr = parser_new_expr(p);
+					break;
 				case DIRECT_SIZEOF:
 					e->kind = EXPR_UNARY_OP;
 					e->unary.op = UNARY_DSIZEOF;
@@ -2278,6 +2283,15 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprint_expr(out, e->c.code);
 		fprintf(out, ")");
 		break;
+	case EXPR_BUILTIN:
+		fprintf(out, "#builtin(");
+		if (found_type) {
+			fprintf(out, "%s", builtin_val_names[e->builtin.which.val]);
+		} else {
+			fprint_expr(out, e->builtin.which.expr);
+		}
+		fprintf(out, ")");
+		break;
 	case EXPR_SLICE: {
 		SliceExpr *s = &e->slice;
 		fprint_expr(out, s->of);
@@ -2415,6 +2429,7 @@ static bool expr_is_definitely_const(Expression *e) {
 	case EXPR_IF:
 	case EXPR_WHILE:
 	case EXPR_C:
+	case EXPR_BUILTIN:
 	case EXPR_NEW:
 	case EXPR_CAST:
 	case EXPR_CALL:

@@ -200,11 +200,11 @@ static void idents_test(void) {
 	char *s = b;
 	idents_create(&ids);
 	Identifier i1 = ident_insert(&ids, &s);
-	assert(strcmp(s, " bar") == 0);
+	assert(strs_equal(s, " bar"));
 	char b2[] = "foo_variable+6";
 	s = b2;
 	Identifier i2 = ident_insert(&ids, &s);
-	assert(strcmp(s, "+6") == 0);
+	assert(strs_equal(s, "+6"));
 	assert(i1 == i2);
 	
 	idents_free(&ids);

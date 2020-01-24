@@ -18,16 +18,21 @@
 
 /* 
 TODO:
-see NOTE in test.toc
-variadic fns
-#include
-constants in structs
 #builtin values - accessed via, e.g. #builtin("sizeof(int)")
 - sizeof(int)   (size of C int type), sizeof(long), sizeof(size_t) etc.
 - compiling - true if @ compile time, false otherwise
 - stdout, stderr, stdin - pointers to C FILEs
 
+clean up copy_expr
+each=>for
+
+#C_int, #C_long, etc.
+
+#include
+constants in structs
 #if
+
+variadic fns
 
 ---
 X ::= newtype(int); or something
@@ -60,7 +65,7 @@ int main(int argc, char **argv) {
 	}
 	const char *out_filename = "out.c";
 	for (int i = 2; i < argc-1; ++i) {
-		if (strcmp(argv[i], "-o") == 0)
+		if (strs_equal(argv[i], "-o"))
 			out_filename = argv[i+1];
 	}
 	
