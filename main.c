@@ -18,7 +18,6 @@
 
 /* 
 TODO:
-no foreign parameter declarations
 see NOTE in test.toc
 variadic fns
 #include
@@ -86,7 +85,7 @@ int main(int argc, char **argv) {
 	}
 	++contents;
 	if (ferror(in)) {
-		fprintf(stderr, "Error reading input file: %s.\n", argv[1]);
+		fprintf(stderr, "Error reading input file: %s.\n", in_filename);
 		return EXIT_FAILURE;
 	}
 	fclose(in);

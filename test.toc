@@ -3,6 +3,10 @@
 	 // io.puts("Hello, world!");
 // };
 
+foo ::= fn(bar :: int = #foreign "X") {
+	
+};
+
 stdout :: &u8 = #foreign "stdout";
 fwrite :: fn(&u8, u64, u64, &u8) = #foreign "fwrite";
 

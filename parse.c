@@ -589,6 +589,10 @@ static bool parse_type(Parser *p, Type *type) {
 						err_print(field_decl.where, "Constant struct members are not supported (yet).");
 						return false;
 					}
+					if ((field_decl.flags & DECL_FOREIGN) && !(field_decl.flags & DECL_IS_CONST)) {
+						err_print(field_decl.where, "Non-constant struct members cannot be foreign.");
+						return false;
+					}
 					if (field_decl.flags & DECL_HAS_EXPR) {
 						err_print(field_decl.where, "struct members cannot have initializers.");
 						return false;
@@ -807,7 +811,7 @@ static bool parse_block(Parser *p, Block *b) {
 	return ret;
 }
 
-/* does NOT handle empty declaration lists */
+/* does NOT handle empty declaration list. */
 static bool parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end) {
 	Tokenizer *t = p->tokr;
 	bool ret = true;
@@ -853,6 +857,12 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 	} else {
 		if (!parse_decl_list(p, &f->params, DECL_END_RPAREN_COMMA))
 			return false;
+		arr_foreach(f->params, Declaration, param) {
+			if (param->flags & DECL_FOREIGN) {
+				err_print(param->where, "Parameters cannot be foreign.");
+				return false;
+			}
+		}
 	}
 	
 	if (t->token->kind == TOKEN_EOF) {
@@ -873,7 +883,11 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 				return false;
 			}
 			if (d->flags & DECL_INFER) {
-				err_print(d->where, "Can't infer the value of a return declaration!");
+				err_print(d->where, "Can't infer the value of a named return value!");
+				return false;
+			}
+			if (d->flags & DECL_FOREIGN) {
+				err_print(d->where, "Named return values can't be foreign.");
 				return false;
 			}
 		}
