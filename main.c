@@ -61,7 +61,7 @@ int main(int argc, char **argv) {
 	
 	FILE *in = fopen(in_filename, "r");
 	if (!in) {
-		fprintf(stderr, "Could not open file: %s.\n", argv[1]);
+		fprintf(stderr, "Could not open file: %s.\n", in_filename);
 		return EXIT_FAILURE;
 	}
 	
