@@ -17,10 +17,12 @@ typedef struct {
 	Block *block;
 } Copier;
 
+static Expression *copy_expr_(Copier *c, Expression *in);
 static void copy_expr(Copier *c, Expression *out, Expression *in);
 static void copy_decl(Copier *c, Declaration *out, Declaration *in);
 static void copy_block(Copier *c, Block *out, Block *in);
 static void copy_type(Copier *c, Type *out, Type *in);
+static Type *copy_type_(Copier *c, Type *in);
 
 static Copier copier_create(Allocator *a, Block *b) {
 	Copier c;
@@ -70,6 +72,7 @@ static void copy_val_full(Copier *c, Value *out, Value *in, Type *t) {
 	}
 }
 
+
 /* works on unresolved and resolved types */
 static void copy_type(Copier *c, Type *out, Type *in) {
 	*out = *in;
@@ -79,7 +82,7 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 	case TYPE_UNKNOWN:
 		break;
 	case TYPE_EXPR:
-		copy_expr(c, out->expr = allocr_malloc(c->allocr, sizeof *out->expr), in->expr);
+		out->expr = copy_expr_(c, in->expr);
 		break;
 	case TYPE_FN: {
 		size_t ntypes = arr_len(in->fn.types);
@@ -101,19 +104,15 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 		if (in->flags & TYPE_IS_RESOLVED) {
 			out->arr.n = in->arr.n;
 		} else {
-			out->arr.n_expr = allocr_malloc(c->allocr, sizeof *out->arr.n_expr);
-			copy_expr(c, out->arr.n_expr, in->arr.n_expr);
+			out->arr.n_expr = copy_expr_(c, in->arr.n_expr);
 		}
-		out->arr.of = allocr_malloc(c->allocr, sizeof *out->arr.of);
-		copy_type(c, out->arr.of, in->arr.of);
+		out->arr.of = copy_type_(c, in->arr.of);
 		break;
 	case TYPE_PTR:
-		out->ptr = allocr_malloc(c->allocr, sizeof *out->ptr);
-		copy_type(c, out->ptr, in->ptr);
+		out->ptr = copy_type_(c, in->ptr);
 		break;
 	case TYPE_SLICE:
-		out->ptr = allocr_malloc(c->allocr, sizeof *out->slice);
-		copy_type(c, out->slice, in->slice);
+		out->slice = copy_type_(c, in->slice);
 		break;
 	case TYPE_STRUCT: {
 		out->struc = allocr_malloc(c->allocr, sizeof *out->struc);
@@ -130,6 +129,12 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 		}
 	} break;
 	}
+}
+
+static Type *copy_type_(Copier *c, Type *in) {
+	Type *out = allocr_malloc(c->allocr, sizeof *out);
+	copy_type(c, out, in);
+	return out;
 }
 
 static void copy_fn_expr(Copier *c, FnExpr *fout, FnExpr *fin, bool copy_body) {
@@ -152,7 +157,6 @@ static void copy_fn_expr(Copier *c, FnExpr *fout, FnExpr *fin, bool copy_body) {
 		copy_block(c, &fout->body, &fin->body);
 }
 
-static Expression *copy_expr_(Copier *c, Expression *in);
 static void copy_expr(Copier *c, Expression *out, Expression *in) {
 	Allocator *a = c->allocr;
 	*out = *in;
@@ -166,26 +170,26 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 	case EXPR_IDENT:
 		break;
 	case EXPR_UNARY_OP:
-		copy_expr(c, out->unary.of = allocr_malloc(a, sizeof *out->unary.of), in->unary.of);
+		out->unary.of = copy_expr_(c, in->unary.of);
 		break;
 	case EXPR_BINARY_OP:
-		copy_expr(c, out->binary.lhs = allocr_malloc(a, sizeof *out->binary.lhs), in->binary.lhs);
-		copy_expr(c, out->binary.rhs = allocr_malloc(a, sizeof *out->binary.rhs), in->binary.rhs);
+		out->binary.lhs = copy_expr_(c, in->binary.lhs);
+		out->binary.rhs = copy_expr_(c, in->binary.rhs);
 		break;
 	case EXPR_IF: {
 		IfExpr *iin = &in->if_;
 		IfExpr *iout = &out->if_;
 		if (iin->cond)
-			copy_expr(c, iout->cond = allocr_malloc(a, sizeof *iout->cond), iin->cond);
+			iout->cond = copy_expr_(c, iin->cond);
 		if (iin->next_elif)
-			copy_expr(c, iout->next_elif = allocr_malloc(a, sizeof *iout->next_elif), iin->next_elif);
+			iout->next_elif = copy_expr_(c, iin->next_elif);
 		copy_block(c, &iout->body, &iin->body);
 	} break;
 	case EXPR_WHILE: {
 		WhileExpr *win = &in->while_;
 		WhileExpr *wout = &out->while_;
 		if (win->cond)
-			copy_expr(c, wout->cond = allocr_malloc(a, sizeof *wout->cond), win->cond);
+			wout->cond = copy_expr_(c, win->cond);
 		copy_block(c, &wout->body, &win->body);
 	} break;
 	case EXPR_EACH: {
@@ -196,13 +200,13 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		if (ein->flags & EACH_ANNOTATED_TYPE)
 			copy_type(c, &eout->type, &ein->type);
 		if (ein->flags & EACH_IS_RANGE) {
-			copy_expr(c, eout->range.from = allocr_malloc(a, sizeof *eout->range.from), ein->range.from);
+			eout->range.from = copy_expr_(c, ein->range.from);
 			if (ein->range.to)
-				copy_expr(c, eout->range.to = allocr_malloc(a, sizeof *eout->range.to), ein->range.to);
+				eout->range.to = copy_expr_(c, ein->range.to);
 			if (ein->range.step)
-				copy_expr(c, eout->range.step = allocr_malloc(a, sizeof *eout->range.step), ein->range.step);
+				eout->range.step = copy_expr_(c, ein->range.step);
 		} else {
-			copy_expr(c, eout->of = allocr_malloc(a, sizeof *eout->of), ein->of);
+			eout->of = copy_expr_(c, ein->of);
 		}
 		copy_block(c, &eout->body, &ein->body);
 	} break;
@@ -213,13 +217,14 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		CastExpr *cin = &in->cast;
 		CastExpr *cout = &out->cast;
 		copy_type(c, &cout->type, &cin->type);
-		copy_expr(c, cout->expr = allocr_malloc(a, sizeof *cout->expr), cin->expr);
+		cout->expr = copy_expr_(c, cin->expr);
 	} break;
 	case EXPR_NEW: {
 		NewExpr *nin = &in->new;
 		NewExpr *nout = &out->new;
 		copy_type(c, &nout->type, &nin->type);
-		if (nin->n) copy_expr(c, nout->n = allocr_malloc(a, sizeof *nout->n), nin->n);
+		if (nin->n)
+			nout->n = copy_expr_(c, nin->n);
 	} break;
 	case EXPR_CALL: {
 		CallExpr *cin = &in->call;
@@ -246,7 +251,7 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 			copy_expr(c, out->tuple + i, in->tuple + i);
 	} break;
 	case EXPR_C:
-		copy_expr(c, out->c.code = allocr_malloc(a, sizeof *out->c.code), in->c.code);
+		out->c.code = copy_expr_(c, in->c.code);
 		break;
 	case EXPR_BUILTIN:
 		out->builtin.which.expr = copy_expr_(c, in->builtin.which.expr); 
@@ -256,9 +261,9 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		SliceExpr *sout = &out->slice;
 		copy_expr(c, sout->of = allocr_malloc(a, sizeof *sout->of), sin->of);
 		if (sin->from)
-			copy_expr(c, sout->from = allocr_malloc(a, sizeof *sout->from), sin->from);
+			sout->from = copy_expr_(c, sin->from);
 		if (sin->to)
-			copy_expr(c, sout->to = allocr_malloc(a, sizeof *sout->to), sin->to);
+			sout->to = copy_expr_(c, sin->to);
 	} break;
 	case EXPR_PKG:
 		out->pkg.name_expr = copy_expr_(c, in->pkg.name_expr);
@@ -315,7 +320,7 @@ static void copy_block(Copier *c, Block *out, Block *in) {
 	Block *prev = c->block;
 	c->block = out;
 	if (in->ret_expr)
-		copy_expr(c, out->ret_expr = allocr_malloc(c->allocr, sizeof *out->ret_expr), in->ret_expr);
+		out->ret_expr = copy_expr_(c, in->ret_expr);
 	
 	arr_set_lena(&out->stmts, nstmts, c->allocr);
 	for (size_t i = 0; i < nstmts; ++i) {

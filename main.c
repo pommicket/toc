@@ -18,12 +18,11 @@
 
 /* 
 TODO:
-clean up copy_expr
 clean up location printing- general thing for printing location line to a file used by err and print_location
-
+passing structs to foreign functions
 each=>for
 
-#C_int, #C_long, etc.
+#builtin("sizeof(int)") etc.
 
 #include
 constants in structs

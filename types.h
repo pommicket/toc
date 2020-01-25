@@ -424,9 +424,9 @@ enum {
 typedef U8 TypeFlags;
 typedef struct Type {
 	Location where;
+	struct Expression *was_expr; /* if non-NULL, indicates that this type used to be an expression (TYPE_EXPR) */
 	TypeKind kind;
 	TypeFlags flags;
-	struct Expression *was_expr; /* if non-NULL, indicates that this type used to be an expression (TYPE_EXPR) */
 	union {
 		BuiltinType builtin;
 		FnType fn;
