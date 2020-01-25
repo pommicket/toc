@@ -954,7 +954,7 @@ static int op_precedence(Keyword op) {
 static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	Tokenizer *t = p->tokr;
 
-#if 1
+#if 0
 	{
 		Location where;
 		where.file = p->file;

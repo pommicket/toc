@@ -655,6 +655,11 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 	case EXPR_TUPLE:
 		/* e.g. a, b = 3, 5; */
 		for (size_t i = 0; i < arr_len(to->tuple); ++i) {
+			if (exprs)
+				if (!cgen_expr_pre(g, &exprs[i]))
+					return false;
+		}
+		for (size_t i = 0; i < arr_len(to->tuple); ++i) {
 			char *s = NULL, buf[64];
 			Expression *e = NULL;
 			if (idents)
@@ -670,14 +675,23 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 		}
 		break;
 	case EXPR_CALL: {
+		Constness *constness = to->call.fn->type.fn.constness;
+		int i = 0;
 		/* e.g. a, b = fn_which_returns_tuple(); */
+		arr_foreach(to->call.arg_exprs, Expression, arg) {
+			if (!constness || !arg_is_const(arg, constness[i])) {
+				if (!cgen_expr_pre(g, arg))
+					return false;
+			}
+		}
+		if (!cgen_expr_pre(g, to->call.fn)) return false;
+		
 		if (!cgen_expr(g, to->call.fn)) return false;
 		if (to->call.instance)
 			cgen_fn_instance_number(g, to->call.instance->c.id);
 		cgen_write(g, "(");
 		bool any_args = false;
-		Constness *constness = to->call.fn->type.fn.constness;
-		int i = 0;
+		i = 0;
 		arr_foreach(to->call.arg_exprs, Expression, arg) {
 			if (!constness || !arg_is_const(arg, constness[i])) {
 				if (any_args)
@@ -720,6 +734,11 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 		prefix_id = to->each->c.id;
 		goto prefixed;
 	prefixed:
+		for (size_t i = 0; i < arr_len(to->type.tuple); ++i) {
+			if (exprs)
+				if (!cgen_expr_pre(g, &exprs[i]))
+					return false;
+		}
 		for (unsigned long i = 0; i < (unsigned long)arr_len(to->type.tuple); ++i) {
 			cgen_write(g, "(");
 			if (exprs) {
@@ -1024,7 +1043,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		break;
 	case EXPR_CALL: {
 		if (!cgen_expr_pre(g, e->call.fn)) return false;
-		int i = 0;
+	    size_t i = 0;
 		Constness *constness = e->call.fn->type.fn.constness;
 		arr_foreach(e->call.arg_exprs, Expression, arg) {
 			if (!constness || !arg_is_const(arg, constness[i])) {
@@ -1032,8 +1051,44 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			}
 			++i;
 		}
-		if (cgen_uses_ptr(&e->type)
-			&& e->type.kind != TYPE_TUPLE) {
+		if (e->type.kind == TYPE_TUPLE) {
+			Type *t = &e->type;
+			size_t ntypes = arr_len(t->tuple);
+			IdentID *ids = err_malloc(ntypes * sizeof *ids);
+			for (i = 0; i < ntypes; ++i) {
+				ids[i] = ++g->ident_counter;
+				if (!cgen_type_pre(g, &t->tuple[i], e->where))
+					return false;
+				cgen_write(g, " ");
+				cgen_ident_id(g, ids[i]);
+				if (!cgen_type_post(g, &t->tuple[i], e->where))
+					return false;
+				cgen_write(g, "; ");
+			}
+		    if (!cgen_expr(g, e->call.fn)) return false;
+			if (e->call.instance) {
+				cgen_fn_instance_number(g, e->call.instance->c.id);
+			}
+			cgen_write(g, "(");
+			bool any_args = false;
+			i = 0;
+			arr_foreach(e->call.arg_exprs, Expression, arg) {
+				if (!constness || !arg_is_const(arg, constness[i])) {
+					if (any_args) cgen_write(g, ", ");
+					any_args = true;
+					if (!cgen_expr(g, arg))
+						return false;
+				}
+				++i;
+			}
+			for (i = 0; i < ntypes; ++i) {
+				if (any_args) cgen_write(g, ", ");
+				any_args = true;
+				cgen_write(g, "&");
+				cgen_ident_id(g, ids[i]);
+			}
+			cgen_write(g, ");");
+		} else if (cgen_uses_ptr(&e->type)) {
 			e->call.c.id = ++g->ident_counter;
 			if (!cgen_type_pre(g, &e->type, e->where)) return false;
 			cgen_write(g, " ");
@@ -1436,7 +1491,9 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			cgen_ident_id(g, e->each->c.id);
 		break;
 	case EXPR_CALL:
-		if (cgen_uses_ptr(&e->type)) {
+		if (e->type.kind == TYPE_TUPLE) {
+			/* the only situation in which this could happen is if the return value doesn't matter */
+		} else if (cgen_uses_ptr(&e->type)) {
 			cgen_ident_id(g, e->call.c.id);
 		} else {
 			FnType *fn_type = &e->call.fn->type.fn;
@@ -1862,10 +1919,10 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 		}
 		if (has_expr) {
 			assert((g->block || g->fn) && !(d->flags & DECL_IS_CONST));
-			if (!cgen_expr_pre(g, &d->expr)) return false;
 			if (d->expr.type.kind == TYPE_TUPLE) {
 				if (!cgen_set_tuple(g, NULL, d->idents, NULL, &d->expr)) return false;
 			} else {
+				if (!cgen_expr_pre(g, &d->expr)) return false;
 				if (nidents > 1) {
 					/* set expr__ first to make sure side effects don't happen twice */
 					cgen_write(g, "{");

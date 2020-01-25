@@ -27,7 +27,7 @@ if [ "$1" = "" ]; then
 	fi
 fi
 
-DEBUG_FLAGS="-O0 -g3 $WARNINGS -std=c11 -DTOC_DEBUG"
+DEBUG_FLAGS="-O0 -g3 -pipe $WARNINGS -std=c11 -DTOC_DEBUG"
 RELEASE_FLAGS="-O3 -s -DNDEBUG $WARNINGS -std=c11"
 
 if [ "$1" = "release" ]; then

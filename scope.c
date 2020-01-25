@@ -21,7 +21,7 @@ static bool DEBUG_UNDERSCORE(add_ident_decls)(SOURCE_LOCATION_PARAMS Block *b, D
 				err_print(d->where, "Re-declaration of identifier in the same block.");
 				info_print(prev->decl->where, "Previous declaration was here.");
 #ifdef TOC_DEBUG
-				info_print(d->where, "First declaration was done by %s:%d, second was done by %s:%d.", prev->src_file, prev->src_line, src_file, src_line);
+				err_fprint(d->where.file->ctx, "First declaration was done by %s:%d, second was done by %s:%d.\n", prev->src_file, prev->src_line, src_file, src_line);
 #endif				
 				ret = false;
 				continue;

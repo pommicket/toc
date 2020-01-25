@@ -1,6 +1,6 @@
 addmul ::= fn (x::=0, y:=0)
 add := x+y, mul := x*y {
-	
+	a : []char = x;
 };
 
 main ::= fn() {
