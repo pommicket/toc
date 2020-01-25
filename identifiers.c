@@ -93,6 +93,12 @@ static Identifier ident_insert(Identifiers *ids, char **s) {
 }
 
 static char *ident_to_str(Identifier i) {
+	if (i->anonymous) {
+		char *s = malloc(4);
+		strcpy(s, "???");
+		return s;
+	}
+	
 	char *str = err_malloc(i->len + 1);
 	/* for some reason, GCC thinks that i->len is -1 when this is called from type_to_str_ (in release mode)
 	   TODO: test this now (some stuff was changed)

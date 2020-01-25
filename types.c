@@ -366,7 +366,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 			*/
 			arr_foreach(f->params, Declaration, param) {
 				if (!(param->flags & DECL_IS_CONST)) {
-					char *s = type_to_str(ret_type);
+					char *s = type_to_str(&f->ret_type);
 					warn_print(param->where, "Non-constant parameter in function which returns %s (which is a type which can only be used at run time).", s);
 					free(s);
 					break;
@@ -927,21 +927,72 @@ static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Type *fn_type, A
 	return true;
 }
 
-static void get_builtin_val(BuiltinVal val, Value *v) {
+static Value get_builtin_val(BuiltinVal val) {
+	Value v;
 	switch (val) {
 	case BUILTIN_STDOUT:
-		v->ptr = stdout;
+		v.ptr = stdout;
 		break;
 	case BUILTIN_STDERR:
-		v->ptr = stderr;
+		v.ptr = stderr;
 		break;
 	case BUILTIN_STDIN:
-		v->ptr = stdin;
+		v.ptr = stdin;
 		break;
 	case BUILTIN_COMPILING:
-		v->boolv = true;
+		v.boolv = true;
+		break;
+	case BUILTIN_SIZEOF_SHORT:
+		v.i64 = (I64)sizeof(short);
+		break;
+	case BUILTIN_SIZEOF_INT:
+		v.i64 = (I64)sizeof(int);
+		break;
+	case BUILTIN_SIZEOF_LONG:
+		v.i64 = (I64)sizeof(long);
+		break;
+	case BUILTIN_SIZEOF_LONG_LONG:
+		v.i64 = (I64)sizeof(long long);
+		break;
+	case BUILTIN_SIZEOF_FLOAT:
+		v.i64 = (I64)sizeof(float);
+		break;
+	case BUILTIN_SIZEOF_DOUBLE:
+		v.i64 = (I64)sizeof(double);
+		break;
+	case BUILTIN_SIZEOF_LONG_DOUBLE:
+		v.i64 = (I64)sizeof(long double);
+		break;
+	case BUILTIN_SIZEOF_SIZE_T:
+		v.i64 = (I64)sizeof(size_t);
+		break;
+		/* TODO(eventually): fix these for cross compilation */
+	case BUILTIN_TSIZEOF_SHORT:
+		v.i64 = (I64)sizeof(short);
+		break;
+	case BUILTIN_TSIZEOF_INT:
+		v.i64 = (I64)sizeof(int);
+		break;
+	case BUILTIN_TSIZEOF_LONG:
+		v.i64 = (I64)sizeof(long);
+		break;
+	case BUILTIN_TSIZEOF_LONG_LONG:
+		v.i64 = (I64)sizeof(long long);
+		break;
+	case BUILTIN_TSIZEOF_FLOAT:
+		v.i64 = (I64)sizeof(float);
+		break;
+	case BUILTIN_TSIZEOF_DOUBLE:
+		v.i64 = (I64)sizeof(double);
+		break;
+	case BUILTIN_TSIZEOF_LONG_DOUBLE:
+		v.i64 = (I64)sizeof(long double);
+		break;
+	case BUILTIN_TSIZEOF_SIZE_T:
+		v.i64 =(I64)sizeof(size_t);
 		break;
 	}
+	return v;
 }
 
 static void get_builtin_val_type(Allocator *a, BuiltinVal val, Type *t) {
@@ -960,6 +1011,25 @@ static void get_builtin_val_type(Allocator *a, BuiltinVal val, Type *t) {
 	case BUILTIN_COMPILING:
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_BOOL;
+		break;
+	case BUILTIN_SIZEOF_SHORT:
+	case BUILTIN_SIZEOF_INT:
+	case BUILTIN_SIZEOF_LONG:
+	case BUILTIN_SIZEOF_LONG_LONG:
+	case BUILTIN_SIZEOF_FLOAT:
+	case BUILTIN_SIZEOF_DOUBLE:
+	case BUILTIN_SIZEOF_LONG_DOUBLE:
+	case BUILTIN_TSIZEOF_SHORT:
+	case BUILTIN_TSIZEOF_INT:
+	case BUILTIN_TSIZEOF_LONG:
+	case BUILTIN_TSIZEOF_LONG_LONG:
+	case BUILTIN_TSIZEOF_FLOAT:
+	case BUILTIN_TSIZEOF_DOUBLE:
+	case BUILTIN_TSIZEOF_LONG_DOUBLE:
+	case BUILTIN_SIZEOF_SIZE_T:
+	case BUILTIN_TSIZEOF_SIZE_T:
+		t->kind = TYPE_BUILTIN;
+		t->builtin = BUILTIN_I64;
 		break;
 	}
 }

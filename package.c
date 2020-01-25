@@ -169,7 +169,7 @@ static void export_location(Exporter *ex, Location where) {
 }
 static Location import_location(Importer *im) {
 	Location l;
-	l.file = &im->importing_from;
+	l.file = im->importing_from;
 	l.start = NULL;
 	l.simple_location.line = (U32)import_vlq(im);
 	return l;
@@ -220,13 +220,14 @@ static void exptr_start(Exporter *ex, const char *pkg_name, size_t pkg_name_len)
 /* where = where was this imported. don't free fname while imported stuff is in use. */
 static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname, ErrCtx *parent_ctx, Location where) {
 	Importer i = {0};
-	i.importing_from.filename = fname;
-	i.importing_from.ctx = parent_ctx;
+	i.allocr = allocr;
+	i.importing_from = imptr_calloc(&i, 1, sizeof *i.importing_from);
+	i.importing_from->filename = fname;
+	i.importing_from->ctx = parent_ctx;
 	idents_create(&p->idents);
 	i.pkg = p;
 	i.in = f;
 	i.import_location = where;
-	i.allocr = allocr;
 	/* read header */
 	U8 toc[3];
 	toc[0] = import_u8(&i);
@@ -255,7 +256,7 @@ static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname
 	if (has_code) {
 		size_t code_len = import_len(&i);
 		char *code = import_str(&i, code_len);
-		i.importing_from.contents = code;
+		i.importing_from->contents = code;
 	}
 	long decls_offset = ftell(f);
 	fseek(f, (long)footer_offset, SEEK_SET);
@@ -637,6 +638,7 @@ static bool export_expr(Exporter *ex, Expression *e) {
 	export_u8(ex, (U8)e->flags);
 	assert(e->kind < 256);
 	export_u8(ex, (U8)e->kind);
+	export_location(ex, e->where);
 	unsigned found_type = e->flags & EXPR_FOUND_TYPE;
     if (found_type) {
 		if (!export_type(ex, &e->type, e->where))
@@ -813,6 +815,7 @@ static inline Expression *import_expr_(Importer *im) {
 static void import_expr(Importer *im, Expression *e) {
 	e->flags = import_u8(im);
 	e->kind = import_u8(im);
+	e->where = import_location(im);
 	unsigned found_type = e->flags & EXPR_FOUND_TYPE;
 	if (found_type) {
 		import_type(im, &e->type);
@@ -888,6 +891,7 @@ static void import_expr(Importer *im, Expression *e) {
 		break;
 	case EXPR_CALL: {
 		CallExpr *c = &e->call;
+		memset(c, 0, sizeof *c);
 		c->fn = import_expr_(im);
 		if (found_type) {
 			import_arr(im, &c->arg_exprs);
@@ -1037,6 +1041,7 @@ static bool export_stmt(Exporter *ex, Statement *s) {
 	possibly_static_assert(sizeof s->flags == 1);
 	export_u8(ex, s->flags);
 	export_u8(ex, (U8)s->kind);
+	export_location(ex, s->where);
 	switch (s->kind) {
 	case STMT_EXPR:
 		if (!export_expr(ex, &s->expr))
@@ -1060,6 +1065,7 @@ static bool export_stmt(Exporter *ex, Statement *s) {
 static void import_stmt(Importer *im, Statement *s) {
 	s->flags = import_u8(im);
 	s->kind = import_u8(im);
+	s->where = import_location(im);
 	switch (s->kind) {
 	case STMT_EXPR:
 		import_expr(im, &s->expr);
@@ -1073,6 +1079,7 @@ static void import_stmt(Importer *im, Statement *s) {
 			import_expr(im, &s->expr);
 		break;
 	}
+	fprint_stmt(stdout, s); printf("\n");
 }
 
 static bool export_block(Exporter *ex, Block *b) {

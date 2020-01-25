@@ -1,15 +1,9 @@
-Point ::= struct {
-	  x, y : int;
+io ::= pkg "std/io";
+hw ::= fn() int {
+	 io.puts("Hello, world!");
+	 3
 };
-
-p :: fn(Point) int = #foreign "p", "./test.so";
-
-mkpoint ::= fn(x:int,y:int) p : Point {
-		p.x = x;
-		p.y = y;
-};
-
 main ::= fn() {
-	 point ::= mkpoint(-3,-5);
-	 total ::= p(point);
+x::=hw();
+hw();
 };
