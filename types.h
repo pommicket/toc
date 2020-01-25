@@ -102,8 +102,6 @@ typedef U32 IdentID; /* identifier ID for cgen (anonymous variables). not to be 
 
 
 typedef struct ErrCtx {
-	const char *filename;
-	char *str; /* file contents, or NULL if none are available */
 	bool enabled;
 	bool color_enabled;
 	bool have_errored;
@@ -328,7 +326,6 @@ typedef struct StrLiteral {
 } StrLiteral;
 
 typedef struct {
-	ErrCtx *ctx;
 	U32 line;
 	U32 start; /* index in ctx->str */
 	U32 end; /* exclusive */
@@ -348,16 +345,21 @@ typedef struct Token {
 	};
 } Token;
 
+typedef struct {
+	ErrCtx *ctx;
+	const char *filename;
+	char *contents;
+} File;
 
 typedef struct Location {
+	File *file;
 	/* if start is NULL, simple_location will be used. */
 	Token *start;
 	union {
 		Token *end; /* Exclusive */
 	    struct {
-			ErrCtx *ctx;
-			U32 line;
-		} *simple_location;
+		    U32 line; /* if 0, this is a null location */
+		} simple_location;
 	};
 } Location;
 
@@ -365,6 +367,7 @@ typedef struct Location {
 typedef struct Tokenizer {
 	Allocator *allocr;
 	Token *tokens;
+	File *file;
 	char *s; /* string being parsed */
 	ErrCtx *err_ctx;
 	U32 line;
@@ -827,8 +830,9 @@ typedef struct ParsedFile {
 typedef struct Parser {
 	Tokenizer *tokr;
 	Allocator *allocr;
+	File *file;
 	Block *block; /* which block are we in? NULL = file scope */
-	ParsedFile *file;
+	ParsedFile *parsed_file;
 } Parser;
 
 typedef enum {
@@ -891,6 +895,7 @@ typedef struct Exporter {
 	FILE *out; /* .top (toc package) to output to */
 	bool started;
 	U64 ident_id;
+	File exporting_to;
 	FnExpr **exported_fns;
 	StructDef **exported_structs;
 	Identifier *exported_idents; /* (only those whose names are exported) */
@@ -899,6 +904,7 @@ typedef struct Exporter {
 
 typedef struct Importer {
 	FILE *in;
+	File importing_from;
 	Package *pkg;
 	Allocator *allocr;
 	Identifier *ident_map; /* [i] = value of identifier with ID i */

@@ -18,7 +18,6 @@
 
 /* 
 TODO:
-clean up location printing- general thing for printing location line to a file used by err and print_location
 passing structs to foreign functions
 each=>for
 
@@ -96,11 +95,14 @@ int main(int argc, char **argv) {
 	Allocator main_allocr;
 	allocr_create(&main_allocr);
 	ErrCtx err_ctx = {0};
-	err_ctx.filename = in_filename;
 	err_ctx.enabled = true;
 	err_ctx.color_enabled = true;
+	File file = {0};
+	file.filename = in_filename;
+	file.contents = contents;
+	file.ctx = &err_ctx;
 	tokr_create(&t, &idents, &err_ctx, &main_allocr);
-	if (!tokenize_string(&t, contents)) {
+	if (!tokenize_file(&t, &file)) {
 		err_text_important(&err_ctx, "Errors occured during preprocessing.\n");
 		return EXIT_FAILURE;
 	}
@@ -147,7 +149,7 @@ int main(int argc, char **argv) {
 	FILE *out = fopen(out_filename, "w");
 	if (!out) {
 		err_text_important(&err_ctx, "Could not open output file: ");
-		err_fprint("%s\n", out_filename);
+		err_fprint(&err_ctx, "%s\n", out_filename);
 		return EXIT_FAILURE;
 	}
 	CGenerator g;

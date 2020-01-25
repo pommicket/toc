@@ -279,6 +279,12 @@ static char *type_to_str(Type *t) {
 	return ret;
 }
 
+static inline Location parser_mk_loc(Parser *p) {
+	Location loc = {0};
+	loc.file = p->file;
+	return loc;
+}
+
 static inline void *parser_arr_add_(Parser *p, void **a, size_t sz) {
 	return arr_adda_(a, sz, p->allocr);
 }
@@ -412,6 +418,7 @@ static bool parse_args(Parser *p, Argument **args) {
 				return false;
 			}
 			Argument *arg = parser_arr_add(p, args);
+			arg->where = parser_mk_loc(p);
 			arg->where.start = t->token;
 			/* named arguments */
 			if (t->token->kind == TOKEN_IDENT && token_is_kw(t->token + 1, KW_EQ)) {
@@ -437,6 +444,7 @@ static bool parse_args(Parser *p, Argument **args) {
 
 static bool parse_type(Parser *p, Type *type) {
 	Tokenizer *t = p->tokr;
+	type->where = parser_mk_loc(p);
 	type->where.start = t->token;
 	type->flags = 0;
 	switch (t->token->kind) {
@@ -571,6 +579,7 @@ static bool parse_type(Parser *p, Type *type) {
 			struc->c.id = 0;
 			struc->fields = NULL;
 			struc->export.id = 0;
+			struc->where = parser_mk_loc(p);
 			struc->where.start = t->token;
 				
 			++t->token;
@@ -779,6 +788,7 @@ static bool parse_block(Parser *p, Block *b) {
 		return false;
 	}
 	p->block = b;
+	b->where = parser_mk_loc(p);
 	b->where.start = t->token;
 	++t->token;	/* move past { */
 	b->stmts = NULL;
@@ -942,12 +952,12 @@ static int op_precedence(Keyword op) {
 }
 
 static bool parse_expr(Parser *p, Expression *e, Token *end) {
-
 	Tokenizer *t = p->tokr;
 
-#if 0
+#if 1
 	{
 		Location where;
+		where.file = p->file;
 		where.start = t->token;
 		where.end = end;
 		printf("PARSING ");
@@ -958,6 +968,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	e->flags = 0;
 	e->type.flags = 0;
 	if (end == NULL) return false;
+	e->where = parser_mk_loc(p);
 	e->where.start = t->token;
 	if (end <= t->token) {
 		tokr_err(t, "Empty expression.");
@@ -1079,6 +1090,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					Expression *next = parser_new_expr(p);
 					next->flags = 0;
 					next->kind = EXPR_IF;
+					next->where = parser_mk_loc(p);
 					next->where.start = t->token;
 					curr->next_elif = next;
 					IfExpr *nexti = &next->if_;
@@ -1788,6 +1800,7 @@ static inline bool ends_decl(Token *t, DeclEndKind ends_with) {
 
 static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 flags) {
 	Tokenizer *t = p->tokr;
+	d->where = parser_mk_loc(p);
 	d->where.start = t->token;
 	d->idents = NULL;
 	d->flags = 0;
@@ -1985,6 +1998,7 @@ static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 		tokr_err(t, "Expected statement.");
 		return false;
 	}
+	s->where = parser_mk_loc(p);
 	s->where.start = t->token;
 	s->flags = 0;
 	*was_a_statement = true;
@@ -2029,13 +2043,13 @@ static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				t->token = end + 1;
 				return false;
 			}
-			if (p->file->pkg_name) {
+			if (p->parsed_file->pkg_name) {
 				tokr_err(t, "You've already set the package name.");
-				info_print(p->file->pkg_name->where, "The package name was previously set here.");
+				info_print(p->parsed_file->pkg_name->where, "The package name was previously set here.");
 				t->token = end + 1;
 				return false;
 			}
-			p->file->pkg_name = pkg_name;
+			p->parsed_file->pkg_name = pkg_name;
 			bool success = parse_expr(p, pkg_name, end);
 			t->token = end + 1;
 			*was_a_statement = false;
@@ -2083,7 +2097,8 @@ static bool parse_file(Parser *p, ParsedFile *f) {
 	Tokenizer *t = p->tokr;
 	f->stmts = NULL;
 	f->pkg_name = NULL;
-	p->file = f;
+	p->file = t->file;
+	p->parsed_file = f;
 	bool ret = true;
 	while (t->token->kind != TOKEN_EOF) {
 		bool was_a_statement;

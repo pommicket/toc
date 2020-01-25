@@ -1666,7 +1666,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				/* type this instance */
 				
 				/* if anything happens, make sure we let the user know that this happened while generating a fn */
-				ErrCtx *err_ctx = e->where.start->pos.ctx;
+				ErrCtx *err_ctx = e->where.file->ctx;
 				*(Location *)typer_arr_add(tr, &err_ctx->instance_stack) = e->where;
 				bool success = types_fn(tr, &c->instance->fn, &f->type, c->instance);
 				arr_remove_lasta(&err_ctx->instance_stack, tr->allocr);
@@ -2380,7 +2380,7 @@ static bool types_stmt(Typer *tr, Statement *s) {
 			return false;
 		}
 				
-		if (s->expr.type.kind == TYPE_TUPLE && !(s->flags & STMT_EXPR_NO_SEMICOLON)) {
+		if (s->expr.kind == EXPR_TUPLE && !(s->flags & STMT_EXPR_NO_SEMICOLON)) {
 			err_print(s->where, "Statement of a tuple is not allowed. Use a semicolon instead of a comma here.");
 			return false;
 		}
@@ -2467,7 +2467,7 @@ static bool types_file(Typer *tr, ParsedFile *f) {
 		memcpy(pkg_name_cstr, pkg_name_str, pkg_name_len);
 		pkg_name_cstr[pkg_name_len] = 0;
 		tr->pkg_name = pkg_name_cstr;
-		char *pkg_file_name = err_malloc(pkg_name_len+5);
+		char *pkg_file_name = typer_malloc(tr, pkg_name_len+5);
 		sprintf(pkg_file_name, "%s.top", pkg_name_cstr);
 		pkg_fp = fopen(pkg_file_name, "wb");
 		if (!pkg_fp) {
@@ -2475,8 +2475,7 @@ static bool types_file(Typer *tr, ParsedFile *f) {
 			free(pkg_file_name);
 			return false;
 		}
-		free(pkg_file_name);
-		exptr_create(tr->exptr, pkg_fp);
+		exptr_create(tr->exptr, pkg_fp, pkg_file_name, tr->err_ctx);
 		exptr_start(tr->exptr, pkg_name_str, pkg_name_len);
 	}
 	arr_foreach(f->stmts, Statement, s) {

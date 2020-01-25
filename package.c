@@ -16,9 +16,11 @@ static void import_block(Importer *im, Block *b);
 static inline Expression *import_expr_(Importer *im);
 
 
-static void exptr_create(Exporter *ex, FILE *out) {
+static void exptr_create(Exporter *ex, FILE *out, const char *filename, ErrCtx *err_ctx) {
 	/* construct full filename */
 	ex->out = out;
+	ex->exporting_to.ctx = err_ctx;
+	ex->exporting_to.filename = filename;
 	ex->ident_id = 0;
 	ex->exported_fns = NULL;
 	ex->exported_structs = NULL;
@@ -167,10 +169,9 @@ static void export_location(Exporter *ex, Location where) {
 }
 static Location import_location(Importer *im) {
 	Location l;
+	l.file = &im->importing_from;
 	l.start = NULL;
-	l.simple_location = imptr_malloc(im, sizeof *l.simple_location);
-	l.simple_location->ctx = im->err_ctx;
-	l.simple_location->line = (U32)import_vlq(im);
+	l.simple_location.line = (U32)import_vlq(im);
 	return l;
 }
 
@@ -219,16 +220,13 @@ static void exptr_start(Exporter *ex, const char *pkg_name, size_t pkg_name_len)
 /* where = where was this imported. don't free fname while imported stuff is in use. */
 static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname, ErrCtx *parent_ctx, Location where) {
 	Importer i = {0};
-	ErrCtx *err_ctx = i.err_ctx = allocr_malloc(allocr, sizeof *i.err_ctx);
+	i.importing_from.filename = fname;
+	i.importing_from.ctx = parent_ctx;
 	idents_create(&p->idents);
 	i.pkg = p;
 	i.in = f;
 	i.import_location = where;
 	i.allocr = allocr;
-	*err_ctx = *parent_ctx;
-	err_ctx->filename = fname;
-	err_ctx->instance_stack = NULL;
-	err_ctx->str = NULL;
 	/* read header */
 	U8 toc[3];
 	toc[0] = import_u8(&i);
@@ -257,7 +255,7 @@ static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname
 	if (has_code) {
 		size_t code_len = import_len(&i);
 		char *code = import_str(&i, code_len);
-	    err_ctx->str = code;
+		i.importing_from.contents = code;
 	}
 	long decls_offset = ftell(f);
 	fseek(f, (long)footer_offset, SEEK_SET);
@@ -1229,7 +1227,9 @@ static bool exptr_finish(Exporter *ex) {
 	export_u64(ex, (U64)struct_info_offset);
 	
 	if (ferror(ex->out)) {
-		warn_print(LOCATION_NONE, "An error occured while writing the package output. It may be incorrect.");
+		Location none = {0};
+		none.file = &ex->exporting_to;
+		warn_print(none, "An error occured while writing the package output. It may be incorrect.");
 	}
 	
 	return true;

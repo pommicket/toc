@@ -16,8 +16,6 @@
 #define TEXT_ERR_START "\x1b[91m"
 #define TEXT_ERR_END "\x1b[0m"
 
-#define TEXT_INDICATOR_START "\x1b[96m"
-#define TEXT_INDICATOR_END "\x1b[0m"
 #define TEXT_INFO_START "\x1b[94m"
 #define TEXT_INFO_END "\x1b[0m"
 #define TEXT_WARN_START "\x1b[93m"
@@ -38,142 +36,90 @@ static inline const char *ordinals(size_t x) {
 	}
 }
 
-/* Write directly to the error file */
-static void err_fwrite(const void *data, size_t size, size_t n) {
-	fwrite(data, size, n, stderr);
+static FILE *err_ctx_file(ErrCtx *ctx) {
+	(void)ctx;
+	return stderr;
 }
 
-static void err_fprint(const char *fmt, ...) {
+static void err_fprint(ErrCtx *ctx, const char *fmt, ...) {
 	va_list args;
 	va_start(args, fmt);
-	vfprintf(stderr, fmt, args);
+	vfprintf(err_ctx_file(ctx), fmt, args);
 	va_end(args);
 }
 
 static void err_text_err(ErrCtx *ctx, const char *s) {
 	if (ctx->color_enabled)
-		err_fprint(TEXT_ERR_START "%s" TEXT_ERR_END, s);
+		err_fprint(ctx, TEXT_ERR_START "%s" TEXT_ERR_END, s);
 	else
-		err_fprint("%s", s);
+		err_fprint(ctx, "%s", s);
 }
 static void err_text_warn(ErrCtx *ctx, const char *s) {
 	if (ctx->color_enabled)
-		err_fprint(TEXT_WARN_START "%s" TEXT_WARN_END, s);
+		err_fprint(ctx, TEXT_WARN_START "%s" TEXT_WARN_END, s);
 	else
-		err_fprint("%s", s);
+		err_fprint(ctx, "%s", s);
 }
 static void err_text_info(ErrCtx *ctx, const char *s) {
 	if (ctx->color_enabled)
-		err_fprint(TEXT_INFO_START "%s" TEXT_INFO_END, s);
+		err_fprint(ctx, TEXT_INFO_START "%s" TEXT_INFO_END, s);
 	else
-		err_fprint("%s", s);
+		err_fprint(ctx, "%s", s);
 }
 static void err_text_important(ErrCtx *ctx, const char *s) {
 	if (ctx->color_enabled)
-		err_fprint(TEXT_IMPORTANT_START "%s" TEXT_IMPORTANT_END, s);
+		err_fprint(ctx, TEXT_IMPORTANT_START "%s" TEXT_IMPORTANT_END, s);
 	else
-		err_fprint("%s", s);
+		err_fprint(ctx, "%s", s);
 }
 
 
 
-static void err_vfprint(const char *fmt, va_list args) {
-	vfprintf(stderr, fmt, args);
+static void err_vfprint(ErrCtx *ctx, const char *fmt, va_list args) {
+	vfprintf(err_ctx_file(ctx), fmt, args);
 }
 
 static void err_print_line_file(Location where) {
+	ErrCtx *ctx = where.file->ctx;
 	if (where.start) {
-		err_fprint(" at line %lu of %s:\n", (unsigned long)where.start->pos.line, where.start->pos.ctx->filename);
-	} else if (where.simple_location) {
-		err_fprint(" at line %lu of %s:\n", (unsigned long)where.simple_location->line, where.simple_location->ctx->filename);
+		err_fprint(ctx, " at line %lu of %s:\n", (unsigned long)where.start->pos.line, where.file->filename);
 	} else {
-		err_fprint(":\n");
-
+		U32 line = where.simple_location.line; 
+		if (line)
+			err_fprint(ctx, " at line %lu of %s:\n", (unsigned long)line, where.file->filename);
+		else
+			err_fprint(ctx, ":\n");
 	}
 	
 }
 
 static void err_print_header_(Location where) {
-	SourcePos start_pos = where.start->pos;
-	ErrCtx *ctx = start_pos.ctx;
+	ErrCtx *ctx = where.file->ctx;
 	err_text_err(ctx, "error");
 	err_print_line_file(where);
 }
 
 static void info_print_header_(Location where) {
-	SourcePos start_pos = where.start->pos;
-	ErrCtx *ctx = start_pos.ctx;
+	ErrCtx *ctx = where.file->ctx;
 	err_text_info(ctx, "info");
 	err_print_line_file(where);
 }
 
 static void warn_print_header_(Location where) {
-	SourcePos start_pos = where.start->pos;
-	ErrCtx *ctx = start_pos.ctx;
+	ErrCtx *ctx = where.file->ctx;
 	err_text_warn(ctx, "warning");
 	err_print_line_file(where);
 }
 
-static void err_print_pos_text(ErrCtx *ctx, U32 start_pos, U32 end_pos) {
-	char *str = ctx->str;
-	if (!str) {
-		return;
-	}
-	
-	char *start = str + start_pos;
-	char *line_start = start;
-	char *end = str + end_pos;
-
-	/* go back to last newline / 0 byte */
-	while (*line_start != '\0' && *line_start != '\n') --line_start;
-	if (line_start < start) ++line_start;
-		
-	char *line_end = strchr(start, '\n');
-	int has_newline = line_end != NULL;
-	if (!has_newline)
-		line_end = strchr(start, '\0');
-	assert(line_end);
-	err_fprint("\t");
-	if (!line_start[0])
-		err_fprint("<end of file>");
-	else {
-		/* write up to start of error */
-		err_fwrite(line_start, 1, (size_t)(start - line_start));
-		if (ctx->color_enabled)
-			err_fprint(TEXT_INDICATOR_START);
-		if (line_end < end) {
-			/* write error part (only go to end of line) */
-			err_fwrite(start, 1, (size_t)(line_end - start));
-			if (ctx->color_enabled)
-				err_fprint(TEXT_INDICATOR_END);
-		} else {
-			/* write error part */
-			err_fwrite(start, 1, (size_t)(end - start));
-			if (ctx->color_enabled)
-				err_fprint(TEXT_INDICATOR_END);
-			/* write rest of line */
-			err_fwrite(end, 1, (size_t)(line_end - end));
-		}
-	}
-	err_fprint("\n");
-}
-
-static void err_print_location_text(Location where) {
-	if (where.start) {
-		ErrCtx *ctx = where.start->pos.ctx;
-		err_print_pos_text(ctx, where.start->pos.start, where.end[-1].pos.end);
-	}
-	
-}
 
 static void err_print_footer_(Location where) {
-	ErrCtx *ctx = where.start->pos.ctx;
-	err_fprint("\n"); 
-	err_print_location_text(where);
+	ErrCtx *ctx = where.file->ctx;
+	err_fprint(ctx, "\n"); 
+	print_location_highlight(err_ctx_file(ctx), where);
 	if (ctx) {
 		arr_foreach(ctx->instance_stack, Location, inst) {
-			err_fprint("While generating the instance of a function\n");
-			err_print_location_text(*inst);
+			err_fprint(ctx, "While generating the instance of a function\n");
+		    print_location_highlight(err_ctx_file(ctx), *inst);
 		}
 	}
 }
@@ -181,14 +127,11 @@ static void err_print_footer_(Location where) {
 /* Write nicely-formatted errors to the error file */
 
 static void err_vprint(Location where, const char *fmt, va_list args) {
-	if (location_is_ctx_disabled(where)) return;
-	if (where.start) {
-		where.start->pos.ctx->have_errored = true;
-	} else if (where.simple_location) {
-		where.simple_location->ctx->have_errored = true;
-	}
+	ErrCtx *ctx = where.file->ctx;
+	if (!ctx->enabled) return;
+	ctx->have_errored = true;
 	err_print_header_(where);
-	err_vfprint(fmt, args);
+	err_vfprint(ctx, fmt, args);
 	err_print_footer_(where);
 }
 
@@ -200,9 +143,10 @@ static void err_print_(
 					   Location where, const char *fmt, ...) {
 	va_list args;
 #if ERR_SHOW_SOURCE_LOCATION
-	if (location_is_ctx_disabled(where)) return;
+	ErrCtx *ctx = where.file->ctx;
+	if (!ctx->enabled) return;
 	if (file)
-		err_fprint("Generated by line %d of %s:\n", line, file);
+		err_fprint(ctx, "Generated by line %d of %s:\n", line, file);
 #endif
 	va_start(args, fmt);
 	err_vprint(where, fmt, args);
@@ -217,10 +161,11 @@ static void err_print_(
 	
 static void info_print(Location where, const char *fmt, ...) {
 	va_list args;
-	if (location_is_ctx_disabled(where)) return;
+	ErrCtx *ctx = where.file->ctx;
+	if (!ctx->enabled) return;
 	va_start(args, fmt);
 	info_print_header_(where);
-	err_vfprint(fmt, args);
+	err_vfprint(ctx, fmt, args);
 	err_print_footer_(where);
 	va_end(args);
 }
@@ -231,14 +176,15 @@ static void warn_print_(
 #endif
 						Location where, const char *fmt, ...) {
 	va_list args;
-	if (location_is_ctx_disabled(where)) return;
+	ErrCtx *ctx = where.file->ctx;
+	if (!ctx->enabled) return;
 #if ERR_SHOW_SOURCE_LOCATION
 	if (file)
-		err_fprint("Generated by line %d of %s:\n", line, file);
+		err_fprint(ctx, "Generated by line %d of %s:\n", line, file);
 #endif
 	va_start(args, fmt);
 	warn_print_header_(where);
-	err_vfprint(fmt, args);
+	err_vfprint(ctx, fmt, args);
 	err_print_footer_(where);
 	va_end(args);
 }
