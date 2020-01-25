@@ -233,6 +233,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	t->kind = TYPE_FN;
 	t->fn.types = NULL;
 	t->fn.constness = NULL; /* OPTIM: constness doesn't need to be a dynamic array */
+	t->flags = 0;
 	bool success = true;
 	bool entered_fn = false;
 	size_t param_idx;
@@ -372,7 +373,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 				}
 			}
 		}
-		
+		t->flags |= TYPE_IS_RESOLVED;
 	}
 	*ret_type = f->ret_type;
 
@@ -931,6 +932,15 @@ static void get_builtin_val(BuiltinVal val, Value *v) {
 	case BUILTIN_STDOUT:
 		v->ptr = stdout;
 		break;
+	case BUILTIN_STDERR:
+		v->ptr = stderr;
+		break;
+	case BUILTIN_STDIN:
+		v->ptr = stdin;
+		break;
+	case BUILTIN_COMPILING:
+		v->boolv = true;
+		break;
 	}
 }
 
@@ -938,11 +948,18 @@ static void get_builtin_val_type(Allocator *a, BuiltinVal val, Type *t) {
 	t->flags = TYPE_IS_RESOLVED;
 	switch (val) {
 	case BUILTIN_STDOUT:
+	case BUILTIN_STDERR:
+	case BUILTIN_STDIN:
+		/* use &u8 for FILE * */
 		t->kind = TYPE_PTR;
 		t->ptr = allocr_calloc(a, 1, sizeof *t->ptr);
 		t->ptr->flags = TYPE_IS_RESOLVED;
 		t->ptr->kind = TYPE_BUILTIN;
 		t->ptr->builtin = BUILTIN_U8;
+		break;
+	case BUILTIN_COMPILING:
+		t->kind = TYPE_BUILTIN;
+		t->builtin = BUILTIN_BOOL;
 		break;
 	}
 }

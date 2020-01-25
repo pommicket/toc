@@ -88,12 +88,11 @@ static void arr_cleara_(void **arr, size_t size, Allocator *allocr) {
 	}
 }
 
+/* does NOT shrink the array! */
 static void arr_set_len_(void **arr, size_t n, size_t item_sz) {
-	if (n == 0) {
-		arr_clear_(arr);
-		return;
+	if (n > arr_len(*arr)) {
+		arr_resv_(arr, n, item_sz);
 	}
-	arr_resv_(arr, n, item_sz);
 	arr_hdr(*arr)->len = n;
 }
 static void arr_set_lena_(void **arr, size_t n, size_t item_sz, Allocator *a) {

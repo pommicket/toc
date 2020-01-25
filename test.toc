@@ -1,16 +1,37 @@
+voidptr ::= &u8;
 
-getstdout ::= fn() &u8 {
-	  #builtin("stdout")
+getstdout ::= fn() voidptr {
+	#builtin("stdout")
 };
 
-fwrite :: fn(&u8, u64, u64, &u8) = #foreign "fwrite";
+getstdin ::= fn() voidptr {
+	#builtin("stdin")
+};
+
+fwrite :: fn(voidptr, u64, u64, voidptr) u64 = #foreign "fwrite", "libc.so.6";
+fputc :: fn(i32, voidptr) i32 = #foreign "fputc", "libc.so.6";
+fgets :: fn(&char, i32, voidptr) &char = #foreign "fgets", "libc.so.6";
+
+writes ::= fn(x : []char) {
+	 fwrite(&x[0] as voidptr, 1, x.len as u64, getstdout());
+};
 
 puts ::= fn(x : []char) {
-	 fwrite(&x[0] as &u8 as &u16 as &u8, 1, x.len as u64, getstdout());
+	 writes(x);
+	 fputc('\n' as i32, getstdout());
 };
 
 hw ::= fn() int {
-   hw();
+   name : [1024]char;
+   writes("Name? ");
+   fgets(&name[0], name.len as i32, getstdin());
+   
+   writes("Hello, ");
+   if #builtin("compiling") {
+   	  writes("compiling ");
+   }
+   
+   writes(name[:]); // fgets already has a newline
    2
 };
 

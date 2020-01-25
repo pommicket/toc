@@ -1050,7 +1050,12 @@ static bool eval_ident(Evaluator *ev, Identifier ident, Value *v, Location where
 		d = idecl->decl;
 		if (d->flags & DECL_FOREIGN) {
 			if (!(d->flags & DECL_FOUND_VAL)) {
-				err_print(where, "Cannot access foreign declaration at compile time (you can only call foreign functions)");
+#if COMPILE_TIME_FOREIGN_FN_SUPPORT
+				err_print(where, "Cannot access foreign declaration at compile time. "
+						  "If you are calling a function, you need to provide the library it's in.");
+#else
+				err_print(where, "Cannot access foreign declaration at compile time.");
+#endif
 				return false;
 			}
 			v->fn = d->val.fn;
@@ -1465,9 +1470,11 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		/* make sure function body is typed before calling it */
 		if (!types_block(ev->typer, &fn->body))
 			return false;
+
+		/* NOTE: we're not calling fn_enter because we're manually entering the function */
+		
 		/* set parameter values */
 		Declaration *params = fn->params;
-		fn_enter(fn, 0);
 		long arg = 0;
 		arr_foreach(params, Declaration, p) {
 			int idx = 0;
@@ -1476,12 +1483,21 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				if (!eval_expr(ev, &e->call.arg_exprs[arg], &arg_val))
 					return false;
 				Type *type = p->type.kind == TYPE_TUPLE ? &p->type.tuple[idx++] : &p->type;
-				IdentDecl *id = ident_decl(*i);
+				IdentDecl *id = ident_add_decl(*i, p, &fn->body);
 				copy_val(NULL, &id->val, &arg_val, type);
 				id->flags |= IDECL_HAS_VAL;
+
+				arr_set_len(&(*i)->decls, arr_len((*i)->decls)-1);
+				
 				++arg;
 			}
 		}
+		arr_foreach(params, Declaration, p) {
+			arr_foreach(p->idents, Identifier, i) {
+				arr_set_len(&(*i)->decls, arr_len((*i)->decls)+1);
+			}
+		}
+		
 		arr_foreach(fn->ret_decls, Declaration, d) {
 			int idx = 0;
 			Value val;
@@ -1501,6 +1517,8 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				}
 				++idx;
 			}
+			if (!add_ident_decls(&fn->body, d, 0))
+				return false;
 		}
 		if (!eval_block(ev, &fn->body, &e->type, v)) {
 			fn_exit(fn);

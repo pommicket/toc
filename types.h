@@ -673,11 +673,14 @@ typedef struct SliceExpr {
 } SliceExpr;
 
 typedef enum {
-			  BUILTIN_STDOUT
-#define BUILTIN_VAL_COUNT (BUILTIN_STDOUT+1)
+			  BUILTIN_STDOUT,
+			  BUILTIN_STDERR,
+			  BUILTIN_STDIN,
+			  BUILTIN_COMPILING
+#define BUILTIN_VAL_COUNT (BUILTIN_COMPILING+1)
 } BuiltinVal;
 
-const char *const builtin_val_names[BUILTIN_VAL_COUNT] = {"stdout"};
+const char *const builtin_val_names[BUILTIN_VAL_COUNT] = {"stdout", "stderr", "stdin", "compiling"};
 
 enum {
 	  EXPR_FOUND_TYPE = 0x01

@@ -1165,6 +1165,16 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			cgen_write(g, "extern void *stdout;");
 			cgen_nl(g);
 			break;
+		case BUILTIN_STDERR:
+			cgen_write(g, "extern void *stderr;");
+			cgen_nl(g);
+			break;
+		case BUILTIN_STDIN:
+			cgen_write(g, "extern void *stdin;");
+			cgen_nl(g);
+			break;
+		case BUILTIN_COMPILING:
+			break;
 		}
 		break;
 	case EXPR_LITERAL_INT:
@@ -1462,6 +1472,15 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		switch (e->builtin.which.val) {
 		case BUILTIN_STDOUT:
 			cgen_write(g, "stdout");
+			break;
+		case BUILTIN_STDERR:
+			cgen_write(g, "stderr");
+			break;
+		case BUILTIN_STDIN:
+			cgen_write(g, "stdin");
+			break;
+		case BUILTIN_COMPILING:
+			cgen_write(g, "false");
 			break;
 		}
 		break;

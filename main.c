@@ -22,6 +22,7 @@ TODO:
 - sizeof(int)   (size of C int type), sizeof(long), sizeof(size_t) etc.
 - compiling - true if @ compile time, false otherwise
 - stdout, stderr, stdin - pointers to C FILEs
+fully re-test default args & return decls
 
 clean up copy_expr
 each=>for
