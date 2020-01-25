@@ -18,7 +18,6 @@
 
 /* 
 TODO:
-passing structs to foreign functions
 each=>for
 
 #builtin("sizeof(int)") etc.

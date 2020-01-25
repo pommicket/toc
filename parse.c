@@ -414,7 +414,7 @@ static bool parse_args(Parser *p, Argument **args) {
 		while (1) {
 			if (t->token->kind == TOKEN_EOF) {
 				tokr_err(t, "Expected argument list to continue.");
-				info_print(token_location(start), "This is where the argument list starts.");
+				info_print(token_location(p->file, start), "This is where the argument list starts.");
 				return false;
 			}
 			Argument *arg = parser_arr_add(p, args);
@@ -1211,7 +1211,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 						if (!parse_expr(p, ea->range.step, step_end))
 							return false;
 						if (!token_is_kw(step_end, KW_DOTDOT)) {
-							err_print(token_location(step_end), "Expected .. to follow step in for statement.");
+							err_print(token_location(p->file, step_end), "Expected .. to follow step in for statement.");
 							return false;
 						}
 					} else {
@@ -1231,7 +1231,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 						}
 					}
 				} else {
-					err_print(token_location(first_end), "Expected { or .. to follow expression in for statement.");
+					err_print(token_location(p->file, first_end), "Expected { or .. to follow expression in for statement.");
 					return false;
 				}
 			
@@ -1530,7 +1530,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			case KW_AMPERSAND:
 			case KW_EXCLAMATION:
 			case KW_DEL:
-				err_print(token_location(lowest_precedence_op), "Unary operator '%s' being used as a binary operator!", kw_to_str(lowest_precedence_op->kw));
+				err_print(token_location(p->file, lowest_precedence_op), "Unary operator '%s' being used as a binary operator!", kw_to_str(lowest_precedence_op->kw));
 				return false;
 			default: assert(0); return false;
 			}
@@ -1643,7 +1643,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					}
 					iend = expr_find_end(p, EXPR_CAN_END_WITH_COLON);
 					if (iend->kind != TOKEN_KW) {
-						err_print(token_location(iend), "Expected ] or : after index.");
+						err_print(token_location(p->file, iend), "Expected ] or : after index.");
 						return false;
 					}
 					switch (iend->kw) {
@@ -1679,7 +1679,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 							s->to = parser_new_expr(p);
 							Token *to_end = expr_find_end(p, 0);
 							if (!token_is_kw(to_end, KW_RSQUARE)) {
-								err_print(token_location(iend), "Expected ] at end of slice.");
+								err_print(token_location(p->file, iend), "Expected ] at end of slice.");
 								return false;
 							}
 							if (!parse_expr(p, s->to, to_end))
@@ -1687,7 +1687,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 						}
 					} break;
 					default:
-						err_print(token_location(iend), "Expected ] or : after index.");
+						err_print(token_location(p->file, iend), "Expected ] or : after index.");
 						return false;
 					}
 					++t->token;	/* move past ] */
@@ -1737,7 +1737,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					++t->token;
 					Token *arg_end = expr_find_end(p, 0);
 					if (!token_is_kw(arg_end, KW_RPAREN)) {
-						err_print(token_location(arg_end), "Expected ) at end of #%s directive.", directives[t->token->direct]);
+						err_print(token_location(p->file, arg_end), "Expected ) at end of #%s directive.", directives[t->token->direct]);
 						return false;
 					}
 					if (!parse_expr(p, single_arg, arg_end))
@@ -1858,7 +1858,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 			}
 			d->type = type;
 			if (type.kind == TYPE_TUPLE && arr_len(d->type.tuple) != arr_len(d->idents)) {
-				err_print(d->where, "Expected to have %lu things declared in declaration, but got %lu.", (unsigned long)arr_len(d->type.tuple), (unsigned long)arr_len(d->idents));
+				err_print(type.where, "Expected to have %lu things declared in declaration, but got %lu.", (unsigned long)arr_len(d->type.tuple), (unsigned long)arr_len(d->idents));
 				goto ret_false;
 			}
 		}
@@ -1876,8 +1876,8 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 			++t->token;
 			if (token_is_direct(t->token, DIRECT_FOREIGN)) {
 				if (!(d->flags & DECL_ANNOTATES_TYPE)) {
-					err_print(d->where, "Foreign declaration must have a type.");
-					return false;
+					tokr_err(t, "Foreign declaration must have a type.");
+					goto ret_false;
 				}
 				d->flags |= DECL_FOREIGN;
 				/* foreign name */
@@ -1910,7 +1910,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 				/* inferred expression */
 				d->flags |= DECL_INFER;
 				if (arr_len(d->idents) > 1) {
-					err_print(d->where, "Inferred declarations can only have one identifier. Please separate this declaration.");
+				    tokr_err(t, "Inferred declarations can only have one identifier. Please separate this declaration.");
 					goto ret_false;
 				}
 				if (!(d->flags & DECL_IS_CONST)) {
@@ -2020,7 +2020,7 @@ static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				return false;
 			}
 			if (!token_is_kw(end, KW_SEMICOLON)) {
-				err_print(token_location(end), "Expected ';' at end of return statement.");
+				err_print(token_location(p->file, end), "Expected ';' at end of return statement.");
 				t->token = end->kind == TOKEN_EOF ? end : end + 1;
 				return false;
 			}

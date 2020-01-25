@@ -822,7 +822,7 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 		}
 		/* TODO: this should really be at the closing brace, and not the function declaration */
 		char *expected = type_to_str(ret_type);
-		err_print(token_location(f->body.where.end), "No return value in function which returns %s.", expected);
+		err_print(token_location(f->body.where.file, f->body.where.end), "No return value in function which returns %s.", expected);
 		free(expected);
 		info_print(f->where, "Function was declared here:");
 		success = false;

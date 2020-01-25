@@ -18,7 +18,6 @@
 */
 static void *val_get_ptr(Value *v, Type *t);
 static U64 val_hash(Value v, Type *t);
-static size_t compiler_sizeof(Type *t);
 static bool val_eq(Value u, Value v, Type *t);
 static bool type_eq(Type *t1, Type *t2);
 

@@ -1,8 +1,15 @@
-addmul ::= fn (x::=0, y:=0)
-add := x+y, mul := x*y {
-	a : []char = x;
+Point ::= struct {
+	  x, y : int;
+};
+
+p :: fn(Point) int = #foreign "p", "./test.so";
+
+mkpoint ::= fn(x:int,y:int) p : Point {
+		p.x = x;
+		p.y = y;
 };
 
 main ::= fn() {
-	 addmul(6,7);
+	 point ::= mkpoint(-3,-5);
+	 total ::= p(point);
 };

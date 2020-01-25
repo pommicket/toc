@@ -144,6 +144,42 @@ static bool arg_list_start(av_alist *arg_list, void (*fn)(), Value *return_val, 
 			break;
 		}
 		break;
+	case TYPE_STRUCT: {
+		size_t struct_size = compiler_sizeof(return_type);
+		StructDef *struc = return_type->struc;
+		return_val->struc = err_calloc(1, struct_size);
+		bool splittable;
+		/* hopefully this is right! */
+		if (struct_size <= sizeof(long)) {
+			splittable = true;
+		} else if (struct_size > 2*sizeof(long)) {
+			splittable = false;
+		} else if (arr_len(struc->fields) > 4) {
+			splittable = false;
+		} else {
+			/* NOTE: this warning is not because splittable is being computed incorrectly! it doesn't handle it right with *either* splittable = 0 or splittable = 1 */
+			warn_print(where, "Dynamically calling function which returns a struct. avcall seems to not handle structs of size ~2*sizeof(long) correctly.");
+			splittable = true;
+			size_t word_size = sizeof(__avword);
+			arr_foreach(struc->fields, Field, f) {
+				if (f->offset / word_size != (f->offset + compiler_sizeof(&f->type) - 1) / word_size) {
+					splittable = false;
+					break;
+				}
+			}
+		}
+		_av_start_struct(*arg_list, fn, struct_size, splittable, return_val->struc);
+	} break;
+	case TYPE_SLICE:
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-conversion"
+#endif	
+		av_start_struct(*arg_list, fn, Slice, av_word_splittable_2(I64, void *), &return_val->slice);
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
+		break;
 	case TYPE_EXPR:
 		assert(0);
 		return false;
@@ -215,6 +251,12 @@ static bool arg_list_add(av_alist *arg_list, Value *val, Type *type, Location wh
 			break;
 		}
 		break;
+	case TYPE_SLICE:
+		av_struct(*arg_list, Slice, val->slice);
+		break;
+	case TYPE_STRUCT:
+		_av_struct(*arg_list, compiler_sizeof(type), compiler_alignof(type), val->struc);
+		break;
 	case TYPE_EXPR:
 		assert(0);
 		return false;
@@ -269,9 +311,7 @@ static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *fn_type, Val
 	}
 	av_call(arg_list);
 	
-	(void)fn_type; (void)args;
-
-	
+	(void)fn_type; (void)args;	
 	return true;
 }
 

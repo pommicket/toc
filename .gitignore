@@ -13,3 +13,4 @@ tags
 compatibility
 std/*.c
 std/*.o
+*.so

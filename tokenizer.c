@@ -176,10 +176,11 @@ static int tokr_esc_seq(Tokenizer *t) {
 
 }
 
-static Location token_location(Token *t) {
+static Location token_location(File *file, Token *t) {
 	Location loc;
 	loc.start = t;
 	loc.end = t + 1;
+	loc.file = file;
 	return loc;
 }
 
@@ -231,7 +232,7 @@ static void tokr_err_(
 #endif
 	va_list args;
 	va_start(args, fmt);
-	err_vprint(token_location(t->token), fmt, args);
+	err_vprint(token_location(t->file, t->token), fmt, args);
 	va_end(args);
 }
 

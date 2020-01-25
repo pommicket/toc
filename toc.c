@@ -78,6 +78,8 @@ static inline bool type_is_slicechar(Type *t) {
 #include "location.c"
 #include "err.c"
 #include "blockarr.c"
+static size_t compiler_alignof(Type *t);
+static size_t compiler_sizeof(Type *t);
 #include "instance_table.c"
 #include "copy.c"
 #include "binfile.c"

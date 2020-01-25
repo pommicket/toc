@@ -6,7 +6,6 @@
 static bool types_block(Typer *tr, Block *b);
 static bool types_decl(Typer *tr, Declaration *d);
 static bool type_resolve(Typer *tr, Type *t, Location where);
-static size_t compiler_sizeof(Type *t);
 static bool eval_block(Evaluator *ev, Block *b, Type *t, Value *v);
 static bool eval_expr(Evaluator *ev, Expression *e, Value *v);
 static bool block_enter(Block *b, Statement *stmts, U16 flags);
@@ -60,7 +59,6 @@ static size_t compiler_sizeof_builtin(BuiltinType b) {
 	return 0;
 }
 
-static size_t compiler_alignof(Type *t);
 /* finds offsets and size */
 static void eval_struct_find_offsets(StructDef *s) {
 	if (!(s->flags & STRUCT_DEF_FOUND_OFFSETS)) {
