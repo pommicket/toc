@@ -942,7 +942,19 @@ static int op_precedence(Keyword op) {
 }
 
 static bool parse_expr(Parser *p, Expression *e, Token *end) {
+
 	Tokenizer *t = p->tokr;
+
+#if 0
+	{
+		Location where;
+		where.start = t->token;
+		where.end = end;
+		printf("PARSING ");
+		fprint_location(stdout, where);
+	}
+#endif
+	
 	e->flags = 0;
 	e->type.flags = 0;
 	if (end == NULL) return false;
@@ -1899,7 +1911,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 				if (ends_with == DECL_END_RPAREN_COMMA)
 					expr_flags |= EXPR_CAN_END_WITH_COMMA;
 				if (ends_with == DECL_END_LBRACE_COMMA)
-					expr_flags |= EXPR_CAN_END_WITH_LBRACE;
+					expr_flags |= EXPR_CAN_END_WITH_LBRACE | EXPR_CAN_END_WITH_COMMA;
 				Token *end = expr_find_end(p, expr_flags);
 				if (!end || !ends_decl(end, ends_with)) {
 					if (end) t->token = end;

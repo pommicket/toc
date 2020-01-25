@@ -1,0 +1,32 @@
+voidptr ::= &u8;
+
+getstdout ::= fn() voidptr {
+	#builtin("stdout")
+};
+
+
+fwrite :: fn(voidptr, u64, u64, voidptr) u64 = #foreign "fwrite", "libc.so.6";
+fputc :: fn(i32, voidptr) i32 = #foreign "fputc", "libc.so.6";
+
+writes ::= fn(x : []char) {
+	 fwrite(&x[0] as voidptr, 1, x.len as u64, getstdout());
+};
+
+puts ::= fn(x : []char) {
+	 writes(x);
+	 fputc('\n' as i32, getstdout());
+};
+
+hw ::= fn() int {
+   writes("Hello,");
+   if #builtin("compiling") {
+   	  writes(" compiling");
+   }
+   puts(" world!");
+   3
+};
+
+main ::= fn() {
+	 hw();
+	 x ::= hw();
+};

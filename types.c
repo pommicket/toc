@@ -1710,7 +1710,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		int which = -1;
 		for (BuiltinVal b = 0; b < BUILTIN_VAL_COUNT; b = b + 1) {
 			if (strs_equal(builtin_val_names[b], builtin_name)) {
-				which = b;
+				which = (int)b;
 			}
 		}
 		if (which == -1) {

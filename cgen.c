@@ -1861,7 +1861,7 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 			cgen_write(g, "; ");
 		}
 		if (has_expr) {
-			assert(g->block && !(d->flags & DECL_IS_CONST));
+			assert((g->block || g->fn) && !(d->flags & DECL_IS_CONST));
 			if (!cgen_expr_pre(g, &d->expr)) return false;
 			if (d->expr.type.kind == TYPE_TUPLE) {
 				if (!cgen_set_tuple(g, NULL, d->idents, NULL, &d->expr)) return false;

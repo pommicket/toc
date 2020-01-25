@@ -1505,6 +1505,8 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				if (!eval_expr(ev, &d->expr, &val))
 					return false;
 			
+			if (!add_ident_decls(&fn->body, d, 0))
+				return false;
 			arr_foreach(d->idents, Identifier, i) {
 				Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx] : &d->type;
 				IdentDecl *id = ident_decl(*i);
@@ -1517,8 +1519,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				}
 				++idx;
 			}
-			if (!add_ident_decls(&fn->body, d, 0))
-				return false;
 		}
 		if (!eval_block(ev, &fn->body, &e->type, v)) {
 			fn_exit(fn);

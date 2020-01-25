@@ -18,13 +18,9 @@
 
 /* 
 TODO:
-#builtin values - accessed via, e.g. #builtin("sizeof(int)")
-- sizeof(int)   (size of C int type), sizeof(long), sizeof(size_t) etc.
-- compiling - true if @ compile time, false otherwise
-- stdout, stderr, stdin - pointers to C FILEs
-fully re-test default args & return decls
-
 clean up copy_expr
+clean up location printing- general thing for printing location line to a file used by err and print_location
+
 each=>for
 
 #C_int, #C_long, etc.

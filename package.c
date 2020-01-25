@@ -672,7 +672,7 @@ static bool export_expr(Exporter *ex, Expression *e) {
 	case EXPR_BUILTIN:
 		if (found_type) {
 			possibly_static_assert(BUILTIN_VAL_COUNT <= 256);
-			export_u8(ex, e->builtin.which.val);
+			export_u8(ex, (U8)e->builtin.which.val);
 		} else {
 			if (!export_expr(ex, e->builtin.which.expr))
 				return false;

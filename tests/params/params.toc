@@ -1,0 +1,37 @@
+addmul ::= fn (x:=0, y:=0) add := x+y, mul := x*y {
+};
+
+do_foo ::= fn (x := 3) y := x {
+	   y *= 12;
+	   y += x;
+};
+
+puti ::= fn(x: int) {
+	 #C("extern int printf(const char *fmt, ...)");
+	 #C("printf(\"%ld\\n\", x)");
+};
+
+
+main ::= fn() {
+	 a, m := addmul();
+	 puti(a); puti(m);
+	 a, m = addmul(7,3);
+	 puti(a); puti(m);
+	 a, m = addmul(5);
+	 puti(a); puti(m);
+	 a, m = addmul(y = 17);
+	 puti(a); puti(m);
+
+	 c, d ::= addmul();
+	 puti(c); puti(d);
+	 e, f ::= addmul(y = 3, x = 7);
+	 puti(e); puti(f);
+	 
+
+	 z := do_foo();
+	 puti(z);
+	 z = do_foo(-1);
+	 puti(z);
+	 z = do_foo(x = -1);
+	 puti(z);
+};

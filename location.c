@@ -6,6 +6,7 @@
 
 static Location const LOCATION_NONE = {0};
 
+static void err_print_location_text(Location where);
 /* for debugging */
 static void fprint_location(FILE *out, Location location) {
 	if (!location.start) {
@@ -16,12 +17,8 @@ static void fprint_location(FILE *out, Location location) {
 		}
 		return;
 	}
-	/* TODO: show end */
-	char *str = location.start->pos.ctx->str + location.start->pos.start;
-	char *newline = strchr(str, '\n');
-	if (newline) *newline = 0;
-	fprintf(out, "Line %ld: %s\n", (long)location.start->pos.line, str);
-	if (newline) *newline = '\n';
+	fprintf(out, "Line %ld: ", (long)location.start->pos.line);
+	err_print_location_text(location);
 }
 
 static void print_location(Location location) {
