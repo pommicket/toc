@@ -192,23 +192,23 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 			wout->cond = copy_expr_(c, win->cond);
 		copy_block(c, &wout->body, &win->body);
 	} break;
-	case EXPR_EACH: {
-		EachExpr *ein = in->each;
-		EachExpr *eout = allocr_malloc(a, sizeof *eout);
-		out->each = eout;
-		*eout = *ein;
-		if (ein->flags & EACH_ANNOTATED_TYPE)
-			copy_type(c, &eout->type, &ein->type);
-		if (ein->flags & EACH_IS_RANGE) {
-			eout->range.from = copy_expr_(c, ein->range.from);
-			if (ein->range.to)
-				eout->range.to = copy_expr_(c, ein->range.to);
-			if (ein->range.step)
-				eout->range.step = copy_expr_(c, ein->range.step);
+	case EXPR_FOR: {
+	    ForExpr *fin = in->for_;
+	    ForExpr *fout = allocr_malloc(a, sizeof *fout);
+		out->for_ = fout;
+		*fout = *fin;
+		if (fin->flags & FOR_ANNOTATED_TYPE)
+			copy_type(c, &fout->type, &fin->type);
+		if (fin->flags & FOR_IS_RANGE) {
+			fout->range.from = copy_expr_(c, fin->range.from);
+			if (fin->range.to)
+				fout->range.to = copy_expr_(c, fin->range.to);
+			if (fin->range.step)
+				fout->range.step = copy_expr_(c, fin->range.step);
 		} else {
-			eout->of = copy_expr_(c, ein->of);
+			fout->of = copy_expr_(c, fin->of);
 		}
-		copy_block(c, &eout->body, &ein->body);
+		copy_block(c, &fout->body, &fin->body);
 	} break;
 	case EXPR_FN:
 		copy_fn_expr(c, out->fn = allocr_malloc(a, sizeof *out->fn), in->fn, true);

@@ -19,7 +19,7 @@ arr_add ::= fn(t :: Type, a : &Arr(t), x : t) {
 		if a.len >= a.cap {
 		   a.cap = a.cap * 2 + 2;
 		   new_data := new(t, a.cap);
-		   each i := 0..a.len-1 {
+		   for i := 0..a.len-1 {
 		   		new_data[i] = a.data[i];
 		   }
 		   a.data = new_data;
@@ -30,11 +30,11 @@ arr_add ::= fn(t :: Type, a : &Arr(t), x : t) {
 
 square ::= fn(t :: Type, x : t) t {
 	   a : Arr(t);
-	   each i := 1,2..2*x-1 {
+	   for i := 1,2..2*x-1 {
 	   		arr_add(t, &a, i);
 	   };
 	   sum := 0 as t;
-	   each i := 0..a.len-1 {
+	   for i := 0..a.len-1 {
 	   		sum += a.data[i];
 	   };
 	   sum
@@ -50,14 +50,14 @@ inc ::= fn(t :: Type, x : t) t {
 main ::= fn() {
 	 arr : ArrInt;
 	 farr : Arr(float);
-	 each i := 1..100 {
+	 for i := 1..100 {
 	 	   arr_add(int, &arr, inc(int, square(int, i)));
 	 	   arr_add(float, &farr, inc(float, square(float, i as float)));
 	 }
-	 each i := 0..arr.len - 1 {
+	 for i := 0..arr.len - 1 {
 	 	  puti(arr.data[i]);
 	 }
-	 each i := 0..farr.len - 1 {
+	 for i := 0..farr.len - 1 {
 	 	  putf(farr.data[i]);
 	 }
 };

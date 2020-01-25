@@ -9,7 +9,7 @@ static const char *const keywords[KW_COUNT] =
 	 "!=", "<=", "<", ">=", ">",
 	 "+", "-", "*", "!", "&", "/", "..", ".",
 	 "=",
-	 "if", "elif", "else", "while", "each", "return", "fn", "as",
+	 "if", "elif", "else", "while", "for", "return", "fn", "as",
 	 "new", "del", "struct",
 	 "int", "i8", "i16", "i32", "i64",
 	 "u8", "u16", "u32", "u64", "float", "f32", "f64", "Type",

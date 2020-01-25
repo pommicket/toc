@@ -3,7 +3,7 @@ pkg "io";
 c_putchar :: fn(i32) i32 = #foreign "putchar", "libc.so.6";
 
 #export puts ::= fn(x: []char) {
-	each c := x {
+	for c := x {
 		 c_putchar(c as i32);
 	};
 	c_putchar('\n' as i32);

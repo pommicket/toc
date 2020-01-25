@@ -33,7 +33,7 @@ static const char *expr_kind_to_str(ExprKind k) {
 	case EXPR_LITERAL_CHAR: return "character literal";
 	case EXPR_IF: return "if expression";
 	case EXPR_WHILE: return "while expression";
-	case EXPR_EACH: return "each expression";
+	case EXPR_FOR: return "for expression";
 	case EXPR_CALL: return "function call";
 	case EXPR_C: return "C code";
 	case EXPR_BUILTIN: return "#builtin value";
@@ -1143,12 +1143,12 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				if (!parse_block(p, &w->body)) return false;
 				goto success;
 			}
-			case KW_EACH: {
-				e->kind = EXPR_EACH;
-				EachExpr *ea = e->each = parser_malloc(p, sizeof *ea);
-				ea->flags = 0;
-				ea->value = NULL;
-				ea->index = NULL;
+			case KW_FOR: {
+				e->kind = EXPR_FOR;
+				ForExpr *fo = e->for_ = parser_malloc(p, sizeof *fo);
+				fo->flags = 0;
+				fo->value = NULL;
+				fo->index = NULL;
 				++t->token;
 				if (token_is_kw(t->token, KW_COLON)
 					|| (t->token->kind == TOKEN_IDENT
@@ -1157,25 +1157,25 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 								&& t->token[2].kind == TOKEN_IDENT
 								&& token_is_kw(t->token + 3, KW_COLON))))) {
 					if (t->token->kind == TOKEN_IDENT) {
-						ea->value = t->token->ident;
-						if (ident_eq_str(ea->value, "_")) /* ignore value */
-							ea->value = NULL;
+						fo->value = t->token->ident;
+						if (ident_eq_str(fo->value, "_")) /* ignore value */
+							fo->value = NULL;
 						++t->token;
 						if (token_is_kw(t->token, KW_COMMA)) {
 							++t->token;
 							if (t->token->kind == TOKEN_IDENT) {
-								ea->index = t->token->ident;
-								if (ident_eq_str(ea->index, "_")) /* ignore index */
-									ea->index = NULL;
+								fo->index = t->token->ident;
+								if (ident_eq_str(fo->index, "_")) /* ignore index */
+									fo->index = NULL;
 								++t->token;
 							} else {
-								tokr_err(t, "Expected identifier after , in each statement.");
+								tokr_err(t, "Expected identifier after , in for loop.");
 								return false;
 							}
 						}
 					}
 					if (!token_is_kw(t->token, KW_COLON)) {
-						tokr_err(t, "Expected : following identifiers in for statement.");
+						tokr_err(t, "Expected : following identifiers in for loop.");
 						return false;
 					}
 					++t->token;
@@ -1184,8 +1184,8 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 						return false;
 					}
 					if (!token_is_kw(t->token, KW_EQ)) {
-						ea->flags |= EACH_ANNOTATED_TYPE;
-						if (!parse_type(p, &ea->type))
+						fo->flags |= FOR_ANNOTATED_TYPE;
+						if (!parse_type(p, &fo->type))
 							return false;
 						if (!token_is_kw(t->token, KW_EQ)) {
 							tokr_err(t, "Expected = in for statement.");
@@ -1199,31 +1199,31 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				if (!parse_expr(p, first, first_end))
 					return false;
 				if (token_is_kw(first_end, KW_LBRACE)) {
-					ea->of = first;
+					fo->of = first;
 				} else if (token_is_kw(first_end, KW_DOTDOT) || token_is_kw(first_end, KW_COMMA)) {
-					ea->flags |= EACH_IS_RANGE;
-					ea->range.from = first;
+					fo->flags |= FOR_IS_RANGE;
+					fo->range.from = first;
 					if (token_is_kw(first_end, KW_COMMA)) {
 						/* step */
 						++t->token;
-						ea->range.step = parser_new_expr(p);
+						fo->range.step = parser_new_expr(p);
 						Token *step_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE|EXPR_CAN_END_WITH_DOTDOT);
-						if (!parse_expr(p, ea->range.step, step_end))
+						if (!parse_expr(p, fo->range.step, step_end))
 							return false;
 						if (!token_is_kw(step_end, KW_DOTDOT)) {
 							err_print(token_location(p->file, step_end), "Expected .. to follow step in for statement.");
 							return false;
 						}
 					} else {
-						ea->range.step = NULL;
+						fo->range.step = NULL;
 					}
 					++t->token; /* move past .. */
 					if (token_is_kw(t->token, KW_LBRACE)) {
-						ea->range.to = NULL; /* infinite loop! */
+						fo->range.to = NULL; /* infinite loop! */
 					} else {
-						ea->range.to = parser_new_expr(p);
+						fo->range.to = parser_new_expr(p);
 						Token *to_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE);
-						if (!parse_expr(p, ea->range.to, to_end))
+						if (!parse_expr(p, fo->range.to, to_end))
 							return false;
 						if (!token_is_kw(t->token, KW_LBRACE)) {
 							tokr_err(t, "Expected { to open body of for statement.");
@@ -1235,7 +1235,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					return false;
 				}
 			
-				if (!parse_block(p, &ea->body))
+				if (!parse_block(p, &fo->body))
 					return false;
 				goto success;
 			}
@@ -2249,42 +2249,42 @@ static void fprint_expr(FILE *out, Expression *e) {
 		if (e->while_.cond) fprint_expr(out, e->while_.cond);
 		fprint_block(out, &e->while_.body);
 		break;
-	case EXPR_EACH: {
-		EachExpr *ea = e->each;
-		fprintf(out, "each ");
-		if (ea->index) {
-			fprint_ident_debug(out, ea->index);
+	case EXPR_FOR: {
+		ForExpr *fo = e->for_;
+		fprintf(out, "for ");
+		if (fo->index) {
+			fprint_ident_debug(out, fo->index);
 		} else fprintf(out, "_");
 		fprintf(out, ", ");
-		if (ea->value) {
-			fprint_ident_debug(out, ea->value);
+		if (fo->value) {
+			fprint_ident_debug(out, fo->value);
 		} else fprintf(out, "_");
 		fprintf(out, " :");
-		if (ea->flags & EACH_ANNOTATED_TYPE)
-			fprint_type(out, &ea->type);
+		if (fo->flags & FOR_ANNOTATED_TYPE)
+			fprint_type(out, &fo->type);
 		fprintf(out, "= ");
-		if (ea->flags & EACH_IS_RANGE) {
-			fprint_expr(out, ea->range.from);
+		if (fo->flags & FOR_IS_RANGE) {
+			fprint_expr(out, fo->range.from);
 			if (found_type) {
-				if (ea->range.stepval) {
+				if (fo->range.stepval) {
 					fprintf(out, ",");
-					fprint_val(out, *ea->range.stepval, &ea->type);
+					fprint_val(out, *fo->range.stepval, &fo->type);
 				}
 			} else {
-				if (ea->range.step) {
+				if (fo->range.step) {
 					fprintf(out, ",");
-					fprint_expr(out, ea->range.step);
+					fprint_expr(out, fo->range.step);
 				}
 			}
 			fprintf(out, "..");
-			if (ea->range.to) {
-				fprint_expr(out, ea->range.to);
+			if (fo->range.to) {
+				fprint_expr(out, fo->range.to);
 			}
 			fprintf(out, " ");
 		} else {
-			fprint_expr(out, ea->of);
+			fprint_expr(out, fo->of);
 		}
-		fprint_block(out, &ea->body);
+		fprint_block(out, &fo->body);
 	} break;
 	case EXPR_CALL:
 		fprint_expr(out, e->call.fn);
@@ -2462,7 +2462,7 @@ static bool expr_is_definitely_const(Expression *e) {
 	case EXPR_CALL:
 	case EXPR_BLOCK:
 	case EXPR_TUPLE:
-	case EXPR_EACH:
+	case EXPR_FOR:
 	case EXPR_FN:
 		return false;
 	case EXPR_UNARY_OP:

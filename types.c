@@ -165,7 +165,7 @@ static bool expr_must_lval(Expression *e) {
 	case EXPR_LITERAL_BOOL:
 	case EXPR_IF:
 	case EXPR_WHILE:
-	case EXPR_EACH:
+	case EXPR_FOR:
 	case EXPR_CALL:
 	case EXPR_C:
 	case EXPR_BUILTIN:
@@ -480,13 +480,13 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 		}
 		
 		switch (e->kind) {
-		case EXPR_EACH:
-			if (i == e->each->index) {
+		case EXPR_FOR:
+			if (i == e->for_->index) {
 				t->kind = TYPE_BUILTIN;
 				t->builtin = BUILTIN_I64;
 			} else {
-				assert(i == e->each->value);
-				*t = e->each->type;
+				assert(i == e->for_->value);
+				*t = e->for_->type;
 			}
 			break;
 		default: assert(0); return false;
@@ -1071,78 +1071,78 @@ static bool types_expr(Typer *tr, Expression *e) {
 		e->val.pkg = pkg;
 		fclose(fp);
 	} break;
-	case EXPR_EACH: {
-		EachExpr *ea = e->each;
+	case EXPR_FOR: {
+		ForExpr *fo = e->for_;
 		*(Expression **)typer_arr_add(tr, &tr->in_expr_decls) = e;
-		if (!each_enter(e)) return false;
-		if (ea->flags & EACH_IS_RANGE) {
+		if (!for_enter(e)) return false;
+		if (fo->flags & FOR_IS_RANGE) {
 			/* TODO: allow user-defined numerical types */
-			if (!types_expr(tr, ea->range.from)) return false;
+			if (!types_expr(tr, fo->range.from)) return false;
 			{
-				Type *ft = &ea->range.from->type;
+				Type *ft = &fo->range.from->type;
 				if (ft->kind != TYPE_BUILTIN || !type_builtin_is_numerical(ft->builtin)) {
 					char *s = type_to_str(ft);
-					err_print(e->where, "from expression of each must be a builtin numerical type, not %s", s);
+					err_print(e->where, "from expression of for loop must be a builtin numerical type, not %s", s);
 					free(s);
 				}
 			}
-			if (ea->range.step) {
-				if (!types_expr(tr, ea->range.step)) return false;
-				Type *st = &ea->range.step->type;
+			if (fo->range.step) {
+				if (!types_expr(tr, fo->range.step)) return false;
+				Type *st = &fo->range.step->type;
 				if (st->kind != TYPE_BUILTIN || !type_builtin_is_numerical(st->builtin)) {
 					char *s = type_to_str(st);
-					err_print(e->where, "step expression of each must be a builtin numerical type, not %s", s);
+					err_print(e->where, "step expression of for loop must be a builtin numerical type, not %s", s);
 					free(s);
 				}
 			}
-			if (ea->range.to) {
-				if (!types_expr(tr, ea->range.to)) return false;
-				Type *tt = &ea->range.to->type;
+			if (fo->range.to) {
+				if (!types_expr(tr, fo->range.to)) return false;
+				Type *tt = &fo->range.to->type;
 				if (tt->kind != TYPE_BUILTIN || !type_builtin_is_numerical(tt->builtin)) {
 					char *s = type_to_str(tt);
-					err_print(e->where, "to expression of each must be a builtin numerical type, not %s", s);
+					err_print(e->where, "to expression of for loop must be a builtin numerical type, not %s", s);
 					free(s);
 				}
 			}
 
-			if (!(ea->flags & EACH_ANNOTATED_TYPE)) {
-				ea->type = ea->range.from->type;
+			if (!(fo->flags & FOR_ANNOTATED_TYPE)) {
+				fo->type = fo->range.from->type;
 			}
 			
-			if (!type_eq(&ea->type, &ea->range.from->type)) {
-				char *exp = type_to_str(&ea->type);
-				char *got = type_to_str(&ea->range.from->type);
-				err_print(e->where, "Type of each does not match the type of the from expression. Expected %s, but got %s.", exp, got);
+			if (!type_eq(&fo->type, &fo->range.from->type)) {
+				char *exp = type_to_str(&fo->type);
+				char *got = type_to_str(&fo->range.from->type);
+				err_print(e->where, "Type of for loop does not match the type of the from expression. Expected %s, but got %s.", exp, got);
 				free(exp); free(got);
 				return false;
 			}
 			
-			if (ea->range.step && !type_eq(&ea->type, &ea->range.step->type)) {
-				char *exp = type_to_str(&ea->type);
-				char *got = type_to_str(&ea->range.step->type);
-				err_print(e->where, "Type of each does not match the type of the step expression. Expected %s, but got %s.", exp, got);
+			if (fo->range.step && !type_eq(&fo->type, &fo->range.step->type)) {
+				char *exp = type_to_str(&fo->type);
+				char *got = type_to_str(&fo->range.step->type);
+				err_print(e->where, "Type of for loop does not match the type of the step expression. Expected %s, but got %s.", exp, got);
 				free(exp); free(got);
 				return false;
 			}
 			
-			if ((ea->type.flags & TYPE_IS_FLEXIBLE) && ea->range.step)
-				ea->type = ea->range.step->type;
+			if ((fo->type.flags & TYPE_IS_FLEXIBLE) && fo->range.step)
+				fo->type = fo->range.step->type;
 			
-			if (ea->range.to && !type_eq(&ea->type, &ea->range.to->type)) {
-				char *exp = type_to_str(&ea->type);
-				char *got = type_to_str(&ea->range.to->type);
-				err_print(e->where, "Type of each does not match the type of the to expression. Expected %s, but got %s.", exp, got);
+			if (fo->range.to && !type_eq(&fo->type, &fo->range.to->type)) {
+				char *exp = type_to_str(&fo->type);
+				char *got = type_to_str(&fo->range.to->type);
+				err_print(e->where, "Type of for loop does not match the type of the to expression. Expected %s, but got %s.", exp, got);
 				free(exp); free(got);
 				return false;
 			}
 			
-			if ((ea->type.flags & TYPE_IS_FLEXIBLE) && ea->range.to)
-				ea->type = ea->range.to->type;
-			ea->type.flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE;
+			if ((fo->type.flags & TYPE_IS_FLEXIBLE) && fo->range.to)
+				fo->type = fo->range.to->type;
+			fo->type.flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE;
 		} else {
-			if (!types_expr(tr, ea->of))
+			if (!types_expr(tr, fo->of))
 				return false;
-			Type *iter_type = &ea->of->type;
+			Type *iter_type = &fo->of->type;
 
 			bool uses_ptr = false;
 			if (iter_type->kind == TYPE_PTR) {
@@ -1157,7 +1157,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				iter_type = iter_type->arr.of;
 				break;
 			default: {
-				char *s = type_to_str(&ea->of->type);
+				char *s = type_to_str(&fo->of->type);
 				err_print(e->where, "Cannot iterate over non-array non-slice type %s.", s);
 				free(s);
 				return false;
@@ -1170,33 +1170,33 @@ static bool types_expr(Typer *tr, Expression *e) {
 				ptr_type.ptr = iter_type;
 				iter_type = &ptr_type;
 			}
-			if (ea->flags & EACH_ANNOTATED_TYPE) {
-				if (!type_eq(iter_type, &ea->type)) {
+			if (fo->flags & FOR_ANNOTATED_TYPE) {
+				if (!type_eq(iter_type, &fo->type)) {
 					char *exp = type_to_str(iter_type);
-					char *got = type_to_str(&ea->type);
+					char *got = type_to_str(&fo->type);
 					err_print(e->where, "Expected to iterate over type %s, but it was annotated as iterating over type %s.");
 					free(exp); free(got);
 					return false;
 				}
-			} else ea->type = *iter_type;
+			} else fo->type = *iter_type;
 		}
-		if ((ea->flags & EACH_IS_RANGE) && ea->range.step) {
-			Value *stepval = typer_malloc(tr, sizeof *ea->range.stepval);
-			if (!eval_expr(tr->evalr, ea->range.step, stepval)) {
-				info_print(ea->range.step->where, "Note that the step of an each loop must be a compile-time constant.");
+		if ((fo->flags & FOR_IS_RANGE) && fo->range.step) {
+			Value *stepval = typer_malloc(tr, sizeof *fo->range.stepval);
+			if (!eval_expr(tr->evalr, fo->range.step, stepval)) {
+				info_print(fo->range.step->where, "Note that the step of a for loop must be a compile-time constant.");
 				return false;
 			}
-			val_cast(stepval, &ea->range.step->type, stepval, &ea->type);
-			ea->range.stepval = stepval;
+			val_cast(stepval, &fo->range.step->type, stepval, &fo->type);
+			fo->range.stepval = stepval;
 		}
 		
 		arr_remove_lasta(&tr->in_expr_decls, tr->allocr);
 		
-		if (!types_block(tr, &ea->body)) return false;
-		each_exit(e);
+		if (!types_block(tr, &fo->body)) return false;
+		for_exit(e);
 		
-		if (ea->body.ret_expr) {
-			*t = ea->body.ret_expr->type;
+		if (fo->body.ret_expr) {
+			*t = fo->body.ret_expr->type;
 		} else {
 			t->kind = TYPE_VOID;
 			t->flags |= TYPE_IS_RESOLVED;
@@ -2189,7 +2189,7 @@ static bool types_block(Typer *tr, Block *b) {
 				if (!(e->kind == EXPR_BLOCK
 					  || e->kind == EXPR_IF
 					  || e->kind == EXPR_WHILE
-					  || e->kind == EXPR_EACH)) {
+					  || e->kind == EXPR_FOR)) {
 					err_print(e->where, "void expression must be followed by ;");
 					success = false;
 					goto ret;

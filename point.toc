@@ -6,7 +6,7 @@ pkg "point";
 };
 bar ::= fn() []int {
 	x:[]int = new(int,20);
-	each p, i := &x {
+	for p, i := &x {
 		 *p = i; 
 	}
 	x

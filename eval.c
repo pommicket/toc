@@ -1270,9 +1270,9 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (!eval_block(ev, &w->body, &e->type, v)) return false;
 		}
 	} break;
-	case EXPR_EACH: {
-		EachExpr *ea = e->each;
-		if (ea->flags & EACH_IS_RANGE) {
+	case EXPR_FOR: {
+		ForExpr *fo = e->for_;
+		if (fo->flags & FOR_IS_RANGE) {
 			Value from, to;
 			Value stepval;
 			stepval.i64 = 1;
@@ -1280,69 +1280,69 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			i64t.flags = TYPE_IS_RESOLVED;
 			i64t.kind = TYPE_BUILTIN;
 			i64t.builtin = BUILTIN_I64;
-			if (!eval_expr(ev, ea->range.from, &from)) return false;
-			if (ea->range.to && !eval_expr(ev, ea->range.to, &to)) return false;
-			if (ea->range.stepval)
-				stepval = *ea->range.stepval;
+			if (!eval_expr(ev, fo->range.from, &from)) return false;
+			if (fo->range.to && !eval_expr(ev, fo->range.to, &to)) return false;
+			if (fo->range.stepval)
+				stepval = *fo->range.stepval;
 			Value x = from;
 			Value *index_val;
 			Value *value_val;
-			if (!each_enter(e)) return false;
-			if (ea->index) {
-				IdentDecl *idecl = ident_decl(ea->index);
+			if (!for_enter(e)) return false;
+			if (fo->index) {
+				IdentDecl *idecl = ident_decl(fo->index);
 				idecl->flags |= IDECL_HAS_VAL;
 				index_val = &idecl->val;
 			} else {
 				index_val = NULL;
 			}
-			if (ea->value) {
-				IdentDecl *idecl = ident_decl(ea->value);
+			if (fo->value) {
+				IdentDecl *idecl = ident_decl(fo->value);
 				idecl->flags |= IDECL_HAS_VAL;
 				value_val = &idecl->val;
 			} else {
 				value_val = NULL;
 			}
-			bool step_is_negative = ea->range.stepval && !val_is_nonnegative(&stepval, &ea->type);
+			bool step_is_negative = fo->range.stepval && !val_is_nonnegative(&stepval, &fo->type);
 			if (index_val) index_val->i64 = 0;
 			while (1) {
-				if (ea->range.to) {
+				if (fo->range.to) {
 					/* check if loop has ended */
 					Value lhs = x;
 					Value rhs = to;
-					assert(ea->type.kind == TYPE_BUILTIN);
+					assert(fo->type.kind == TYPE_BUILTIN);
 					Type boolt = {0};
 					boolt.flags = TYPE_IS_RESOLVED;
 					boolt.kind = TYPE_BUILTIN;
 					boolt.builtin = BUILTIN_BOOL;
 					Value cont;
-					eval_numerical_bin_op(lhs, &ea->type, step_is_negative ? BINARY_GE : BINARY_LE, rhs, &ea->range.to->type, &cont, &boolt);
+					eval_numerical_bin_op(lhs, &fo->type, step_is_negative ? BINARY_GE : BINARY_LE, rhs, &fo->range.to->type, &cont, &boolt);
 					
 					if (!cont.boolv) break;
 				}
 				if (value_val) *value_val = x;
 
-				if (!eval_block(ev, &ea->body, &e->type, v)) return false;
+				if (!eval_block(ev, &fo->body, &e->type, v)) return false;
 				if (index_val) {
 					++index_val->i64;
 				}
-				eval_numerical_bin_op(x, &ea->type, BINARY_ADD, stepval, ea->range.stepval ? &ea->type : &i64t, &x, &ea->type);
+				eval_numerical_bin_op(x, &fo->type, BINARY_ADD, stepval, fo->range.stepval ? &fo->type : &i64t, &x, &fo->type);
 			}
 				
 		} else {
 			Value of;
-			if (!eval_expr(ev, ea->of, &of)) return false;
+			if (!eval_expr(ev, fo->of, &of)) return false;
 			Value *index_val, *value_val;
 			Value i, val;
-			if (!each_enter(e)) return false;
-			if (ea->index) {
-				IdentDecl *idecl = ident_decl(ea->index);
+			if (!for_enter(e)) return false;
+			if (fo->index) {
+				IdentDecl *idecl = ident_decl(fo->index);
 				idecl->flags |= IDECL_HAS_VAL;
 				index_val = &idecl->val;
 			} else {
 				index_val = &i;
 			}
-			if (ea->value) {
-				IdentDecl *idecl = ident_decl(ea->value);
+			if (fo->value) {
+				IdentDecl *idecl = ident_decl(fo->value);
 				idecl->flags |= IDECL_HAS_VAL;
 				value_val = &idecl->val;
 			} else {
@@ -1350,7 +1350,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			}
 			I64 len;
 			bool uses_ptr = false;
-			Type *of_type = &ea->of->type;
+			Type *of_type = &fo->of->type;
 			if (of_type->kind == TYPE_PTR) {
 				uses_ptr = true;
 				of_type = of_type->ptr;
@@ -1380,13 +1380,13 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				if (uses_ptr)
 					value_val->ptr = ptr;
 				else
-					eval_deref(value_val, ptr, &ea->type);
-				if (!eval_block(ev, &ea->body, &e->type, v))
+					eval_deref(value_val, ptr, &fo->type);
+				if (!eval_block(ev, &fo->body, &e->type, v))
 					return false;
 				++index_val->i64;
 			}
 		}
-		each_exit(e);
+		for_exit(e);
 	} break;
 	case EXPR_BLOCK:
 		if (!eval_block(ev, &e->block, &e->type, v)) return false;

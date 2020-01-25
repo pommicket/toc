@@ -771,32 +771,32 @@ static bool export_expr(Exporter *ex, Expression *e) {
 		if (!export_optional_expr(ex, s->to))
 			return false;
 	} break;
-	case EXPR_EACH: {
-		EachExpr *ea = e->each;
-		possibly_static_assert(sizeof ea->flags == 1);
-		export_u8(ex, ea->flags);
-		if ((ea->flags & EACH_ANNOTATED_TYPE) || found_type)
-			if (!export_type(ex, &ea->type, e->where))
+	case EXPR_FOR: {
+		ForExpr *fo = e->for_;
+		possibly_static_assert(sizeof fo->flags == 1);
+		export_u8(ex, fo->flags);
+		if ((fo->flags & FOR_ANNOTATED_TYPE) || found_type)
+			if (!export_type(ex, &fo->type, e->where))
 				return false;
-		export_ident(ex, ea->index);
-		export_ident(ex, ea->value);
-		if (ea->flags & EACH_IS_RANGE) {
-			if (!export_expr(ex, ea->range.from))
+		export_ident(ex, fo->index);
+		export_ident(ex, fo->value);
+		if (fo->flags & FOR_IS_RANGE) {
+			if (!export_expr(ex, fo->range.from))
 				return false;
-			if (!export_optional_expr(ex, ea->range.to))
+			if (!export_optional_expr(ex, fo->range.to))
 				return false;
 			if (found_type) {
-				if (!export_optional_val(ex, ea->range.stepval, &ea->type, e->where))
+				if (!export_optional_val(ex, fo->range.stepval, &fo->type, e->where))
 					return false;
 			} else {
-				if (!export_optional_expr(ex, ea->range.step))
+				if (!export_optional_expr(ex, fo->range.step))
 					return false;
 			}
 		} else {
-			if (!export_expr(ex, ea->of))
+			if (!export_expr(ex, fo->of))
 				return false;
 		}
-		if (!export_block(ex, &ea->body))
+		if (!export_block(ex, &fo->body))
 			return false;
 	} break;
 	}
@@ -923,25 +923,25 @@ static void import_expr(Importer *im, Expression *e) {
 		s->from = import_optional_expr(im);
 		s->to = import_optional_expr(im);
 	} break;
-	case EXPR_EACH: {
-		EachExpr *ea = e->each = imptr_calloc(im, 1, sizeof *ea);
-		ea->flags = import_u8(im);
-		if ((ea->flags & EACH_ANNOTATED_TYPE) || found_type)
-			import_type(im, &ea->type);
-		ea->index = import_ident(im);
-		ea->value = import_ident(im);
-		if (ea->flags & EACH_IS_RANGE) {
-			ea->range.from = import_expr_(im);
-			ea->range.to = import_optional_expr(im);
+	case EXPR_FOR: {
+		ForExpr *fo = e->for_ = imptr_calloc(im, 1, sizeof *fo);
+		fo->flags = import_u8(im);
+		if ((fo->flags & FOR_ANNOTATED_TYPE) || found_type)
+			import_type(im, &fo->type);
+		fo->index = import_ident(im);
+		fo->value = import_ident(im);
+		if (fo->flags & FOR_IS_RANGE) {
+			fo->range.from = import_expr_(im);
+			fo->range.to = import_optional_expr(im);
 			if (found_type) {
-				ea->range.stepval = import_optional_val(im, &ea->type);
+				fo->range.stepval = import_optional_val(im, &fo->type);
 			} else {
-				ea->range.step = import_optional_expr(im);
+				fo->range.step = import_optional_expr(im);
 			}
 		} else {
-			ea->of = import_expr_(im);
+			fo->of = import_expr_(im);
 		}
-		import_block(im, &ea->body);
+		import_block(im, &fo->body);
 	} break;
 	}
 }

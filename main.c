@@ -18,9 +18,9 @@
 
 /* 
 TODO:
-each=>for
-
-#builtin("sizeof(int)") etc.
+#builtin("sizeof int")
+#builtin("target sizeof int") 
+etc.
 
 #include
 constants in structs

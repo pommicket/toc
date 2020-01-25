@@ -105,21 +105,21 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 	if (!block_f(g, &e->while_.body))									\
 		return false;													\
 	break;																\
-	case EXPR_EACH: {													\
-		EachExpr *ea = e->each;											\
-		if (!each_enter(e)) return false;								\
-		if (ea->flags & EACH_IS_RANGE) {								\
-			if (!f(g, ea->range.from))									\
+	case EXPR_FOR: {													\
+		ForExpr *fo = e->for_;											\
+		if (!for_enter(e)) return false;								\
+		if (fo->flags & FOR_IS_RANGE) {									\
+			if (!f(g, fo->range.from))									\
 				return false;											\
-			if (ea->range.to && !f(g, ea->range.to))					\
+			if (fo->range.to && !f(g, fo->range.to))					\
 				return false;											\
 			/* step is a value, not an expression */					\
 		} else {														\
-			if (!f(g, ea->of))											\
+			if (!f(g, fo->of))											\
 				return false;											\
 		}																\
-		if (!block_f(g, &ea->body)) return false;						\
-		each_exit(e);													\
+		if (!block_f(g, &fo->body)) return false;						\
+		for_exit(e);													\
 	} break;															\
 	case EXPR_TUPLE:													\
 	arr_foreach(e->tuple, Expression, x)								\
@@ -730,8 +730,8 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 	case EXPR_WHILE:
 		prefix_id = to->while_.c.id;
 		goto prefixed;
-	case EXPR_EACH:
-		prefix_id = to->each->c.id;
+	case EXPR_FOR:
+		prefix_id = to->for_->c.id;
 		goto prefixed;
 	prefixed:
 		for (size_t i = 0; i < arr_len(to->type.tuple); ++i) {
@@ -785,7 +785,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 	switch (e->kind) {
 	case EXPR_IF:
 	case EXPR_WHILE:
-	case EXPR_EACH:
+	case EXPR_FOR:
 	case EXPR_BLOCK: {
 		id = ++g->ident_counter;
 		
@@ -848,71 +848,71 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		if (!cgen_block(g, &w->body, ret_name, 0))
 			return false;
 	} break;
-	case EXPR_EACH: {
-		EachExpr *ea = e->each;
-		int is_range = ea->flags & EACH_IS_RANGE;
+	case EXPR_FOR: {
+		ForExpr *fo = e->for_;
+		int is_range = fo->flags & FOR_IS_RANGE;
 		if (is_range) {
-			if (!cgen_expr_pre(g, ea->range.from)) return false;
-			if (ea->range.to && !cgen_expr_pre(g, ea->range.to)) return false;
+			if (!cgen_expr_pre(g, fo->range.from)) return false;
+			if (fo->range.to && !cgen_expr_pre(g, fo->range.to)) return false;
 		} else {
-			if (!cgen_expr_pre(g, ea->of)) return false;
+			if (!cgen_expr_pre(g, fo->of)) return false;
 		}
 		
-		ea->c.id = id;
-		if (!each_enter(e)) return false;
+		fo->c.id = id;
+		if (!for_enter(e)) return false;
 		cgen_write(g, "{");
 		if (is_range) {
-			if (ea->range.to) {
+			if (fo->range.to) {
 				/* pre generate to */
-				if (!cgen_type_pre(g, &ea->type, e->where)) return false;
+				if (!cgen_type_pre(g, &fo->type, e->where)) return false;
 				cgen_write(g, " to_");
-				if (!cgen_type_post(g, &ea->type, e->where)) return false;
+				if (!cgen_type_post(g, &fo->type, e->where)) return false;
 				cgen_write(g, " = ");
-				if (!cgen_expr(g, ea->range.to))
+				if (!cgen_expr(g, fo->range.to))
 					return false;
 				cgen_write(g, "; ");
 			}
 			
 			/* set value to from */
-			if (ea->value) {
-				if (!cgen_type_pre(g, &ea->type, e->where)) return false;
+			if (fo->value) {
+				if (!cgen_type_pre(g, &fo->type, e->where)) return false;
 				cgen_write(g, " ");
-				cgen_ident(g, ea->value);
-				if (!cgen_type_post(g, &ea->type, e->where)) return false;
+				cgen_ident(g, fo->value);
+				if (!cgen_type_post(g, &fo->type, e->where)) return false;
 				cgen_write(g, "; ");
 				Expression val_expr;
 				val_expr.flags = EXPR_FOUND_TYPE;
 				val_expr.kind = EXPR_IDENT;
-				val_expr.ident = ea->value;
-				val_expr.type = ea->type;
-				if (!cgen_set(g, &val_expr, NULL, ea->range.from, NULL))
+				val_expr.ident = fo->value;
+				val_expr.type = fo->type;
+				if (!cgen_set(g, &val_expr, NULL, fo->range.from, NULL))
 					return false;
 			} else {
-				if (!cgen_type_pre(g, &ea->type, e->where)) return false;
+				if (!cgen_type_pre(g, &fo->type, e->where)) return false;
 				cgen_write(g, " val_");
-				if (!cgen_type_post(g, &ea->type, e->where)) return false;
+				if (!cgen_type_post(g, &fo->type, e->where)) return false;
 				cgen_write(g, "; ");
-				if (!cgen_set(g, NULL, "val_", ea->range.from, NULL))
+				if (!cgen_set(g, NULL, "val_", fo->range.from, NULL))
 					return false;
 			}
 		} else {
 			/* pre-generate of */
-			if (!cgen_type_pre(g, &ea->of->type, e->where))
+			if (!cgen_type_pre(g, &fo->of->type, e->where))
 				return false;
 			cgen_write(g, " of_");
-			if (!cgen_type_post(g, &ea->of->type, e->where))
+			if (!cgen_type_post(g, &fo->of->type, e->where))
 				return false;
 			
 			cgen_write(g, "; ");
 			
-			if (!cgen_set(g, NULL, "of_", ea->of, NULL))
+			if (!cgen_set(g, NULL, "of_", fo->of, NULL))
 				return false;
 		}
 		cgen_write(g, "for (");
-		if (ea->index || !is_range) {
+		if (fo->index || !is_range) {
 			cgen_write(g, "i64 ");
-			if (ea->index)
-				cgen_ident(g, ea->index);
+			if (fo->index)
+				cgen_ident(g, fo->index);
 			else
 				cgen_write(g, "i_");
 			cgen_write(g, " = 0");
@@ -920,22 +920,22 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		cgen_write(g, "; ");
 		bool uses_ptr = false;
 		Type *of_type = NULL;
-		if (!(is_range && !ea->range.to)) { /* if it's finite */
+		if (!(is_range && !fo->range.to)) { /* if it's finite */
 			if (is_range) {
-				if (ea->value)
-					cgen_ident(g, ea->value);
+				if (fo->value)
+					cgen_ident(g, fo->value);
 				else
 					cgen_write(g, "val_");
 				bool positive_step
-					= ea->range.stepval == NULL || val_is_nonnegative(ea->range.stepval, &ea->type);
+					= fo->range.stepval == NULL || val_is_nonnegative(fo->range.stepval, &fo->type);
 				cgen_write(g, " %c= to_", positive_step ? '<' : '>');
 			} else {
-				if (ea->index)
-					cgen_ident(g, ea->index);
+				if (fo->index)
+					cgen_ident(g, fo->index);
 				else
 					cgen_write(g, "i_");
 				cgen_write(g, " < ");
-				of_type = &ea->of->type;
+				of_type = &fo->of->type;
 				uses_ptr = of_type->kind == TYPE_PTR;
 				if (uses_ptr) {
 					of_type = of_type->ptr;
@@ -953,77 +953,77 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		}
 		cgen_write(g, "; ");
 		if (is_range) {
-			if (ea->range.stepval) {
-				if (!cgen_val_pre(g, *ea->range.stepval, &ea->type, e->where))
+			if (fo->range.stepval) {
+				if (!cgen_val_pre(g, *fo->range.stepval, &fo->type, e->where))
 					return false;
 			}
-			if (ea->value)
-				cgen_ident(g, ea->value);
+			if (fo->value)
+				cgen_ident(g, fo->value);
 			else
 				cgen_write(g, "val_");
 			cgen_write(g, " += ");
-			if (ea->range.stepval) {
-				if (!cgen_val(g, *ea->range.stepval, &ea->type, e->where))
+			if (fo->range.stepval) {
+				if (!cgen_val(g, *fo->range.stepval, &fo->type, e->where))
 					return false;
 			} else {
 				cgen_write(g, "1");
 			}
-			if (ea->index) cgen_write(g, ", ");
+			if (fo->index) cgen_write(g, ", ");
 		}
-		if (ea->index || !is_range) {
-			if (ea->index)
-				cgen_ident(g, ea->index);
+		if (fo->index || !is_range) {
+			if (fo->index)
+				cgen_ident(g, fo->index);
 			else
 				cgen_write(g, "i_");
 			cgen_write(g, "++");
 		}
 		cgen_write(g, ") {");
 		cgen_nl(g);
-		if (ea->value) {
+		if (fo->value) {
 			if (!is_range) {
 				/* necessary for iterating over, e.g., an array of arrays */
-				if (!cgen_type_pre(g, &ea->type, e->where))
+				if (!cgen_type_pre(g, &fo->type, e->where))
 					return false;
 				if (uses_ptr)
 					cgen_write(g, " p_");
 				else
 					cgen_write(g, "(*p_)");
-				if (!cgen_type_post(g, &ea->type, e->where))
+				if (!cgen_type_post(g, &fo->type, e->where))
 					return false;
 				cgen_write(g, " = ");
 				if (of_type->kind == TYPE_SLICE) {
 					cgen_write(g, "((");
-					if (!cgen_type_pre(g, &ea->type, e->where)) return false;
+					if (!cgen_type_pre(g, &fo->type, e->where)) return false;
 					if (!uses_ptr) cgen_write(g, "(*)");
-					if (!cgen_type_post(g, &ea->type, e->where)) return false;
+					if (!cgen_type_post(g, &fo->type, e->where)) return false;
 					cgen_write(g, ")of_%sdata) + ", uses_ptr ? "->" : ".");
-					if (ea->index)
-						cgen_ident(g, ea->index);
+					if (fo->index)
+						cgen_ident(g, fo->index);
 					else
 						cgen_write(g, "i_");
 				} else {
 					cgen_write(g, "&%sof_%s[", uses_ptr ? "(*" : "", uses_ptr ? ")" : "");
-					if (ea->index)
-						cgen_ident(g, ea->index);
+					if (fo->index)
+						cgen_ident(g, fo->index);
 					else
 						cgen_write(g, "i_");
 					cgen_write(g, "]");
 				}
 				cgen_write(g, "; ");
-				if (!cgen_type_pre(g, &ea->type, e->where)) return false;
+				if (!cgen_type_pre(g, &fo->type, e->where)) return false;
 				cgen_write(g, " ");
-				cgen_ident(g, ea->value);
-				if (!cgen_type_post(g, &ea->type, e->where)) return false;
+				cgen_ident(g, fo->value);
+				if (!cgen_type_post(g, &fo->type, e->where)) return false;
 				cgen_write(g, "; ");
 				if (uses_ptr) {
-					cgen_ident(g, ea->value);
+					cgen_ident(g, fo->value);
 					cgen_write(g, " = p_;");
 					cgen_nl(g);
 				} else {
 					Expression set_expr;
 					set_expr.kind = EXPR_IDENT;
-					set_expr.ident = ea->value;
-					set_expr.type = ea->type;
+					set_expr.ident = fo->value;
+					set_expr.type = fo->type;
 					set_expr.flags = EXPR_FOUND_TYPE;
 				
 					if (!cgen_set(g, &set_expr, NULL, NULL, "(*p_)"))
@@ -1031,10 +1031,10 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 				}
 			}
 		}
-		if (!cgen_block(g, &ea->body, ret_name, CGEN_BLOCK_NOBRACES))
+		if (!cgen_block(g, &fo->body, ret_name, CGEN_BLOCK_NOBRACES))
 			return false;
 		cgen_write(g, "}}");
-		each_exit(e);
+		for_exit(e);
 	} break;
 	case EXPR_BLOCK:
 		e->block_ret_id = id;
@@ -1486,9 +1486,9 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		if (e->type.kind != TYPE_VOID)
 			cgen_ident_id(g, e->block_ret_id);
 		break;
-	case EXPR_EACH:
+	case EXPR_FOR:
 		if (e->type.kind != TYPE_VOID)
-			cgen_ident_id(g, e->each->c.id);
+			cgen_ident_id(g, e->for_->c.id);
 		break;
 	case EXPR_CALL:
 		if (e->type.kind == TYPE_TUPLE) {

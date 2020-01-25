@@ -178,7 +178,7 @@ typedef enum {
 typedef struct IdentDecl {
 	union {
 		struct Declaration *decl;
-		struct Expression *expr; /* for example, this identifier is declared in an each expression */
+		struct Expression *expr; /* for example, this identifier is declared in a for expression */
 	};
 	struct Block *scope; /* NULL for file scope */
 	Value val;
@@ -277,7 +277,7 @@ typedef enum {
 			  KW_ELIF,
 			  KW_ELSE,
 			  KW_WHILE,
-			  KW_EACH,
+			  KW_FOR,
 			  KW_RETURN,
 			  KW_FN,
 			  KW_AS,
@@ -501,7 +501,7 @@ typedef enum {
 			  EXPR_UNARY_OP,
 			  EXPR_IF,
 			  EXPR_WHILE,
-			  EXPR_EACH,
+			  EXPR_FOR,
 			  EXPR_FN,
 			  EXPR_CAST,
 			  EXPR_NEW,
@@ -583,16 +583,16 @@ typedef struct WhileExpr {
 
 
 enum {
-	  EACH_IS_RANGE = 0x01,
-	  EACH_ANNOTATED_TYPE = 0x02,
+	  FOR_IS_RANGE = 0x01,
+	  FOR_ANNOTATED_TYPE = 0x02,
 };
 
-typedef struct EachExpr {
+typedef struct ForExpr {
 	U8 flags;
 	struct {
 		IdentID id;
 	} c;
-	Type type; /* uninitialized unless typed or flags & EACH_ANNOTATED_TYPE */
+	Type type; /* uninitialized unless typed or flags & FOR_ANNOTATED_TYPE */
 	Identifier index; /* NULL = no index */
 	Identifier value; /* NULL = no value */
 	Block body;
@@ -608,7 +608,7 @@ typedef struct EachExpr {
 		} range;
 		struct Expression *of;
 	};
-} EachExpr;
+} ForExpr;
 
 
 enum {
@@ -734,7 +734,7 @@ typedef struct Expression {
 		} pkg; /* only can exist before typing */
 		IfExpr if_;
 		WhileExpr while_;
-		EachExpr *each;
+		ForExpr *for_;
 		FnExpr *fn;
 		CastExpr cast;
 		SliceExpr slice;
@@ -879,7 +879,7 @@ typedef struct Typer {
 	Evaluator *evalr;
 	Identifiers *idents;
 	struct Exporter *exptr;
-	Expression **in_expr_decls; /* an array of expressions whose declarations (e.g. each **x := foo**) we are currently inside */
+	Expression **in_expr_decls; /* an array of expressions whose declarations (e.g. for **x := foo**) we are currently inside */
 	Declaration **in_decls; /* array of declarations we are currently inside */
 	Block *block;
 	Block **blocks; /* dyn array of all the block's we're in ([0] = NULL for global scope) */

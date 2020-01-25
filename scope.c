@@ -97,37 +97,37 @@ static void fn_exit(FnExpr *f) {
 		remove_ident_decls(&f->body, decl);
 }
 
-static bool each_enter(Expression *e) {
-	assert(e->kind == EXPR_EACH);
-	EachExpr *ea = e->each;
-	if (ea->index && ea->index == ea->value) {
-		err_print(e->where, "The identifier for the index of an each loop must be different from the identifier for the value.");
+static bool for_enter(Expression *e) {
+	assert(e->kind == EXPR_FOR);
+	ForExpr *fo = e->for_;
+	if (fo->index && fo->index == fo->value) {
+		err_print(e->where, "The identifier for the index of a for loop must be different from the identifier for the value.");
 		return false;
 	}
-	if (ea->index) {
-		IdentDecl *id = arr_add(&ea->index->decls);
+	if (fo->index) {
+		IdentDecl *id = arr_add(&fo->index->decls);
 		id->flags = 0;
 		id->kind = IDECL_EXPR;
-		id->scope = &ea->body;
+		id->scope = &fo->body;
 		id->expr = e;
 	}
-	if (ea->value) {
-		IdentDecl *id = arr_add(&ea->value->decls);
+	if (fo->value) {
+		IdentDecl *id = arr_add(&fo->value->decls);
 		id->flags = 0;
 		id->kind = IDECL_EXPR;
-		id->scope = &ea->body;
+		id->scope = &fo->body;
 		id->expr = e;
 	}
 	return true;
 }
 
-static void each_exit(Expression *e) {
-	assert(e->kind == EXPR_EACH);
-	EachExpr *ea = e->each;
-	if (ea->index) {
-		arr_remove_last(&ea->index->decls);
+static void for_exit(Expression *e) {
+	assert(e->kind == EXPR_FOR);
+	ForExpr *fo = e->for_;
+	if (fo->index) {
+		arr_remove_last(&fo->index->decls);
 	}
-	if (ea->value) {
-		arr_remove_last(&ea->value->decls);
+	if (fo->value) {
+		arr_remove_last(&fo->value->decls);
 	}
 }
