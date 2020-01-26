@@ -22,6 +22,8 @@ TODO:
 #builtin("target sizeof int") 
 etc.
 
+allow any global declaration to be used before itself
+
 #include
 constants in structs
 #if

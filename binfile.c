@@ -277,11 +277,14 @@ static void write_vlq(FILE *fp, U64 x) {
 }
 
 static U64 read_vlq(FILE *fp) {
-    U8 byte = read_u8(fp);
-	if (byte & 0x80) {
-		return (read_vlq(fp) << 7) + (byte & 0x7F);
-	} else {
-		return byte;
+	U64 q = 0;
+	U64 bit = 0;
+	while (1) {
+		U8 byte = read_u8(fp);
+		assert(!feof(fp));
+		q |= (U64)(byte & 0x7F) << bit;
+		bit += 7;
+		if (!(byte & 0x80)) return q;
 	}
 }
 
@@ -291,6 +294,8 @@ static void binfile_test(void) {
 	FILE *fp = tmpfile();
 	U64 a = 234873485734;
 	write_vlq(fp, a);
+	U64 s = 3;
+	write_vlq(fp, s);
 	I64 b = -123981232131;
 	write_i64(fp, b);
 	U8 c = 12;
@@ -313,6 +318,7 @@ static void binfile_test(void) {
 	}
 
 	expect(U64, U64_FMT, read_vlq(fp), a);
+	expect(U64, U64_FMT, read_vlq(fp), s);
 	expect(I64, I64_FMT, read_i64(fp), b);
 	expect(U8, U8_FMT, read_u8(fp), c);
 	expect(F32, F32_FMT, read_f32(fp), d);

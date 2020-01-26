@@ -24,9 +24,13 @@ toc_putchar ::= fn(x: char) {
 		c_putchar(x as c_int);
 };
 
+c_fwrite :: fn(&u8, c_size_t, c_size_t, &u8) = #foreign "fwrite", "libc.so.6";
+
+stdout_fwrite ::= fn(data: &u8, size: u64, nmemb: u64) {
+	c_fwrite(data, size as c_size_t, nmemb as c_size_t, #builtin("stdout"));
+};
+
 #export puts ::= fn(x: []char) {
-	for c := x {
-		 toc_putchar(c);
-	};
-	toc_putchar('\n');
+		stdout_fwrite(&x[0] as &u8, 1, x.len as u64);
+		toc_putchar('\n');
 };

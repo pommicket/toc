@@ -3,7 +3,10 @@ hw ::= fn() int {
 	 io.puts("Hello, world!");
 	 3
 };
+arr ::= pkg "std/arr";
 main ::= fn() {
-x::=hw();
-hw();
+	hw();
+	x::=hw();
+	x : arr.Arr(int);
+	arr_add(&x, 10);
 };

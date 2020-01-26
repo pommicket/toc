@@ -2425,11 +2425,11 @@ static bool types_decl(Typer *tr, Declaration *d) {
 	if (success) {
 		if (d->flags & DECL_EXPORT) {
 			/* export it! */
-			if (!tr->exptr) {
+			if (!tr->pkg_name) {
 				err_print(d->where, "Declaration marked for exporting, but no package output was specified."); 
 				success = false;
 			} else {
-				success = export_decl_external(tr->exptr, d);
+				export_decl_external(tr->exptr, d);
 			}
 		}
 	} else {

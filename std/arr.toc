@@ -20,7 +20,7 @@ pkg "arr";
 		a.len += 1;
 };
 
-#export arr_forfor ::= fn(t ::=, a : Arr(t), f : fn(&t)) {
+#export arr_foreach ::= fn(t ::=, a : Arr(t), f : fn(&t)) {
 		for i := 0..a.len-1 {
 			 f(&a.data[i]);
 		}

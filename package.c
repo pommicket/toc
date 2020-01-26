@@ -9,11 +9,16 @@
 static bool export_decl(Exporter *ex, Declaration *d);
 static bool export_block(Exporter *ex, Block *b);
 static bool export_expr(Exporter *ex, Expression *e);
+static bool export_fn(Exporter *ex, FnExpr *f);
 static bool import_footer(Importer *i);
 static void import_decl(Importer *im, Declaration *d);
 static void import_expr(Importer *im, Expression *e);
 static void import_block(Importer *im, Block *b);
+static FnExpr *import_fn(Importer *im);
+static void export_decl_external(Exporter *ex, Declaration *d);
 static inline Expression *import_expr_(Importer *im);
+static bool export_struct(Exporter *ex, StructDef *s);
+static StructDef *import_struct(Importer *im);
 
 
 static void exptr_create(Exporter *ex, FILE *out, const char *filename, ErrCtx *err_ctx) {
@@ -22,8 +27,8 @@ static void exptr_create(Exporter *ex, FILE *out, const char *filename, ErrCtx *
 	ex->exporting_to.ctx = err_ctx;
 	ex->exporting_to.filename = filename;
 	ex->ident_id = 0;
-	ex->exported_fns = NULL;
-	ex->exported_structs = NULL;
+	ex->nexported_fns = 0;
+	ex->nexported_structs = 0;
 	ex->exported_idents = NULL;
 	ex->started = false;
 	ex->code = NULL;
@@ -106,7 +111,7 @@ static inline bool import_bool(Importer *i) {
 static inline void export_char(Exporter *ex, char c) {
 	write_char(ex->out, c);
 }
-static inline bool import_char(Importer *i) {
+static inline char import_char(Importer *i) {
 	return read_char(i->in);
 }
 static inline void export_vlq(Exporter *ex, U64 x) {
@@ -181,7 +186,12 @@ static inline void export_ident(Exporter *ex, Identifier i) {
 		export_vlq(ex, 0);
 		return;
 	}
+	IdentDecl *idecl = ident_decl(i);
 	
+	if (idecl && idecl->scope == NULL && idecl->kind == IDECL_DECL) {
+		/* make sure this is exported */
+		export_decl_external(ex, idecl->decl);
+	}
 	if (!i->export_id) {
 		i->export_id = ++ex->ident_id;
 	}
@@ -198,6 +208,7 @@ static const U8 toc_package_indicator[3] = {116, 111, 112};
 /* writes the header */
 static void exptr_start(Exporter *ex, const char *pkg_name, size_t pkg_name_len) {
 	const char *code = ex->code;
+	ex->decls_to_export = NULL;
 	ex->started = true;
 	export_u8(ex, toc_package_indicator[0]);
 	export_u8(ex, toc_package_indicator[1]);
@@ -265,12 +276,14 @@ static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname
 		return false;
 	fseek(f, decls_offset, SEEK_SET);
 	/* read declarations */
+	size_t ndecls = import_u32(&i);
 	p->stmts = NULL;
-	while (import_u8(&i)) {
+	for (size_t idx = 0; idx < ndecls; ++idx) {
 		Statement *s = arr_add(&p->stmts);
 		s->kind = STMT_DECL;
 		import_decl(&i, &s->decl);
 	}
+	assert(ftell(i.in) == (long)footer_offset);
 
 	free(i.ident_map);
 	if (!block_enter(NULL, p->stmts, 0))
@@ -328,18 +341,7 @@ static bool export_type(Exporter *ex, Type *type, Location where) {
 	} break;
 	case TYPE_STRUCT: {
 		StructDef *struc = type->struc;
-		if (struc->export.id == 0) {
-			StructDef **ptr = arr_add(&ex->exported_structs);
-			*ptr = struc;
-			size_t nexported_structs = arr_len(ex->exported_structs);
-			if (nexported_structs > U32_MAX) {
-				err_print(struc->where, "Too many exported structure definitions (the maximum is " STRINGIFY(U32_MAX) ").");
-				return false;
-			}
-				
-			struc->export.id = (U32)nexported_structs;
-		}
-		export_vlq(ex, (U64)struc->export.id);
+		export_struct(ex, struc);
 	} break;
 	case TYPE_EXPR:
 		if (!export_expr(ex, type->expr))
@@ -403,33 +405,12 @@ static void import_type(Importer *im, Type *type) {
 		} else type->fn.constness = NULL;
 	} break;
 	case TYPE_STRUCT: {
-		U64 struct_id = import_vlq(im);
-		assert(struct_id);
-		type->struc = &im->structs[struct_id - 1];
+		type->struc = import_struct(im);
 	} break;
 	case TYPE_EXPR:
 		type->expr = import_expr_(im);
 		break;
 	}
-}
-
-static bool export_fn_ptr(Exporter *ex, FnExpr *f) {
-	if (f->export.id == 0) {
-		FnExpr **fptr = arr_add(&ex->exported_fns);
-		*fptr = f;
-		size_t nexported_fns = arr_len(ex->exported_fns);
-		if (nexported_fns > U32_MAX) {
-			err_print(f->where, "Too many exported functions (the maximum is " STRINGIFY(U32_MAX) ").");
-			return false;
-		}
-		f->export.id = (U32)nexported_fns;
-	}
-	export_vlq(ex, f->export.id);
-	return true;
-}
-
-static FnExpr *import_fn_ptr(Importer *im) {
-	return &im->fns[import_vlq(im) - 1];
 }
 
 static bool export_val(Exporter *ex, Value val, Type *type, Location where);
@@ -499,7 +480,7 @@ static bool export_val_ptr(Exporter *ex, void *v, Type *type, Location where) {
 		}
 	} break;
 	case TYPE_FN:
-		if (!export_fn_ptr(ex, *(FnExpr **)v))
+		if (!export_fn(ex, *(FnExpr **)v))
 			return false;
 		break;
 	case TYPE_UNKNOWN:
@@ -561,7 +542,7 @@ static void import_val_ptr(Importer *im, void *v, Type *type) {
 		}
 	} break;
 	case TYPE_FN:
-		*(FnExpr **)v = import_fn_ptr(im);
+		*(FnExpr **)v = import_fn(im);
 		break;
 	case TYPE_SLICE: {
 		Slice *slice = v;
@@ -708,7 +689,7 @@ static bool export_expr(Exporter *ex, Expression *e) {
 			return false;
 		break;
 	case EXPR_FN:
-		if (!export_fn_ptr(ex, e->fn))
+		if (!export_fn(ex, e->fn))
 			return false;
 		break;
 	case EXPR_BLOCK:
@@ -775,32 +756,38 @@ static bool export_expr(Exporter *ex, Expression *e) {
 	} break;
 	case EXPR_FOR: {
 		ForExpr *fo = e->for_;
+		if (!for_enter(e))
+			return false;
 		possibly_static_assert(sizeof fo->flags == 1);
 		export_u8(ex, fo->flags);
 		if ((fo->flags & FOR_ANNOTATED_TYPE) || found_type)
 			if (!export_type(ex, &fo->type, e->where))
-				return false;
+			    goto for_fail;
 		export_ident(ex, fo->index);
 		export_ident(ex, fo->value);
 		if (fo->flags & FOR_IS_RANGE) {
 			if (!export_expr(ex, fo->range.from))
-				return false;
+			    goto for_fail;
 			if (!export_optional_expr(ex, fo->range.to))
-				return false;
+			    goto for_fail;
 			if (found_type) {
 				if (!export_optional_val(ex, fo->range.stepval, &fo->type, e->where))
-					return false;
+				    goto for_fail;
 			} else {
 				if (!export_optional_expr(ex, fo->range.step))
-					return false;
+					goto for_fail;
 			}
 		} else {
 			if (!export_expr(ex, fo->of))
-				return false;
+				goto for_fail;
 		}
 		if (!export_block(ex, &fo->body))
-			return false;
+		    goto for_fail;
+		for_exit(e);
 	} break;
+	for_fail:
+		for_exit(e);
+		return false;
 	}
 	return true;
 }
@@ -876,7 +863,7 @@ static void import_expr(Importer *im, Expression *e) {
 		import_type(im, &e->typeval);
 		break;
 	case EXPR_FN:
-		e->fn = import_fn_ptr(im);
+		e->fn = import_fn(im);
 		break;
 	case EXPR_BLOCK:
 		import_block(im, &e->block);
@@ -958,19 +945,19 @@ static void export_ident_name(Exporter *ex, Identifier ident) {
 }
 
 static bool export_decl(Exporter *ex, Declaration *d) {
+	if (d->flags & DECL_MARKED_FOR_EXPORTING) {
+		arr_foreach(d->idents, Identifier, ident) {
+			export_ident_name(ex, *ident);
+		}
+	}
+	
 	assert(ex->started);
-	/* printf("EXPORT %ld\n",ftell(ex->out)); */
 	possibly_static_assert(sizeof d->flags == 2);
 	export_u16(ex, d->flags);
 
 	if ((d->flags & DECL_FOUND_TYPE) && d->type.kind == TYPE_UNKNOWN) {
 		err_print(d->where, "Can't export declaration of unknown type.");
 		return false;
-	}
-	if (d->flags & DECL_EXPORT) {
-		arr_foreach(d->idents, Identifier, ident) {
-			export_ident_name(ex, *ident);
-		}
 	}
 	
 	export_location(ex, d->where);
@@ -1002,7 +989,6 @@ static bool export_decl(Exporter *ex, Declaration *d) {
 
 static void import_decl(Importer *im, Declaration *d) {
 	possibly_static_assert(sizeof d->flags == 2);
-	/* printf("IMPORT %ld\n",ftell(im->in)); */
 	d->flags = import_u16(im);
 	d->flags &= (DeclFlags)~(DeclFlags)DECL_EXPORT;
 	d->where = import_location(im);
@@ -1032,9 +1018,11 @@ static void import_decl(Importer *im, Declaration *d) {
 }
 
 /* exports a declaration. to be used by other files instead of export_decl. */
-static bool export_decl_external(Exporter *ex, Declaration *d) {
-	export_u8(ex, 1); /* indicate that there are more declarations */
-	return export_decl(ex, d);
+static void export_decl_external(Exporter *ex, Declaration *d) {
+	if (!(d->flags & DECL_MARKED_FOR_EXPORTING)) {
+		d->flags |= DECL_MARKED_FOR_EXPORTING;
+		*(Declaration **)arr_add(&ex->decls_to_export) = d;
+	}
 }
 
 static bool export_stmt(Exporter *ex, Statement *s) {
@@ -1079,21 +1067,29 @@ static void import_stmt(Importer *im, Statement *s) {
 			import_expr(im, &s->expr);
 		break;
 	}
-	fprint_stmt(stdout, s); printf("\n");
+	/* fprint_stmt(stdout, s); printf("\n"); */
 }
 
 static bool export_block(Exporter *ex, Block *b) {
+	if (!block_enter(b, b->stmts, 0))
+		return false;
+	
 	possibly_static_assert(sizeof b->flags == 1);
 	export_u8(ex, b->flags);
 	export_location(ex, b->where);
 	export_len(ex, arr_len(b->stmts));
 	arr_foreach(b->stmts, Statement, s) {
 		if (!export_stmt(ex, s))
-			return false;
+			goto err;
 	}
 	if (!export_optional_expr(ex, b->ret_expr))
-		return false;
+	    goto err;
+
+	block_exit(b, b->stmts);
 	return true;
+ err:
+	block_exit(b, b->stmts);
+	return false;
 }
 
 static void import_block(Importer *im, Block *b) {
@@ -1107,115 +1103,135 @@ static void import_block(Importer *im, Block *b) {
 }
 
 static bool export_fn(Exporter *ex, FnExpr *f) {
-	possibly_static_assert(sizeof f->flags == 1);
-	export_u8(ex, f->flags);
-	if (f->flags & FN_EXPR_FOREIGN) {
-		export_cstr(ex, f->foreign.name);
-		export_cstr(ex, f->foreign.lib);
-	} else {
 	
-		export_location(ex, f->where);
-		export_len(ex, arr_len(f->params));
-		arr_foreach(f->params, Declaration, param) {
-			if (!export_decl(ex, param))
-				return false;
-			arr_foreach(param->idents, Identifier, ident) {
-				export_ident_name(ex, *ident);
+	export_bool(ex, f->export.id == 0);
+	if (f->export.id == 0) {
+		f->export.id = ++ex->nexported_fns;
+		export_vlq(ex, f->export.id);
+		if (!fn_enter(f, 0))
+			return false;
+	
+		possibly_static_assert(sizeof f->flags == 1);
+		export_u8(ex, f->flags);
+		if (f->flags & FN_EXPR_FOREIGN) {
+			export_cstr(ex, f->foreign.name);
+			export_cstr(ex, f->foreign.lib);
+		} else {
+			export_location(ex, f->where);
+			export_len(ex, arr_len(f->params));
+			arr_foreach(f->params, Declaration, param) {
+				if (!export_decl(ex, param))
+					goto err;
+				arr_foreach(param->idents, Identifier, ident) {
+					export_ident_name(ex, *ident);
+				}
 			}
+			if (!export_type(ex, &f->ret_type, f->where))
+				goto err;
+			export_len(ex, arr_len(f->ret_decls));
+			arr_foreach(f->ret_decls, Declaration, ret_decl)
+				if (!export_decl(ex, ret_decl))
+					goto err;
+			if (!export_block(ex, &f->body))
+				goto err;
 		}
-		if (!export_type(ex, &f->ret_type, f->where))
-			return false;
-		export_len(ex, arr_len(f->ret_decls));
-		arr_foreach(f->ret_decls, Declaration, ret_decl)
-			if (!export_decl(ex, ret_decl))
-				return false;
-		if (!export_block(ex, &f->body))
-			return false;
+		fn_exit(f);
+		return true;
+	err:
+		fn_exit(f);
+		return false;
+	} else {
+		export_vlq(ex, f->export.id);
+		return true;
 	}
-	return true;
 }
 
-static void import_fn(Importer *im, FnExpr *f) {
-	memset(f, 0, sizeof *f);
-	f->flags = import_u8(im);
-	if (f->flags & FN_EXPR_FOREIGN) {
-		f->foreign.name = import_cstr(im);
-		f->foreign.lib = import_cstr(im);
-	} else {
-		f->where = import_location(im);
-		import_arr(im, &f->params);
-		arr_foreach(f->params, Declaration, param) {
-			import_decl(im, param);
+static FnExpr *import_fn(Importer *im) {
+	FnExpr *f;
+	if (import_bool(im)) {
+		/* import function definition */
+		f = &im->fns[import_vlq(im)];
+		f->flags = import_u8(im);
+		if (f->flags & FN_EXPR_FOREIGN) {
+			f->foreign.name = import_cstr(im);
+			f->foreign.lib = import_cstr(im);
+		} else {
+			f->where = import_location(im);
+			import_arr(im, &f->params);
+			arr_foreach(f->params, Declaration, param) {
+				import_decl(im, param);
+			}
+			import_type(im, &f->ret_type);
+			import_arr(im, &f->ret_decls);
+			arr_foreach(f->ret_decls, Declaration, ret_decl)
+				import_decl(im, ret_decl);
+			import_block(im, &f->body);
 		}
-		import_type(im, &f->ret_type);
-		import_arr(im, &f->ret_decls);
-		arr_foreach(f->ret_decls, Declaration, ret_decl)
-			import_decl(im, ret_decl);
-		import_block(im, &f->body);
+	} else {
+		f = &im->fns[import_vlq(im)];
 	}
+	return f;
 }
 
 static bool export_struct(Exporter *ex, StructDef *s) {
-	export_ident(ex, s->name);
-	if (s->name)
-		export_ident_name(ex, s->name);
-	export_len(ex, arr_len(s->fields));
-	arr_foreach(s->fields, Field, f) {
-		export_ident(ex, f->name);
-		export_ident_name(ex, f->name);
-		if (!export_type(ex, &f->type, s->where))
-			return false;
+	export_bool(ex, s->export.id == 0);
+	if (s->export.id == 0) {
+		s->export.id = ++ex->nexported_structs;
+		export_ident(ex, s->name);
+		if (s->name)
+			export_ident_name(ex, s->name);
+		export_len(ex, arr_len(s->fields));
+		arr_foreach(s->fields, Field, f) {
+			export_ident(ex, f->name);
+			export_ident_name(ex, f->name);
+			if (!export_type(ex, &f->type, s->where))
+				return false;
+		}
+	} else {
+		export_vlq(ex, s->export.id);
 	}
 	return true;
 }
 
-static void import_struct(Importer *im, StructDef *s) {
-	s->name = import_ident(im);
-	size_t nfields = import_arr(im, &s->fields);
-	for (size_t i = 0; i < nfields; ++i) {
-		s->fields[i].name = import_ident(im);
-		import_type(im, &s->fields[i].type);
+static StructDef *import_struct(Importer *im) {
+	StructDef *s;
+	if (import_bool(im)) {
+		s = &im->structs[import_vlq(im)];
+		s->name = import_ident(im);
+		size_t nfields = import_arr(im, &s->fields);
+		for (size_t i = 0; i < nfields; ++i) {
+			s->fields[i].name = import_ident(im);
+			import_type(im, &s->fields[i].type);
+		}
+	} else {
+		s = &im->structs[import_vlq(im)];
 	}
+	return s;
 }
 
 /* does NOT close the file */
 static bool exptr_finish(Exporter *ex) {
-	export_u8(ex, 0); /* no more declarations */
-	
+	long ndecls_offset = ftell(ex->out);
+	export_u32(ex, 0);
+	/* NOTE: arr_len(ex->decls_to_export) may change during loop! */
+	for (size_t i = 0; i < arr_len(ex->decls_to_export); ++i) {
+		Declaration *d = ex->decls_to_export[i];
+		if (!export_decl(ex, d))
+			return false;
+	}
+	{
+		long back = ftell(ex->out);
+		fseek(ex->out, ndecls_offset, SEEK_SET);
+		export_u32(ex, (U32)arr_len(ex->decls_to_export));
+		fseek(ex->out, back, SEEK_SET);
+	}
+		
 	long footer_offset = ftell(ex->out);
-
-	fseek(ex->out, 7L, SEEK_SET);
-	export_u64(ex, (U64)footer_offset);
-	fseek(ex->out, 0L, SEEK_END);
-
-	/* position in file of where the position in file of identifier info is */
-	long ident_info_offset_offset = ftell(ex->out);
-	export_u64(ex, 0); /* identifier info offset */
-	long struct_info_offset_offset = ftell(ex->out);
-	export_u64(ex, 0); /* struct info offset */
-	
-	
-	export_len(ex, arr_len(ex->exported_fns));
-	typedef FnExpr *FnExprPtr;
-	arr_foreach(ex->exported_fns, FnExprPtr, f) {
-		if (!export_fn(ex, *f))
-			return false;
-	}
-	arr_clear(&ex->exported_fns);
-
-	long struct_info_offset = ftell(ex->out);
-	export_len(ex, arr_len(ex->exported_structs));
-	typedef StructDef *StructDefPtr;
-	arr_foreach(ex->exported_structs, StructDefPtr, s) {
-		if (!export_struct(ex, *s))
-			return false;
-	}
-	arr_clear(&ex->exported_structs);
-
-	long ident_info_offset = ftell(ex->out);
+	export_vlq(ex, ex->nexported_fns);
+	export_vlq(ex, ex->nexported_structs);
+	/* export total number of identifiers */
+	export_vlq(ex, ex->ident_id);
 	/* export number of identifiers *whose names matter* */
-	fseek(ex->out, ident_info_offset, SEEK_SET);
-	export_u64(ex, ex->ident_id);
 	export_len(ex, arr_len(ex->exported_idents));
 	arr_foreach(ex->exported_idents, Identifier, ident) {
 		Identifier i = *ident;
@@ -1225,14 +1241,10 @@ static bool exptr_finish(Exporter *ex) {
 		fprint_ident(ex->out, i);
 	}
 
-	fseek(ex->out, ident_info_offset_offset, SEEK_SET);
-	export_u64(ex, (U64)ident_info_offset);
-	
+	fseek(ex->out, 7L, SEEK_SET);
+	export_u64(ex, (U64)footer_offset);
 	arr_clear(&ex->exported_idents);
 
-	fseek(ex->out, struct_info_offset_offset, SEEK_SET);
-	export_u64(ex, (U64)struct_info_offset);
-	
 	if (ferror(ex->out)) {
 		Location none = {0};
 		none.file = &ex->exporting_to;
@@ -1244,12 +1256,14 @@ static bool exptr_finish(Exporter *ex) {
 
 static bool import_footer(Importer *im) {
 	size_t i;
-	long footer_offset = ftell(im->in);
-	U64 ident_info_offset = import_u64(im);
-	fseek(im->in, (long)ident_info_offset, SEEK_SET);
-	
-	im->max_ident_id = import_u64(im);
 
+	/* +1 because indexing starts at 1 */
+	U32 nfns = (U32)import_vlq(im);
+	im->fns = imptr_calloc(im, nfns+1, sizeof *im->fns);
+	U32 nstructs = (U32)import_vlq(im);
+	im->structs = imptr_calloc(im, nstructs+1, sizeof *im->structs);
+	
+	im->max_ident_id = import_vlq(im);
 	
 	im->ident_map = err_calloc(im->max_ident_id + 1, sizeof *im->ident_map);
 	size_t n_named_idents = import_len(im);
@@ -1271,27 +1285,6 @@ static bool import_footer(Importer *im) {
 		}
 	}
 
-	fseek(im->in, footer_offset + 8, SEEK_SET);
-	U64 struct_offset = import_u64(im);
-	fseek(im->in, (long)struct_offset, SEEK_SET);
-	
-	
-	import_arr(im, &im->structs);
-#ifdef TOC_DEBUG
-	/* for debugging: so that struct names show up as "anonymous struct" if they haven't been imported yet */
-	arr_zero(im->structs);
-#endif
-	arr_foreach(im->structs, StructDef, s)
-		import_struct(im, s);
-
-	fseek(im->in, footer_offset + 16, SEEK_SET);
-	
-	import_arr(im, &im->fns);
-	arr_zero(im->fns);
-	arr_foreach(im->fns, FnExpr, f) {
-		import_fn(im, f);
-	}
-	
 	if (ferror(im->in)) {
 		warn_print(im->import_location, "An error occured while reading the package. It may be incorrect.");
 	}

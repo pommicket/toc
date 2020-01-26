@@ -11,9 +11,11 @@ if [ "$CC" = "" ]; then
 fi
 
 for thing in $std_things; do
+	echo "compiling $thing"
 	$VALGRIND ../toc $thing.toc -o $thing.c || exit 1
 done
 cd ..
+echo "compiling test.toc"
 $VALGRIND ./toc test.toc || exit 1
 $CC out.c std/*.c -Wno-builtin-declaration-mismatch || exit 1
 ./a.out

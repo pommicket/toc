@@ -612,7 +612,8 @@ typedef struct ForExpr {
 
 
 enum {
-	  FN_EXPR_FOREIGN = 0x01
+	  FN_EXPR_FOREIGN = 0x01,
+	  FN_EXPR_HAS_BEEN_IMPORTED = 0x02
 };
 
 typedef struct FnExpr {
@@ -788,7 +789,8 @@ enum {
 	  DECL_FOUND_VAL = 0x0040,
 	  DECL_INFER = 0x0080, /* infer the value (e.g. fn(t::Type=, x:t)) */
 	  DECL_EXPORT = 0x0100,
-	  DECL_FOREIGN = 0x0200
+	  DECL_FOREIGN = 0x0200,
+	  DECL_MARKED_FOR_EXPORTING = 0x0400
 };
 
 typedef U16 DeclFlags;
@@ -917,9 +919,10 @@ typedef struct Exporter {
 	bool started;
 	U64 ident_id;
 	File exporting_to;
-	FnExpr **exported_fns;
-	StructDef **exported_structs;
-	Identifier *exported_idents; /* (only those whose names are exported) */
+	U32 nexported_structs;
+	U32 nexported_fns;
+	Identifier *exported_idents; /* (only those whose names are exported) */ 
+	Declaration **decls_to_export; /* declarations which need to be exported at some point */
 	const char *code;
 } Exporter;
 
