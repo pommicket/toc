@@ -4,24 +4,20 @@ pkg "arr";
 #export Arr ::= fn (t :: Type) Type {
 	struct {
 		   data : []t;
-		   len, cap : int;
+		   cap : int;
 	}
 };
 #export arr_add ::= fn(t ::=, a : &Arr(t), x : t) {
-		if a.len >= a.cap {
+		if a.data.len >= a.cap {
 		   a.cap = a.cap * 2 + 2;
 		   new_data := new(t, a.cap);
-		   for i := 0..a.len-1 {
+		   new_data.len = a.data.len;
+		   for i := 0..a.data.len-1 {
 		   		new_data[i] = a.data[i];
 		   }
 		   a.data = new_data;
 		}
-		a.data[a.len] = x;
-		a.len += 1;
+		a.data[a.data.len] = x;
+		a.data.len += 1;
 };
-
-#export arr_foreach ::= fn(t ::=, a : Arr(t), f : fn(&t)) {
-		for i := 0..a.len-1 {
-			 f(&a.data[i]);
-		}
-};
+#export arr_len ::= fn(t ::=, a : Arr(t)) int { a.data.len };

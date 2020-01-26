@@ -917,6 +917,7 @@ typedef struct Typer {
 typedef struct Exporter {
 	FILE *out; /* .top (toc package) to output to */
 	bool started;
+	bool export_all_ident_names; /* export every identifier's name, not just the important ones */
 	U64 ident_id;
 	File exporting_to;
 	U32 nexported_structs;

@@ -1,12 +1,19 @@
-io ::= pkg "std/io";
-hw ::= fn() int {
-	 io.puts("Hello, world!");
-	 3
-};
 arr ::= pkg "std/arr";
+io ::= pkg "std/io";
 main ::= fn() {
-	hw();
-	x::=hw();
-	x : arr.Arr(int);
-	arr_add(&x, 10);
+	x : arr.Arr(char);
+	arr.arr_add(&x, 'H');
+	arr.arr_add(&x, 'e');
+	arr.arr_add(&x, 'l');
+	arr.arr_add(&x, 'l');
+	arr.arr_add(&x, 'o');
+	arr.arr_add(&x, '!');
+
+	s : [1]char;
+	s[0] = (arr.arr_len(x) as char) + '0';
+	io.puts(s[:]);
+	for c := x.data {
+		s[0] = c;
+		io.puts(s[:]);
+	}
 };

@@ -1183,7 +1183,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			if (!cgen_expr(g, s->to))
 				return false;
 		} else {
-			cgen_write(g, "of__.n - 1");
+			cgen_write(g, "of__.n");
 		}
 		cgen_write(g, " - ");
 		cgen_ident_id(g, from_id);

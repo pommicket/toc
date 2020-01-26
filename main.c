@@ -130,9 +130,12 @@ int main(int argc, char **argv) {
 	
 	Typer tr;
 	Evaluator ev;
-	Exporter exptr;
+	Exporter exptr = {0};
 	evalr_create(&ev, &tr, &main_allocr);
 	typer_create(&tr, &ev, &err_ctx, &main_allocr, &idents);
+#ifdef TOC_DEBUG
+	exptr.export_all_ident_names = true;
+#endif
 	tr.exptr = &exptr;
 	
 	if (!block_enter(NULL, f.stmts, SCOPE_CHECK_REDECL)) /* enter global scope */

@@ -180,6 +180,13 @@ static Location import_location(Importer *im) {
 	return l;
 }
 
+static void export_ident_name(Exporter *ex, Identifier ident) {
+	if (ident->export_name) return;
+	*(Identifier *)arr_add(&ex->exported_idents) = ident;
+	ident->export_name = true;
+}
+
+
 /* handles NULL */
 static inline void export_ident(Exporter *ex, Identifier i) {
 	if (!i) {
@@ -196,6 +203,8 @@ static inline void export_ident(Exporter *ex, Identifier i) {
 		i->export_id = ++ex->ident_id;
 	}
 	export_vlq(ex, i->export_id);
+	if (ex->export_all_ident_names)
+		export_ident_name(ex, i);
 }
 static inline Identifier import_ident(Importer *im) {
 	U64 id = import_vlq(im);
@@ -278,13 +287,18 @@ static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname
 	/* read declarations */
 	size_t ndecls = import_u32(&i);
 	p->stmts = NULL;
+	/* printf("%lu decls\n",ndecls); */
 	for (size_t idx = 0; idx < ndecls; ++idx) {
+		/* printf("-importing one @ %lu\n",ftell(i.in)); */
 		Statement *s = arr_add(&p->stmts);
 		s->kind = STMT_DECL;
 		import_decl(&i, &s->decl);
 	}
-	assert(ftell(i.in) == (long)footer_offset);
 
+	if (ftell(i.in) != (long)footer_offset) {
+		err_print(where, "Something strange happened when importing this package. Expected to be at byte #%ld but actually at byte #%ld.", (long)footer_offset, ftell(i.in));
+		return false;
+	}	
 	free(i.ident_map);
 	if (!block_enter(NULL, p->stmts, 0))
 		return false;
@@ -937,13 +951,6 @@ static void import_expr(Importer *im, Expression *e) {
 	}
 }
 
-
-static void export_ident_name(Exporter *ex, Identifier ident) {
-	if (ident->export_name) return;
-	*(Identifier *)arr_add(&ex->exported_idents) = ident;
-	ident->export_name = true;
-}
-
 static bool export_decl(Exporter *ex, Declaration *d) {
 	if (d->flags & DECL_MARKED_FOR_EXPORTING) {
 		arr_foreach(d->idents, Identifier, ident) {
@@ -1177,6 +1184,7 @@ static bool export_struct(Exporter *ex, StructDef *s) {
 	export_bool(ex, s->export.id == 0);
 	if (s->export.id == 0) {
 		s->export.id = ++ex->nexported_structs;
+		export_vlq(ex, s->export.id);
 		export_ident(ex, s->name);
 		if (s->name)
 			export_ident_name(ex, s->name);
@@ -1215,6 +1223,7 @@ static bool exptr_finish(Exporter *ex) {
 	export_u32(ex, 0);
 	/* NOTE: arr_len(ex->decls_to_export) may change during loop! */
 	for (size_t i = 0; i < arr_len(ex->decls_to_export); ++i) {
+		/* printf("-exporting one at %lu\n",ftell(ex->out)); */
 		Declaration *d = ex->decls_to_export[i];
 		if (!export_decl(ex, d))
 			return false;
@@ -1222,6 +1231,7 @@ static bool exptr_finish(Exporter *ex) {
 	{
 		long back = ftell(ex->out);
 		fseek(ex->out, ndecls_offset, SEEK_SET);
+		/* printf("%lu decls\n",arr_len(ex->decls_to_export)); */
 		export_u32(ex, (U32)arr_len(ex->decls_to_export));
 		fseek(ex->out, back, SEEK_SET);
 	}
