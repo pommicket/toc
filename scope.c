@@ -75,6 +75,8 @@ static void block_exit(Block *b, Statement *stmts) {
 		if (stmt->kind == STMT_DECL) {
 			Declaration *decl = &stmt->decl;
 			remove_ident_decls(b, decl);
+		} else if (stmt->kind == STMT_INCLUDE) {
+			block_exit(b, stmt->inc.stmts);
 		}
 	}
 }

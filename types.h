@@ -754,7 +754,7 @@ typedef struct Expression {
 		} del;
 		struct {
 			struct Expression *name_expr;
-		} pkg; /* only can exist before typing */
+		} pkg; /* can only exist before typing */
 		IfExpr if_;
 		WhileExpr while_;
 		ForExpr *for_;

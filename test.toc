@@ -2,7 +2,10 @@ arr ::= pkg "std/arr";
 io ::= pkg "std/io";
 main ::= fn() {
 #include "incstuff.toc";
+		   {
+		   #include "incstuff.toc";
 
+		   }
 	s : [1]char;
 	s[0] = (arr.arr_len(x) as char) + '0';
 	io.puts(s[:]);
