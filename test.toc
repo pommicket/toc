@@ -1,16 +1,11 @@
 arr ::= pkg "std/arr";
 io ::= pkg "std/io";
 main ::= fn() {
-#include "incstuff.toc";
-		   {
-		   #include "incstuff.toc";
-
-		   }
-	s : [1]char;
-	s[0] = (arr.arr_len(x) as char) + '0';
-	io.puts(s[:]);
-	for c := x.data {
-		s[0] = c;
-		io.puts(s[:]);
-	}
+	 x: arr.Arr([]char);
+	 arr.arr_add(&x, "HI");
+	 arr.arr_add(&x, "Hello");
+	 arr.arr_add(&x, "How's");
+	 arr.arr_add(&x, "it");
+	 arr.arr_add(&x, "going");
+	 io.puts_arr(x);
 };

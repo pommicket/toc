@@ -898,13 +898,18 @@ typedef struct Evaluator {
 } Evaluator;
 
 typedef struct Package {
-	char *name; /* package name, not file name */
+	char *name;
+	const char *filename;
 	Identifiers idents;
 	Statement *stmts;
 	struct {
-		char *prefix; /* prefix for C things (not incl. __) */
+		char *prefix; /* prefix for C things (not including __) */
 	} c;
 } Package;
+
+typedef struct PackageManager {
+	StrHashTable pkgs;
+} PackageManager;
 
 typedef struct Typer {
 	Allocator *allocr;
@@ -920,8 +925,8 @@ typedef struct Typer {
 	ErrCtx *err_ctx;
 	/* for checking for problematic struct circular dependencies */
 	bool *is_reference_stack;
-	Package *pkgs; /* all packages which have been imported */
 	ParsedFile *parsed_file;
+	PackageManager pkgmgr;
 } Typer;
 
 typedef struct Exporter {
@@ -949,7 +954,9 @@ typedef struct Importer {
 	Location import_location;
 	StructDef *structs;
 	FnExpr *fns;
+	PackageManager *pkgmgr;
 } Importer;
+
 
 typedef struct CGenerator {
 	Allocator *allocr;

@@ -238,9 +238,21 @@ static void exptr_start(Exporter *ex, const char *pkg_name, size_t pkg_name_len)
 }
 
 /* where = where was this imported. don't free fname while imported stuff is in use. */
-static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname, ErrCtx *parent_ctx, Location where) {
+static Package *import_pkg(PackageManager *pkgmgr, Allocator *allocr, const char *fname, ErrCtx *parent_ctx, Location where) {
+	
+	Package *p = str_hash_table_get(&pkgmgr->pkgs, fname, strlen(fname));
+	if (p) return p;
+	p = str_hash_table_insert(&pkgmgr->pkgs, fname, strlen(fname));
+	p->filename = fname;
+	FILE *f = fopen(fname, "r");
+	if (!f) {
+		err_print(where, "Could not open package file: %s.", fname);
+		return NULL;
+	}
+
 	Importer i = {0};
 	i.allocr = allocr;
+	i.pkgmgr = pkgmgr;
 	i.importing_from = imptr_calloc(&i, 1, sizeof *i.importing_from);
 	i.importing_from->filename = fname;
 	i.importing_from->ctx = parent_ctx;
@@ -248,6 +260,8 @@ static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname
 	i.pkg = p;
 	i.in = f;
 	i.import_location = where;
+	
+		
 	/* read header */
 	U8 toc[3];
 	toc[0] = import_u8(&i);
@@ -257,7 +271,7 @@ static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname
 		toc[1] != toc_package_indicator[1] ||
 		toc[2] != toc_package_indicator[2]) {
 		err_print(where, "%s is not a toc package file.", fname);
-		return false;
+		goto err;
 	}
 	U32 version_written = import_u32(&i);
 	if (version_written != TOP_FMT_VERSION) {
@@ -281,8 +295,9 @@ static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname
 	long decls_offset = ftell(f);
 	fseek(f, (long)footer_offset, SEEK_SET);
 	/* read footer */
-	if (!import_footer(&i))
-		return false;
+	if (!import_footer(&i)) {
+	    goto err;
+	}
 	fseek(f, decls_offset, SEEK_SET);
 	/* read declarations */
 	size_t ndecls = import_u32(&i);
@@ -297,13 +312,19 @@ static bool import_pkg(Allocator *allocr, Package *p, FILE *f, const char *fname
 
 	if (ftell(i.in) != (long)footer_offset) {
 		err_print(where, "Something strange happened when importing this package. Expected to be at byte #%ld but actually at byte #%ld.", (long)footer_offset, ftell(i.in));
-		return false;
+		goto err;
 	}	
 	free(i.ident_map);
+	i.ident_map = NULL;
 	if (!block_enter(NULL, p->stmts, 0))
-		return false;
+		goto err;
+	fclose(f);
+	return p;
+ err:
+	free(i.ident_map);
+	fclose(f);
+	return NULL;
 	
-	return true;
 }
 
 /* needs to handle unresolved AND resolved types! (for fns with const params) */
@@ -450,7 +471,7 @@ static bool export_val_ptr(Exporter *ex, void *v, Type *type, Location where) {
 				return false;
 			break;
 		case BUILTIN_PKG:
-			/* TODO */
+			export_cstr(ex, (*(Package **)v)->filename);
 			break;
 		}
 		break;
@@ -505,8 +526,8 @@ static bool export_val_ptr(Exporter *ex, void *v, Type *type, Location where) {
 	return true;
 }
 
-static inline Value import_val(Importer *im, Type *type);
-static void import_val_ptr(Importer *im, void *v, Type *type) {
+static inline Value import_val(Importer *im, Type *type, Location where);
+static void import_val_ptr(Importer *im, void *v, Type *type, Location where) {
 	switch (type->kind) {
 	case TYPE_VOID: break;
 	case TYPE_BUILTIN:
@@ -526,10 +547,14 @@ static void import_val_ptr(Importer *im, void *v, Type *type) {
 		case BUILTIN_TYPE:
 			import_type(im, *(Type **)v = imptr_new_type(im));
 			break;
-		case BUILTIN_PKG:
-			/* TODO */
-			assert(0);
-			break;
+		case BUILTIN_PKG: {
+			char *fname = import_cstr(im);
+			Package *pkg = *(Package **)v = import_pkg(im->pkgmgr, im->allocr, fname, im->err_ctx, where);
+			if (!pkg) {
+				/* TODO: make this bool */
+				return;
+			}
+		} break;
 		}
 		break;
 	case TYPE_TUPLE: {
@@ -537,7 +562,7 @@ static void import_val_ptr(Importer *im, void *v, Type *type) {
 		size_t n = arr_len(type->tuple);
 		*vals = imptr_malloc(im, n * sizeof **vals);
 		for (size_t i = 0; i < n; ++i) {
-			(*vals)[i] = import_val(im, &type->tuple[i]);
+			(*vals)[i] = import_val(im, &type->tuple[i], where);
 		}
 	} break;
 	case TYPE_ARR: {
@@ -545,14 +570,14 @@ static void import_val_ptr(Importer *im, void *v, Type *type) {
 		U64 n = type->arr.n;
 		char *ptr = v;
 		for (U64 i = 0; i < n; ++i) {
-			import_val_ptr(im, ptr, type->arr.of);
+			import_val_ptr(im, ptr, type->arr.of, where);
 			ptr += item_size;
 		}
 	} break;
 	case TYPE_STRUCT: {
 		eval_struct_find_offsets(type->struc);
 		arr_foreach(type->struc->fields, Field, f) {
-			import_val_ptr(im, (char *)v + f->offset, &f->type);
+			import_val_ptr(im, (char *)v + f->offset, &f->type, where);
 		}
 	} break;
 	case TYPE_FN:
@@ -567,7 +592,7 @@ static void import_val_ptr(Importer *im, void *v, Type *type) {
 		} else {
 			char *ptr = slice->data = imptr_malloc(im, (U64)n * item_size);
 			for (I64 i = 0; i < n; ++i) {
-				import_val_ptr(im, ptr, type->slice);
+				import_val_ptr(im, ptr, type->slice, where);
 				ptr += item_size;
 			}
 		}
@@ -585,10 +610,10 @@ static inline bool export_val(Exporter *ex, Value val, Type *type, Location wher
 	return export_val_ptr(ex, val_get_ptr(&val, type), type, where);
 }
 
-static inline Value import_val(Importer *im, Type *type) {
+static inline Value import_val(Importer *im, Type *type, Location where) {
 	Value val;
 	val = val_alloc(im->allocr, type);
-	import_val_ptr(im, val_get_ptr(&val, type), type);
+	import_val_ptr(im, val_get_ptr(&val, type), type, where);
 	return val;
 }
 
@@ -602,10 +627,10 @@ static inline bool export_optional_val(Exporter *ex, Value *val, Type *type, Loc
 	}
 }
 
-static inline Value *import_optional_val(Importer *im, Type *type) {
+static inline Value *import_optional_val(Importer *im, Type *type, Location where) {
 	if (import_bool(im)) {
 		Value *val = imptr_malloc(im, sizeof *val);
-		*val = import_val(im, type);
+		*val = import_val(im, type, where);
 		return val;
 	}
 	return NULL;
@@ -865,7 +890,7 @@ static void import_expr(Importer *im, Expression *e) {
 		e->binary.rhs = import_expr_(im);
 		break;
 	case EXPR_VAL:
-		e->val = import_val(im, &e->type);
+		e->val = import_val(im, &e->type, e->where);
 		break;
 	case EXPR_TUPLE:
 		import_arr(im, &e->tuple);
@@ -939,7 +964,7 @@ static void import_expr(Importer *im, Expression *e) {
 			fo->range.from = import_expr_(im);
 			fo->range.to = import_optional_expr(im);
 			if (found_type) {
-				fo->range.stepval = import_optional_val(im, &fo->type);
+				fo->range.stepval = import_optional_val(im, &fo->type, e->where);
 			} else {
 				fo->range.step = import_optional_expr(im);
 			}
@@ -1008,7 +1033,7 @@ static void import_decl(Importer *im, Declaration *d) {
 		import_type(im, &d->type);
 	}
 	if (d->flags & DECL_FOUND_VAL) {
-		d->val = import_val(im, &d->type);
+		d->val = import_val(im, &d->type, d->where);
 		if (d->flags & DECL_HAS_EXPR) {
 			d->expr.kind = EXPR_VAL;
 			d->expr.val = d->val;

@@ -139,7 +139,6 @@ int main(int argc, char **argv) {
 	free(contents - 1); /* -1 because we put a 0 byte at the beginning */
 	allocr_free_all(&main_allocr);
 	evalr_free(&ev);
-	typer_free(&tr);
 	fclose(out);
 	idents_free(&idents);
 	return 0;

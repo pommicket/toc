@@ -34,3 +34,11 @@ stdout_fwrite ::= fn(data: &u8, size: u64, nmemb: u64) {
 		stdout_fwrite(&x[0] as &u8, 1, x.len as u64);
 		toc_putchar('\n');
 };
+
+arr ::= pkg "arr";
+
+#export puts_arr ::= fn(x: arr.Arr([]char)) {
+		for s := x.data {
+			puts(s);
+		}
+};

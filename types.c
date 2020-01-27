@@ -1123,23 +1123,16 @@ static bool types_expr(Typer *tr, Expression *e) {
 		char *name_cstr = typer_malloc(tr, name_str_len + 1);
 		memcpy(name_cstr, name_str.data, name_str_len);
 		name_cstr[name_str.n] = '\0';
-		/* TODO: only import packages once */
-		Package *pkg = arr_add(&tr->pkgs);
-		char *filename = typer_malloc(tr, name_str_len + 6);
+	    char *filename = typer_malloc(tr, name_str_len + 6);
 		memcpy(filename, name_str.data, name_str_len);
 		strcpy(filename + name_str.n, ".top");
 		/* TODO: package paths */
-		FILE *fp = fopen(filename, "rb");
-		if (!fp) {
-			err_print(e->where, "Could not open package: %s (does this file exist?)", filename);
-			return false;
-		}
-		if (!import_pkg(tr->allocr, pkg, fp, filename, tr->err_ctx, e->where)) {
+		Package *pkg = import_pkg(&tr->pkgmgr, tr->allocr, filename, tr->err_ctx, e->where);
+	    if (!pkg) {
 			return false;
 		}
 		e->kind = EXPR_VAL;
 		e->val.pkg = pkg;
-		fclose(fp);
 	} break;
 	case EXPR_FOR: {
 		ForExpr *fo = e->for_;
@@ -2529,7 +2522,7 @@ static bool types_stmt(Typer *tr, Statement *s) {
 static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *allocr, Identifiers *idents) {
 	tr->block = NULL;
 	tr->blocks = NULL;
-	tr->pkgs = NULL;
+	pkgmgr_create(tr->pkgmgr);
 	tr->fn = NULL;
 	tr->evalr = ev;
 	tr->err_ctx = err_ctx;
@@ -2593,11 +2586,4 @@ static bool types_file(Typer *tr, ParsedFile *f) {
 		fclose(pkg_fp);
 	}
 	return ret;
-}
-
-static void typer_free(Typer *tr) {
-	arr_foreach(tr->pkgs, Package, pkg) {
-		package_free(pkg);
-	}
-	arr_clear(&tr->pkgs);
 }
