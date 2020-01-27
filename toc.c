@@ -84,6 +84,38 @@ static size_t compiler_sizeof(Type *t);
 #include "copy.c"
 #include "binfile.c"
 
+/* returns NULL on error */
+static char *read_entire_file(Allocator *a, ErrCtx *ectx, const char *filename) {
+	FILE *in = fopen(filename, "r");
+	
+	if (!in) {
+		Location where = {0};
+		File file = {0};
+		file.ctx = ectx;
+		file.filename = filename;
+		where.file = &file;
+		err_print(where, "Could not open file: %s.", filename);
+		return NULL;
+	}
+	char *contents = allocr_malloc(a, 4096);
+	contents[0] = 0; /* put 0 byte at the start of the file. see err.c:err_print_location_text to find out why */
+	contents[1] = 0; /* if fgets fails the first time */
+	long contents_cap = 4095;
+	long contents_len = 1;
+	while (fgets(contents + contents_len, (int)(contents_cap - contents_len), in)) {
+		contents_len += (long)strlen(contents + contents_len);
+		
+		if (contents_len >= (long)contents_cap - 1024) {
+			size_t prev = (size_t)contents_cap + 1;
+			contents_cap *= 2;
+			contents = allocr_realloc(a, contents, prev, (size_t)contents_cap + 1);
+		}
+	}
+	++contents;
+	return contents;
+}
+	
+
 
 #include "identifiers.c"
 #include "tokenizer.c"

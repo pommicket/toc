@@ -1053,6 +1053,17 @@ static bool export_stmt(Exporter *ex, Statement *s) {
 			if (!export_expr(ex, &s->ret.expr))
 				return false;
 	} break;
+	case STMT_INCLUDE:
+		if (s->flags & STMT_TYPED) {
+			export_len(ex, arr_len(s->inc.stmts));
+			arr_foreach(s->inc.stmts, Statement, sub)
+				if (!export_stmt(ex, sub))
+					return false;
+		} else {
+			if (!export_expr(ex, &s->inc.filename))
+				return false;
+		}
+		break;
 	}
 	return true;
 }
@@ -1067,6 +1078,15 @@ static void import_stmt(Importer *im, Statement *s) {
 		break;
 	case STMT_DECL:
 		import_decl(im, &s->decl);
+		break;
+	case STMT_INCLUDE:
+		if (s->flags & STMT_TYPED) {
+			import_arr(im, &s->inc.stmts);
+			arr_foreach(s->inc.stmts, Statement, sub)
+				import_stmt(im, sub);
+		} else {
+			import_expr(im, &s->inc.filename);
+		}
 		break;
 	case STMT_RET:
 		s->ret.flags = import_u8(im);

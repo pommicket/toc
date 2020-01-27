@@ -304,6 +304,17 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 		if (in->ret.flags & RET_HAS_EXPR)
 			copy_expr(c, &out->ret.expr, &in->ret.expr);
 		break;
+	case STMT_INCLUDE:
+		if (in->flags & STMT_TYPED) {
+			size_t nstmts = arr_len(in->inc.stmts);
+			arr_set_lena(&out->inc.stmts, nstmts, c->allocr);
+			for (size_t i = 0; i < nstmts; ++i) {
+				copy_stmt(c, &out->inc.stmts[i], &in->inc.stmts[i]);
+			}
+		} else {
+			copy_expr(c, &out->inc.filename, &in->inc.filename);
+		}
+		break;
 	case STMT_EXPR:
 		copy_expr(c, &out->expr, &in->expr);
 		break;

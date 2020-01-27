@@ -16,6 +16,7 @@ exptr - exporter
 fn - function
 ident - identifier
 imptr - importer
+inc - include
 kw - keyword
 len - length
 num - number

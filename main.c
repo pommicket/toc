@@ -18,13 +18,8 @@
 
 /* 
 TODO:
-#builtin("sizeof int")
-#builtin("target sizeof int") 
-etc.
-
-allow any global declaration to be used before itself
-
 #include
+nested packages
 constants in structs
 #if
 
@@ -64,40 +59,16 @@ int main(int argc, char **argv) {
 		if (strs_equal(argv[i], "-o"))
 			out_filename = argv[i+1];
 	}
-	
-	FILE *in = fopen(in_filename, "r");
-	if (!in) {
-		fprintf(stderr, "Could not open file: %s.\n", in_filename);
-		return EXIT_FAILURE;
-	}
-	
-	char *contents = err_malloc(4096);
-	contents[0] = 0; /* put 0 byte at the start of the file. see err.c:err_print_location_text to find out why */
-	contents[1] = 0; /* if fgets fails the first time */
-	long contents_cap = 4095;
-	long contents_len = 1;
-	while (fgets(contents + contents_len, (int)(contents_cap - contents_len), in)) {
-		contents_len += (long)strlen(contents + contents_len);
-		
-		if (contents_len >= (long)contents_cap - 1024) {
-			contents_cap *= 2;
-			contents = err_realloc(contents, (size_t)contents_cap + 1);
-		}
-	}
-	++contents;
-	if (ferror(in)) {
-		fprintf(stderr, "Error reading input file: %s.\n", in_filename);
-		return EXIT_FAILURE;
-	}
-	fclose(in);
-	Identifiers idents;
-	idents_create(&idents);
-	Tokenizer t;
 	Allocator main_allocr;
 	allocr_create(&main_allocr);
 	ErrCtx err_ctx = {0};
 	err_ctx.enabled = true;
 	err_ctx.color_enabled = true;
+	char *contents = read_entire_file(&main_allocr, &err_ctx, in_filename);
+	
+	Identifiers idents;
+	idents_create(&idents);
+	Tokenizer t;
 	File file = {0};
 	file.filename = in_filename;
 	file.contents = contents;

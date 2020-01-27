@@ -2028,6 +2028,11 @@ static bool cgen_stmt(CGenerator *g, Statement *s) {
 		if (!cgen_ret(g, has_expr ? &s->ret.expr : NULL))
 			return false;
 	} break;
+	case STMT_INCLUDE:
+		arr_foreach(s->inc.stmts, Statement, sub)
+			if (!cgen_stmt(g, sub))
+				return false;
+	    break;
 	}
 	return true;
 }
@@ -2108,6 +2113,11 @@ static bool cgen_defs_stmt(CGenerator *g, Statement *s) {
 	case STMT_RET:
 		if (s->ret.flags & RET_HAS_EXPR)
 			if (!cgen_defs_expr(g, &s->ret.expr))
+				return false;
+		break;
+	case STMT_INCLUDE:
+		arr_foreach(s->inc.stmts, Statement, sub)
+			if (!cgen_defs_stmt(g, sub))
 				return false;
 		break;
 	}

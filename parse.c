@@ -1724,6 +1724,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					break;
 				case DIRECT_FOREIGN:
 				case DIRECT_EXPORT:
+				case DIRECT_INCLUDE:
 					tokr_err(t, "Unrecognized expression.");
 					return false;
 				case DIRECT_COUNT: assert(0); break;
@@ -2056,6 +2057,23 @@ static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			return success;
 		}
 		default: break;
+		}
+	} else if (t->token->kind == TOKEN_DIRECT) {
+		switch (t->token->direct) {
+		case DIRECT_INCLUDE: {
+			++t->token;
+			s->kind = STMT_INCLUDE;
+			if (!parse_expr(p, &s->inc.filename, expr_find_end(p, 0)))
+				return false;
+			if (!token_is_kw(t->token, KW_SEMICOLON)) {
+				tokr_err(t, "Expected ; after #include directive");
+				return false;
+			}
+			++t->token;
+			return true;
+		} break;
+		default:
+			break;
 		}
 	}
 	if (is_decl(t)) {
@@ -2395,6 +2413,16 @@ static void fprint_stmt(FILE *out, Statement *s) {
 		if (s->ret.flags & RET_HAS_EXPR)
 			fprint_expr(out, &s->ret.expr);
 		fprintf(out, ";\n");
+		break;
+	case STMT_INCLUDE:
+		if (s->flags & STMT_TYPED) {
+		    arr_foreach(s->inc.stmts, Statement, sub)
+				fprint_stmt(out, sub);
+		} else {
+			fprintf(out, "#include ");
+			fprint_expr(out, &s->inc.filename);
+			fprintf(out, ";\n");
+		}
 		break;
 	}
 }

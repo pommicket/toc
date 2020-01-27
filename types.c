@@ -2249,10 +2249,13 @@ static bool types_block(Typer *tr, Block *b) {
 	bool success = true;
 	if (!typer_block_enter(tr, b))
 		return false;
+
 	arr_foreach(b->stmts, Statement, s) {
-		if (!types_stmt(tr, s))
+		if (!types_stmt(tr, s)) {
 			success = false;
-		else if (s->kind == STMT_EXPR && (s->flags & STMT_EXPR_NO_SEMICOLON)) {
+			continue;
+		}
+		if (s->kind == STMT_EXPR && (s->flags & STMT_EXPR_NO_SEMICOLON)) {
 			/* not voided */
 			Expression *e = &s->expr;
 			if (e->type.kind == TYPE_VOID) {
@@ -2489,6 +2492,36 @@ static bool types_stmt(Typer *tr, Statement *s) {
 			}
 		}
 		break;
+	case STMT_INCLUDE: {
+		char *filename = eval_expr_as_cstr(tr, &s->inc.filename, "import filename");
+		if (!filename)
+			return false;
+		char *contents = read_entire_file(tr->allocr, tr->err_ctx, filename);
+		Tokenizer tokr;
+		tokr_create(&tokr, tr->idents, tr->err_ctx, tr->allocr);
+		File *file = typer_calloc(tr, 1, sizeof *file);
+		file->filename = filename;
+		file->contents = contents;
+		file->ctx = tr->err_ctx;
+		if (!tokenize_file(&tokr, file))
+			return false;
+		Parser parser;
+		parser_create(&parser, &tokr, tr->allocr);
+		ParsedFile parsed_file;
+		if (!parse_file(&parser, &parsed_file)) {
+			return false;
+		}
+		Statement *stmts_inc = parsed_file.stmts;
+	    s->inc.stmts = stmts_inc;
+		arr_foreach(stmts_inc, Statement, s_incd) {
+			if (!types_stmt(tr, s_incd))
+				return false;
+			if (s_incd->kind == STMT_DECL) {
+				if (!add_ident_decls(tr->block, &s_incd->decl, SCOPE_CHECK_REDECL))
+					return false;
+			}
+		}
+	} break;
 	}
 	return true;
 }
@@ -2513,6 +2546,7 @@ static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *a
 static bool types_file(Typer *tr, ParsedFile *f) {
 	bool ret = true;
 	FILE *pkg_fp = NULL;
+	tr->parsed_file = f;
 	if (f->pkg_name) {
 		Value pkg_name;
 		if (!types_expr(tr, f->pkg_name))
@@ -2548,6 +2582,7 @@ static bool types_file(Typer *tr, ParsedFile *f) {
 		exptr_create(tr->exptr, pkg_fp, pkg_file_name, tr->err_ctx);
 		exptr_start(tr->exptr, pkg_name_str, pkg_name_len);
 	}
+
 	arr_foreach(f->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {
 			ret = false;

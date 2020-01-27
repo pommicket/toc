@@ -20,7 +20,7 @@ static const char *const keywords[KW_COUNT] =
 static inline const char *kw_to_str(Keyword k) { return keywords[k]; }
 
 static const char *directives[DIRECT_COUNT] =
-	{"C", "sizeof", "alignof", "export", "foreign", "builtin"};
+	{"C", "sizeof", "alignof", "export", "foreign", "builtin", "include"};
 
 /* Returns KW_COUNT if it's not a keyword */
 /* OPTIM: don't use strncmp so much */

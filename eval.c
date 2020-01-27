@@ -1668,6 +1668,11 @@ static bool eval_stmt(Evaluator *ev, Statement *stmt) {
 			return false;
 		copy_val(NULL, &ev->ret_val, &r, &stmt->ret.expr.type);
 	} break;
+	case STMT_INCLUDE:
+		arr_foreach(stmt->inc.stmts, Statement, sub)
+			if (!eval_stmt(ev, sub))
+				return false;
+		return false;
 	}
 	return true;
 }

@@ -240,6 +240,7 @@ typedef enum {
 			  DIRECT_EXPORT,
 			  DIRECT_FOREIGN,
 			  DIRECT_BUILTIN,
+			  DIRECT_INCLUDE,
 			  DIRECT_COUNT
 } Directive;
 
@@ -820,7 +821,8 @@ typedef struct Declaration {
 typedef enum {
 			  STMT_DECL,
 			  STMT_EXPR,
-			  STMT_RET
+			  STMT_RET,
+			  STMT_INCLUDE
 } StatementKind;
 
 enum {
@@ -833,7 +835,13 @@ typedef struct Return {
 
 enum {
 	  STMT_EXPR_NO_SEMICOLON = 0x01,
+	  STMT_TYPED = 0x02
 };
+typedef union {
+	Expression filename; /* before typing */
+	struct Statement *stmts; /* after typing */
+} Include;
+
 typedef struct Statement {
 	Location where;
 	StatementKind kind;
@@ -842,6 +850,7 @@ typedef struct Statement {
 		Declaration decl;
 		Expression expr;
 		Return ret;
+		Include inc;
 	};
 } Statement;
 
@@ -912,6 +921,7 @@ typedef struct Typer {
 	/* for checking for problematic struct circular dependencies */
 	bool *is_reference_stack;
 	Package *pkgs; /* all packages which have been imported */
+	ParsedFile *parsed_file;
 } Typer;
 
 typedef struct Exporter {

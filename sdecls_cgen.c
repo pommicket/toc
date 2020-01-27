@@ -108,6 +108,11 @@ static bool cgen_sdecls_stmt(CGenerator *g, Statement *s) {
 			if (!cgen_sdecls_expr(g, &s->ret.expr))
 				return false;
 		break;
+	case STMT_INCLUDE:
+		arr_foreach(s->inc.stmts, Statement, sub)
+			if (!cgen_sdecls_stmt(g, sub))
+				return false;
+	    break;
 	}
 	return true;
 }
