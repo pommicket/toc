@@ -48,7 +48,6 @@ static const char *expr_kind_to_str(ExprKind k) {
 	case EXPR_SLICE: return "slice";
 	case EXPR_TYPE: return "type";
 	case EXPR_VAL: return "value";
-	case EXPR_PKG: return "package";
 	}
 	assert(0);
 	return "";
@@ -152,7 +151,6 @@ static int kw_to_builtin_type(Keyword kw) {
 	case KW_F64: return BUILTIN_F64;
 	case KW_BOOL: return BUILTIN_BOOL;
 	case KW_CHAR: return BUILTIN_CHAR;
-	case KW_PACKAGE: return BUILTIN_PKG;
 	case KW_TYPE: return BUILTIN_TYPE;
 	default: return -1;
 	}
@@ -173,7 +171,6 @@ static Keyword builtin_type_to_kw(BuiltinType t) {
 	case BUILTIN_F64: return KW_F64;
 	case BUILTIN_BOOL: return KW_BOOL;
 	case BUILTIN_CHAR: return KW_CHAR;
-	case BUILTIN_PKG: return KW_PACKAGE;
 	case BUILTIN_TYPE: return KW_TYPE;
 	}
 	assert(0);
@@ -1040,12 +1037,6 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 		Token *start = t->token;
 		/* TODO: consider moving this after ops, so that "if true { 5 } else { 3 } as f32" is possible */
 		if (t->token->kind == TOKEN_KW) switch (t->token->kw) {
-			case KW_PKG:
-				++t->token;
-				e->kind = EXPR_PKG;
-				if (!parse_expr(p, e->pkg.name_expr = parser_malloc(p, sizeof *e->pkg.name_expr), expr_find_end(p, 0)))
-					return false;
-				goto success;
 			case KW_FN: {
 				/* this is a function */
 				e->kind = EXPR_FN;
@@ -2029,33 +2020,6 @@ static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			t->token = end + 1;
 			return success;
 		}
-		case KW_PKG: {
-			/* declaration of package name */
-			Expression *pkg_name  = parser_new_expr(p);
-			++t->token;
-			Token *end = expr_find_end(p, 0);
-			if (!end || !token_is_kw(end, KW_SEMICOLON)) {
-				tokr_err(t, "No semicolon at end of package name.");
-				tokr_skip_to_eof(t);
-				return false;
-			}
-			if (p->block) {
-				tokr_err(t, "You must set the package name at global scope.");
-				t->token = end + 1;
-				return false;
-			}
-			if (p->parsed_file->pkg_name) {
-				tokr_err(t, "You've already set the package name.");
-				info_print(p->parsed_file->pkg_name->where, "The package name was previously set here.");
-				t->token = end + 1;
-				return false;
-			}
-			p->parsed_file->pkg_name = pkg_name;
-			bool success = parse_expr(p, pkg_name, end);
-			t->token = end + 1;
-			*was_a_statement = false;
-			return success;
-		}
 		default: break;
 		}
 	} else if (t->token->kind == TOKEN_DIRECT) {
@@ -2114,7 +2078,6 @@ static void parser_create(Parser *p, Tokenizer *t, Allocator *allocr) {
 static bool parse_file(Parser *p, ParsedFile *f) {
 	Tokenizer *t = p->tokr;
 	f->stmts = NULL;
-	f->pkg_name = NULL;
 	p->file = t->file;
 	p->parsed_file = f;
 	bool ret = true;
@@ -2352,12 +2315,6 @@ static void fprint_expr(FILE *out, Expression *e) {
 	case EXPR_VAL:
 		fprint_val(out, e->val, &e->type);
 		break;
-	case EXPR_PKG:
-		fprintf(out, "(pkg ");
-		assert(!found_type);
-		fprint_expr(out, e->pkg.name_expr);
-		fprintf(out, ")");
-		break;
 	}
 	if (found_type) {
 		fprintf(out, ":");
@@ -2479,7 +2436,6 @@ static bool expr_is_definitely_const(Expression *e) {
 	case EXPR_LITERAL_BOOL:
 	case EXPR_TYPE:
 	case EXPR_VAL:
-	case EXPR_PKG:
 		return true;
 	case EXPR_IF:
 	case EXPR_WHILE:
@@ -2501,9 +2457,6 @@ static bool expr_is_definitely_const(Expression *e) {
 				return false;
 			Type *lhs_type = &e->binary.lhs->type;
 			if (lhs_type->kind == TYPE_PTR) lhs_type = lhs_type->ptr;
-			if (type_is_builtin(lhs_type, BUILTIN_PKG)) {
-				return ident_is_definitely_const(e->binary.dot.pkg_ident);
-			}
 			return true;
 		}
 		return expr_is_definitely_const(e->binary.lhs)

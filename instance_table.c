@@ -142,10 +142,6 @@ static U64 val_ptr_hash(void *v, Type *t) {
 		case BUILTIN_BOOL: return (U64)*(bool *)v;
 		case BUILTIN_TYPE:
 			return type_hash(*(Type **)v);
-		case BUILTIN_PKG: {
-			Package *pkg = *(Package **)v;
-			return (U64)pkg;
-		} break;
 		}
 		assert(0);
 		return 0;
@@ -222,8 +218,6 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 			bool ret = type_eq(*(Type **)u, *(Type **)v);
 			return ret;
 		}
-		case BUILTIN_PKG:
-			return *(Package **)u == *(Package **)v;
 		}
 		break;
 	case TYPE_VOID:

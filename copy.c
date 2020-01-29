@@ -265,9 +265,6 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		if (sin->to)
 			sout->to = copy_expr_(c, sin->to);
 	} break;
-	case EXPR_PKG:
-		out->pkg.name_expr = copy_expr_(c, in->pkg.name_expr);
-		break;
 	case EXPR_TYPE:
 		copy_type(c, &out->typeval, &in->typeval);
 		break;

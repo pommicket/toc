@@ -139,9 +139,6 @@ static bool arg_list_start(av_alist *arg_list, void (*fn)(), Value *return_val, 
 		case BUILTIN_TYPE:
 			av_start_ptr(*arg_list, fn, Type *, &return_val->type);
 			break;
-		case BUILTIN_PKG:
-			av_start_ptr(*arg_list, fn, Package *, &return_val->pkg);
-			break;
 		}
 		break;
 	case TYPE_STRUCT: {
@@ -236,9 +233,6 @@ static bool arg_list_add(av_alist *arg_list, Value *val, Type *type, Location wh
 			break;
 		case BUILTIN_BOOL:
 			av_uchar(*arg_list, val->boolv);
-			break;
-		case BUILTIN_PKG:
-			av_ptr(*arg_list, Package *, val->pkg);
 			break;
 		case BUILTIN_TYPE:
 			av_ptr(*arg_list, Type *, val->type);

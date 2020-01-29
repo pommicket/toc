@@ -113,59 +113,6 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 		Type *lhs_type = &e->binary.lhs->type;
 		if (lhs_type->kind == TYPE_PTR)
 			lhs_type = lhs_type->ptr;
-		if (e->binary.op == BINARY_DOT && type_is_builtin(lhs_type, BUILTIN_PKG)) {
-			Identifier ident = e->binary.dot.pkg_ident;
-			IdentDecl *idecl = ident_decl(ident);
-			assert(idecl);
-			assert(idecl->kind == IDECL_DECL);
-			Declaration *d = idecl->decl;
-			if (e->type.kind == TYPE_FN) {
-				FnExpr *f = NULL;
-				if (d->flags & DECL_FOUND_VAL)
-					f = d->val.fn;
-				else if (d->expr.kind == EXPR_FN)
-					f = d->expr.fn;
-				if (f) {
-					if (fn_has_any_const_params(f)) {
-						/* declare the instances */
-						f->c.name = ident;
-						if (!cgen_fn_decl(g, f, &e->type))
-							return false;
-					} else {
-						bool out_param = cgen_uses_ptr(&f->ret_type);
-						/* extern function declaration */
-						cgen_write(g, "extern ");
-						if (out_param) {
-							cgen_write(g, "void");
-						} else {
-							if (!cgen_type_pre(g, &f->ret_type, e->where))
-								return false;
-						}
-						cgen_write(g, " ");
-						cgen_ident(g, ident);
-						if (!cgen_fn_args(g, f, 0, 0))
-							return false;
-						if (!out_param) {
-							if (!cgen_type_post(g, &f->ret_type, e->where))
-								return false;
-						}
-						cgen_write(g, ";");
-						cgen_nl(g);
-					}
-					break;
-				}
-			}
-			/* extern variable declaration */
-			cgen_write(g, "extern ");
-			if (!cgen_type_pre(g, &e->type, e->where))
-				return false;
-			cgen_write(g, " ");
-			cgen_ident(g, ident);
-			if (!cgen_type_post(g, &e->type, e->where))
-				return false;
-			cgen_write(g, ";");
-			cgen_nl(g);
-		}
 	} break;
 	default:
 		break;

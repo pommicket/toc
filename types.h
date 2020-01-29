@@ -163,7 +163,6 @@ typedef union Value {
 	union Value *tuple;
 	Slice slice;
 	struct Type *type;
-	struct Package *pkg;
 } Value;
 
 enum {
@@ -194,8 +193,6 @@ typedef struct IdentSlot {
 	bool anonymous; /* is this identifier not part of a tree? */
 	bool imported; /* was this identifier imported from a package? */
 	U64 export_id; /* 0 if there's no exported identifier here, otherwise unique positive integer associated with this identifier */
-	struct Package *from_pkg;
-	struct Package *pkg; /* NULL if this is not associated with a package */
 	IdentDecl *decls; /* array of declarations of this identifier */
 } IdentSlot;
 
@@ -303,7 +300,6 @@ typedef enum {
 			  KW_BOOL,
 			  KW_TRUE,
 			  KW_FALSE,
-			  KW_PKG,
 			  KW_COUNT
 } Keyword;
 
@@ -405,8 +401,7 @@ typedef enum {
 			  BUILTIN_F64,
 			  BUILTIN_CHAR,
 			  BUILTIN_BOOL,
-			  BUILTIN_TYPE,
-			  BUILTIN_PKG
+			  BUILTIN_TYPE
 } BuiltinType;
 
 
@@ -513,7 +508,6 @@ typedef enum {
 			  EXPR_BUILTIN,
 			  EXPR_SLICE,
 			  EXPR_TYPE,
-			  EXPR_PKG,
 			  /* 
 				 a value (it's useful to have this). 
 				 right now they don't work with cgen_set_tuple
@@ -734,7 +728,6 @@ typedef struct Expression {
 			struct Expression *rhs;
 			union {
 				Field *field; /* for struct. */
-				Identifier pkg_ident; /* for Package. */
 			} dot;
 		} binary;
 		CallExpr call;
@@ -752,9 +745,6 @@ typedef struct Expression {
 		struct {
 			Type type;
 		} del;
-		struct {
-			struct Expression *name_expr;
-		} pkg; /* can only exist before typing */
 		IfExpr if_;
 		WhileExpr while_;
 		ForExpr *for_;
@@ -856,7 +846,6 @@ typedef struct Statement {
 
 typedef struct ParsedFile {
 	Statement *stmts;
-	Expression *pkg_name;
 } ParsedFile;
 
 typedef struct Parser {
@@ -907,10 +896,6 @@ typedef struct Package {
 	} c;
 } Package;
 
-typedef struct PackageManager {
-	StrHashTable pkgs;
-} PackageManager;
-
 typedef struct Typer {
 	Allocator *allocr;
 	Evaluator *evalr;
@@ -921,42 +906,11 @@ typedef struct Typer {
 	Block *block;
 	Block **blocks; /* dyn array of all the block's we're in ([0] = NULL for global scope) */
 	FnExpr *fn; /* the function we're currently parsing. */
-	char *pkg_name;
 	ErrCtx *err_ctx;
 	/* for checking for problematic struct circular dependencies */
 	bool *is_reference_stack;
 	ParsedFile *parsed_file;
-	PackageManager pkgmgr;
 } Typer;
-
-typedef struct Exporter {
-	FILE *out; /* .top (toc package) to output to */
-	bool started;
-	bool export_all_ident_names; /* export every identifier's name, not just the important ones */
-	U64 ident_id;
-	File exporting_to;
-	U32 nexported_structs;
-	U32 nexported_fns;
-	Identifier *exported_idents; /* (only those whose names are exported) */ 
-	Declaration **decls_to_export; /* declarations which need to be exported at some point */
-	const char *code;
-} Exporter;
-
-typedef struct Importer {
-	FILE *in;
-	File *importing_from;
-	Package *pkg;
-	Allocator *allocr;
-	Identifier *ident_map; /* [i] = value of identifier with ID i */
-	ErrCtx *err_ctx;
-	Declaration *decls;
-	size_t max_ident_id;
-	Location import_location;
-	StructDef *structs;
-	FnExpr *fns;
-	PackageManager *pkgmgr;
-} Importer;
-
 
 typedef struct CGenerator {
 	Allocator *allocr;
@@ -968,10 +922,8 @@ typedef struct CGenerator {
 	Block *block;
 	FnExpr *fn; /* which function are we in? (NULL for none) - not used during decls */
 	Evaluator *evalr;
-	Exporter *exptr;
 	Identifier main_ident;
 	Identifiers *idents;
-	char *pkg_prefix;
 } CGenerator;
 
 #ifdef TOC_DEBUG

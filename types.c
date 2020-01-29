@@ -172,8 +172,7 @@ static bool expr_must_lval(Expression *e) {
 	case EXPR_BLOCK:
 	case EXPR_SLICE:
 	case EXPR_TYPE:
-	case EXPR_VAL:
-	case EXPR_PKG: {
+	case EXPR_VAL: {
 		err_print(e->where, "Cannot use %s as l-value.", expr_kind_to_str(e->kind));
 		return false;
 	}
@@ -183,7 +182,7 @@ static bool expr_must_lval(Expression *e) {
 }
 
 
-/* does this type have a Type or a Package in it? (e.g. [5]Type, &&Package) */
+/* does this type have a Type or a Package in it? (e.g. [5]Type, &&Type) */
 static bool type_is_compileonly(Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
@@ -191,7 +190,7 @@ static bool type_is_compileonly(Type *t) {
 	case TYPE_UNKNOWN:
 		return false;
 	case TYPE_BUILTIN:
-		return t->builtin == BUILTIN_PKG || t->builtin == BUILTIN_TYPE;
+		return t->builtin == BUILTIN_TYPE;
 	case TYPE_PTR:
 		return type_is_compileonly(t->ptr);
 	case TYPE_SLICE:
@@ -612,7 +611,6 @@ static bool type_can_be_truthy(Type *t) {
 	case TYPE_BUILTIN:
 		switch (t->builtin) {
 		case BUILTIN_TYPE:
-		case BUILTIN_PKG:
 			return false;
 		case BUILTIN_I8:
 		case BUILTIN_U8:
@@ -678,7 +676,6 @@ static Status type_cast_status(Type *from, Type *to) {
 				case BUILTIN_BOOL:
 				case BUILTIN_CHAR:
 					return STATUS_NONE;
-				case BUILTIN_PKG:
 				case BUILTIN_TYPE:
 					return STATUS_ERR;
 				}
@@ -710,7 +707,6 @@ static Status type_cast_status(Type *from, Type *to) {
 				return STATUS_NONE;
 			case BUILTIN_CHAR:
 			case BUILTIN_TYPE:
-			case BUILTIN_PKG:
 				return STATUS_ERR;
 			}
 			assert(0);
@@ -722,7 +718,6 @@ static Status type_cast_status(Type *from, Type *to) {
 		case BUILTIN_BOOL:
 			return type_can_be_truthy(to) ? STATUS_NONE : STATUS_ERR;
 		case BUILTIN_TYPE:
-		case BUILTIN_PKG:
 			return STATUS_ERR;
 		}
 		break;
@@ -1063,14 +1058,16 @@ static bool types_expr(Typer *tr, Expression *e) {
 	e->flags |= EXPR_FOUND_TYPE; /* even if failed, pretend we found the type */
 	switch (e->kind) {
 	case EXPR_FN: {
-		if (!type_of_fn(tr, e->fn, &e->type, 0))
+		if (!type_of_fn(tr, e->fn, &e->type, 0)) {
 			return false;
+		}
 		if (fn_has_any_const_params(e->fn)) {
 			HashTable z = {0};
 			e->fn->instances = z;
 		} else {
-			if (!types_fn(tr, e->fn, &e->type, NULL))
+			if (!types_fn(tr, e->fn, &e->type, NULL)) {
 				return false;
+			}
 		}
 	} break;
 	case EXPR_LITERAL_INT:
@@ -1099,41 +1096,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_CHAR;
 		break;
-	case EXPR_PKG: {
-		t->kind = TYPE_BUILTIN;
-		t->builtin = BUILTIN_PKG;
-		Expression *name_expr = e->pkg.name_expr;
-		if (!types_expr(tr, name_expr)) return false;
-		if (!type_is_slicechar(&name_expr->type)) {
-			char *s = type_to_str(&name_expr->type);
-			err_print(name_expr->where, "Package name is not of type []char (as it should be), but of type %s.",  s);
-			free(s);
-			return false;
-		}
-		Value name_val;
-		if (!eval_expr(tr->evalr, name_expr, &name_val))
-			return false;
-
-		Slice name_str = name_val.slice;
-		if (name_str.n < 0) {
-			err_print(name_expr->where, "Package name has negative length (" I64_FMT ")!", name_str.n);
-			return false;
-		}
-		size_t name_str_len = (size_t)name_str.n;
-		char *name_cstr = typer_malloc(tr, name_str_len + 1);
-		memcpy(name_cstr, name_str.data, name_str_len);
-		name_cstr[name_str.n] = '\0';
-	    char *filename = typer_malloc(tr, name_str_len + 6);
-		memcpy(filename, name_str.data, name_str_len);
-		strcpy(filename + name_str.n, ".top");
-		/* TODO: package paths */
-		Package *pkg = import_pkg(&tr->pkgmgr, tr->allocr, filename, tr->err_ctx, e->where);
-	    if (!pkg) {
-			return false;
-		}
-		e->kind = EXPR_VAL;
-		e->val.pkg = pkg;
-	} break;
 	case EXPR_FOR: {
 		ForExpr *fo = e->for_;
 		*(Expression **)typer_arr_add(tr, &tr->in_expr_decls) = e;
@@ -2069,45 +2031,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 			if (struct_type->kind == TYPE_UNKNOWN) return true;
 			if (struct_type->kind == TYPE_PTR)
 				struct_type = struct_type->ptr;
-			
-			if (type_is_builtin(struct_type, BUILTIN_PKG)) {
-				if (rhs->kind != EXPR_IDENT) {
-					err_print(rhs->where, "Expected identifier for package access, but got %s.",
-							  expr_kind_to_str(rhs->kind));
-					return false;
-				}
-				{
-					Value pkg_val;
-					if (!eval_expr(tr->evalr, lhs, &pkg_val))
-						return false;
-					lhs->kind = EXPR_VAL;
-					if (lhs_type->kind == TYPE_PTR) {
-						/* that's a pointer to a package! */
-
-						/* soon it will be a package... */
-						lhs->type.kind = TYPE_BUILTIN;
-						lhs->type.builtin = BUILTIN_PKG;
-					
-						eval_deref(&lhs->val, pkg_val.ptr, &lhs->type);
-					} else {
-						lhs->val = pkg_val;
-					}
-				}
-				Package *pkg = lhs->val.pkg;
-				e->binary.dot.pkg_ident = ident_translate(rhs->ident, &pkg->idents);
-				if (!e->binary.dot.pkg_ident) {
-					char *ident_name = ident_to_str(rhs->ident);
-					
-					err_print(e->where, "%s was not imported from package %s.", ident_name, pkg->name);
-					free(ident_name);
-					return false;
-				}
-				if (!type_of_ident(tr, e->where, e->binary.dot.pkg_ident, t)) {
-					return false;
-				}
-				break;
-			}
-			
 			if (rhs->kind != EXPR_IDENT) {
 				err_print(rhs->where, "Expected identifier for struct member access, but got %s.",
 						  expr_kind_to_str(rhs->kind));
@@ -2279,8 +2202,8 @@ static bool types_block(Typer *tr, Block *b) {
 }
 
 static bool types_decl(Typer *tr, Declaration *d) {
-	bool success = true;
 	if (d->flags & DECL_FOUND_TYPE) return true;
+	bool success = true;
 
 	if ((d->flags & DECL_HAS_EXPR)
 		&& d->expr.kind == EXPR_TYPE
@@ -2418,17 +2341,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
  ret:
 	/* pretend we found the type even if we didn't to prevent too many errors */
 	d->flags |= DECL_FOUND_TYPE;
-	if (success) {
-		if (d->flags & DECL_EXPORT) {
-			/* export it! */
-			if (!tr->pkg_name) {
-				err_print(d->where, "Declaration marked for exporting, but no package output was specified."); 
-				success = false;
-			} else {
-				export_decl_external(tr->exptr, d);
-			}
-		}
-	} else {
+	if (!success) {
 		/* use unknown type if we didn't get the type */
 		d->type.flags = TYPE_IS_RESOLVED;
 		d->type.was_expr = NULL;
@@ -2452,8 +2365,9 @@ static bool types_stmt(Typer *tr, Statement *s) {
 		}
 		break;
 	case STMT_DECL:
-		if (!types_decl(tr, &s->decl))
+		if (!types_decl(tr, &s->decl)) {
 			return false;
+		}
 		break;
 	case STMT_RET:
 		if (!tr->fn) {
@@ -2522,14 +2436,12 @@ static bool types_stmt(Typer *tr, Statement *s) {
 static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *allocr, Identifiers *idents) {
 	tr->block = NULL;
 	tr->blocks = NULL;
-	pkgmgr_create(tr->pkgmgr);
 	tr->fn = NULL;
 	tr->evalr = ev;
 	tr->err_ctx = err_ctx;
 	tr->exptr = NULL; /* by default, don't set an exporter */
 	tr->in_decls = NULL;
 	tr->in_expr_decls = NULL;
-	tr->pkg_name = NULL;
 	tr->allocr = allocr;
 	tr->idents = idents;
 	tr->is_reference_stack = NULL;
@@ -2538,52 +2450,11 @@ static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *a
 
 static bool types_file(Typer *tr, ParsedFile *f) {
 	bool ret = true;
-	FILE *pkg_fp = NULL;
 	tr->parsed_file = f;
-	if (f->pkg_name) {
-		Value pkg_name;
-		if (!types_expr(tr, f->pkg_name))
-			return false;
-		if (!type_is_slicechar(&f->pkg_name->type)) {
-			char *typestr = type_to_str(&f->pkg_name->type);
-			err_print(f->pkg_name->where, "Package names must be of type []char, but this is of type %s.", typestr);
-			free(typestr);
-			return false;
-		}
-		if (!eval_expr(tr->evalr, f->pkg_name, &pkg_name))
-			return false;
-		Slice pkg_name_slice = pkg_name.slice;
-		char *pkg_name_str = pkg_name_slice.data;
-		if (pkg_name_slice.n < 0) {
-			err_print(f->pkg_name->where, "Package name has a negative length (" I64_FMT ")!", pkg_name_slice.n);
-			return false;
-		}
-		size_t pkg_name_len = (size_t)pkg_name_slice.n;
-		
-		char *pkg_name_cstr = typer_malloc(tr, pkg_name_len+1);
-		memcpy(pkg_name_cstr, pkg_name_str, pkg_name_len);
-		pkg_name_cstr[pkg_name_len] = 0;
-		tr->pkg_name = pkg_name_cstr;
-		char *pkg_file_name = typer_malloc(tr, pkg_name_len+5);
-		sprintf(pkg_file_name, "%s.top", pkg_name_cstr);
-		pkg_fp = fopen(pkg_file_name, "wb");
-		if (!pkg_fp) {
-			err_print(f->pkg_name->where, "Could not open package output file: %s.", pkg_file_name);
-			free(pkg_file_name);
-			return false;
-		}
-		exptr_create(tr->exptr, pkg_fp, pkg_file_name, tr->err_ctx);
-		exptr_start(tr->exptr, pkg_name_str, pkg_name_len);
-	}
-
 	arr_foreach(f->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {
 			ret = false;
 		}
-	}
-	if (pkg_fp) {
-		exptr_finish(tr->exptr);
-		fclose(pkg_fp);
 	}
 	return ret;
 }

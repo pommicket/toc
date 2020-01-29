@@ -124,7 +124,6 @@ static char *read_entire_file(Allocator *a, ErrCtx *ectx, const char *filename) 
 #include "foreign.c"
 #include "eval.c"
 #include "infer.c"
-#include "package.c"
 #include "types.c"
 static bool cgen_decls_file(CGenerator *g, ParsedFile *f);
 static bool cgen_sdecls_file(CGenerator *g, ParsedFile *f);

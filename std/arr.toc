@@ -1,13 +1,10 @@
-// array package
-pkg "arr";
-
-#export Arr ::= fn (t :: Type) Type {
+Arr ::= fn (t :: Type) Type {
 	struct {
 		   data : []t;
 		   cap : int;
 	}
 };
-#export arr_add ::= fn(t ::=, a : &Arr(t), x : t) {
+arr_add ::= fn(t ::=, a : &Arr(t), x : t) {
 		if a.data.len >= a.cap {
 		   a.cap = a.cap * 2 + 2;
 		   new_data := new(t, a.cap);
@@ -17,7 +14,7 @@ pkg "arr";
 		   }
 		   a.data = new_data;
 		}
-		a.data[a.data.len] = x;
 		a.data.len += 1;
+		a.data[a.data.len-1] = x;
 };
-#export arr_len ::= fn(t ::=, a : Arr(t)) int { a.data.len };
+arr_len ::= fn(t ::=, a : Arr(t)) int { a.data.len };

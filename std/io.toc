@@ -1,5 +1,3 @@
-pkg "io";
-
 get_type_with_size ::= fn(size :: i64) Type {
 	if size == 1 { i8 }
 	elif size == 2 { i16 }
@@ -30,15 +28,7 @@ stdout_fwrite ::= fn(data: &u8, size: u64, nmemb: u64) {
 	c_fwrite(data, size as c_size_t, nmemb as c_size_t, #builtin("stdout"));
 };
 
-#export puts ::= fn(x: []char) {
+puts ::= fn(x: []char) {
 		stdout_fwrite(&x[0] as &u8, 1, x.len as u64);
 		toc_putchar('\n');
-};
-
-arr ::= pkg "arr";
-
-#export puts_arr ::= fn(x: arr.Arr([]char)) {
-		for s := x.data {
-			puts(s);
-		}
 };

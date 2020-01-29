@@ -12,7 +12,6 @@ static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *e
 	g->indent_lvl = 0;
 	g->idents = ids;
 	g->allocr = allocr;
-	g->exptr = ev->typer->exptr;
 }
 
 static bool cgen_stmt(CGenerator *g, Statement *s);
@@ -62,7 +61,6 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 	case EXPR_LITERAL_STR:												\
 	case EXPR_LITERAL_CHAR:												\
 	case EXPR_LITERAL_FLOAT:											\
-	case EXPR_PKG:														\
 	break;																\
 	case EXPR_UNARY_OP:													\
 	if (!f(g, e->unary.of)) return false;								\
@@ -288,13 +286,6 @@ static inline void cgen_ident_simple(CGenerator *g, Identifier i) {
 }
 
 static void cgen_ident(CGenerator *g, Identifier i) {
-	IdentDecl *idecl = ident_decl(i);
-	if (idecl && idecl->kind == IDECL_DECL && (idecl->decl->flags & DECL_EXPORT)) {
-		assert(g->pkg_prefix);
-		cgen_write(g, "%s__", g->pkg_prefix);
-	} else if (i->from_pkg) {
-		cgen_write(g, "%s__", i->from_pkg->c.prefix);
-	}
 	if (i == g->main_ident) {
 		/* don't conflict with C's main! */
 		cgen_write(g, "main__");
@@ -338,7 +329,6 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
 		case BUILTIN_F32: cgen_write(g, "f32"); break;
 		case BUILTIN_F64: cgen_write(g, "f64"); break;
 		case BUILTIN_TYPE:
-		case BUILTIN_PKG:
 			assert(0); break;
 		} break;
 	case TYPE_PTR:
@@ -772,7 +762,6 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 	case EXPR_C:
 	case EXPR_BUILTIN:
 	case EXPR_TYPE:
-	case EXPR_PKG:
 		assert(0);
 		return false;
 	}
@@ -1241,7 +1230,6 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 	case EXPR_FN:
 	case EXPR_C:
 	case EXPR_TYPE:
-	case EXPR_PKG:
 		break;
 	}
 	return true;
@@ -1373,19 +1361,14 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			handled = true;
 			break;
 		case BINARY_DOT: {
-			if (type_is_builtin(&e->binary.lhs->type, BUILTIN_PKG)) {
-				assert(e->binary.lhs->kind == EXPR_VAL);
-				cgen_ident(g, e->binary.dot.pkg_ident);
-				handled = true;
-			} else {
-				cgen_write(g, "(");
-				cgen_expr(g, e->binary.lhs);
-				bool is_ptr = e->binary.lhs->type.kind == TYPE_PTR;
-				cgen_write(g, is_ptr ? "->" :".");
-				cgen_ident_simple(g, e->binary.dot.field->name);
-				cgen_write(g, ")");
-				handled = true;
-			}
+
+			cgen_write(g, "(");
+			cgen_expr(g, e->binary.lhs);
+			bool is_ptr = e->binary.lhs->type.kind == TYPE_PTR;
+			cgen_write(g, is_ptr ? "->" :".");
+			cgen_ident_simple(g, e->binary.dot.field->name);
+			cgen_write(g, ")");
+			handled = true;
 		} break;
 		}
 		if (handled) break;
@@ -1586,7 +1569,6 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		   a tuple, e.g. 3, 5;, but we've errored about that before
 		*/
 	case EXPR_TYPE:
-	case EXPR_PKG:
 		assert(0);
 		break;
 	case EXPR_FN: {
@@ -1863,7 +1845,6 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 		case BUILTIN_CHAR: cgen_write(g, "'\\x%02x'", *(char *)v); break;
 		case BUILTIN_BOOL: cgen_write(g, "%s", *(bool *)v ? "true" : "false"); break;
 		case BUILTIN_TYPE:
-		case BUILTIN_PKG:
 			assert(0);
 			break;
 		}
@@ -2071,18 +2052,6 @@ static bool cgen_defs_expr(CGenerator *g, Expression *e) {
 	if (e->kind == EXPR_FN) {
 	    if (!cgen_defs_fn(g, e->fn, &e->type))
 			return false;
-	} else if (e->kind == EXPR_BINARY_OP) {
-		if (e->binary.op == BINARY_DOT && type_is_builtin(&e->binary.lhs->type, BUILTIN_PKG)
-			&& e->type.kind == TYPE_FN) {
-			Identifier ident = e->binary.dot.pkg_ident;
-			Declaration *d = ident_decl(ident)->decl;
-			FnExpr *f = (d->flags & DECL_FOUND_VAL) ? d->val.fn : d->expr.fn;
-			if (fn_has_any_const_params(f)) {
-				/* define instances */
-				if (!cgen_defs_fn(g, f, &e->type))
-					return false;
-			}
-		}
 	}
 	cgen_recurse_subexprs(g, e, cgen_defs_expr, cgen_defs_block, cgen_defs_decl);
 	return true;
@@ -2138,7 +2107,6 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 	g->block = NULL;
 	g->fn = NULL;
 	g->file = f;
-	g->pkg_prefix = g->evalr->typer->pkg_name;
 
 	/* 
 	   TODO: don't include stdio.h with posix file descriptors
@@ -2168,8 +2136,7 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 	if (!cgen_decls_file(g, f))
 		return false;
 	cgen_write(g, "/* code */\n");
-	if (!f->pkg_name)
-		cgen_write(g, "int main() {\n\tmain__();\n\treturn 0;\n}\n\n");
+	cgen_write(g, "int main() {\n\tmain__();\n\treturn 0;\n}\n\n");
 	arr_foreach(f->stmts, Statement, s) {
 		if (!cgen_defs_stmt(g, s))
 			return false;

@@ -53,7 +53,6 @@ static size_t compiler_sizeof_builtin(BuiltinType b) {
 	case BUILTIN_CHAR: return sizeof(char); /* = 1 */
 	case BUILTIN_BOOL: return sizeof(bool);
 	case BUILTIN_TYPE: return sizeof(Type *);
-	case BUILTIN_PKG: return sizeof(Package *);
 	}
 	assert(0);
 	return 0;
@@ -162,7 +161,6 @@ static bool builtin_truthiness(Value *v, BuiltinType b) {
 	case BUILTIN_BOOL: return v->boolv;
 	case BUILTIN_CHAR: return v->charv != 0;
 	case BUILTIN_TYPE:
-	case BUILTIN_PKG:
 		break;
 	}
 	assert(0); return false;
@@ -300,10 +298,6 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		case BUILTIN_F64: fprintf(f, F64_FMT, *(F64 *)p); break;
 		case BUILTIN_CHAR: fprint_char_literal(f, *(char *)p); break;
 		case BUILTIN_BOOL: fprintf(f, "%s", *(bool *)p ? "true" : "false"); break;
-		case BUILTIN_PKG: {
-			Package *pkg = *(Package **)p;
-			fprintf(f, "<package at %p>", (void *)pkg);
-		} break;
 		case BUILTIN_TYPE:
 			fprint_type(f, *(Type **)p);
 			break;
@@ -434,7 +428,7 @@ static void val_free(Value *v, Type *t) {
 		builtin_casts_to_num(low);							\
 	case BUILTIN_CHAR: vout->charv = (char)vin->low; break;	\
 	case BUILTIN_BOOL: vout->boolv = vin->low != 0; break;	\
-	case BUILTIN_PKG: case BUILTIN_TYPE: assert(0); break;	\
+	case BUILTIN_TYPE: assert(0); break;					\
 	} break
 
 #define builtin_float_casts(low, up)							\
@@ -443,7 +437,7 @@ static void val_free(Value *v, Type *t) {
 		builtin_casts_to_num(low);								\
 	case BUILTIN_BOOL: vout->boolv = vin->low != 0.0f; break;	\
 	case BUILTIN_CHAR:											\
-	case BUILTIN_PKG: case BUILTIN_TYPE:						\
+	case BUILTIN_TYPE:											\
 		assert(0); break;										\
 	} break
 	
@@ -473,12 +467,10 @@ static void val_builtin_cast(Value *vin, BuiltinType from, Value *vout, BuiltinT
 		case BUILTIN_F64:
 		case BUILTIN_BOOL:
 		case BUILTIN_TYPE:
-		case BUILTIN_PKG:
 			assert(0); break;
 		}
 		break;
 	case BUILTIN_TYPE:
-	case BUILTIN_PKG:
 		assert(0);
 		break;
 	}
@@ -554,7 +546,6 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 			case BUILTIN_F32:
 			case BUILTIN_F64:
 			case BUILTIN_TYPE:
-			case BUILTIN_PKG:
 				assert(0); break;
 			}
 			break;
@@ -629,9 +620,6 @@ static void eval_deref(Value *v, void *ptr, Type *type) {
 		case BUILTIN_TYPE:
 			v->type = *(Type **)ptr;
 			break;
-		case BUILTIN_PKG:
-			v->pkg = *(Package **)ptr;
-			break;
 		}
 		break;
 	case TYPE_SLICE:
@@ -669,9 +657,6 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 		case BUILTIN_BOOL: *(bool *)set = to->boolv; break;
 		case BUILTIN_TYPE:
 			*(Type **)set = to->type;
-			break;
-		case BUILTIN_PKG:
-			*(Package **)set = to->pkg;
 			break;
 		}
 		break;
@@ -747,7 +732,11 @@ static void *eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr) {
 		return NULL;
 	void *struc_data;
 	if (is_ptr) {
-		struc_data = *(void **)struc.ptr;
+		struc_data = struc.ptr;
+		if (struc_data == NULL) {
+			err_print(dot_expr->where, "Attempt to dereference NULL pointer.");
+			return false;
+		}
 	} else {
 		struc_data = struc.struc;
 	}
@@ -936,7 +925,7 @@ static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value 
 		val_cast(&lhs, lhs_type, &lhs, cast_to);				\
 		val_cast(&rhs, rhs_type, &rhs, cast_to);				\
 		assert(lhs_type->kind == TYPE_BUILTIN);					\
-		switch (builtin) {										\
+		switch (cast_to->builtin) {								\
 			eval_binary_bool_op_nums(builtin, op);				\
 		default:												\
 			assert(!("Invalid builtin to "#op)[0]); break;		\
@@ -1181,11 +1170,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (!eval_expr(ev, rhs_expr, &rhs)) return false;
 		switch (e->binary.op) {
 		case BINARY_DOT: {
-			if (type_is_builtin(&lhs_expr->type, BUILTIN_PKG)) {
-				if (!eval_ident(ev, e->binary.dot.pkg_ident, v, rhs_expr->where))
-					return false;
-				break;
-			}
 			void *ptr = eval_ptr_to_struct_field(ev, e);
 			if (!ptr) return false;
 			eval_deref(v, ptr, &e->type);
@@ -1316,7 +1300,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 					boolt.builtin = BUILTIN_BOOL;
 					Value cont;
 					eval_numerical_bin_op(lhs, &fo->type, step_is_negative ? BINARY_GE : BINARY_LE, rhs, &fo->range.to->type, &cont, &boolt);
-					
 					if (!cont.boolv) break;
 				}
 				if (value_val) *value_val = x;
@@ -1447,8 +1430,9 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			fn = &e->call.instance->fn;
 		} else {
 			Value fnv;
-			if (!eval_expr(ev, e->call.fn, &fnv))
+			if (!eval_expr(ev, e->call.fn, &fnv)) {
 				return false;
+			}
 			fn = fnv.fn;
 		}
 		if (fn->flags & FN_EXPR_FOREIGN) {
@@ -1464,11 +1448,10 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				return false;
 			break;
 		}
-		
 		/* make sure function body is typed before calling it */
-		if (!types_block(ev->typer, &fn->body))
+		if (!types_block(ev->typer, &fn->body)) {
 			return false;
-
+		}
 		/* NOTE: we're not calling fn_enter because we're manually entering the function */
 		
 		/* set parameter values */
@@ -1606,9 +1589,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		break;
 	case EXPR_VAL:
 		*v = e->val;
-		break;
-	case EXPR_PKG:
-		assert(0);
 		break;
 	}
 	return true;

@@ -1,11 +1,20 @@
-arr ::= pkg "std/arr";
-io ::= pkg "std/io";
+#include "std/arr.toc";
+#include "std/io.toc";
+
+do_thing ::= fn() int {
+	x: Arr([]char);
+	arr_add(&x, "HI");
+	arr_add(&x, "Hello");
+	arr_add(&x, "How's");
+	arr_add(&x, "it");
+	arr_add(&x, "going");
+	for a := x.data {
+		 puts(a);
+	}
+	3
+};
+
 main ::= fn() {
-	 x: arr.Arr([]char);
-	 arr.arr_add(&x, "HI");
-	 arr.arr_add(&x, "Hello");
-	 arr.arr_add(&x, "How's");
-	 arr.arr_add(&x, "it");
-	 arr.arr_add(&x, "going");
-	 io.puts_arr(x);
+	 x ::= do_thing();
+	 do_thing();
 };
