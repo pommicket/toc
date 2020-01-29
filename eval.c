@@ -735,7 +735,7 @@ static void *eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr) {
 		struc_data = struc.ptr;
 		if (struc_data == NULL) {
 			err_print(dot_expr->where, "Attempt to dereference NULL pointer.");
-			return false;
+			return NULL;
 		}
 	} else {
 		struc_data = struc.struc;

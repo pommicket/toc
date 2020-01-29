@@ -312,8 +312,8 @@ static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *fn_type, Val
 static void ffmgr_free(ForeignFnManager *ffmgr) {
 	arr_foreach(ffmgr->libs_loaded.slots, StrHashTableSlotPtr, slotp) {
 		if (*slotp) {
-			Library lib = *(Library *)((*slotp)->data);
-			dlclose(lib.handle);
+			Library *lib = (void *)((*slotp)->data);
+			dlclose(lib->handle);
 		}
 	}
 	str_hash_table_free(&ffmgr->libs_loaded);

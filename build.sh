@@ -21,22 +21,19 @@ else
 	WARNINGS=''
 fi
 
-if [ "$1" = "" ]; then
-	if [ "$COMPILE_TIME_FOREIGN_FN_SUPPORT" != "no" ]; then
-		ADDITIONAL_FLAGS="$ADDITIONAL_FLAGS -DCOMPILE_TIME_FOREIGN_FN_SUPPORT=1 -lffcall -ldl"
-	fi
+if [ "$COMPILE_TIME_FOREIGN_FN_SUPPORT" != "no" ]; then
+	ADDITIONAL_FLAGS="$ADDITIONAL_FLAGS -DCOMPILE_TIME_FOREIGN_FN_SUPPORT=1 -lffcall -ldl"
 fi
 
-DEBUG_FLAGS="-O0 -no-pie -gdwarf-2 -pipe $WARNINGS -std=c11 -DTOC_DEBUG"
+
+DEBUG_FLAGS="-O0 $WARNINGS -std=c11 -DTOC_DEBUG"
+if [ "$CC" = "gcc" ]; then
+	DEBUG_FLAGS="$DEBUG_FLAGS -no-pie -gdwarf-2 -pipe"
+fi
 RELEASE_FLAGS="-O3 -s -DNDEBUG $WARNINGS -std=c11"
 
 if [ "$1" = "release" ]; then
 	FLAGS="$RELEASE_FLAGS $ADDITIONAL_FLAGS"
-
-	COMMAND="$CC compatibility.c -Wall -Wextra -o compatibility"
-	echo $COMMAND
-	$COMMAND || exit 1
-	FLAGS="$FLAGS $(./compatibility)"
 else
 	FLAGS="$DEBUG_FLAGS $ADDITIONAL_FLAGS"
 fi
