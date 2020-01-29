@@ -18,7 +18,7 @@
 
 /* 
 TODO:
-nested packages
+namespace
 constants in structs
 #if
 

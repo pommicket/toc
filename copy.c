@@ -318,6 +318,9 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 	case STMT_DECL:
 		copy_decl(c, &out->decl, &in->decl);
 		break;
+	case STMT_NAMESPACE:
+		copy_block(c, &out->ns.body, &in->ns.body);
+		break;
 	}
 }
 

@@ -2025,6 +2025,7 @@ static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			++t->token;
 			if (t->token->kind == TOKEN_IDENT) {
 				s->ns.name = t->token->ident;
+				++t->token;
 			} else {
 				s->ns.name = NULL;
 			}
@@ -2397,6 +2398,12 @@ static void fprint_stmt(FILE *out, Statement *s) {
 			fprint_expr(out, &s->inc.filename);
 			fprintf(out, ";\n");
 		}
+		break;
+	case STMT_NAMESPACE:
+		fprintf(out, "namespace ");
+		if (s->ns.name)
+			fprint_ident(out, s->ns.name);
+		fprint_block(out, &s->ns.body);
 		break;
 	}
 }
