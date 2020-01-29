@@ -300,6 +300,7 @@ typedef enum {
 			  KW_BOOL,
 			  KW_TRUE,
 			  KW_FALSE,
+			  KW_NAMESPACE,
 			  KW_COUNT
 } Keyword;
 
@@ -812,6 +813,7 @@ typedef enum {
 			  STMT_DECL,
 			  STMT_EXPR,
 			  STMT_RET,
+			  STMT_NAMESPACE,
 			  STMT_INCLUDE
 } StatementKind;
 
@@ -832,6 +834,11 @@ typedef union {
 	struct Statement *stmts; /* after typing */
 } Include;
 
+typedef struct {
+	Identifier name; /* NULL = anonymous */
+	Block body;
+} Namespace;
+
 typedef struct Statement {
 	Location where;
 	StatementKind kind;
@@ -841,6 +848,7 @@ typedef struct Statement {
 		Expression expr;
 		Return ret;
 		Include inc;
+		Namespace ns;
 	};
 } Statement;
 

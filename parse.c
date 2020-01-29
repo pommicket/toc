@@ -2020,6 +2020,23 @@ static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			t->token = end + 1;
 			return success;
 		}
+		case KW_NAMESPACE: {
+			s->kind = STMT_NAMESPACE;
+			++t->token;
+			if (t->token->kind == TOKEN_IDENT) {
+				s->ns.name = t->token->ident;
+			} else {
+				s->ns.name = NULL;
+			}
+			if (!parse_block(p, &s->ns.body))
+				return false;
+			arr_foreach(s->ns.body.stmts, Statement, sub) {
+				if (sub->kind != STMT_DECL) {
+					err_print(s->where, "Only declarations can be in namespaces.");
+					return false;
+				}
+			}
+		} break;
 		default: break;
 		}
 	} else if (t->token->kind == TOKEN_DIRECT) {

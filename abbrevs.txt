@@ -19,6 +19,7 @@ imptr - importer
 inc - include
 kw - keyword
 len - length
+ns - namespace
 num - number
 op - operator
 param - parameter

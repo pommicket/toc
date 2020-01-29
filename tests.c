@@ -33,5 +33,4 @@ static void test_all(void) {
 	block_arr_test();
 	str_hash_table_test();
 	idents_test();
-	binfile_test();
 }

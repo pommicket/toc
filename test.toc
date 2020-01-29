@@ -1,18 +1,6 @@
-#include "std/arr.toc";
-#include "std/io.toc";
-
-do_thing ::= fn() int {
-	x: Arr([]char);
-	arr_add(&x, "HI");
-	arr_add(&x, "Hello");
-	arr_add(&x, "How's");
-	arr_add(&x, "it");
-	arr_add(&x, "going");
-	for a := x.data {
-		 puts(a);
-	}
-	3
-};
+namespace foo {
+bar ::= 12;
+}
 
 main ::= fn() {
 	 x ::= do_thing();

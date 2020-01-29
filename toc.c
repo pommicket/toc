@@ -82,7 +82,6 @@ static size_t compiler_alignof(Type *t);
 static size_t compiler_sizeof(Type *t);
 #include "instance_table.c"
 #include "copy.c"
-#include "binfile.c"
 
 /* returns NULL on error */
 static char *read_entire_file(Allocator *a, ErrCtx *ectx, const char *filename) {
