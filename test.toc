@@ -1,6 +1,10 @@
 foo ::= nms {
 bar ::= 12;
 };
+yep :: Namespace = nms {
+bar ::= 12;
+};
+
 
 main ::= fn() {
 };

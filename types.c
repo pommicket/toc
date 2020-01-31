@@ -165,7 +165,7 @@ static bool expr_must_lval(Expression *e) {
 }
 
 
-/* does this type have a Type or a Package in it? (e.g. [5]Type, &&Type) */
+/* does this type have a Type or a Namespace in it? (e.g. [5]Type, &&Namespace) */
 static bool type_is_compileonly(Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
