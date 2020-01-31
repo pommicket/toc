@@ -48,6 +48,7 @@ static const char *expr_kind_to_str(ExprKind k) {
 	case EXPR_SLICE: return "slice";
 	case EXPR_TYPE: return "type";
 	case EXPR_VAL: return "value";
+	case EXPR_NMS: return "namespace";
 	}
 	assert(0);
 	return "";
@@ -152,6 +153,7 @@ static int kw_to_builtin_type(Keyword kw) {
 	case KW_BOOL: return BUILTIN_BOOL;
 	case KW_CHAR: return BUILTIN_CHAR;
 	case KW_TYPE: return BUILTIN_TYPE;
+	case KW_NAMESPACE: return BUILTIN_NMS;
 	default: return -1;
 	}
 	return -1;
@@ -172,6 +174,7 @@ static Keyword builtin_type_to_kw(BuiltinType t) {
 	case BUILTIN_BOOL: return KW_BOOL;
 	case BUILTIN_CHAR: return KW_CHAR;
 	case BUILTIN_TYPE: return KW_TYPE;
+	case BUILTIN_NMS: return KW_NAMESPACE;
 	}
 	assert(0);
 	return KW_COUNT;
@@ -575,7 +578,6 @@ static bool parse_type(Parser *p, Type *type) {
 			/* help cgen out */
 			struc->c.id = 0;
 			struc->fields = NULL;
-			struc->export.id = 0;
 			struc->where = parser_mk_loc(p);
 			struc->where.start = t->token;
 				
@@ -1042,13 +1044,26 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				e->kind = EXPR_FN;
 				if (!parse_fn_expr(p, e->fn = parser_calloc(p, 1, sizeof *e->fn)))
 					return false;
-				e->fn->export.id = 0;
 				if (t->token != end) {
 					if (token_is_kw(t->token, KW_LPAREN))
 						tokr_err(t, "Direct function calling in an expression is not supported.\nYou can wrap the function in parentheses.");
 					else
 						tokr_err(t, "Expected end of function (did you forget a semicolon?).");
 					return false;
+				}
+				goto success;
+			}
+			case KW_NMS: {
+				Namespace *n = &e->nms;
+				e->kind = EXPR_NMS;
+				++t->token;
+				if (!parse_block(p, &n->body))
+					return false;
+				arr_foreach(e->nms.body.stmts, Statement, sub) {
+					if (sub->kind != STMT_DECL) {
+						err_print(sub->where, "Only declarations can be in namespaces.");
+						return false;
+					}
 				}
 				goto success;
 			}
@@ -1996,6 +2011,10 @@ static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 	*was_a_statement = true;
 	if (t->token->kind == TOKEN_KW) {
 		switch (t->token->kw) {
+		case KW_SEMICOLON:
+			*was_a_statement = false;
+			++t->token;
+			return true;
 		case KW_RETURN: {
 			s->kind = STMT_RET;
 			++t->token;
@@ -2020,24 +2039,6 @@ static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			t->token = end + 1;
 			return success;
 		}
-		case KW_NAMESPACE: {
-			s->kind = STMT_NAMESPACE;
-			++t->token;
-			if (t->token->kind == TOKEN_IDENT) {
-				s->ns.name = t->token->ident;
-				++t->token;
-			} else {
-				s->ns.name = NULL;
-			}
-			if (!parse_block(p, &s->ns.body))
-				return false;
-			arr_foreach(s->ns.body.stmts, Statement, sub) {
-				if (sub->kind != STMT_DECL) {
-					err_print(s->where, "Only declarations can be in namespaces.");
-					return false;
-				}
-			}
-		} break;
 		default: break;
 		}
 	} else if (t->token->kind == TOKEN_DIRECT) {
@@ -2179,6 +2180,11 @@ static void fprint_arg_exprs(FILE *out, Expression *args) {
 		fprint_expr(out, arg);
 	}
 	fprintf(out, ")");
+}
+
+static inline void fprint_nms(FILE *out, Namespace *nms) {
+	fprintf(out, "namespace ");
+	fprint_block(out, &nms->body);
 }
 
 static void fprint_val(FILE *f, Value v, Type *t);
@@ -2333,6 +2339,9 @@ static void fprint_expr(FILE *out, Expression *e) {
 	case EXPR_VAL:
 		fprint_val(out, e->val, &e->type);
 		break;
+	case EXPR_NMS:
+		fprint_nms(out, &e->nms);
+		break;
 	}
 	if (found_type) {
 		fprintf(out, ":");
@@ -2399,12 +2408,6 @@ static void fprint_stmt(FILE *out, Statement *s) {
 			fprintf(out, ";\n");
 		}
 		break;
-	case STMT_NAMESPACE:
-		fprintf(out, "namespace ");
-		if (s->ns.name)
-			fprint_ident(out, s->ns.name);
-		fprint_block(out, &s->ns.body);
-		break;
 	}
 }
 
@@ -2460,6 +2463,7 @@ static bool expr_is_definitely_const(Expression *e) {
 	case EXPR_LITERAL_BOOL:
 	case EXPR_TYPE:
 	case EXPR_VAL:
+	case EXPR_NMS:
 		return true;
 	case EXPR_IF:
 	case EXPR_WHILE:

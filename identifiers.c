@@ -130,10 +130,6 @@ static void fprint_ident_debug(FILE *out, Identifier id) {
 		fprintf(out, "???");
 		return;
 	}
-#ifdef TOC_DEBUG
-	if (id->export_id)
-		printf(U64_FMT "-", id->export_id);
-#endif
 	fprint_ident(out, id);
 }
 

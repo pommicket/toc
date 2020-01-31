@@ -13,8 +13,8 @@ static const char *const keywords[KW_COUNT] =
 	 "new", "del", "struct",
 	 "int", "i8", "i16", "i32", "i64",
 	 "u8", "u16", "u32", "u64", "float", "f32", "f64", "Type",
-	 "Package",
-	 "char", "bool", "true", "false", "namespace"};
+	 "Namespace",
+	 "char", "bool", "true", "false", "nms"};
 
 static inline const char *kw_to_str(Keyword k) { return keywords[k]; }
 

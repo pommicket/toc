@@ -271,6 +271,9 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 	case EXPR_VAL:
 		copy_val(a, &out->val, &in->val, &in->type);
 		break;
+	case EXPR_NMS:
+		copy_block(c, &out->nms.body, &in->nms.body);
+		break;
 	}
 }
 
@@ -317,9 +320,6 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 		break;
 	case STMT_DECL:
 		copy_decl(c, &out->decl, &in->decl);
-		break;
-	case STMT_NAMESPACE:
-		copy_block(c, &out->ns.body, &in->ns.body);
 		break;
 	}
 }

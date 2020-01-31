@@ -23,7 +23,7 @@ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 For more information, please refer to <http://unlicense.org/>
 */
-/* NOTE: make sure you edit copy.c and package.c and cgen_recurse_subexprs/types when you make a change to expression-related types or type-related types in this file! */
+/* NOTE: make sure you edit copy.c and cgen_recurse_subexprs/types when you make a change to expression-related types or type-related types in this file! */
 
 typedef long double Floating; /* OPTIM: Switch to double, but make sure floating-point literals are right */
 
@@ -163,6 +163,7 @@ typedef union Value {
 	union Value *tuple;
 	Slice slice;
 	struct Type *type;
+	struct Namespace *nms;
 } Value;
 
 enum {
@@ -189,10 +190,7 @@ typedef struct IdentDecl {
 typedef struct IdentSlot {
 	char *str;
 	size_t len;
-	bool export_name; /* is this identifier's name important? */
 	bool anonymous; /* is this identifier not part of a tree? */
-	bool imported; /* was this identifier imported from a package? */
-	U64 export_id; /* 0 if there's no exported identifier here, otherwise unique positive integer associated with this identifier */
 	IdentDecl *decls; /* array of declarations of this identifier */
 } IdentSlot;
 
@@ -295,12 +293,12 @@ typedef enum {
 			  KW_F32,
 			  KW_F64,
 			  KW_TYPE,
-			  KW_PACKAGE,
+			  KW_NAMESPACE,
 			  KW_CHAR,
 			  KW_BOOL,
 			  KW_TRUE,
 			  KW_FALSE,
-			  KW_NAMESPACE,
+			  KW_NMS,
 			  KW_COUNT
 } Keyword;
 
@@ -402,7 +400,8 @@ typedef enum {
 			  BUILTIN_F64,
 			  BUILTIN_CHAR,
 			  BUILTIN_BOOL,
-			  BUILTIN_TYPE
+			  BUILTIN_TYPE,
+			  BUILTIN_NMS
 } BuiltinType;
 
 
@@ -470,9 +469,6 @@ typedef struct StructDef {
 		/* if name is NULL, use this */
 		IdentID id;
 	} c;
-	struct {
-		U32 id; /* (index into exptr->exported_structs) + 1, or 0 if hasn't been exported */
-	} export;
 } StructDef;
 
 
@@ -509,6 +505,7 @@ typedef enum {
 			  EXPR_BUILTIN,
 			  EXPR_SLICE,
 			  EXPR_TYPE,
+			  EXPR_NMS,
 			  /* 
 				 a value (it's useful to have this). 
 				 right now they don't work with cgen_set_tuple
@@ -630,11 +627,6 @@ typedef struct FnExpr {
 							if the ith semi-constant parameter is constant.
 						 */
 	struct {
-		U32 id; /* (index of function in ex->exported_fns) + 1, 
-				   or 0 if this function has not been
-				   added to the exporting array yet */
-	} export;
-	struct {
 		/* if name = NULL, this is an anonymous function, and id will be the ID of the fn. */
 		Identifier name;
 		IdentID id;
@@ -703,6 +695,10 @@ const char *const builtin_val_names[BUILTIN_VAL_COUNT] =
 	 "sizeof float", "target sizeof float", "sizeof double", "target sizeof double",
 	 "sizeof long double", "target sizeof long double", "compiling"};
 
+typedef struct Namespace {
+	Block body;
+} Namespace;
+
 enum {
 	  EXPR_FOUND_TYPE = 0x01
 };
@@ -743,6 +739,7 @@ typedef struct Expression {
 		} builtin;
 		Identifier ident;
 		NewExpr new;
+		Namespace nms;
 		struct {
 			Type type;
 		} del;
@@ -781,8 +778,7 @@ enum {
 	  DECL_FOUND_VAL = 0x0040,
 	  DECL_INFER = 0x0080, /* infer the value (e.g. fn(t::Type=, x:t)) */
 	  DECL_EXPORT = 0x0100,
-	  DECL_FOREIGN = 0x0200,
-	  DECL_MARKED_FOR_EXPORTING = 0x0400
+	  DECL_FOREIGN = 0x0200
 };
 
 typedef U16 DeclFlags;
@@ -813,7 +809,6 @@ typedef enum {
 			  STMT_DECL,
 			  STMT_EXPR,
 			  STMT_RET,
-			  STMT_NAMESPACE,
 			  STMT_INCLUDE
 } StatementKind;
 
@@ -821,7 +816,7 @@ enum {
 	  RET_HAS_EXPR = 0x01,
 };
 typedef struct Return {
-	U8 flags; /* if this changes, go to package.c */
+	U8 flags;
 	Expression expr;
 } Return;
 
@@ -834,11 +829,6 @@ typedef union {
 	struct Statement *stmts; /* after typing */
 } Include;
 
-typedef struct {
-	Identifier name; /* NULL = anonymous */
-	Block body;
-} Namespace;
-
 typedef struct Statement {
 	Location where;
 	StatementKind kind;
@@ -848,7 +838,6 @@ typedef struct Statement {
 		Expression expr;
 		Return ret;
 		Include inc;
-		Namespace ns;
 	};
 } Statement;
 
@@ -894,21 +883,10 @@ typedef struct Evaluator {
 	ForeignFnManager ffmgr;
 } Evaluator;
 
-typedef struct Package {
-	char *name;
-	const char *filename;
-	Identifiers idents;
-	Statement *stmts;
-	struct {
-		char *prefix; /* prefix for C things (not including __) */
-	} c;
-} Package;
-
 typedef struct Typer {
 	Allocator *allocr;
 	Evaluator *evalr;
 	Identifiers *idents;
-	struct Exporter *exptr;
 	Expression **in_expr_decls; /* an array of expressions whose declarations (e.g. for **x := foo**) we are currently inside */
 	Declaration **in_decls; /* array of declarations we are currently inside */
 	Block *block;

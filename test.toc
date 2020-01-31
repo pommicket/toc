@@ -1,8 +1,6 @@
-namespace foo {
+foo ::= nms {
 bar ::= 12;
-}
+};
 
 main ::= fn() {
-	 x ::= do_thing();
-	 do_thing();
 };

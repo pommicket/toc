@@ -53,6 +53,7 @@ static size_t compiler_sizeof_builtin(BuiltinType b) {
 	case BUILTIN_CHAR: return sizeof(char); /* = 1 */
 	case BUILTIN_BOOL: return sizeof(bool);
 	case BUILTIN_TYPE: return sizeof(Type *);
+	case BUILTIN_NMS: return sizeof(Namespace *);
 	}
 	assert(0);
 	return 0;
@@ -161,6 +162,7 @@ static bool builtin_truthiness(Value *v, BuiltinType b) {
 	case BUILTIN_BOOL: return v->boolv;
 	case BUILTIN_CHAR: return v->charv != 0;
 	case BUILTIN_TYPE:
+	case BUILTIN_NMS:
 		break;
 	}
 	assert(0); return false;
@@ -301,6 +303,9 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		case BUILTIN_TYPE:
 			fprint_type(f, *(Type **)p);
 			break;
+		case BUILTIN_NMS:
+			fprint_nms(f, *(Namespace **)p);
+			break;
 		}
 		break;
 	case TYPE_FN:
@@ -428,6 +433,7 @@ static void val_free(Value *v, Type *t) {
 		builtin_casts_to_num(low);							\
 	case BUILTIN_CHAR: vout->charv = (char)vin->low; break;	\
 	case BUILTIN_BOOL: vout->boolv = vin->low != 0; break;	\
+	case BUILTIN_NMS:										\
 	case BUILTIN_TYPE: assert(0); break;					\
 	} break
 
@@ -438,6 +444,7 @@ static void val_free(Value *v, Type *t) {
 	case BUILTIN_BOOL: vout->boolv = vin->low != 0.0f; break;	\
 	case BUILTIN_CHAR:											\
 	case BUILTIN_TYPE:											\
+	case BUILTIN_NMS:											\
 		assert(0); break;										\
 	} break
 	
@@ -467,10 +474,12 @@ static void val_builtin_cast(Value *vin, BuiltinType from, Value *vout, BuiltinT
 		case BUILTIN_F64:
 		case BUILTIN_BOOL:
 		case BUILTIN_TYPE:
+		case BUILTIN_NMS:
 			assert(0); break;
 		}
 		break;
 	case BUILTIN_TYPE:
+	case BUILTIN_NMS:
 		assert(0);
 		break;
 	}
@@ -546,6 +555,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 			case BUILTIN_F32:
 			case BUILTIN_F64:
 			case BUILTIN_TYPE:
+			case BUILTIN_NMS:
 				assert(0); break;
 			}
 			break;
@@ -617,6 +627,7 @@ static void eval_deref(Value *v, void *ptr, Type *type) {
 		case BUILTIN_F64: v->f64 = *(F64 *)ptr; break;
 		case BUILTIN_CHAR: v->charv = *(char *)ptr; break;
 		case BUILTIN_BOOL: v->boolv = *(bool *)ptr; break;
+		case BUILTIN_NMS: v->nms = *(Namespace **)ptr; break;
 		case BUILTIN_TYPE:
 			v->type = *(Type **)ptr;
 			break;
@@ -655,6 +666,7 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 		case BUILTIN_F64: *(F64 *)set = to->f64; break;
 		case BUILTIN_CHAR: *(char *)set = to->charv; break;
 		case BUILTIN_BOOL: *(bool *)set = to->boolv; break;
+		case BUILTIN_NMS: *(Namespace **)set = to->nms; break;
 		case BUILTIN_TYPE:
 			*(Type **)set = to->type;
 			break;
@@ -1587,6 +1599,9 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	case EXPR_TYPE:
 		v->type = &e->typeval;
 		break;
+	case EXPR_NMS:
+		v->nms = &e->nms;
+		break;
 	case EXPR_VAL:
 		*v = e->val;
 		break;
@@ -1652,7 +1667,7 @@ static bool eval_stmt(Evaluator *ev, Statement *stmt) {
 		arr_foreach(stmt->inc.stmts, Statement, sub)
 			if (!eval_stmt(ev, sub))
 				return false;
-		return false;
+		break;
 	}
 	return true;
 }

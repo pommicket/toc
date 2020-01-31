@@ -19,6 +19,7 @@
 /* 
 TODO:
 namespace
+make sure #export still works properly
 constants in structs
 #if
 
@@ -30,7 +31,7 @@ don't allow while {3; 5} (once break is added)
 better printing of types (take was_expr into account)
 any odd number of "s for a string
 make sure futurely/currently-declared types are only used by pointer/slice
-allow omission of trailing ; in foo ::= fn() {}?
+allow omission of trailing ; in foo ::= fn() {...} or foo ::= nms {...} ?
 */
 
 

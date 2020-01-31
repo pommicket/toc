@@ -204,10 +204,7 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 				Identifier ident = d->idents[i];
 				Type *type = decl_type_at_index(d, i);
 				if (!type_is_compileonly(type)) {
-					if (ident->export_name) {
-						cgen_write(g, "extern ");
-					} else
-						cgen_write(g, "static ");
+					cgen_write(g, "static ");
 					if (!cgen_type_pre(g, type, d->where))
 						return false;
 					cgen_write(g, " ");

@@ -142,6 +142,8 @@ static U64 val_ptr_hash(void *v, Type *t) {
 		case BUILTIN_BOOL: return (U64)*(bool *)v;
 		case BUILTIN_TYPE:
 			return type_hash(*(Type **)v);
+		case BUILTIN_NMS:
+			return (U64)*(Namespace **)v;
 		}
 		assert(0);
 		return 0;
@@ -214,10 +216,10 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 		case BUILTIN_F64: return *(F64 *)u == *(F64 *)v;
 		case BUILTIN_BOOL: return *(bool *)u == *(bool *)v;
 		case BUILTIN_CHAR: return *(char *)u == *(char *)v;
-		case BUILTIN_TYPE: {
-			bool ret = type_eq(*(Type **)u, *(Type **)v);
-			return ret;
-		}
+		case BUILTIN_TYPE:
+		    return type_eq(*(Type **)u, *(Type **)v);
+		case BUILTIN_NMS:
+			return *(Namespace **)u == *(Namespace **)v;
 		}
 		break;
 	case TYPE_VOID:

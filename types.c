@@ -155,24 +155,7 @@ static bool expr_must_lval(Expression *e) {
 				return false;
 		}
 		return true;
-	case EXPR_CAST:
-	case EXPR_NEW:
-	case EXPR_FN:
-	case EXPR_LITERAL_FLOAT:
-	case EXPR_LITERAL_CHAR:
-	case EXPR_LITERAL_STR:
-	case EXPR_LITERAL_INT:
-	case EXPR_LITERAL_BOOL:
-	case EXPR_IF:
-	case EXPR_WHILE:
-	case EXPR_FOR:
-	case EXPR_CALL:
-	case EXPR_C:
-	case EXPR_BUILTIN:
-	case EXPR_BLOCK:
-	case EXPR_SLICE:
-	case EXPR_TYPE:
-	case EXPR_VAL: {
+    default: {
 		err_print(e->where, "Cannot use %s as l-value.", expr_kind_to_str(e->kind));
 		return false;
 	}
@@ -190,7 +173,7 @@ static bool type_is_compileonly(Type *t) {
 	case TYPE_UNKNOWN:
 		return false;
 	case TYPE_BUILTIN:
-		return t->builtin == BUILTIN_TYPE;
+		return t->builtin == BUILTIN_TYPE || t->builtin == BUILTIN_NMS;
 	case TYPE_PTR:
 		return type_is_compileonly(t->ptr);
 	case TYPE_SLICE:
@@ -611,6 +594,7 @@ static bool type_can_be_truthy(Type *t) {
 	case TYPE_BUILTIN:
 		switch (t->builtin) {
 		case BUILTIN_TYPE:
+		case BUILTIN_NMS:
 			return false;
 		case BUILTIN_I8:
 		case BUILTIN_U8:
@@ -677,6 +661,7 @@ static Status type_cast_status(Type *from, Type *to) {
 				case BUILTIN_CHAR:
 					return STATUS_NONE;
 				case BUILTIN_TYPE:
+				case BUILTIN_NMS:
 					return STATUS_ERR;
 				}
 				assert(0);
@@ -707,6 +692,7 @@ static Status type_cast_status(Type *from, Type *to) {
 				return STATUS_NONE;
 			case BUILTIN_CHAR:
 			case BUILTIN_TYPE:
+			case BUILTIN_NMS:
 				return STATUS_ERR;
 			}
 			assert(0);
@@ -718,6 +704,7 @@ static Status type_cast_status(Type *from, Type *to) {
 		case BUILTIN_BOOL:
 			return type_can_be_truthy(to) ? STATUS_NONE : STATUS_ERR;
 		case BUILTIN_TYPE:
+		case BUILTIN_NMS:
 			return STATUS_ERR;
 		}
 		break;
@@ -2137,6 +2124,12 @@ static bool types_expr(Typer *tr, Expression *e) {
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_TYPE;
 		break;
+	case EXPR_NMS: {
+		if (!types_block(tr, &e->nms.body))
+			return false;
+		t->kind = TYPE_BUILTIN;
+		t->builtin = BUILTIN_NMS;
+	} break;
 	case EXPR_VAL:
 		assert(0);
 		return false;
@@ -2194,6 +2187,7 @@ static bool types_block(Typer *tr, Block *b) {
 				arr_remove_lasta(&b->stmts, tr->allocr);
 			}
 		}
+		
 	}
  ret:
 	typer_block_exit(tr);
@@ -2439,7 +2433,6 @@ static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *a
 	tr->fn = NULL;
 	tr->evalr = ev;
 	tr->err_ctx = err_ctx;
-	tr->exptr = NULL; /* by default, don't set an exporter */
 	tr->in_decls = NULL;
 	tr->in_expr_decls = NULL;
 	tr->allocr = allocr;
