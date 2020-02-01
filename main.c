@@ -20,6 +20,7 @@
 TODO:
 namespace
 make sure #export still works properly
+check for leaks
 constants in structs
 #if
 

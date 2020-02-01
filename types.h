@@ -194,7 +194,7 @@ typedef struct IdentSlot {
 	IdentDecl *decls; /* array of declarations of this identifier */
 } IdentSlot;
 
-typedef struct {
+typedef struct StrHashTableSlot {
 	const char *str;
 	size_t len;
 	MaxAlign data[];
@@ -202,7 +202,7 @@ typedef struct {
 
 typedef StrHashTableSlot *StrHashTableSlotPtr;
 
-typedef struct {
+typedef struct StrHashTable {
 	StrHashTableSlot **slots;
 	Allocator *allocr;
 	U32 rand_seed;
@@ -697,6 +697,7 @@ const char *const builtin_val_names[BUILTIN_VAL_COUNT] =
 
 typedef struct Namespace {
 	Block body;
+	Identifiers idents; /* these do not include local variables  */
 } Namespace;
 
 enum {

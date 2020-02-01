@@ -30,6 +30,7 @@ static int is_ident(int c) {
 static void idents_create(Identifiers *ids) {
 	str_hash_table_create(&ids->table, sizeof(IdentSlot) - sizeof(StrHashTableSlot), NULL);
 	ids->rseed = 0x27182818;
+	
 }
 
 /* advances s until a non-identifier character is reached, then returns the number of characters advanced */
@@ -89,7 +90,8 @@ static Identifier ident_new_anonymous(Identifiers *ids) {
 static Identifier ident_insert(Identifiers *ids, char **s) {
 	char *original = *s;
 	size_t len = ident_str_len(s);
-	return (Identifier)str_hash_table_insert_(&ids->table, original, len);
+    IdentSlot *slot = (IdentSlot *)str_hash_table_insert_(&ids->table, original, len);
+	return slot;
 }
 
 static char *ident_to_str(Identifier i) {
@@ -163,9 +165,11 @@ static Identifier ident_get(Identifiers *ids, char *s) {
 	return (Identifier)str_hash_table_get_(&ids->table, s, len);
 }
 
-static Identifier ident_translate(Identifier i, Identifiers *to_idents) {
+/* translate and insert if not already there */
+static Identifier ident_translate_forced(Identifier i, Identifiers *to_idents) {
 	if (!i || i->anonymous) return NULL;
-	Identifier new_ident = ident_get(to_idents, i->str);
+	char *p = i->str;
+	Identifier new_ident = ident_insert(to_idents, &p);
 	return new_ident;
 }
 

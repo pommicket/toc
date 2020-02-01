@@ -4,7 +4,6 @@
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
 static bool types_stmt(Typer *tr, Statement *s);
-static bool types_block(Typer *tr, Block *b);
 static bool type_resolve(Typer *tr, Type *t, Location where);
 
 
@@ -769,7 +768,7 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 		goto ret;
 	}
 	entered_fn = true;
-	if (!types_block(tr, &f->body)) {
+	if (!types_block(tr, &f->body, 0)) {
 		success = false;
 		goto ret;
 	}
@@ -1204,7 +1203,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		
 		arr_remove_lasta(&tr->in_expr_decls, tr->allocr);
 		
-		if (!types_block(tr, &fo->body)) return false;
+		if (!types_block(tr, &fo->body, 0)) return false;
 		for_exit(e);
 		
 		if (fo->body.ret_expr) {
@@ -1262,7 +1261,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		IfExpr *curr = i;
 		Type *curr_type = t;
 		bool has_else = false;
-		if (!types_block(tr, &curr->body))
+		if (!types_block(tr, &curr->body, 0))
 			return false;
 		if (curr->body.ret_expr) {
 			*t = curr->body.ret_expr->type;
@@ -1287,7 +1286,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				IfExpr *nexti = &curr->next_elif->if_;
 				Type *next_type = &curr->next_elif->type;
 				curr->next_elif->flags |= EXPR_FOUND_TYPE;
-				if (!types_block(tr, &nexti->body)) {
+				if (!types_block(tr, &nexti->body, 0)) {
 					return false;
 				}
 				if (nexti->body.ret_expr) {
@@ -1322,7 +1321,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		bool ret = true;
 		if (w->cond && !types_expr(tr, w->cond))
 			ret = false;
-		if (!types_block(tr, &w->body))
+		if (!types_block(tr, &w->body, 0))
 			ret = false;
 		if (!ret) return false;
 		if (w->cond != NULL && w->body.ret_expr != NULL) {
@@ -1691,7 +1690,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 	} break;
 	case EXPR_BLOCK: {
 		Block *b = &e->block;
-		if (!types_block(tr, b))
+		if (!types_block(tr, b, 0))
 			return false;
 		if (b->ret_expr) {
 			*t = b->ret_expr->type;
@@ -2125,7 +2124,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		t->builtin = BUILTIN_TYPE;
 		break;
 	case EXPR_NMS: {
-		if (!types_block(tr, &e->nms.body))
+		if (!types_block(tr, &e->nms.body, TYPES_BLOCK_NAMESPACE))
 			return false;
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_NMS;
@@ -2152,7 +2151,8 @@ static void typer_block_exit(Typer *tr) {
 	tr->block = *(Block **)arr_last(tr->blocks);
 }
 
-static bool types_block(Typer *tr, Block *b) {
+
+static bool types_block(Typer *tr, Block *b, U16 flags) {
 	if (b->flags & BLOCK_FOUND_TYPES)
 		return true;
 	bool success = true;
@@ -2190,7 +2190,13 @@ static bool types_block(Typer *tr, Block *b) {
 		
 	}
  ret:
-	typer_block_exit(tr);
+	if (flags & TYPES_BLOCK_NAMESPACE) {
+		/* don't exit block because we don't want to have to re-enter each time we grab something from the namespace */
+		arr_remove_last(&tr->blocks);
+		tr->block = *(Block **)arr_last(tr->blocks);
+	} else {
+		typer_block_exit(tr);
+	}
 	b->flags |= BLOCK_FOUND_TYPES;
 	return success;
 }

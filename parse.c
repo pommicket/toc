@@ -1055,6 +1055,8 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			}
 			case KW_NMS: {
 				Namespace *n = &e->nms;
+				idents_create(&n->idents);
+				
 				e->kind = EXPR_NMS;
 				++t->token;
 				if (!parse_block(p, &n->body))
@@ -1063,6 +1065,10 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					if (sub->kind != STMT_DECL) {
 						err_print(sub->where, "Only declarations can be in namespaces.");
 						return false;
+					}
+					Declaration *decl = &sub->decl;
+					arr_foreach(decl->idents, Identifier, i) {
+						*i = ident_translate_forced(*i, &n->idents);
 					}
 				}
 				goto success;

@@ -24,7 +24,7 @@ For more information, please refer to <http://unlicense.org/>
 */
 
 /* OPTIM: is it faster to store void *end? */
-typedef struct {
+typedef struct ArrHeader {
 	size_t len;
 	size_t cap;
 	MaxAlign data[];
