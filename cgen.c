@@ -12,6 +12,8 @@ static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *e
 	g->indent_lvl = 0;
 	g->idents = ids;
 	g->allocr = allocr;
+	g->nms_prefix = NULL;
+	*(char *)arr_add(&g->nms_prefix) = '\0';
 }
 
 static bool cgen_stmt(CGenerator *g, Statement *s);
@@ -87,8 +89,10 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 		return false;													\
 	break;																\
 	case EXPR_NMS:														\
+		cgen_nms_enter(g, &e->nms);										\
 		if (!block_f(g, &e->nms.body))									\
 			return false;												\
+		cgen_nms_exit(g, &e->nms);										\
 		break;															\
 	case EXPR_IF:														\
 	if (e->if_.cond)													\
@@ -244,6 +248,73 @@ static inline void cgen_nl(CGenerator *g) {
 	g->will_indent = true;
 }
 
+static char *cgen_ident_to_str(Identifier i) {
+	/* TODO: FIXME for unicode idents */
+	return ident_to_str(i);
+}
+
+static void cgen_ident_id(CGenerator *g, IdentID id) {
+	cgen_write(g, "a%lu_", (unsigned long)id);
+}
+/* used for fields */
+static inline void cgen_ident_simple(CGenerator *g, Identifier i) {
+	cgen_indent(g);
+	fprint_ident_reduced_charset(cgen_writing_to(g), i);
+}
+
+static void cgen_ident(CGenerator *g, Identifier i) {
+	if (g->block && (g->block->flags & BLOCK_IS_NMS)) {
+		/* namespace prefix */
+		cgen_write(g, "%s", g->nms_prefix);
+	}
+	if (i == g->main_ident) {
+		/* don't conflict with C's main! */
+		cgen_write(g, "main__");
+	} else {
+	    cgen_ident_simple(g, i);
+	}
+}
+
+
+#define CGEN_IDENT_ID_STR_SIZE 48
+/* buffer should be at least CGEN_IDENT_ID_STR_SIZE bytes */
+static inline void cgen_ident_id_to_str(char *buffer, IdentID id) {
+	snprintf(buffer, 32, "a%lu_", (unsigned long)id);
+}
+
+/* does NOT include __ */
+static char *cgen_nms_prefix(CGenerator *g, Namespace *n) {
+    char *s;
+	if (n->associated_ident) {
+		s = cgen_ident_to_str(n->associated_ident);
+	} else {
+		s = malloc(CGEN_IDENT_ID_STR_SIZE);
+		if (!n->c.id) n->c.id = ++g->ident_counter;
+		cgen_ident_id_to_str(s, n->c.id);
+	}
+	return s;
+}
+
+static void cgen_nms_enter(CGenerator *g, Namespace *n) {
+	char *s = cgen_nms_prefix(g, n);
+	size_t chars_so_far = arr_len(g->nms_prefix) - 1; /* -1 for '\0' byte */
+	size_t new_chars = strlen(s);
+	arr_set_len(&g->nms_prefix, chars_so_far + new_chars);
+	for (size_t i = 0; i < new_chars; ++i) {
+		g->nms_prefix[i+chars_so_far] = s[i];
+	}
+	*(char *)arr_add(&g->nms_prefix) = '_';
+	*(char *)arr_add(&g->nms_prefix) = '_';
+	*(char *)arr_add(&g->nms_prefix) = '\0';
+	free(s);
+}
+
+static void cgen_nms_exit(CGenerator *g, Namespace *n) {
+	char *s = cgen_nms_prefix(g, n);
+	arr_set_len(&g->nms_prefix, arr_len(g->nms_prefix) - strlen(s) - 2); /* -2 for "__" */
+	free(s);
+}
+
 static inline void cgen_writeln(CGenerator *g, const char *fmt, ...) {
 	va_list args;
 	cgen_indent(g);
@@ -253,13 +324,9 @@ static inline void cgen_writeln(CGenerator *g, const char *fmt, ...) {
 	cgen_nl(g);
 }
 
-static void cgen_ident_id(CGenerator *g, IdentID id) {
-	cgen_write(g, "a%lu_", (unsigned long)id);
-}
-
 /* should this declaration be a direct function declaration C? (as opposed to using a function pointer or not being a function) */
 static bool cgen_fn_is_direct(CGenerator *g, Declaration *d) {
-	return g->block == NULL && (d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_FN && arr_len(d->idents) == 1;
+	return (g->block == NULL || (g->block->flags & BLOCK_IS_NMS)) && (d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_FN && arr_len(d->idents) == 1;
 }
 
 static bool cgen_uses_ptr(Type *t) {
@@ -281,32 +348,6 @@ static bool cgen_uses_ptr(Type *t) {
 	}
 	assert(0);
 	return false;
-}
-
-/* used for fields */
-static inline void cgen_ident_simple(CGenerator *g, Identifier i) {
-	cgen_indent(g);
-	fprint_ident_reduced_charset(cgen_writing_to(g), i);
-}
-
-static void cgen_ident(CGenerator *g, Identifier i) {
-	if (i == g->main_ident) {
-		/* don't conflict with C's main! */
-		cgen_write(g, "main__");
-	} else {
-	    cgen_ident_simple(g, i);
-	}
-}
-
-
-static char *cgen_ident_to_str(Identifier i) {
-	return ident_to_str(i);
-}
-
-
-/* buffer should be at least 32 bytes */
-static inline void cgen_ident_id_to_str(char *buffer, IdentID id) {
-	snprintf(buffer, 32, "a%lu_", (unsigned long)id);
 }
 
 static inline Identifier cgen_ident_id_to_ident(CGenerator *g, IdentID id) {
@@ -775,7 +816,7 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 
 static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 	IdentID id = 0;
-	char ret_name[64];
+	char ret_name[CGEN_IDENT_ID_STR_SIZE];
 	switch (e->kind) {
 	case EXPR_IF:
 	case EXPR_WHILE:

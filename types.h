@@ -474,7 +474,8 @@ typedef struct StructDef {
 
 enum {
 	  BLOCK_IS_FN = 0x01,
-	  BLOCK_FOUND_TYPES = 0x02,
+	  BLOCK_IS_NMS = 0x02,
+	  BLOCK_FOUND_TYPES = 0x04
 };
 typedef struct Block {
 	U8 flags;
@@ -698,6 +699,10 @@ const char *const builtin_val_names[BUILTIN_VAL_COUNT] =
 typedef struct Namespace {
 	Block body;
 	Identifiers idents; /* these do not include local variables  */
+	Identifier associated_ident; /* if this is foo ::= nms { ... }, then associated_ident is foo; can be NULL */
+	struct {
+		IdentID id; /* used as prefix is associated_ident is unavailable */
+	} c;
 } Namespace;
 
 enum {
@@ -911,6 +916,7 @@ typedef struct CGenerator {
 	Evaluator *evalr;
 	Identifier main_ident;
 	Identifiers *idents;
+	char *nms_prefix; /* dynamic (null-terminated) array of characters, the current namespace C prefix (e.g. "foo__bar__") */
 } CGenerator;
 
 #ifdef TOC_DEBUG

@@ -2126,6 +2126,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 	case EXPR_NMS: {
 		if (!types_block(tr, &e->nms.body, TYPES_BLOCK_NAMESPACE))
 			return false;
+		e->nms.associated_ident = NULL;
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_NMS;
 	} break;
@@ -2325,16 +2326,17 @@ static bool types_decl(Typer *tr, Declaration *d) {
 			t->fn.constness = NULL;
 		}
 	}
-
-	{
-		size_t n_idents = arr_len(d->idents);
-		if (d->type.kind == TYPE_TUPLE) {
-			if (n_idents != arr_len(d->type.tuple)) {
-				err_print(d->where, "Expected to have %lu things declared in declaration, but got %lu.", (unsigned long)arr_len(d->type.tuple), (unsigned long)n_idents);
-				success = false;
-				goto ret;
-			}
+	
+	size_t n_idents; n_idents = arr_len(d->idents);
+	if (d->type.kind == TYPE_TUPLE) {
+		if (n_idents != arr_len(d->type.tuple)) {
+			err_print(d->where, "Expected to have %lu things declared in declaration, but got %lu.", (unsigned long)arr_len(d->type.tuple), (unsigned long)n_idents);
+			success = false;
+			goto ret;
 		}
+	}
+	if (n_idents == 1 && d->expr.kind == EXPR_NMS) {
+		d->expr.nms.associated_ident = d->idents[0];
 	}
 
 	

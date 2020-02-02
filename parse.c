@@ -1061,6 +1061,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				++t->token;
 				if (!parse_block(p, &n->body))
 					return false;
+				n->body.flags |= BLOCK_IS_NMS;
 				arr_foreach(e->nms.body.stmts, Statement, sub) {
 					if (sub->kind != STMT_DECL) {
 						err_print(sub->where, "Only declarations can be in namespaces.");

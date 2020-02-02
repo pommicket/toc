@@ -62,6 +62,7 @@ Here are all the C99 features which `toc` depends on (I might have forgotten som
 - `inttypes.h`
 - Non-constant struct literal initializers (e.g. `int x[2] = {y, z};`)
 - Flexible array members
+- `snprintf`
 
 And here are all of its C11 features:
 

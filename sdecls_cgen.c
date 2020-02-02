@@ -50,20 +50,26 @@ static bool cgen_sdecls_block(CGenerator *g, Block *b) {
 }
 
 static bool cgen_sdecls_expr(CGenerator *g, Expression *e) {
-	cgen_recurse_subexprs(g, e, cgen_sdecls_expr, cgen_sdecls_block, cgen_sdecls_decl);
-	if (e->kind == EXPR_CAST) {
+	switch (e->kind) {
+	case EXPR_CAST:
 		cgen_sdecls_type(g, &e->cast.type);
-	}
-	if (e->kind == EXPR_FN) {
+		break;
+	case EXPR_FN:
 		/* needs to go before decls_cgen.c... */
 		e->fn->c.id = ++g->ident_counter;
 		e->fn->c.declared = false;
 		e->fn->c.defined = false;
-	}
-	if (e->kind == EXPR_TYPE) {
+		break;
+	case EXPR_TYPE:
 		if (!cgen_sdecls_type(g, &e->typeval))
 			return false;
+		break;
+	case EXPR_NMS:
+		e->nms.c.id = 0;
+		break;
+	default: break;
 	}
+	cgen_recurse_subexprs(g, e, cgen_sdecls_expr, cgen_sdecls_block, cgen_sdecls_decl);
 	return true;
 
 }
