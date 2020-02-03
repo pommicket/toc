@@ -76,8 +76,6 @@ static bool cgen_decls_fn_instances(CGenerator *g, FnExpr *f) {
 
 static bool cgen_fn_decl(CGenerator *g, FnExpr *f, Type *t) {
 	FnType *fn_type = &t->fn;
-	if (f->c.declared) return true;
-	f->c.declared = true;
 	if (fn_type->constness) {
 		if (!cgen_decls_fn_instances(g, f))
 			return false;

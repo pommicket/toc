@@ -199,6 +199,9 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 
 static bool cgen_block_enter(CGenerator *g, Block *b) {
 	g->block = b;
+	if (b->flags & BLOCK_IS_NMS) {
+		return true;
+	}
 	Statement *stmts;
 	if (b == NULL) {
 		stmts = g->file->stmts;
@@ -2069,8 +2072,6 @@ static bool cgen_stmt(CGenerator *g, Statement *s) {
 }
 
 static bool cgen_defs_fn(CGenerator *g, FnExpr *f, Type *t) {
-	if (f->c.defined) return true;
-	f->c.defined = true;
 	FnType *fn_type = &t->fn;
 	bool any_const = false;
 	if (fn_type->constness) {

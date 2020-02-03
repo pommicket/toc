@@ -631,9 +631,6 @@ typedef struct FnExpr {
 		/* if name = NULL, this is an anonymous function, and id will be the ID of the fn. */
 		Identifier name;
 		IdentID id;
-		/* needed for imported templates atm */
-		bool declared;
-		bool defined;
 	} c;
 	U8 flags;
 } FnExpr; /* an expression such as fn(x: int) int { 2 * x } */
