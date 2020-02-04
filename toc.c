@@ -84,7 +84,7 @@ static size_t compiler_sizeof(Type *t);
 #include "copy.c"
 
 /* returns NULL on error */
-static char *read_entire_file(Allocator *a, const char *filename, Location where) {
+static char *read_file_contents(Allocator *a, const char *filename, Location where) {
 	FILE *in = fopen(filename, "r");
 	
 	if (!in) {

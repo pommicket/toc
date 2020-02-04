@@ -25,7 +25,7 @@ make sure #export still works properly
 fix cgen_ident_to_str for unicode idents
 check for leaks
 ---
-nice syntax for importing something into a namespace
+nice syntax for #including something into a namespace
 run stuff at compile time without assigning it to a constant
 #compile_only declarations
 constants in structs
@@ -77,13 +77,14 @@ int main(int argc, char **argv) {
 	file.filename = in_filename;
 	Location file_where = {0};
 	file_where.file = &file;
-	char *contents = read_entire_file(&main_allocr, in_filename, file_where);
-	
+	file.ctx = &err_ctx;
+	char *contents = read_file_contents(&main_allocr, in_filename, file_where);
+	if (!contents) return EXIT_FAILURE;
+
 	Identifiers idents;
 	idents_create(&idents);
 	Tokenizer t;
 	file.contents = contents;
-	file.ctx = &err_ctx;
 	tokr_create(&t, &idents, &err_ctx, &main_allocr);
 	if (!tokenize_file(&t, &file)) {
 		err_text_important(&err_ctx, "Errors occured during preprocessing.\n");
@@ -143,7 +144,6 @@ int main(int argc, char **argv) {
 	
 	block_exit(NULL, f.stmts); /* exit global scope */
 	
-	free(contents - 1); /* -1 because we put a 0 byte at the beginning */
 	allocr_free_all(&main_allocr);
 	evalr_free(&ev);
 	fclose(out);

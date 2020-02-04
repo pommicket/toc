@@ -2446,7 +2446,7 @@ static bool types_stmt(Typer *tr, Statement *s) {
 		char *filename = eval_expr_as_cstr(tr, &s->inc.filename, "import filename");
 		if (!filename)
 			return false;
-		char *contents = read_entire_file(tr->allocr, filename, s->where);
+		char *contents = read_file_contents(tr->allocr, filename, s->where);
 		if (!contents)
 			return false;
 		Tokenizer tokr;
