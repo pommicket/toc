@@ -2395,6 +2395,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 }
 
 static bool types_stmt(Typer *tr, Statement *s) {
+	if (s->flags & STMT_TYPED) return true;
 	switch (s->kind) {
 	case STMT_EXPR:
 		if (!types_expr(tr, &s->expr)) {
@@ -2472,6 +2473,7 @@ static bool types_stmt(Typer *tr, Statement *s) {
 		}
 	} break;
 	}
+	s->flags |= STMT_TYPED;
 	return true;
 }
 

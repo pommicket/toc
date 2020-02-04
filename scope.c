@@ -65,7 +65,7 @@ static bool block_enter(Block *b, Statement *stmts, U16 flags) {
 			Declaration *decl = &stmt->decl;
 			if (!add_ident_decls(b, decl, flags))
 				ret = false;
-		} else if (stmt->kind == STMT_INCLUDE) {
+		} else if ((stmt->flags & STMT_TYPED) && stmt->kind == STMT_INCLUDE) {
 			if (!block_enter(b, stmt->inc.stmts, flags))
 				return false;
 		}

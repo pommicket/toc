@@ -88,12 +88,15 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 	if (!block_f(g, &e->block))											\
 		return false;													\
 	break;																\
-	case EXPR_NMS:														\
+	case EXPR_NMS: {													\
+		Namespace *prev = g->nms;										\
 		cgen_nms_enter(g, &e->nms);										\
-		if (!block_f(g, &e->nms.body))									\
+		if (!block_f(g, &e->nms.body)) {								\
+			cgen_nms_exit(g, &e->nms, prev);							\
 			return false;												\
-		cgen_nms_exit(g, &e->nms);										\
-		break;															\
+		}																\
+		cgen_nms_exit(g, &e->nms, prev);								\
+	} break;															\
 	case EXPR_IF:														\
 	if (e->if_.cond)													\
 		if (!f(g, e->if_.cond))											\
@@ -270,6 +273,12 @@ static void cgen_ident(CGenerator *g, Identifier i) {
 	if (g->block && (g->block->flags & BLOCK_IS_NMS) && !g->fn) {
 		/* namespace prefix */
 		cgen_write(g, "%s", g->nms_prefix);
+	} else {
+		/* do prefix for references to siblings */
+		IdentDecl *idecl = ident_decl(i);
+		if (g->nms && idecl->scope == &g->nms->body) {
+			cgen_write(g, "%s", g->nms_prefix);
+		}
 	}
 	if (i == g->main_ident && ident_decl(i) && ident_decl(i)->scope == NULL) {
 		/* don't conflict with C's main! */
@@ -306,6 +315,7 @@ static char *cgen_nms_prefix(CGenerator *g, Namespace *n) {
 }
 
 static void cgen_nms_enter(CGenerator *g, Namespace *n) {
+	g->nms = n;
 	char *s = cgen_nms_prefix(g, n);
 	size_t chars_so_far = arr_len(g->nms_prefix) - 1; /* -1 for '\0' byte */
 	size_t new_chars = strlen(s) + 1; /* + 1 for '\0' byte */
@@ -316,9 +326,10 @@ static void cgen_nms_enter(CGenerator *g, Namespace *n) {
 	free(s);
 }
 
-static void cgen_nms_exit(CGenerator *g, Namespace *n) {
+static void cgen_nms_exit(CGenerator *g, Namespace *n, Namespace *prev) {
 	char *s = cgen_nms_prefix(g, n);
 	arr_set_len(&g->nms_prefix, arr_len(g->nms_prefix) - strlen(s));
+	g->nms = prev;
 	free(s);
 }
 
@@ -2180,6 +2191,7 @@ static bool cgen_defs_block(CGenerator *g, Block *b) {
 
 static bool cgen_file(CGenerator *g, ParsedFile *f) {
 	g->block = NULL;
+	g->nms = NULL;
 	g->fn = NULL;
 	g->file = f;
 

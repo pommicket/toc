@@ -19,7 +19,7 @@
 /* 
 TODO:
 try to remember why arr_set_len doesn't shrink, then write that reason there
-make eval_ptr_to_struct_field return a bool
+make eval_ptr_to_struct_field return a bool (just in case it successfully returns a NULL pointer)
 nms["foo"]
 make sure #export still works properly
 fix cgen_ident_to_str for unicode idents

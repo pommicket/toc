@@ -914,6 +914,7 @@ typedef struct CGenerator {
 	bool will_indent; /* will the next thing be indented? */
 	ParsedFile *file;
 	Block *block;
+	Namespace *nms;
 	FnExpr *fn; /* which function are we in? (NULL for none) - not used during decls */
 	Evaluator *evalr;
 	Identifier main_ident;
