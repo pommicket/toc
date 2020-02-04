@@ -1,7 +1,8 @@
-yep :: Namespace = nms {
-adfasdf ::= fn() {};
+n :: Namespace = nms {
+f ::= fn() {};
 };
 
 
 main ::= fn() {
+	 n.f();
 };

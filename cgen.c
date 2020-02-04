@@ -2079,8 +2079,6 @@ static bool cgen_defs_fn(CGenerator *g, FnExpr *f, Type *t) {
 			if (fn_type->constness[i] == CONSTNESS_YES)
 				any_const = true;
 		}
-	}
-	if (fn_type->constness) {
 		HashTable *instances = &f->instances;
 		/* generate each instance */
 		Instance **is = instances->data;
@@ -2145,13 +2143,22 @@ static bool cgen_defs_stmt(CGenerator *g, Statement *s) {
 }
 
 static bool cgen_defs_block(CGenerator *g, Block *b) {
+	Block *prev = g->block;
+	g->block = b;
+	bool success = true;
 	arr_foreach(b->stmts, Statement, s) {
-		if (!cgen_defs_stmt(g, s))
-			return false;
+		if (!cgen_defs_stmt(g, s)) {
+		    success = false;
+			goto ret;
+		}
 	}
-	if (b->ret_expr && !cgen_defs_expr(g, b->ret_expr))
-		return false;
-	return true;
+	if (b->ret_expr && !cgen_defs_expr(g, b->ret_expr)) {
+		success = false;
+	    goto ret;
+	}
+ ret:
+	g->block = prev;
+	return success;
 }
 
 static bool cgen_file(CGenerator *g, ParsedFile *f) {
