@@ -307,14 +307,16 @@ static void cgen_nms_enter(CGenerator *g, Namespace *n) {
 		g->nms_prefix[i+chars_so_far] = s[i];
 	}
 	*(char *)arr_add(&g->nms_prefix) = '_';
-	*(char *)arr_add(&g->nms_prefix) = '_';
+	if (n->associated_ident)
+		*(char *)arr_add(&g->nms_prefix) = '_';
 	*(char *)arr_add(&g->nms_prefix) = '\0';
 	free(s);
 }
 
 static void cgen_nms_exit(CGenerator *g, Namespace *n) {
 	char *s = cgen_nms_prefix(g, n);
-	arr_set_len(&g->nms_prefix, arr_len(g->nms_prefix) - strlen(s) - 2); /* -2 for "__" */
+	bool double_underscore = n->associated_ident != NULL;
+	arr_set_len(&g->nms_prefix, arr_len(g->nms_prefix) - strlen(s) - (double_underscore ? 2 : 1));
 	free(s);
 }
 

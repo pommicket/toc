@@ -2024,14 +2024,11 @@ static bool types_expr(Typer *tr, Expression *e) {
 			}
 			if (struct_type->kind == TYPE_STRUCT) {
 				bool is_field = false;
-				if (rhs->kind == EXPR_IDENT) {
-					/* maybe accessing a field? */
-					arr_foreach(struct_type->struc->fields, Field, f) {
-						if (ident_eq(f->name, rhs->ident)) {
-							is_field = true;
-							*t = f->type;
-							e->binary.dot.field = f;
-						}
+				arr_foreach(struct_type->struc->fields, Field, f) {
+					if (ident_eq(f->name, rhs->ident)) {
+						is_field = true;
+						*t = f->type;
+						e->binary.dot.field = f;
 					}
 				}
 
@@ -2042,30 +2039,11 @@ static bool types_expr(Typer *tr, Expression *e) {
 					return false;
 				}
 			} else if (struct_type->kind == TYPE_SLICE || struct_type->kind == TYPE_ARR) {
-				if (!(rhs->kind == EXPR_IDENT && ident_eq_str(rhs->ident, "len"))) {
-						
-					Value field_name;
-					if (!types_expr(tr, rhs)) return false;
-					if (!type_is_slicechar(rhs_type)) {
-						char *s = type_to_str(rhs_type);
-						err_print(e->where, "Invalid field of type %s.", s);
-						free(s);
-						return false;
-					}
-					if (!eval_expr(tr->evalr, rhs, &field_name)) return false;
-					char *str = field_name.slice.data;
-					if (field_name.slice.n != 3	|| strcmp(str, "len") != 0) {					
-						char *fstr = err_malloc((size_t)(field_name.slice.n + 1));
-						memcpy(fstr, field_name.slice.data, (size_t)field_name.slice.n);
-						fstr[field_name.slice.n] = 0; /* null-terminate */
-						char *typestr = type_to_str(lhs_type);
-						err_print(e->where, "%s is not a field of type %s.", fstr, typestr);
-						free(fstr); free(typestr);
-						return false;
-					}
+				if (!ident_eq_str(rhs->ident, "len")) {
+					err_print(rhs->where, "Field of array or slice must be .len");
+					return false;
 				}
-			
-				/* length of slice/arr */
+				/* length of slice/arr is i64 */
 				t->kind = TYPE_BUILTIN;
 				t->builtin = BUILTIN_I64;
 				/* change expr to UNARY_LEN */
@@ -2073,6 +2051,20 @@ static bool types_expr(Typer *tr, Expression *e) {
 				Expression *of = lhs;
 				e->unary.op = UNARY_LEN;
 				e->unary.of = of;
+			} else if (type_is_builtin(struct_type, BUILTIN_NMS)) {
+				Value nms_val;
+				if (!eval_expr(tr->evalr, lhs, &nms_val))
+					return false;
+				Namespace *nms = nms_val.nms;
+				Identifier translated = ident_translate(rhs->ident, &nms->idents);
+				if (!translated) {
+					char *s = ident_to_str(rhs->ident);
+					err_print(rhs->where, "%s is not a member of this namespace.", s);
+					return false;
+				}
+				if (!type_of_ident(tr, rhs->where, translated, t)) {
+					return false;
+				}
 			} else {
 				char *s = type_to_str(lhs_type);
 				err_print(e->where, "Operator . applied to type %s, which is not a structure or pointer to structure.", s);
@@ -2126,7 +2118,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 	case EXPR_NMS: {
 		if (!types_block(tr, &e->nms.body, TYPES_BLOCK_NAMESPACE))
 			return false;
-		e->nms.associated_ident = NULL;
+		e->nms.associated_ident = NULL; /* set when we type the declaration */
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_NMS;
 	} break;
@@ -2193,6 +2185,7 @@ static bool types_block(Typer *tr, Block *b, U16 flags) {
  ret:
 	if (flags & TYPES_BLOCK_NAMESPACE) {
 		/* don't exit block because we don't want to have to re-enter each time we grab something from the namespace */
+		b->flags |= BLOCK_IS_NMS;
 		arr_remove_last(&tr->blocks);
 		tr->block = *(Block **)arr_last(tr->blocks);
 	} else {
@@ -2336,7 +2329,16 @@ static bool types_decl(Typer *tr, Declaration *d) {
 		}
 	}
 	if (n_idents == 1 && d->expr.kind == EXPR_NMS) {
-		d->expr.nms.associated_ident = d->idents[0];
+		bool is_at_top_level = true;
+		typedef Block *BlockPtr;
+		arr_foreach(tr->blocks, BlockPtr, b) {
+			if (*b && !((*b)->flags & BLOCK_IS_NMS)) {
+				is_at_top_level = false;
+				break;
+			}
+		}
+		if (is_at_top_level)
+			d->expr.nms.associated_ident = d->idents[0];
 	}
 
 	

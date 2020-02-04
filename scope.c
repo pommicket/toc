@@ -59,6 +59,9 @@ static void remove_ident_decls(Block *b, Declaration *d) {
 
 /* pass NULL for block for global scope */
 static bool block_enter(Block *b, Statement *stmts, U16 flags) {
+	if (b && (b->flags & BLOCK_IS_NMS)) /* we only enter namespaces once, when they're created */
+		return true;
+	
 	bool ret = true;
 	arr_foreach(stmts, Statement, stmt) {
 		if (stmt->kind == STMT_DECL) {
@@ -71,6 +74,9 @@ static bool block_enter(Block *b, Statement *stmts, U16 flags) {
 }
 
 static void block_exit(Block *b, Statement *stmts) {
+	if (b && (b->flags & BLOCK_IS_NMS))
+		return;
+	
 	arr_foreach(stmts, Statement, stmt) {
 		if (stmt->kind == STMT_DECL) {
 			Declaration *decl = &stmt->decl;

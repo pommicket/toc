@@ -169,8 +169,13 @@ static Identifier ident_get(Identifiers *ids, char *s) {
 static Identifier ident_translate_forced(Identifier i, Identifiers *to_idents) {
 	if (!i || i->anonymous) return NULL;
 	char *p = i->str;
-	Identifier new_ident = ident_insert(to_idents, &p);
-	return new_ident;
+    return ident_insert(to_idents, &p);
+}
+
+/* translate but don't add it if it's not there */
+static Identifier ident_translate(Identifier i, Identifiers *to_idents) {
+	if (!i || i->anonymous) return NULL;
+    return ident_get(to_idents, i->str);
 }
 
 static IdentDecl *ident_add_decl(Identifier i, struct Declaration *d, struct Block *b) {

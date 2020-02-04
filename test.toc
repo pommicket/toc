@@ -1,8 +1,10 @@
-n :: Namespace = nms {
-f ::= fn() {};
-};
 
 
 main ::= fn() {
-	 n.f();
+	 x ::= nms {
+	   f ::= fn() {
+	   	 
+	   };
+	 };
+	 // x.g();
 };

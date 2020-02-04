@@ -20,6 +20,7 @@
 TODO:
 namespace
 try to remember why arr_set_len doesn't shrink, then write that reason there
+nms["foo"]
 make sure nms {foo:= 7; } works for cgen
 make sure #export still works properly
 fix cgen_ident_to_str for unicode idents
