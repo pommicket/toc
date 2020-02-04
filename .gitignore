@@ -6,6 +6,7 @@ point.c
 *.top
 tests/**/*.c
 tests/**/*.bin
+tests/**/got
 vgcore*
 TAGS
 tags
