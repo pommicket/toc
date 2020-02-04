@@ -1065,18 +1065,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				++t->token;
 				if (!parse_block(p, &n->body))
 					return false;
-				/* don't set BLOCK_IS_NMS yet (done by types.c) */
-				arr_foreach(e->nms.body.stmts, Statement, sub) {
-					if (sub->kind != STMT_DECL) {
-						err_print(sub->where, "Only declarations can be in namespaces.");
-						return false;
-					}
-					Declaration *decl = &sub->decl;
-					arr_foreach(decl->idents, Identifier, i) {
-						*i = ident_translate_forced(*i, &n->idents);
-					}
-				}
-				goto success;
+ 				goto success;
 			}
 			case KW_IF: {
 				IfExpr *i = &e->if_;

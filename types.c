@@ -384,11 +384,13 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 		bool captured = false;
 		if (decl->scope != NULL && !(decl->scope->flags & BLOCK_IS_NMS)) {
 			Block *decl_scope = decl->scope;
-			/* go back through scopes */
-			for (Block **block = arr_last(tr->blocks); *block && *block != decl_scope; --block) {
-				if ((*block)->flags & BLOCK_IS_FN) {
-					captured = true;
-					break;
+			if (!(decl_scope->flags & BLOCK_IS_NMS)) {
+				/* go back through scopes */
+				for (Block **block = arr_last(tr->blocks); *block && *block != decl_scope; --block) {
+					if ((*block)->flags & BLOCK_IS_FN) {
+						captured = true;
+						break;
+					}
 				}
 			}
 		}
@@ -769,7 +771,7 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 		goto ret;
 	}
 	entered_fn = true;
-	if (!types_block(tr, &f->body, 0)) {
+	if (!types_block(tr, &f->body)) {
 		success = false;
 		goto ret;
 	}
@@ -1036,6 +1038,32 @@ static char *eval_expr_as_cstr(Typer *tr, Expression *e, const char *what_is_thi
 	return str;
 }
 
+static bool nms_translate_idents_in_stmts(Namespace *nms, Statement *stmts) {
+	arr_foreach(stmts, Statement, s) {
+		switch (s->kind) {
+		case STMT_INCLUDE:
+			if (!nms_translate_idents_in_stmts(nms, s->inc.stmts))
+				return false;
+			break;
+		case STMT_DECL: {
+			Declaration *d = &s->decl;
+			arr_foreach(d->idents, Identifier, i) {
+				*i = ident_translate_forced(*i, &nms->idents);
+			}
+		} break;
+		case STMT_EXPR:
+		case STMT_RET:
+			err_print(s->where, "Only declarations can appear in namespaces.");
+			return false;
+		}
+	}
+	return true;
+}
+
+static inline bool nms_translate_idents(Namespace *nms) {
+	return nms_translate_idents_in_stmts(nms, nms->body.stmts);
+}
+
 static bool types_expr(Typer *tr, Expression *e) {
 	if (e->flags & EXPR_FOUND_TYPE) return true;
 	Type *t = &e->type;
@@ -1204,7 +1232,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		
 		arr_remove_lasta(&tr->in_expr_decls, tr->allocr);
 		
-		if (!types_block(tr, &fo->body, 0)) return false;
+		if (!types_block(tr, &fo->body)) return false;
 		for_exit(e);
 		
 		if (fo->body.ret_expr) {
@@ -1262,7 +1290,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		IfExpr *curr = i;
 		Type *curr_type = t;
 		bool has_else = false;
-		if (!types_block(tr, &curr->body, 0))
+		if (!types_block(tr, &curr->body))
 			return false;
 		if (curr->body.ret_expr) {
 			*t = curr->body.ret_expr->type;
@@ -1287,7 +1315,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				IfExpr *nexti = &curr->next_elif->if_;
 				Type *next_type = &curr->next_elif->type;
 				curr->next_elif->flags |= EXPR_FOUND_TYPE;
-				if (!types_block(tr, &nexti->body, 0)) {
+				if (!types_block(tr, &nexti->body)) {
 					return false;
 				}
 				if (nexti->body.ret_expr) {
@@ -1322,7 +1350,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		bool ret = true;
 		if (w->cond && !types_expr(tr, w->cond))
 			ret = false;
-		if (!types_block(tr, &w->body, 0))
+		if (!types_block(tr, &w->body))
 			ret = false;
 		if (!ret) return false;
 		if (w->cond != NULL && w->body.ret_expr != NULL) {
@@ -1691,7 +1719,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 	} break;
 	case EXPR_BLOCK: {
 		Block *b = &e->block;
-		if (!types_block(tr, b, 0))
+		if (!types_block(tr, b))
 			return false;
 		if (b->ret_expr) {
 			*t = b->ret_expr->type;
@@ -2126,11 +2154,16 @@ static bool types_expr(Typer *tr, Expression *e) {
 		t->builtin = BUILTIN_TYPE;
 		break;
 	case EXPR_NMS: {
-		if (!types_block(tr, &e->nms.body, TYPES_BLOCK_NAMESPACE))
+		e->nms.body.flags |= BLOCK_IS_NMS;
+		if (!types_block(tr, &e->nms.body))
 			return false;
 		e->nms.associated_ident = NULL; /* set when we type the declaration */
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_NMS;
+		if (!nms_translate_idents(&e->nms))
+			return false;
+		if (!block_enter(&e->nms.body, e->nms.body.stmts, 0))
+			return false;
 	} break;
 	case EXPR_VAL:
 		assert(0);
@@ -2155,14 +2188,12 @@ static void typer_block_exit(Typer *tr) {
 }
 
 
-static bool types_block(Typer *tr, Block *b, U16 flags) {
+static bool types_block(Typer *tr, Block *b) {
 	if (b->flags & BLOCK_FOUND_TYPES)
 		return true;
 	bool success = true;
 	if (!typer_block_enter(tr, b))
 		return false;
-	if (flags & TYPES_BLOCK_NAMESPACE)
-		b->flags |= BLOCK_IS_NMS; /* do this after typer_block_enter because otherwise it won't actually enter the block */
 	arr_foreach(b->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {
 			success = false;
@@ -2194,13 +2225,7 @@ static bool types_block(Typer *tr, Block *b, U16 flags) {
 		
 	}
  ret:
-	if (flags & TYPES_BLOCK_NAMESPACE) {
-		/* don't exit block because we don't want to have to re-enter each time we grab something from the namespace */
-		arr_remove_last(&tr->blocks);
-		tr->block = *(Block **)arr_last(tr->blocks);
-	} else {
-		typer_block_exit(tr);
-	}
+	typer_block_exit(tr);
 	b->flags |= BLOCK_FOUND_TYPES;
 	return success;
 }

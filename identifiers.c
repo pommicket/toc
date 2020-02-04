@@ -30,7 +30,6 @@ static int is_ident(int c) {
 static void idents_create(Identifiers *ids) {
 	str_hash_table_create(&ids->table, sizeof(IdentSlot) - sizeof(StrHashTableSlot), NULL);
 	ids->rseed = 0x27182818;
-	
 }
 
 /* advances s until a non-identifier character is reached, then returns the number of characters advanced */

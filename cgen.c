@@ -266,6 +266,7 @@ static inline void cgen_ident_simple(CGenerator *g, Identifier i) {
 }
 
 static void cgen_ident(CGenerator *g, Identifier i) {
+	
 	if (g->block && (g->block->flags & BLOCK_IS_NMS) && !g->fn) {
 		/* namespace prefix */
 		cgen_write(g, "%s", g->nms_prefix);

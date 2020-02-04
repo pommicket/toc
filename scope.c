@@ -58,16 +58,16 @@ static void remove_ident_decls(Block *b, Declaration *d) {
 }
 
 /* pass NULL for block for global scope */
-static bool block_enter(Block *b, Statement *stmts, U16 flags) {
-	if (b && (b->flags & BLOCK_IS_NMS)) /* we only enter namespaces once, when they're created */
-		return true;
-	
+static bool block_enter(Block *b, Statement *stmts, U16 flags) {	
 	bool ret = true;
 	arr_foreach(stmts, Statement, stmt) {
 		if (stmt->kind == STMT_DECL) {
 			Declaration *decl = &stmt->decl;
 			if (!add_ident_decls(b, decl, flags))
 				ret = false;
+		} else if (stmt->kind == STMT_INCLUDE) {
+			if (!block_enter(b, stmt->inc.stmts, flags))
+				return false;
 		}
 	}
 	return ret;

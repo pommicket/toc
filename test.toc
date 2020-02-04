@@ -6,11 +6,11 @@ n ::= nms {
 
 
 main ::= fn() {
-	a := counter();
-	b := counter();
-	counter();
-	c := counter();
-	puti(a);
-	puti(b);
-	puti(c);
+	a := n.counter();
+	b := n.counter();
+	n.counter();
+	c := n.counter();
+	// puti(a);
+	// puti(b);
+	// puti(c);
 };

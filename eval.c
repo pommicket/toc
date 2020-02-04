@@ -4,10 +4,7 @@
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
 
-enum {
-	  TYPES_BLOCK_NAMESPACE = 0x01
-};
-static bool types_block(Typer *tr, Block *b, U16 flags);
+static bool types_block(Typer *tr, Block *b);
 static bool types_decl(Typer *tr, Declaration *d);
 static bool type_resolve(Typer *tr, Type *t, Location where);
 static bool eval_block(Evaluator *ev, Block *b, Type *t, Value *v);
@@ -1506,7 +1503,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			break;
 		}
 		/* make sure function body is typed before calling it */
-		if (!types_block(ev->typer, &fn->body, 0)) {
+		if (!types_block(ev->typer, &fn->body)) {
 			return false;
 		}
 		/* NOTE: we're not calling fn_enter because we're manually entering the function */

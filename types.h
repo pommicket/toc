@@ -702,7 +702,7 @@ typedef struct Namespace {
 	Identifiers idents; /* these do not include local variables  */
 	Identifier associated_ident; /* if this is foo ::= nms { ... }, then associated_ident is foo; can be NULL */
 	struct {
-		IdentID id; /* used as prefix is associated_ident is unavailable */
+		IdentID id; /* used as prefix if prefix is NULL */
 	} c;
 } Namespace;
 
