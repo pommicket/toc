@@ -29,6 +29,25 @@ stdout_fwrite ::= fn(data: &u8, size: u64, nmemb: u64) {
 };
 
 puts ::= fn(x: []char) {
-		stdout_fwrite(&x[0] as &u8, 1, x.len as u64);
-		toc_putchar('\n');
+	stdout_fwrite(&x[0] as &u8, 1, x.len as u64);
+	toc_putchar('\n');
+};
+
+puti ::= fn(x: int) {
+	if x < 0 {
+	   toc_putchar('-');
+	   // NOTE: don't do x = -x; here to make sure I64_MIN works
+	}
+	abs ::= fn(x: int) int { if x < 0 { -x } else { x } };
+	scan_digit := 1000000000000000000;
+	started := false;
+	while scan_digit > 0 {
+		digit := abs((x / scan_digit) % 10);
+		if digit > 0 { started = true; }
+		if started {
+		   toc_putchar((('0' as int) + digit) as char);
+		}
+		scan_digit /= 10;
+	}
+	toc_putchar('\n');
 };

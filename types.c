@@ -382,9 +382,10 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 	case IDECL_DECL: {
 		Declaration *d = decl->decl;
 		bool captured = false;
-		if (decl->scope != NULL) {
+		if (decl->scope != NULL && !(decl->scope->flags & BLOCK_IS_NMS)) {
+			Block *decl_scope = decl->scope;
 			/* go back through scopes */
-			for (Block **block = arr_last(tr->blocks); *block && *block != decl->scope; --block) {
+			for (Block **block = arr_last(tr->blocks); *block && *block != decl_scope; --block) {
 				if ((*block)->flags & BLOCK_IS_FN) {
 					captured = true;
 					break;
@@ -1855,6 +1856,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		case BINARY_SET_SUB:
 		case BINARY_SET_MUL:
 		case BINARY_SET_DIV:
+		case BINARY_SET_MOD:
 			if (!expr_must_lval(e->binary.lhs)) {
 				return false;
 			}
@@ -1863,6 +1865,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		case BINARY_SUB:
 		case BINARY_MUL:
 		case BINARY_DIV:
+		case BINARY_MOD:
 		case BINARY_LT:
 		case BINARY_GT:
 		case BINARY_LE:
@@ -1935,6 +1938,11 @@ static bool types_expr(Typer *tr, Expression *e) {
 					} else {
 						/* lhs flexible, rhs ? */
 						*t = *rhs_type;
+					}
+					if ((o == BINARY_MOD || o == BINARY_SET_MOD)
+						&& type_builtin_is_float(t->builtin)) {
+						err_print(e->where, "Cannot use operator % on floating-point numbers.");
+						valid = false;
 					}
 				} break;
 				}
@@ -2056,6 +2064,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 				if (!eval_expr(tr->evalr, lhs, &nms_val))
 					return false;
 				Namespace *nms = nms_val.nms;
+				lhs->kind = EXPR_VAL;
+				lhs->val.nms = nms;
 				Identifier translated = ident_translate(rhs->ident, &nms->idents);
 				if (!translated) {
 					char *s = ident_to_str(rhs->ident);
@@ -2151,7 +2161,8 @@ static bool types_block(Typer *tr, Block *b, U16 flags) {
 	bool success = true;
 	if (!typer_block_enter(tr, b))
 		return false;
-
+	if (flags & TYPES_BLOCK_NAMESPACE)
+		b->flags |= BLOCK_IS_NMS; /* do this after typer_block_enter because otherwise it won't actually enter the block */
 	arr_foreach(b->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {
 			success = false;
@@ -2185,7 +2196,6 @@ static bool types_block(Typer *tr, Block *b, U16 flags) {
  ret:
 	if (flags & TYPES_BLOCK_NAMESPACE) {
 		/* don't exit block because we don't want to have to re-enter each time we grab something from the namespace */
-		b->flags |= BLOCK_IS_NMS;
 		arr_remove_last(&tr->blocks);
 		tr->block = *(Block **)arr_last(tr->blocks);
 	} else {
@@ -2241,7 +2251,10 @@ static bool types_decl(Typer *tr, Declaration *d) {
 			d->type = d->expr.type;
 			d->type.flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE; /* x := 5; => x is not flexible */
 		}
-		if ((d->flags & DECL_IS_CONST) || (tr->block == NULL && tr->fn == NULL)) {
+		bool need_value = (d->flags & DECL_IS_CONST) ||
+			((tr->block == NULL || (tr->block->flags & BLOCK_IS_NMS)) && tr->fn == NULL);
+		
+		if (need_value) {
 			if (!(d->flags & DECL_FOUND_VAL)) {
 				Value val;
 				if (!eval_expr(tr->evalr, &d->expr, &val)) {
@@ -2328,7 +2341,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 			goto ret;
 		}
 	}
-	if (n_idents == 1 && d->expr.kind == EXPR_NMS) {
+	if (n_idents == 1 && (d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_NMS) {
 		bool is_at_top_level = true;
 		typedef Block *BlockPtr;
 		arr_foreach(tr->blocks, BlockPtr, b) {

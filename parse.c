@@ -80,6 +80,7 @@ static const char *binary_op_to_str(BinaryOp b) {
 	case BINARY_SET_SUB: return "-=";
 	case BINARY_SET_MUL: return "*=";
 	case BINARY_SET_DIV: return "/=";
+	case BINARY_SET_MOD: return "%=";
 	case BINARY_AT_INDEX: return "[]";
 	case BINARY_LT: return "<";
 	case BINARY_LE: return "<=";
@@ -88,6 +89,7 @@ static const char *binary_op_to_str(BinaryOp b) {
 	case BINARY_EQ: return "==";
 	case BINARY_NE: return "!=";
 	case BINARY_DOT: return ".";
+	case BINARY_MOD: return "%";
 	}
 	assert(0);
 	return "";
@@ -931,6 +933,7 @@ static int op_precedence(Keyword op) {
 	case KW_MINUS_EQ:
 	case KW_ASTERISK_EQ:
 	case KW_SLASH_EQ:
+	case KW_PERCENT_EQ:
 		return 0;
 	case KW_COMMA: return 1;
 	case KW_LT: return 3;
@@ -944,6 +947,7 @@ static int op_precedence(Keyword op) {
 	case KW_AMPERSAND: return 25;
 	case KW_ASTERISK: return 30;
 	case KW_SLASH: return 40;
+	case KW_PERCENT: return 45;
 	case KW_EXCLAMATION: return 50;
 	case KW_DEL: return 1000;
 	default: return NOT_AN_OP;
@@ -1501,6 +1505,15 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			case KW_MINUS:
 				op = BINARY_SUB;
 				break;
+			case KW_ASTERISK:
+				op = BINARY_MUL;
+				break;
+			case KW_SLASH:
+				op = BINARY_DIV;
+				break;
+			case KW_PERCENT:
+				op = BINARY_MOD;
+				break;
 			case KW_EQ_EQ:
 				op = BINARY_EQ;
 				break;
@@ -1534,11 +1547,8 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			case KW_SLASH_EQ:
 				op = BINARY_SET_DIV;
 				break;
-			case KW_ASTERISK:
-				op = BINARY_MUL;
-				break;
-			case KW_SLASH:
-				op = BINARY_DIV;
+			case KW_PERCENT_EQ:
+				op = BINARY_SET_MOD;
 				break;
 			case KW_AMPERSAND:
 			case KW_EXCLAMATION:
@@ -2021,7 +2031,7 @@ static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 		case KW_SEMICOLON:
 			*was_a_statement = false;
 			++t->token;
-			return true;
+			goto success;
 		case KW_RETURN: {
 			s->kind = STMT_RET;
 			++t->token;
@@ -2029,7 +2039,7 @@ static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			if (token_is_kw(t->token, KW_SEMICOLON)) {
 				/* return with no expr */
 				++t->token;
-				return true;
+				goto success;
 			}
 			s->ret.flags |= RET_HAS_EXPR;
 			Token *end = expr_find_end(p, 0);
@@ -2060,7 +2070,7 @@ static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				return false;
 			}
 			++t->token;
-			return true;
+			goto success;
 		} break;
 		default:
 			break;
@@ -2079,7 +2089,7 @@ static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			tokr_skip_to_eof(t);
 			return false;
 		}
-		bool success = parse_expr(p, &s->expr, end);
+		bool valid = parse_expr(p, &s->expr, end);
 		
 		/* go past end of expr regardless of whether successful or not */
 		if (token_is_kw(end, KW_SEMICOLON)) {
@@ -2089,8 +2099,9 @@ static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			t->token = end;
 		}
 		
-		if (!success) return false;
+		if (!valid) return false;
 	}
+ success:
 	s->where.end = t->token;
 	return true;
 }

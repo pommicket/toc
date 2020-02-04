@@ -734,45 +734,69 @@ static bool eval_expr_ptr_at_index(Evaluator *ev, Expression *e, void **ptr, Typ
 	return eval_val_ptr_at_index(e->where, &arr, i, ltype, ptr, type);
 }
 
+static bool eval_address_of_ident(Identifier i, Type *type, Location where, void **ptr) {
+	IdentDecl *id = ident_decl(i);
+	if (!(id->flags & IDECL_HAS_VAL)) {
+		if (id->kind == IDECL_DECL) {
+			Declaration *decl = id->decl;
+			if (!(decl->flags & DECL_IS_CONST) || !(decl->flags & DECL_FOUND_VAL)) goto runtime_var;
+			id->val = decl->val;
+			id->flags |= IDECL_HAS_VAL;
+		} else {
+		runtime_var:
+			err_print(where, "Cannot take address of run time variable at compile time.");
+			return false;
+		}
+	}
+	if (type->kind == TYPE_ARR)
+		*ptr = id->val.arr; /* point directly to data */
+	else if (type->kind == TYPE_STRUCT)
+		*ptr = id->val.struc;
+	else
+		*ptr = &id->val;
+	return true;
+}
+
 static void *eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr) {
 	Type *struct_type = &dot_expr->binary.lhs->type;
 	bool is_ptr = struct_type->kind == TYPE_PTR;
 	if (is_ptr) {
 		struct_type = struct_type->ptr;
 	}
-	assert(struct_type->kind == TYPE_STRUCT);
-	eval_struct_find_offsets(struct_type->struc);
+	if (struct_type->kind == TYPE_STRUCT) {
+		eval_struct_find_offsets(struct_type->struc);
 			
-	Value struc;
-	if (!eval_expr(ev, dot_expr->binary.lhs, &struc))
-		return NULL;
-	void *struc_data;
-	if (is_ptr) {
-		struc_data = struc.ptr;
-		if (struc_data == NULL) {
-			err_print(dot_expr->where, "Attempt to dereference NULL pointer.");
+		Value struc;
+		if (!eval_expr(ev, dot_expr->binary.lhs, &struc))
+			return NULL;
+		void *struc_data;
+		if (is_ptr) {
+			struc_data = struc.ptr;
+			if (struc_data == NULL) {
+				err_print(dot_expr->where, "Attempt to dereference NULL pointer.");
+				return NULL;
+			}
+		} else {
+			struc_data = struc.struc;
+		}
+		return (char *)struc_data + dot_expr->binary.dot.field->offset;
+	} else {
+		void *ptr;
+		assert(type_is_builtin(struct_type, BUILTIN_NMS));
+		Identifier translated = ident_translate(dot_expr->binary.rhs->ident, &dot_expr->binary.lhs->val.nms->idents);
+		if (!eval_address_of_ident(translated, &dot_expr->type, dot_expr->where, &ptr)) {
 			return NULL;
 		}
-	} else {
-		struc_data = struc.struc;
+		return ptr;
 	}
-	return (char *)struc_data + dot_expr->binary.dot.field->offset;
+	
 }
 
 static bool eval_address_of(Evaluator *ev, Expression *e, void **ptr) {
 	switch (e->kind) {
 	case EXPR_IDENT: {
-		IdentDecl *id = ident_decl(e->ident);
-		if (!(id->flags & IDECL_HAS_VAL)) {
-			err_print(e->where, "Cannot take address of run time variable at compile time.");
+		if (!eval_address_of_ident(e->ident, &e->type, e->where, ptr))
 			return false;
-		}
-		if (e->type.kind == TYPE_ARR)
-			*ptr = id->val.arr; /* point directly to data */
-		else if (e->type.kind == TYPE_STRUCT)
-			*ptr = id->val.struc;
-		else
-			*ptr = &id->val;
 	} break;
 	case EXPR_UNARY_OP:
 		switch (e->unary.op) {
@@ -799,10 +823,10 @@ static bool eval_address_of(Evaluator *ev, Expression *e, void **ptr) {
 			Value struc;
 			if (!eval_expr(ev, e->binary.lhs, &struc))
 				return false;
+
 			*ptr = eval_ptr_to_struct_field(ev, e);
 			if (!*ptr)
 				return false;
-			return true;
 		} break;
 		default: assert(0); return false;
 		}
@@ -894,7 +918,7 @@ static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value 
 	case BUILTIN_##up:								\
 		out->low = (up)(lhs.low op rhs.low); break
 	
-#define eval_binary_op_nums(builtin, op)		\
+#define eval_binary_op_ints(builtin, op)		\
 	eval_binary_op_one(i8, I8, op);				\
 	eval_binary_op_one(i16, I16, op);			\
 	eval_binary_op_one(i32, I32, op);			\
@@ -902,7 +926,10 @@ static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value 
 	eval_binary_op_one(u8, U8, op);				\
 	eval_binary_op_one(u16, U16, op);			\
 	eval_binary_op_one(u32, U32, op);			\
-	eval_binary_op_one(u64, U64, op);			\
+	eval_binary_op_one(u64, U64, op);			
+	
+#define eval_binary_op_nums(builtin, op)		\
+    eval_binary_op_ints(builtin, op);			\
 	eval_binary_op_one(f32, F32, op);			\
 	eval_binary_op_one(f64, F64, op)
 
@@ -913,6 +940,15 @@ static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value 
 	assert(out_type->kind == TYPE_BUILTIN);		\
 	switch (builtin) {							\
 		eval_binary_op_nums(builtin, op);		\
+	default: assert(0); break;					\
+	}
+
+#define eval_binary_op_ints_only(op)			\
+	val_cast(&lhs, lhs_type, &lhs, out_type);	\
+	val_cast(&rhs, rhs_type, &rhs, out_type);	\
+	assert(out_type->kind == TYPE_BUILTIN);		\
+	switch (builtin) {							\
+		eval_binary_op_ints(builtin, op);		\
 	default: assert(0); break;					\
 	}
 
@@ -974,6 +1010,8 @@ static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value 
 		eval_binary_op_nums_only(*); break;
 	case BINARY_DIV:
 		eval_binary_op_nums_only(/); break;
+	case BINARY_MOD:
+		eval_binary_op_ints_only(%); break;
 	case BINARY_LT:
 		eval_binary_bool_op(<); break;
 	case BINARY_LE:
@@ -1194,6 +1232,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		case BINARY_SUB:
 		case BINARY_MUL:
 		case BINARY_DIV:
+		case BINARY_MOD:
 		case BINARY_LT:
 		case BINARY_LE:
 		case BINARY_GT:
@@ -1208,13 +1247,15 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		case BINARY_SET_ADD:
 		case BINARY_SET_SUB:
 		case BINARY_SET_MUL:
-		case BINARY_SET_DIV: {
+		case BINARY_SET_DIV:
+		case BINARY_SET_MOD: {
 			BinaryOp subop = (BinaryOp)0;
 			switch (e->binary.op) {
 			case BINARY_SET_ADD: subop = BINARY_ADD; break;
 			case BINARY_SET_SUB: subop = BINARY_SUB; break;
 			case BINARY_SET_MUL: subop = BINARY_MUL; break;
 			case BINARY_SET_DIV: subop = BINARY_DIV; break;
+			case BINARY_SET_MOD: subop = BINARY_MOD; break;
 			default: assert(0);
 			}
 			eval_numerical_bin_op(lhs, &e->binary.lhs->type, subop, rhs, &e->binary.rhs->type, v, &e->binary.lhs->type);

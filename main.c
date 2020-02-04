@@ -18,14 +18,16 @@
 
 /* 
 TODO:
-namespace
 try to remember why arr_set_len doesn't shrink, then write that reason there
+make eval_ptr_to_struct_field return a bool
 nms["foo"]
-make sure nms {foo:= 7; } works for cgen
 make sure #export still works properly
 fix cgen_ident_to_str for unicode idents
 check for leaks
 ---
+nice syntax for importing something into a namespace
+run stuff at compile time without assigning it to a constant
+#compile_only declarations
 constants in structs
 #if
 

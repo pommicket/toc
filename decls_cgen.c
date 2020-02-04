@@ -197,7 +197,7 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 			if (!cgen_decls_expr(g, &d->expr))
 				return false;
 		}
-		if (g->block == NULL && g->fn == NULL) {
+		if ((g->block == NULL || (g->block->flags & BLOCK_IS_NMS)) && g->fn == NULL) {
 			for (int i = 0, n_idents = (int)arr_len(d->idents); i < n_idents; ++i) {
 				Identifier ident = d->idents[i];
 				Type *type = decl_type_at_index(d, i);
@@ -209,6 +209,18 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 					cgen_ident(g, ident);
 					if (!cgen_type_post(g, type, d->where))
 						return false;
+					if (g->block) {
+						assert(g->block->flags & BLOCK_IS_NMS);
+						if (d->flags & DECL_HAS_EXPR) {
+							Value *val = decl_val_at_index(d, i);
+							cgen_write(g, " = ");
+							if (!cgen_val(g, *val, type, d->where))
+								return false;
+						} else {
+							cgen_write(g, " = ");
+							cgen_zero_value(g, type);
+						}
+					}
 					cgen_write(g, ";");
 					cgen_nl(g);
 				}

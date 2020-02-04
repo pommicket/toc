@@ -266,11 +266,11 @@ static inline void cgen_ident_simple(CGenerator *g, Identifier i) {
 }
 
 static void cgen_ident(CGenerator *g, Identifier i) {
-	if (g->block && (g->block->flags & BLOCK_IS_NMS)) {
+	if (g->block && (g->block->flags & BLOCK_IS_NMS) && !g->fn) {
 		/* namespace prefix */
 		cgen_write(g, "%s", g->nms_prefix);
 	}
-	if (i == g->main_ident) {
+	if (i == g->main_ident && ident_decl(i) && ident_decl(i)->scope == NULL) {
 		/* don't conflict with C's main! */
 		cgen_write(g, "main__");
 	} else {
@@ -285,15 +285,21 @@ static inline void cgen_ident_id_to_str(char *buffer, IdentID id) {
 	snprintf(buffer, 32, "a%lu_", (unsigned long)id);
 }
 
-/* does NOT include __ */
 static char *cgen_nms_prefix(CGenerator *g, Namespace *n) {
     char *s;
 	if (n->associated_ident) {
-		s = cgen_ident_to_str(n->associated_ident);
+		size_t ident_len = n->associated_ident->len;
+		s = malloc(ident_len + 3);
+		memcpy(s, n->associated_ident->str, ident_len);
+		s[ident_len] = '_';
+		s[ident_len+1] = '_';
+		s[ident_len+2] = '\0';
 	} else {
-		s = malloc(CGEN_IDENT_ID_STR_SIZE);
+		s = calloc(CGEN_IDENT_ID_STR_SIZE + 1, 1);
 		if (!n->c.id) n->c.id = ++g->ident_counter;
 		cgen_ident_id_to_str(s, n->c.id);
+		s[strlen(s)] = '_';
+		
 	}
 	return s;
 }
@@ -301,22 +307,17 @@ static char *cgen_nms_prefix(CGenerator *g, Namespace *n) {
 static void cgen_nms_enter(CGenerator *g, Namespace *n) {
 	char *s = cgen_nms_prefix(g, n);
 	size_t chars_so_far = arr_len(g->nms_prefix) - 1; /* -1 for '\0' byte */
-	size_t new_chars = strlen(s);
+	size_t new_chars = strlen(s) + 1; /* + 1 for '\0' byte */
 	arr_set_len(&g->nms_prefix, chars_so_far + new_chars);
 	for (size_t i = 0; i < new_chars; ++i) {
 		g->nms_prefix[i+chars_so_far] = s[i];
 	}
-	*(char *)arr_add(&g->nms_prefix) = '_';
-	if (n->associated_ident)
-		*(char *)arr_add(&g->nms_prefix) = '_';
-	*(char *)arr_add(&g->nms_prefix) = '\0';
 	free(s);
 }
 
 static void cgen_nms_exit(CGenerator *g, Namespace *n) {
 	char *s = cgen_nms_prefix(g, n);
-	bool double_underscore = n->associated_ident != NULL;
-	arr_set_len(&g->nms_prefix, arr_len(g->nms_prefix) - strlen(s) - (double_underscore ? 2 : 1));
+	arr_set_len(&g->nms_prefix, arr_len(g->nms_prefix) - strlen(s));
 	free(s);
 }
 
@@ -549,7 +550,7 @@ static bool cgen_fn_args(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_c
 				if (!cgen_type_pre(g, type, f->where))
 					return false;
 				cgen_write(g, " ");
-				cgen_ident(g, *i);
+				cgen_ident_simple(g, *i);
 				if (!cgen_type_post(g, type, f->where))
 					return false;
 			}
@@ -1355,6 +1356,8 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			s = "*"; break;
 		case BINARY_DIV:
 			s = "/"; break;
+		case BINARY_MOD:
+			s = "%"; break;
 		case BINARY_SET: 
 			if (!cgen_set(g, e->binary.lhs, NULL, e->binary.rhs, NULL)) return false;
 			handled = true;
@@ -1379,6 +1382,8 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			s = "*="; break;
 		case BINARY_SET_DIV:
 			s = "/="; break;
+		case BINARY_SET_MOD:
+			s = "%="; break;
 		case BINARY_AT_INDEX:
 			cgen_write(g, "(");
 			switch (e->binary.lhs->type.kind) {
@@ -1413,13 +1418,22 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			handled = true;
 			break;
 		case BINARY_DOT: {
-
-			cgen_write(g, "(");
-			cgen_expr(g, e->binary.lhs);
-			bool is_ptr = e->binary.lhs->type.kind == TYPE_PTR;
-			cgen_write(g, is_ptr ? "->" :".");
-			cgen_ident_simple(g, e->binary.dot.field->name);
-			cgen_write(g, ")");
+			Type *struct_type = &e->binary.lhs->type;
+			if (struct_type->kind == TYPE_PTR) struct_type = struct_type->ptr;
+			if (struct_type->kind == TYPE_STRUCT) {
+				cgen_write(g, "(");
+				cgen_expr(g, e->binary.lhs);
+				bool is_ptr = e->binary.lhs->type.kind == TYPE_PTR;
+				cgen_write(g, is_ptr ? "->" :".");
+				cgen_ident_simple(g, e->binary.dot.field->name);
+				cgen_write(g, ")");
+			} else {
+				assert(type_is_builtin(struct_type, BUILTIN_NMS));
+				char *prefix = cgen_nms_prefix(g, e->binary.lhs->val.nms);
+				cgen_write(g, "%s", prefix);
+				cgen_ident_simple(g, e->binary.rhs->ident);
+				free(prefix);
+			}
 			handled = true;
 		} break;
 		}

@@ -254,6 +254,7 @@ typedef enum {
 			  KW_MINUS_EQ,
 			  KW_ASTERISK_EQ,
 			  KW_SLASH_EQ,
+			  KW_PERCENT_EQ,
 			  KW_NE,
 			  KW_LE,
 			  KW_LT,
@@ -265,6 +266,7 @@ typedef enum {
 			  KW_EXCLAMATION,
 			  KW_AMPERSAND,
 			  KW_SLASH,
+			  KW_PERCENT,
 			  KW_DOTDOT,
 			  KW_DOT,
 			  KW_EQ,
@@ -532,10 +534,12 @@ typedef enum {
 			  BINARY_SUB,
 			  BINARY_MUL,
 			  BINARY_DIV,
+			  BINARY_MOD,
 			  BINARY_SET_ADD, /* e.g. x += y */
 			  BINARY_SET_SUB,
 			  BINARY_SET_MUL,
 			  BINARY_SET_DIV,
+			  BINARY_SET_MOD,
 			  BINARY_GT,
 			  BINARY_LT,
 			  BINARY_GE,
@@ -899,6 +903,7 @@ typedef struct Typer {
 	/* for checking for problematic struct circular dependencies */
 	bool *is_reference_stack;
 	ParsedFile *parsed_file;
+	Namespace *nms;
 } Typer;
 
 typedef struct CGenerator {
