@@ -84,15 +84,10 @@ static size_t compiler_sizeof(Type *t);
 #include "copy.c"
 
 /* returns NULL on error */
-static char *read_entire_file(Allocator *a, ErrCtx *ectx, const char *filename) {
+static char *read_entire_file(Allocator *a, const char *filename, Location where) {
 	FILE *in = fopen(filename, "r");
 	
 	if (!in) {
-		Location where = {0};
-		File file = {0};
-		file.ctx = ectx;
-		file.filename = filename;
-		where.file = &file;
 		err_print(where, "Could not open file: %s.", filename);
 		return NULL;
 	}

@@ -72,13 +72,16 @@ int main(int argc, char **argv) {
 	ErrCtx err_ctx = {0};
 	err_ctx.enabled = true;
 	err_ctx.color_enabled = true;
-	char *contents = read_entire_file(&main_allocr, &err_ctx, in_filename);
+
+	File file = {0};
+	file.filename = in_filename;
+	Location file_where = {0};
+	file_where.file = &file;
+	char *contents = read_entire_file(&main_allocr, in_filename, file_where);
 	
 	Identifiers idents;
 	idents_create(&idents);
 	Tokenizer t;
-	File file = {0};
-	file.filename = in_filename;
 	file.contents = contents;
 	file.ctx = &err_ctx;
 	tokr_create(&t, &idents, &err_ctx, &main_allocr);
