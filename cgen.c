@@ -242,11 +242,11 @@ static void cgen_ident(CGenerator *g, Identifier i) {
 		cgen_write(g, "%s", g->nms_prefix);
 	} else {
 		/* do prefix for references to siblings */
-		if (g->nms && i->scope == &g->nms->body) {
+		if (g->nms && ident_scope(i) == &g->nms->body) {
 			cgen_write(g, "%s", g->nms_prefix);
 		}
 	}
-	if (i == g->main_ident && i->decl_kind == IDECL_DECL && i->scope == NULL) {
+	if (i == g->main_ident && i->decl_kind == IDECL_DECL && ident_scope(i) == NULL) {
 		/* don't conflict with C's main! */
 		cgen_write(g, "main__");
 	} else {

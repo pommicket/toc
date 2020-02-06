@@ -365,14 +365,24 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	return success;
 }
 
-static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
+/* may modify ident */
+static bool type_of_ident(Typer *tr, Location where, Identifier *ident, Type *t) {
 	t->flags = 0;
+	Identifier i = *ident;
+	assert(i->idents->scope == tr->block);
+	if (i->decl_kind == IDECL_NONE) {
+		long nblocks = (long)arr_len(tr->blocks);
+		for (long idx = nblocks - 1; idx >= 0; --idx) {
+			int x;
+		}
+	}
+	
 	switch (i->decl_kind) {
 	case IDECL_DECL: {
 		Declaration *d = i->decl;
 		bool captured = false;
-		if (i->scope != NULL && !(i->scope->flags & BLOCK_IS_NMS)) {
-			Block *decl_scope = i->scope;
+		if (ident_scope(i) != NULL && !(ident_scope(i)->flags & BLOCK_IS_NMS)) {
+			Block *decl_scope = ident_scope(i);
 			if (!(decl_scope->flags & BLOCK_IS_NMS)) {
 				/* go back through scopes */
 				for (Block **block = arr_last(tr->blocks); *block && *block != decl_scope; --block) {
@@ -433,7 +443,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 				} else {
 					/* let's type the declaration, and redo this (for evaling future functions) */
 					if (!types_decl(tr, d)) return false;
-					return type_of_ident(tr, where, i, t);
+					return type_of_ident(tr, where, ident, t);
 				}
 				return false;
 			}
@@ -1230,7 +1240,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		}
 	} break;
 	case EXPR_IDENT: {
-		if (!type_of_ident(tr, e->where, e->ident, t)) return false;
+		if (!type_of_ident(tr, e->where, &e->ident, t)) return false;
 	} break;
 	case EXPR_CAST: {
 		CastExpr *c = &e->cast;
@@ -2087,9 +2097,11 @@ static bool types_expr(Typer *tr, Expression *e) {
 					err_print(rhs->where, "%s is not a member of this namespace.", s);
 					return false;
 				}
-				if (!type_of_ident(tr, rhs->where, translated, t)) {
+				if (!type_of_ident(tr, rhs->where, &translated, t)) {
 					return false;
 				}
+				e->kind = EXPR_IDENT;
+				e->ident = translated;
 			} else {
 				char *s = type_to_str(lhs_type);
 				err_print(e->where, "Operator . applied to type %s, which is not a structure or pointer to structure.", s);
@@ -2159,8 +2171,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 }
 
 static bool types_block(Typer *tr, Block *b) {
+	*(Block **)arr_add(&tr->blocks) = b;
 	if (b->flags & BLOCK_FOUND_TYPES)
 		return true;
+	
 	bool success = true;
 	arr_foreach(b->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {
@@ -2193,6 +2207,7 @@ static bool types_block(Typer *tr, Block *b) {
 		
 	}
  ret:
+	arr_remove_last(&tr->blocks);
 	b->flags |= BLOCK_FOUND_TYPES;
 	return success;
 }

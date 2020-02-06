@@ -784,7 +784,7 @@ static bool parse_block(Parser *p, Block *b) {
 	Block *prev_block = p->block;
 	b->flags = 0;
 	b->ret_expr = NULL;
-	idents_create(&b->idents, p->allocr);
+	idents_create(&b->idents, p->allocr, p->block);
 	if (!token_is_kw(t->token, KW_LBRACE)) {
 		tokr_err(t, "Expected '{' to open block.");
 		return false;
@@ -957,7 +957,8 @@ static int op_precedence(Keyword op) {
 
 static Identifier parser_ident_insert(Parser *p, char *str) {
 	Identifiers *idents = p->block ? &p->block->idents : p->globals;
-	return ident_insert(idents, &str);
+	Identifier i = ident_insert(idents, &str);
+	return i;
 }
 
 static bool parse_expr(Parser *p, Expression *e, Token *end) {
@@ -1065,7 +1066,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			}
 			case KW_NMS: {
 				Namespace *n = &e->nms;
-				idents_create(&n->idents, p->allocr);
+				idents_create(&n->idents, p->allocr, p->block);
 				
 				e->kind = EXPR_NMS;
 				++t->token;
@@ -1836,6 +1837,11 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 			goto ret_false;
 		}
 		*ident = parser_ident_insert(p, t->token->ident);
+		{
+			Identifier i = *ident;
+			i->decl_kind = IDECL_DECL;
+			i->decl = d;
+		}
 		++t->token;
 		if (token_is_kw(t->token, KW_COMMA)) {
 			++t->token;

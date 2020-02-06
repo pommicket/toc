@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
 	if (!contents) return EXIT_FAILURE;
 
 	Identifiers globals;
-	idents_create(&globals, &main_allocr);
+	idents_create(&globals, &main_allocr, NULL);
 	Tokenizer t;
 	file.contents = contents;
 	tokr_create(&t, &err_ctx, &main_allocr);

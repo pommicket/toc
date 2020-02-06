@@ -187,7 +187,7 @@ typedef struct IdentSlot {
 		struct Declaration *decl;
 		struct Expression *expr; /* for example, this identifier is declared in a for expression */
 	};
-	struct Block *scope; /* NULL for file scope */
+	struct Identifiers *idents;
 	Value val;
 	SOURCE_LOCATION
 	U16 flags;
@@ -215,6 +215,7 @@ typedef IdentSlot *IdentSlotPtr;
 typedef struct Identifiers {
 	StrHashTable table;
 	U32 rseed;
+	struct Block *scope; /* NULL for file scope */
 } Identifiers;
 
 typedef enum {

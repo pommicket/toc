@@ -1,3 +1,4 @@
+/*
 io ::= nms {
 	#include "std/io.toc";
 };
@@ -16,4 +17,11 @@ main ::= fn() {
 	io.puti(a);
 	io.puti(b);
 	io.puti(c);
+};
+*/
+
+x := 5;
+main ::= fn() {
+	 
+	 x;
 };

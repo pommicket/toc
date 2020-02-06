@@ -27,9 +27,10 @@ static int is_ident(int c) {
 }
 
 /* Initialize Identifiers. */
-static void idents_create(Identifiers *ids, Allocator *allocr) {
+static void idents_create(Identifiers *ids, Allocator *allocr, Block *scope) {
 	str_hash_table_create(&ids->table, sizeof(IdentSlot) - sizeof(StrHashTableSlot), allocr);
 	ids->rseed = 0x27182818;
+	ids->scope = scope;
 }
 
 /* advances s until a non-identifier character is reached, then returns the number of characters advanced */
@@ -85,6 +86,7 @@ static Identifier ident_insert(Identifiers *ids, char **s) {
 	char *original = *s;
 	size_t len = ident_str_len_advance(s);
     IdentSlot *slot = (IdentSlot *)str_hash_table_insert_(&ids->table, original, len);
+	slot->idents = ids;
 	return slot;
 }
 
@@ -148,19 +150,23 @@ static Identifier ident_get(Identifiers *ids, char *s) {
 }
 
 /* translate and insert if not already there */
-static Identifier ident_translate_forced(Identifier i, Identifiers *to_idents) {
+static inline Identifier ident_translate_forced(Identifier i, Identifiers *to_idents) {
 	char *p = i->str;
     return ident_insert(to_idents, &p);
 }
 
 /* translate but don't add it if it's not there */
-static Identifier ident_translate(Identifier i, Identifiers *to_idents) {
+static inline Identifier ident_translate(Identifier i, Identifiers *to_idents) {
     return ident_get(to_idents, i->str);
 }
 
 /* returns true if i and j are equal, even if they're not in the same table */
-static bool ident_eq(Identifier i, Identifier j) {
+static inline bool ident_eq(Identifier i, Identifier j) {
 	return i->len == j->len && memcmp(i->str, j->str, i->len) == 0;
+}
+
+static inline Block *ident_scope(Identifier i) {
+	return i->idents->scope;
 }
 
 #ifdef TOC_DEBUG
@@ -170,7 +176,7 @@ static void idents_test(void) {
 	char *s = b;
 	Allocator a;
 	allocr_create(&a);
-	idents_create(&ids, &a);
+	idents_create(&ids, &a, NULL);
 	Identifier i1 = ident_insert(&ids, &s);
 	assert(strs_equal(s, " bar"));
 	char b2[] = "foo_variable+6";
