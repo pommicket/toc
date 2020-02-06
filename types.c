@@ -372,8 +372,20 @@ static bool type_of_ident(Typer *tr, Location where, Identifier *ident, Type *t)
 	assert(i->idents->scope == tr->block);
 	if (i->decl_kind == IDECL_NONE) {
 		long nblocks = (long)arr_len(tr->blocks);
-		for (long idx = nblocks - 1; idx >= 0; --idx) {
-			int x;
+		long idx;
+		for (idx = nblocks - 1; idx >= 0; --idx) {
+		    Identifier translated = ident_translate(i, &tr->blocks[idx]->idents);
+			if (!translated) continue;
+			if (translated->decl_kind != IDECL_NONE) {
+				i = *ident = translated;
+				break;
+			}
+		}
+		if (idx == -1) {
+			char *s = ident_to_str(i);
+			err_print(where, "Undeclared identifier: %s", s);
+			free(s);
+			return false;
 		}
 	}
 	
