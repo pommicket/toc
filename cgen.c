@@ -10,7 +10,7 @@ static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *e
 	g->evalr = ev;
 	g->will_indent = true;
 	g->indent_lvl = 0;
-	g->idents = ids;
+	g->globals = ids;
 	g->allocr = allocr;
 	g->nms_prefix = NULL;
 	*(char *)arr_add(&g->nms_prefix) = '\0';
@@ -18,8 +18,7 @@ static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *e
 
 static bool cgen_stmt(CGenerator *g, Statement *s);
 enum {
-	  CGEN_BLOCK_NOENTER = 0x01, /* should cgen_block actually enter and exit the block? */
-	  CGEN_BLOCK_NOBRACES = 0x02, /* should it use braces? */
+	  CGEN_BLOCK_NOBRACES = 0x01 /* should it use braces? */
 };
 static bool cgen_block(CGenerator *g, Block *b, const char *ret_name, uint16_t flags);
 static bool cgen_expr_pre(CGenerator *g, Expression *e);
@@ -36,7 +35,6 @@ static bool cgen_defs_block(CGenerator *g, Block *b);
 static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 
 #define cgen_recurse_subexprs_fn_simple(fn, decl_f, block_f)	\
-	if (!fn_enter(fn, 0)) return false;							\
 	FnExpr *prev_fn = g->f##n;									\
 	g->f##n = fn;												\
 	arr_foreach(fn->params, Declaration, param)					\
@@ -47,7 +45,6 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 			return false;										\
 	if (!block_f(g, &fn->body))									\
 		return false;											\
-	fn_exit(fn);												\
 	g->f##n = prev_fn;										
 
 /* calls f on every sub-expression of e, block_f on every sub-block, and decl_f on every sub-declaration. */
@@ -116,7 +113,6 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 	break;																\
 	case EXPR_FOR: {													\
 		ForExpr *fo = e->for_;											\
-		if (!for_enter(e)) return false;								\
 		if (fo->flags & FOR_IS_RANGE) {									\
 			if (!f(g, fo->range.from))									\
 				return false;											\
@@ -128,7 +124,6 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 				return false;											\
 		}																\
 		if (!block_f(g, &fo->body)) return false;						\
-		for_exit(e);													\
 	} break;															\
 	case EXPR_TUPLE:													\
 	arr_foreach(e->tuple, Expression, x)								\
@@ -200,34 +195,6 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 
 
 
-static bool cgen_block_enter(CGenerator *g, Block *b) {
-	g->block = b;
-	if (b->flags & BLOCK_IS_NMS) {
-		return true;
-	}
-	Statement *stmts;
-	if (b == NULL) {
-		stmts = g->file->stmts;
-	} else {
-		stmts = b->stmts;
-	}
-	if (b) ++g->indent_lvl;
-	return block_enter(b, stmts, 0);
-}
-
-static void cgen_block_exit(CGenerator *g, Block *into) {
-	Block *b = g->block;
-	Statement *stmts;
-	if (b == NULL) {
-		stmts = g->file->stmts;
-	} else {
-		stmts = b->stmts;
-	}
-	block_exit(b, stmts);
-	if (b) --g->indent_lvl;
-	g->block = into;
-}
-
 static inline FILE *cgen_writing_to(CGenerator *g) {
 	return g->outc;	/* for now */
 }
@@ -275,12 +242,11 @@ static void cgen_ident(CGenerator *g, Identifier i) {
 		cgen_write(g, "%s", g->nms_prefix);
 	} else {
 		/* do prefix for references to siblings */
-		IdentDecl *idecl = ident_decl(i);
-		if (g->nms && idecl->scope == &g->nms->body) {
+		if (g->nms && i->scope == &g->nms->body) {
 			cgen_write(g, "%s", g->nms_prefix);
 		}
 	}
-	if (i == g->main_ident && ident_decl(i) && ident_decl(i)->scope == NULL) {
+	if (i == g->main_ident && i->decl_kind == IDECL_DECL && i->scope == NULL) {
 		/* don't conflict with C's main! */
 		cgen_write(g, "main__");
 	} else {
@@ -366,12 +332,6 @@ static bool cgen_uses_ptr(Type *t) {
 	}
 	assert(0);
 	return false;
-}
-
-static inline Identifier cgen_ident_id_to_ident(CGenerator *g, IdentID id) {
-	char s[32];
-	cgen_ident_id_to_str(s, id);
-	return ident_get(g->idents, s);
 }
 
 static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
@@ -912,7 +872,6 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		}
 		
 		fo->c.id = id;
-		if (!for_enter(e)) return false;
 		cgen_write(g, "{");
 		if (is_range) {
 			if (fo->range.to) {
@@ -1087,7 +1046,6 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		if (!cgen_block(g, &fo->body, ret_name, CGEN_BLOCK_NOBRACES))
 			return false;
 		cgen_write(g, "}}");
-		for_exit(e);
 	} break;
 	case EXPR_BLOCK:
 		e->block_ret_id = id;
@@ -1329,12 +1287,12 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		bool handled = false;
 		if (e->type.kind == TYPE_FN) {
 			/* generate the right function name, because it might be anonymous */
-			IdentDecl *idecl = ident_decl(e->ident);
-			if (idecl && idecl->kind == IDECL_DECL) {
-				Declaration *d = idecl->decl;
+		    Identifier i = e->ident;
+			if (i->decl_kind == IDECL_DECL) {
+				Declaration *d = i->decl;
 				if (d->flags & DECL_IS_CONST) {
 					if (!(d->flags & DECL_FOREIGN) || d->foreign.lib) {
-						int index = decl_ident_index(d, e->ident);
+						int index = decl_ident_index(d, i);
 						Value fn_val = *decl_val_at_index(d, index);
 						FnExpr *fn = fn_val.fn;
 						Expression fn_expr;
@@ -1671,31 +1629,25 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
   at least. 
 */
 static bool cgen_block(CGenerator *g, Block *b, const char *ret_name, U16 flags) {
-	Block *prev = g->block;
 	if (!(flags & CGEN_BLOCK_NOBRACES)) {
 		cgen_write(g, "{");
 		cgen_nl(g);
 	}
-	if (!(flags & CGEN_BLOCK_NOENTER))
-		if (!cgen_block_enter(g, b))
-			return false;
 	arr_foreach(b->stmts, Statement, s)
 		if (!cgen_stmt(g, s))
-			return false;
+		    return false;
 	if (b->ret_expr && ret_name) {
 		if (!cgen_expr_pre(g, b->ret_expr))
-			return false;
+		    return false;
 		if (b->ret_expr->type.kind == TYPE_TUPLE) {
 			if (!cgen_set_tuple(g, NULL, NULL, ret_name, b->ret_expr))
-				return false;
+			    return false;
 		} else {
 			if (!cgen_set(g, NULL, ret_name, b->ret_expr, NULL))
-				return false;
+			    return false;
 		}
 		cgen_nl(g);
 	}
-	if (!(flags & CGEN_BLOCK_NOENTER))
-		cgen_block_exit(g, prev);
 	if (!(flags & CGEN_BLOCK_NOBRACES))
 		cgen_write(g, "}");
 	return true;
@@ -1731,11 +1683,9 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 static bool cgen_fn(CGenerator *g, FnExpr *f, U64 instance, Value *compile_time_args) {
 	/* see also cgen_defs_expr */
 	FnExpr *prev_fn = g->fn;
-	Block *prev_block = g->block;
 	U64 which_are_const = compile_time_args ? compile_time_args->u64 : 0;
 	if (!cgen_should_gen_fn(f))
 		return true;
-	fn_enter(f, 0);
 	if (!cgen_fn_header(g, f, instance, which_are_const))
 		return false;
 	g->fn = f;
@@ -1781,8 +1731,7 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, U64 instance, Value *compile_time_
 			return false;
 	}
 	
-	if (!cgen_block_enter(g, &f->body)) return false;
-	if (!cgen_block(g, &f->body, NULL, CGEN_BLOCK_NOENTER | CGEN_BLOCK_NOBRACES))
+	if (!cgen_block(g, &f->body, NULL, CGEN_BLOCK_NOBRACES))
 		return false;
 	if (f->ret_decls) {
 		/* OPTIM */
@@ -1818,10 +1767,8 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, U64 instance, Value *compile_time_
 	} else if (f->body.ret_expr) {
 		if (!cgen_ret(g, f->body.ret_expr)) return false;
 	}
-	cgen_block_exit(g, prev_block);
 	
 	cgen_write(g, "}");
-	fn_exit(f);
 	cgen_nl(g);
 	g->fn = prev_fn;
 	cgen_nl(g);
@@ -2171,22 +2118,20 @@ static bool cgen_defs_stmt(CGenerator *g, Statement *s) {
 }
 
 static bool cgen_defs_block(CGenerator *g, Block *b) {
-	Block *prev = g->block;
+	/* 
+	   NOTE: since we exit as soon as there's an error for cgen, we don't need to make sure we
+	   set g->block to the previous block
+	*/
 	g->block = b;
-	bool success = true;
 	arr_foreach(b->stmts, Statement, s) {
 		if (!cgen_defs_stmt(g, s)) {
-		    success = false;
-			goto ret;
+			return false;
 		}
 	}
 	if (b->ret_expr && !cgen_defs_expr(g, b->ret_expr)) {
-		success = false;
-	    goto ret;
+		return false;
 	}
- ret:
-	g->block = prev;
-	return success;
+	return true;
 }
 
 static bool cgen_file(CGenerator *g, ParsedFile *f) {

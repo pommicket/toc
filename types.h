@@ -855,6 +855,7 @@ typedef struct ParsedFile {
 typedef struct Parser {
 	Tokenizer *tokr;
 	Allocator *allocr;
+	Identifiers *globals;
 	File *file;
 	Block *block; /* which block are we in? NULL = file scope */
 	ParsedFile *parsed_file;

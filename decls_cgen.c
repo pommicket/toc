@@ -44,13 +44,10 @@ static bool cgen_decls_type(CGenerator *g, Type *type) {
 
 static bool cgen_single_fn_decl(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_const) {
 	if (cgen_should_gen_fn(f)) {
-		if (!fn_enter(f, 0))
-			return false;
 		if (!cgen_fn_header(g, f, instance, which_are_const))
 			return false;
 		cgen_write(g, ";");
 		cgen_nl(g);
-		fn_exit(f);
 	}
 	return true;
 }
@@ -120,15 +117,11 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 }
 
 static bool cgen_decls_block(CGenerator *g, Block *b) {
-	Block *prev = g->block;
-	if (!cgen_block_enter(g, b))
-		return false;
 	arr_foreach(b->stmts, Statement, s)
 		if (!cgen_decls_stmt(g, s))
 			return false;
 	if (b->ret_expr && !cgen_decls_expr(g, b->ret_expr))
 		return false;
-	cgen_block_exit(g, prev);
 	return true;
 }
 

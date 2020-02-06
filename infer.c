@@ -24,10 +24,10 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Expres
 		break;
 	case EXPR_CALL: {
 		while (to->kind == EXPR_IDENT) {
-			IdentDecl *idecl = ident_decl(to->ident);
-			if (idecl->kind == IDECL_DECL) {
-				Declaration *decl = idecl->decl;
-				int index = ident_index_in_decl(to->ident, decl);
+			Identifier i = to->ident;
+			if (i->decl_kind == IDECL_DECL) {
+				Declaration *decl = i->decl;
+				int index = ident_index_in_decl(i, decl);
 				Expression *expr = NULL;
 				if (decl->type.kind == TYPE_TUPLE) {
 					if (decl->expr.kind == EXPR_TUPLE) {
@@ -46,12 +46,12 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Expres
 		
 		U16 *order = NULL;
 		Expression *f = match->call.fn;
-		IdentDecl *idecl = ident_decl(f->ident);
-		bool is_direct_fn = idecl && idecl->kind == IDECL_DECL && (idecl->decl->flags & DECL_HAS_EXPR) && idecl->decl->expr.kind == EXPR_FN;
+		Identifier ident = f->ident;
+		bool is_direct_fn = f->kind == EXPR_IDENT && ident->decl_kind == IDECL_DECL && (ident->decl->flags & DECL_HAS_EXPR) && ident->decl->expr.kind == EXPR_FN;
 		if (is_direct_fn) {
 			if (!types_expr(tr, f))
 				return false;
-			FnExpr *fn_decl = idecl->decl->expr.fn;
+			FnExpr *fn_decl = ident->decl->expr.fn;
 			if (!call_arg_param_order(tr->allocr, fn_decl, &f->type, m_args, match->where, &order))
 				return false;
 		}

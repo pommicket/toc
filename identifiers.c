@@ -27,13 +27,13 @@ static int is_ident(int c) {
 }
 
 /* Initialize Identifiers. */
-static void idents_create(Identifiers *ids) {
-	str_hash_table_create(&ids->table, sizeof(IdentSlot) - sizeof(StrHashTableSlot), NULL);
+static void idents_create(Identifiers *ids, Allocator *allocr) {
+	str_hash_table_create(&ids->table, sizeof(IdentSlot) - sizeof(StrHashTableSlot), allocr);
 	ids->rseed = 0x27182818;
 }
 
 /* advances s until a non-identifier character is reached, then returns the number of characters advanced */
-static size_t ident_str_len(char **s) {
+static size_t ident_str_len_advance(char **s) {
 	char *original = *s;
 	while (is_ident(**s)) {
 		++*s;
@@ -41,9 +41,13 @@ static size_t ident_str_len(char **s) {
 	return (size_t)(*s - original);
 }
 
+static size_t ident_str_len(char *s) {
+	return ident_str_len_advance(&s);
+}
+
 static U64 ident_hash(char **s) {
 	char *original = *s;
-	return str_hash(original, ident_str_len(s));
+	return str_hash(original, ident_str_len_advance(s));
 }
 
 /* are these strings equal, up to the first non-ident character? */
@@ -79,7 +83,7 @@ static IdentSlot **ident_slots_insert(IdentSlot **slots, char *s, size_t i) {
 /* advances past identifier */
 static Identifier ident_insert(Identifiers *ids, char **s) {
 	char *original = *s;
-	size_t len = ident_str_len(s);
+	size_t len = ident_str_len_advance(s);
     IdentSlot *slot = (IdentSlot *)str_hash_table_insert_(&ids->table, original, len);
 	return slot;
 }
@@ -108,8 +112,7 @@ static char *ident_to_str(Identifier i) {
 
 
 static inline void fprint_ident_str(FILE *out, char *s) {
-	char *p = s;
-	fwrite(s, 1, ident_str_len(&p), out);
+	fwrite(s, 1, ident_str_len(s), out);
 }
 
 static void fprint_ident(FILE *out, Identifier id) {
@@ -140,8 +143,7 @@ static void fprint_ident_reduced_charset(FILE *out, Identifier id) {
 
 /* NULL = no such identifier. returns identifier "foo" for both "foo\0" and "foo+92384324..." */
 static Identifier ident_get(Identifiers *ids, char *s) {
-	char *ptr = s;
-	size_t len = ident_str_len(&ptr);
+	size_t len = ident_str_len(s);
 	return (Identifier)str_hash_table_get_(&ids->table, s, len);
 }
 
@@ -161,16 +163,14 @@ static bool ident_eq(Identifier i, Identifier j) {
 	return i->len == j->len && memcmp(i->str, j->str, i->len) == 0;
 }
 
-static void idents_free(Identifiers *ids) {
-	str_hash_table_free(&ids->table);
-}
-
 #ifdef TOC_DEBUG
 static void idents_test(void) {
 	Identifiers ids;
 	char b[] = "foo_variable bar";
 	char *s = b;
-	idents_create(&ids);
+	Allocator a;
+	allocr_create(&a);
+	idents_create(&ids, &a);
 	Identifier i1 = ident_insert(&ids, &s);
 	assert(strs_equal(s, " bar"));
 	char b2[] = "foo_variable+6";
@@ -178,8 +178,8 @@ static void idents_test(void) {
 	Identifier i2 = ident_insert(&ids, &s);
 	assert(strs_equal(s, "+6"));
 	assert(i1 == i2);
+	allocr_free_all(&a);
 	
-	idents_free(&ids);
 }
 #endif
 

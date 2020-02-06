@@ -18,7 +18,6 @@
 
 /* 
 TODO:
-try to remember why arr_set_len doesn't shrink, then write that reason there
 make eval_ptr_to_struct_field return a bool (just in case it successfully returns a NULL pointer)
 nms["foo"]
 make sure #export still works properly
@@ -81,11 +80,11 @@ int main(int argc, char **argv) {
 	char *contents = read_file_contents(&main_allocr, in_filename, file_where);
 	if (!contents) return EXIT_FAILURE;
 
-	Identifiers idents;
-	idents_create(&idents);
+	Identifiers globals;
+	idents_create(&globals, &main_allocr);
 	Tokenizer t;
 	file.contents = contents;
-	tokr_create(&t, &idents, &err_ctx, &main_allocr);
+	tokr_create(&t, &err_ctx, &main_allocr);
 	if (!tokenize_file(&t, &file)) {
 		err_text_important(&err_ctx, "Errors occured during preprocessing.\n");
 		return EXIT_FAILURE;
@@ -101,7 +100,7 @@ int main(int argc, char **argv) {
 #endif
 	
 	Parser p;
-	parser_create(&p, &t, &main_allocr);
+	parser_create(&p, &globals, &t, &main_allocr);
 	ParsedFile f;
 	if (!parse_file(&p, &f)) {
 		err_text_important(&err_ctx, "Errors occured during parsing.\n");
@@ -114,11 +113,8 @@ int main(int argc, char **argv) {
 	Typer tr;
 	Evaluator ev;
 	evalr_create(&ev, &tr, &main_allocr);
-	typer_create(&tr, &ev, &err_ctx, &main_allocr, &idents);
-	
-	if (!block_enter(NULL, f.stmts, SCOPE_CHECK_REDECL)) /* enter global scope */
-		return EXIT_FAILURE;
-
+	typer_create(&tr, &ev, &err_ctx, &main_allocr, &globals);
+    
 	if (!types_file(&tr, &f)) {
 		/* TODO(eventually): fix this if the error occured while exporting something */
 		err_text_important(&err_ctx, "Errors occured while determining types.\n");
@@ -135,19 +131,16 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 	CGenerator g;
-	cgen_create(&g, out, &idents, &ev, &main_allocr);
+	cgen_create(&g, out, &globals, &ev, &main_allocr);
 	if (!cgen_file(&g, &f)) {
 		fclose(out);
 		err_text_important(&err_ctx, "Errors occured while generating C code.\n");
 		return EXIT_FAILURE;
 	}
 	
-	block_exit(NULL, f.stmts); /* exit global scope */
-	
 	allocr_free_all(&main_allocr);
 	evalr_free(&ev);
 	fclose(out);
-	idents_free(&idents);
 	return 0;
 }
 

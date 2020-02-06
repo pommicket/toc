@@ -784,6 +784,7 @@ static bool parse_block(Parser *p, Block *b) {
 	Block *prev_block = p->block;
 	b->flags = 0;
 	b->ret_expr = NULL;
+	idents_create(&b->idents, p->allocr);
 	if (!token_is_kw(t->token, KW_LBRACE)) {
 		tokr_err(t, "Expected '{' to open block.");
 		return false;
@@ -955,9 +956,8 @@ static int op_precedence(Keyword op) {
 }
 
 static Identifier parser_ident_insert(Parser *p, char *str) {
-	/* TODO TODO TODO NOW */
-	(void)p;
-	return NULL;
+	Identifiers *idents = p->block ? &p->block->idents : p->globals;
+	return ident_insert(idents, &str);
 }
 
 static bool parse_expr(Parser *p, Expression *e, Token *end) {
@@ -1065,7 +1065,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			}
 			case KW_NMS: {
 				Namespace *n = &e->nms;
-				idents_create(&n->idents);
+				idents_create(&n->idents, p->allocr);
 				
 				e->kind = EXPR_NMS;
 				++t->token;
@@ -2101,9 +2101,10 @@ static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 	return true;
 }
 
-static void parser_create(Parser *p, Tokenizer *t, Allocator *allocr) {
+static void parser_create(Parser *p, Identifiers *globals, Tokenizer *t, Allocator *allocr) {
 	p->tokr = t;
 	p->block = NULL;
+	p->globals = globals;
 	p->allocr = allocr;
 }
 

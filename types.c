@@ -108,12 +108,11 @@ static bool expr_must_lval(Expression *e) {
 	/* NOTE: make sure you update eval when you change this */
 	switch (e->kind) {
 	case EXPR_IDENT: {
-		IdentDecl *id_decl = ident_decl(e->ident);
-		assert(id_decl);
-		if (id_decl->kind == IDECL_DECL) {
-			Declaration *d = id_decl->decl;
+		Identifier i = e->ident;
+		if (i->decl_kind == IDECL_DECL) {
+			Declaration *d = i->decl;
 			if (d->flags & DECL_IS_CONST) {
-				char *istr = ident_to_str(e->ident);
+				char *istr = ident_to_str(i);
 				err_print(e->where, "Use of constant %s as a non-constant expression.", istr);
 				info_print(d->where, "%s was declared here.", istr);
 				return false;
@@ -239,8 +238,6 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	size_t idx = 0;
 	bool has_constant_params = false;
 	Type *ret_type = typer_arr_add(tr, &t->fn.types);
-	if (!fn_enter(f, SCOPE_CHECK_REDECL))
-		return false;
 	tr->fn = f;
 	size_t nparams = arr_len(f->params);
 	entered_fn = true;
@@ -363,7 +360,6 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	tr->block = prev_block;
 	/* cleanup */
 	if (entered_fn) {
-		fn_exit(f);
 		tr->fn = prev_fn;
 	}
 	return success;
@@ -371,19 +367,12 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 
 static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 	t->flags = 0;
-	IdentDecl *decl = ident_decl(i);
-	if (!decl) {
-		char *s = ident_to_str(i);
-		err_print(where, "Undeclared identifier: %s", s);
-		free(s);
-		return false;
-	}
-	switch (decl->kind) {
+	switch (i->decl_kind) {
 	case IDECL_DECL: {
-		Declaration *d = decl->decl;
+		Declaration *d = i->decl;
 		bool captured = false;
-		if (decl->scope != NULL && !(decl->scope->flags & BLOCK_IS_NMS)) {
-			Block *decl_scope = decl->scope;
+		if (i->scope != NULL && !(i->scope->flags & BLOCK_IS_NMS)) {
+			Block *decl_scope = i->scope;
 			if (!(decl_scope->flags & BLOCK_IS_NMS)) {
 				/* go back through scopes */
 				for (Block **block = arr_last(tr->blocks); *block && *block != decl_scope; --block) {
@@ -451,7 +440,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 		}
 	} break;
 	case IDECL_EXPR: {
-		Expression *e = decl->expr;
+		Expression *e = i->expr;
 		/* are we inside this expression? */
 		typedef Expression *ExpressionPtr;
 		arr_foreach(tr->in_expr_decls, ExpressionPtr, in_e) {
@@ -462,7 +451,6 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 				return false;
 			}
 		}
-		
 		switch (e->kind) {
 		case EXPR_FOR:
 			if (i == e->for_->index) {
@@ -476,6 +464,12 @@ static bool type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 		default: assert(0); return false;
 		}
 	} break;
+	case IDECL_NONE: {
+		char *s = ident_to_str(i);
+		err_print(where, "Undeclared identifier: %s", s);
+		free(s);
+		return false;
+	}
 	}
 	return true;
 }
@@ -753,7 +747,6 @@ static bool arg_is_const(Expression *arg, Constness constness) {
 static bool types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 	FnExpr *prev_fn = tr->fn;
 	bool success = true;
-	bool entered_fn = false;
 	Expression *ret_expr;
 	Type *ret_type;
 	bool has_named_ret_vals;
@@ -766,11 +759,6 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 	}
 	
 	tr->fn = f;
-	if (!fn_enter(f, SCOPE_CHECK_REDECL)) {
-		success = false;
-		goto ret;
-	}
-	entered_fn = true;
 	if (!types_block(tr, &f->body)) {
 		success = false;
 		goto ret;
@@ -813,8 +801,6 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 		goto ret;
 	}
  ret:
-	if (entered_fn)
-		fn_exit(f);
 	tr->fn = prev_fn;
 	return success;
 }
@@ -862,7 +848,7 @@ static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Type *fn_type, A
 			bool found = false;
 			arr_foreach(fn->params, Declaration, pa) {
 				arr_foreach(pa->idents, Identifier, id) {
-					if (ident_eq(*id, arg->name)) {
+					if (ident_eq_str(*id, arg->name)) {
 						found = true;
 						break;
 					}
@@ -871,9 +857,12 @@ static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Type *fn_type, A
 				if (found) break;
 			}
 			if (!found) {
-				char *s = ident_to_str(arg->name);
-				err_print(arg->where, "Argument '%s' does not appear in declaration of function.", s);
-				free(s);
+				char *name_end = arg->name + ident_str_len(arg->name);
+				/* temporarily null-terminate string to print it out */
+				char before = *name_end;
+				*name_end = 0;
+				err_print(arg->where, "Argument '%s' does not appear in declaration of function.", arg->name);
+				*name_end = before;
 				info_print(fn->where, "Declaration is here.");
 				return false;
 			}
@@ -1114,7 +1103,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 	case EXPR_FOR: {
 		ForExpr *fo = e->for_;
 		*(Expression **)typer_arr_add(tr, &tr->in_expr_decls) = e;
-		if (!for_enter(e)) return false;
 		if (fo->flags & FOR_IS_RANGE) {
 			/* TODO: allow user-defined numerical types */
 			if (!types_expr(tr, fo->range.from)) return false;
@@ -1233,7 +1221,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 		arr_remove_lasta(&tr->in_expr_decls, tr->allocr);
 		
 		if (!types_block(tr, &fo->body)) return false;
-		for_exit(e);
 		
 		if (fo->body.ret_expr) {
 			*t = fo->body.ret_expr->type;
@@ -2162,8 +2149,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 		t->builtin = BUILTIN_NMS;
 		if (!nms_translate_idents(&e->nms))
 			return false;
-		if (!block_enter(&e->nms.body, e->nms.body.stmts, 0))
-			return false;
 	} break;
 	case EXPR_VAL:
 		assert(0);
@@ -2173,27 +2158,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 	return true;
 }
 
-static bool typer_block_enter(Typer *tr, Block *b) {
-	tr->block = b;
-	*(Block **)arr_adda(&tr->blocks, tr->allocr) = b;
-	if (!block_enter(b, b->stmts, SCOPE_CHECK_REDECL)) return false;
-	return true;
-}
-
-static void typer_block_exit(Typer *tr) {
-	Block *b = tr->block;
-	block_exit(b, b->stmts);
-	arr_remove_last(&tr->blocks);
-	tr->block = *(Block **)arr_last(tr->blocks);
-}
-
-
 static bool types_block(Typer *tr, Block *b) {
 	if (b->flags & BLOCK_FOUND_TYPES)
 		return true;
 	bool success = true;
-	if (!typer_block_enter(tr, b))
-		return false;
 	arr_foreach(b->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {
 			success = false;
@@ -2225,7 +2193,6 @@ static bool types_block(Typer *tr, Block *b) {
 		
 	}
  ret:
-	typer_block_exit(tr);
 	b->flags |= BLOCK_FOUND_TYPES;
 	return success;
 }
@@ -2450,7 +2417,7 @@ static bool types_stmt(Typer *tr, Statement *s) {
 		if (!contents)
 			return false;
 		Tokenizer tokr;
-		tokr_create(&tokr, tr->idents, tr->err_ctx, tr->allocr);
+		tokr_create(&tokr, tr->err_ctx, tr->allocr);
 		File *file = typer_calloc(tr, 1, sizeof *file);
 		file->filename = filename;
 		file->contents = contents;
@@ -2458,7 +2425,8 @@ static bool types_stmt(Typer *tr, Statement *s) {
 		if (!tokenize_file(&tokr, file))
 			return false;
 		Parser parser;
-		parser_create(&parser, &tokr, tr->allocr);
+		parser_create(&parser, tr->globals, &tokr, tr->allocr);
+		parser.block = tr->block;
 		ParsedFile parsed_file;
 		if (!parse_file(&parser, &parsed_file)) {
 			return false;
@@ -2468,10 +2436,6 @@ static bool types_stmt(Typer *tr, Statement *s) {
 		arr_foreach(stmts_inc, Statement, s_incd) {
 			if (!types_stmt(tr, s_incd))
 				return false;
-			if (s_incd->kind == STMT_DECL) {
-				if (!add_ident_decls(tr->block, &s_incd->decl, SCOPE_CHECK_REDECL))
-					return false;
-			}
 		}
 	} break;
 	}
@@ -2488,7 +2452,7 @@ static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *a
 	tr->in_decls = NULL;
 	tr->in_expr_decls = NULL;
 	tr->allocr = allocr;
-	tr->idents = idents;
+	tr->globals = idents;
 	tr->is_reference_stack = NULL;
 	*(Block **)arr_adda(&tr->blocks, allocr) = NULL;
 }

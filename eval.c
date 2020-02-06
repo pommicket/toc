@@ -9,8 +9,6 @@ static bool types_decl(Typer *tr, Declaration *d);
 static bool type_resolve(Typer *tr, Type *t, Location where);
 static bool eval_block(Evaluator *ev, Block *b, Type *t, Value *v);
 static bool eval_expr(Evaluator *ev, Expression *e, Value *v);
-static bool block_enter(Block *b, Statement *stmts, U16 flags);
-static void block_exit(Block *b, Statement *stmts);
 static Value get_builtin_val(BuiltinVal val);
 
 static void evalr_create(Evaluator *ev, Typer *tr, Allocator *allocr) {
@@ -1522,7 +1520,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			}
 		}
 		if (!eval_block(ev, &fn->body, &e->type, v)) {
-			fn_exit(fn);
 			return false;
 		}
 		if (fn->ret_decls) {
@@ -1558,7 +1555,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				*v = ev->ret_val;
 			ev->returning = false;
 		}
-		fn_exit(fn);
 	} break;
 	case EXPR_SLICE: {
 		SliceExpr *s = &e->slice;
@@ -1638,18 +1634,18 @@ static bool eval_decl(Evaluator *ev, Declaration *d) {
 	
 	if (!is_const) {
 		int index = 0;
-		arr_foreach(d->idents, Identifier, i) {
-			IdentDecl *id = ident_decl(*i);
+		arr_foreach(d->idents, Identifier, ip) {
+			Identifier i = *ip;
 			Type *type = decl_type_at_index(d, index);
 			if (!is_const) {
 				if (has_expr) {
-					copy_val(NULL, &id->val, &val, type);
+					copy_val(NULL, &i->val, &val, type);
 				} else {
-					id->val = val_zero(type);
+					i->val = val_zero(type);
 				}
 			}
 			++index;
-			id->flags |= IDECL_HAS_VAL;
+			i->flags |= IDENT_HAS_VAL;
 		}
 	}
 	return true;
@@ -1684,7 +1680,6 @@ static bool eval_stmt(Evaluator *ev, Statement *stmt) {
 static bool eval_block(Evaluator *ev, Block *b, Type *t, Value *v) {
 	void **prev_to_free = ev->to_free;
 	ev->to_free = NULL;
-	block_enter(b, b->stmts, 0);
 	arr_foreach(b->stmts, Statement, stmt) {
 		if (!eval_stmt(ev, stmt))
 			return false;
@@ -1700,7 +1695,6 @@ static bool eval_block(Evaluator *ev, Block *b, Type *t, Value *v) {
 		if (free_ptr)
 			*(void **)arr_add(&prev_to_free) = free_ptr;
 	}
-	block_exit(b, b->stmts);
 	typedef void *VoidPtr;
 	arr_foreach(ev->to_free, VoidPtr, f) {
 		free(*f);
