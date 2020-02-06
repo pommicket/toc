@@ -167,15 +167,22 @@ typedef union Value {
 } Value;
 
 enum {
-	  IDECL_HAS_VAL = 0x01,
+	  IDENT_HAS_VAL = 0x01
+	  
 };
 
 typedef enum {
+			  IDECL_NONE,
 			  IDECL_DECL,
 			  IDECL_EXPR
 } IdentDeclKind;
 
-typedef struct IdentDecl {
+
+typedef struct IdentSlot {
+	char *str;
+	size_t len;
+	/* where this identifier was declared */
+	IdentDeclKind decl_kind;	
 	union {
 		struct Declaration *decl;
 		struct Expression *expr; /* for example, this identifier is declared in a for expression */
@@ -183,15 +190,7 @@ typedef struct IdentDecl {
 	struct Block *scope; /* NULL for file scope */
 	Value val;
 	SOURCE_LOCATION
-	IdentDeclKind kind;
 	U16 flags;
-} IdentDecl;
-
-typedef struct IdentSlot {
-	char *str;
-	size_t len;
-	bool anonymous; /* is this identifier not part of a tree? */
-	IdentDecl *decls; /* array of declarations of this identifier */
 } IdentSlot;
 
 typedef struct StrHashTableSlot {
@@ -336,7 +335,7 @@ typedef struct Token {
 	union {
 		Keyword kw;
 		Directive direct;
-		Identifier ident;
+		char *ident;
 		NumLiteral num;
 		char chr;
 		StrLiteral str;
@@ -370,7 +369,7 @@ typedef struct Tokenizer {
 	ErrCtx *err_ctx;
 	U32 line;
 	Token *token; /* token currently being processed */
-	Identifiers *idents;
+	Identifiers *globals;
 } Tokenizer;
 
 
@@ -482,6 +481,7 @@ enum {
 typedef struct Block {
 	U8 flags;
 	Location where;
+	Identifiers idents;
 	struct Statement *stmts;
 	struct Expression *ret_expr; /* the return expression of this block, e.g. {foo(); 3} => 3  NULL for no expression. */
 } Block;
@@ -699,7 +699,7 @@ const char *const builtin_val_names[BUILTIN_VAL_COUNT] =
 
 typedef struct Namespace {
 	Block body;
-	Identifiers idents; /* these do not include local variables  */
+	Identifiers idents;
 	Identifier associated_ident; /* if this is foo ::= nms { ... }, then associated_ident is foo; can be NULL */
 	struct {
 		IdentID id; /* used as prefix if prefix is NULL */
@@ -771,7 +771,7 @@ typedef struct Expression {
 
 typedef struct Argument {
 	Location where;
-	Identifier name; /* NULL = no name */
+	char *name; /* NULL = no name */
 	Expression val;
 } Argument;
 
@@ -893,7 +893,7 @@ typedef struct Evaluator {
 typedef struct Typer {
 	Allocator *allocr;
 	Evaluator *evalr;
-	Identifiers *idents;
+	Identifiers *globals;
 	Expression **in_expr_decls; /* an array of expressions whose declarations (e.g. for **x := foo**) we are currently inside */
 	Declaration **in_decls; /* array of declarations we are currently inside */
 	Block *block;
@@ -918,10 +918,6 @@ typedef struct CGenerator {
 	FnExpr *fn; /* which function are we in? (NULL for none) - not used during decls */
 	Evaluator *evalr;
 	Identifier main_ident;
-	Identifiers *idents;
+	Identifiers *globals;
 	char *nms_prefix; /* dynamic (null-terminated) array of characters, the current namespace C prefix (e.g. "foo__bar__") */
 } CGenerator;
-
-#ifdef TOC_DEBUG
-#define add_ident_decls(b, d, flags) add_ident_decls_(__FILE__, __LINE__, b, d, flags)
-#endif

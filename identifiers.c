@@ -56,7 +56,6 @@ static bool ident_str_eq_str(const char *s, const char *t) {
 }
 
 static inline bool ident_eq_str(Identifier i, const char *s) {
-	if (i->anonymous) return false;
 	return ident_str_eq_str(i->str, s);
 }
 
@@ -75,14 +74,6 @@ static IdentSlot **ident_slots_insert(IdentSlot **slots, char *s, size_t i) {
 	return slot;
 }
 
-static Identifier ident_new_anonymous(Identifiers *ids) {
-	U32 idx = rand_u32(ids->rseed);
-	ids->rseed = idx;
-	IdentSlot *slot = (IdentSlot *)str_hash_table_insert_anonymous_(&ids->table);
-	slot->anonymous = true;
-	return slot;
-}
-
 /* moves s to the char after the identifier */
 /* inserts if does not exist. reads until non-ident char is found. */
 /* advances past identifier */
@@ -94,12 +85,6 @@ static Identifier ident_insert(Identifiers *ids, char **s) {
 }
 
 static char *ident_to_str(Identifier i) {
-	if (i->anonymous) {
-		char *s = malloc(4);
-		strcpy(s, "???");
-		return s;
-	}
-	
 	char *str = err_malloc(i->len + 1);
 	/* for some reason, GCC thinks that i->len is -1 when this is called from type_to_str_ (in release mode)
 	   TODO: test this now (some stuff was changed)
@@ -122,15 +107,16 @@ static char *ident_to_str(Identifier i) {
 }
 
 
+static inline void fprint_ident_str(FILE *out, char *s) {
+	char *p = s;
+	fwrite(s, 1, ident_str_len(&p), out);
+}
+
 static void fprint_ident(FILE *out, Identifier id) {
 	fwrite(id->str, 1, id->len, out);
 }
 
 static void fprint_ident_debug(FILE *out, Identifier id) {
-	if (id->anonymous) {
-		fprintf(out, "???");
-		return;
-	}
 	fprint_ident(out, id);
 }
 
@@ -142,11 +128,6 @@ static void print_ident(Identifier id) {
 /* reduced charset = a-z, A-Z, 0-9, _ */
 static void fprint_ident_reduced_charset(FILE *out, Identifier id) {
 	assert(id);
-	if (id->anonymous) {
-		/* hack to generate unique C identifiers */
-		fprintf(out, "a%p__",(void *)id);
-		return;
-	}
 	for (const char *s = id->str; is_ident(*s); ++s) {
 		int c = (unsigned char)(*s);
 		if (c > 127) {
@@ -166,28 +147,13 @@ static Identifier ident_get(Identifiers *ids, char *s) {
 
 /* translate and insert if not already there */
 static Identifier ident_translate_forced(Identifier i, Identifiers *to_idents) {
-	if (!i || i->anonymous) return NULL;
 	char *p = i->str;
     return ident_insert(to_idents, &p);
 }
 
 /* translate but don't add it if it's not there */
 static Identifier ident_translate(Identifier i, Identifiers *to_idents) {
-	if (!i || i->anonymous) return NULL;
     return ident_get(to_idents, i->str);
-}
-
-static IdentDecl *ident_add_decl(Identifier i, struct Declaration *d, struct Block *b) {
-	IdentDecl *id_decl = arr_add(&i->decls);
-	id_decl->decl = d;
-	id_decl->scope = b;
-	id_decl->flags = 0;
-	id_decl->kind = IDECL_DECL;
-	return id_decl;
-}
-
-static IdentDecl *ident_decl(Identifier i) {
-	return (IdentDecl *)arr_last(i->decls);
 }
 
 /* returns true if i and j are equal, even if they're not in the same table */
@@ -196,10 +162,6 @@ static bool ident_eq(Identifier i, Identifier j) {
 }
 
 static void idents_free(Identifiers *ids) {
-	arr_foreach(ids->table.slots, StrHashTableSlotPtr, slotp) {
-		IdentSlot *slot = *(IdentSlot **)slotp;
-		if (slot) arr_clear(&slot->decls);
-	}
 	str_hash_table_free(&ids->table);
 }
 
@@ -231,13 +193,15 @@ static int ident_index_in_decl(Identifier i, Declaration *d) {
 	return -1;
 }
 
-static Location idecl_where(IdentDecl *id) {
+static Location ident_decl_location(Identifier i) {
 	
-	switch (id->kind) {
+	switch (i->decl_kind) {
 	case IDECL_DECL:
-		return id->decl->where;
+		return i->decl->where;
 	case IDECL_EXPR:
-		return id->expr->where;
+		return i->expr->where;
+	case IDECL_NONE:
+		break;
 	}
 	assert(0);
 	Location def = {0};

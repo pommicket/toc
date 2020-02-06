@@ -88,12 +88,12 @@ static void arr_cleara_(void **arr, size_t size, Allocator *allocr) {
 	}
 }
 
-/* does NOT shrink the array! */
 static void arr_set_len_(void **arr, size_t n, size_t item_sz) {
 	if (n > arr_len(*arr)) {
 		arr_resv_(arr, n, item_sz);
 	}
 	arr_hdr(*arr)->len = n;
+	/* OPTIM: shrink */
 }
 static void arr_set_lena_(void **arr, size_t n, size_t item_sz, Allocator *a) {
 	arr_resva_(arr, n, item_sz, a);
@@ -228,6 +228,8 @@ static void arr_test(void) {
 	arr_clear(&foos);
 }
 #endif
+
+/* string hash table. entries are zero initialized (toc stuff depends on this!) */
 
 static U64 str_hash(const char *s, size_t len) {
 	U32 x = 0xabcdef01;

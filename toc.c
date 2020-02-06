@@ -114,7 +114,6 @@ static char *read_file_contents(Allocator *a, const char *filename, Location whe
 #include "identifiers.c"
 #include "tokenizer.c"
 #include "parse.c"
-#include "scope.c"
 #include "foreign.c"
 #include "eval.c"
 #include "infer.c"

@@ -87,10 +87,10 @@ static void fprint_token(FILE *out, Token *t) {
 	case TOKEN_KW:
 		fprintf(out, "keyword: %s", kw_to_str(t->kw));
 		break;
-	case TOKEN_IDENT:
-		fprintf(out, "identifier: %p: ", (void*)t->ident);
-		fprint_ident_debug(out, t->ident);
-		break;
+	case TOKEN_IDENT: {
+		fprintf(out, "identifier: ");
+		fprint_ident_str(out, t->ident);
+	} break;
 	case TOKEN_LITERAL_NUM:
 		fprintf(out, "number: ");
 		switch (t->num.kind) {
@@ -260,11 +260,10 @@ static void tokr_get_start_pos(Tokenizer *tokr, Token *t) {
 the allocator you pass it will be used for string literals, so it shouldn't be freed
 until everything is done
 */
-static void tokr_create(Tokenizer *t, Identifiers *idents, ErrCtx *err_ctx, Allocator *allocr) {
+static void tokr_create(Tokenizer *t, ErrCtx *err_ctx, Allocator *allocr) {
 	t->tokens = NULL;
 	arr_resva(&t->tokens, 256, allocr);
 	t->allocr = allocr;
-	t->idents = idents;
 	t->err_ctx = err_ctx;
 }
 
@@ -566,9 +565,9 @@ static bool tokenize_file(Tokenizer *t, File *file) {
 		if (is_ident(*t->s)) {
 			/* it's an identifier */
 			Token *token = tokr_add(t);
-			Identifier ident = ident_insert(t->idents, &t->s);
 			token->kind = TOKEN_IDENT;
-			token->ident = ident;
+			token->ident = t->s;
+			while (is_ident(*t->s)) ++t->s;
 			tokr_put_end_pos(t, token);
 			continue;
 		}		

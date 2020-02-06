@@ -732,13 +732,12 @@ static bool eval_expr_ptr_at_index(Evaluator *ev, Expression *e, void **ptr, Typ
 }
 
 static bool eval_address_of_ident(Identifier i, Type *type, Location where, void **ptr) {
-	IdentDecl *id = ident_decl(i);
-	if (!(id->flags & IDECL_HAS_VAL)) {
-		if (id->kind == IDECL_DECL) {
-			Declaration *decl = id->decl;
+	if (!(i->flags & IDENT_HAS_VAL)) {
+		if (i->decl_kind == IDECL_DECL) {
+			Declaration *decl = i->decl;
 			if (!(decl->flags & DECL_IS_CONST) || !(decl->flags & DECL_FOUND_VAL)) goto runtime_var;
-			id->val = decl->val;
-			id->flags |= IDECL_HAS_VAL;
+			i->val = decl->val;
+			i->flags |= IDENT_HAS_VAL;
 		} else {
 		runtime_var:
 			err_print(where, "Cannot take address of run time variable at compile time.");
@@ -746,11 +745,11 @@ static bool eval_address_of_ident(Identifier i, Type *type, Location where, void
 		}
 	}
 	if (type->kind == TYPE_ARR)
-		*ptr = id->val.arr; /* point directly to data */
+		*ptr = i->val.arr; /* point directly to data */
 	else if (type->kind == TYPE_STRUCT)
-		*ptr = id->val.struc;
+		*ptr = i->val.struc;
 	else
-		*ptr = &id->val;
+		*ptr = &i->val;
 	return true;
 }
 
@@ -838,12 +837,12 @@ static bool eval_address_of(Evaluator *ev, Expression *e, void **ptr) {
 static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 	switch (set->kind) {
 	case EXPR_IDENT: {
-		IdentDecl *id = ident_decl(set->ident);
-		if (!(id->flags & IDECL_HAS_VAL)) {
+		Identifier i = set->ident;
+		if (!(i->flags & IDENT_HAS_VAL)) {
 			err_print(set->where, "Cannot set value of run time variable at compile time.");
 			return false;
 		}
-		id->val = *to;
+		i->val = *to;
 	} break;
 	case EXPR_UNARY_OP:
 		switch (set->unary.op) {
@@ -1075,17 +1074,16 @@ static bool val_is_nonnegative(Value *v, Type *t) {
 }
 
 static bool eval_ident(Evaluator *ev, Identifier ident, Value *v, Location where) {
-	IdentDecl *idecl = ident_decl(ident);
-	if (!idecl) {
+	if (ident->decl_kind == IDECL_NONE) {
 		char *s = ident_to_str(ident);
 		err_print(where, "Undeclared identifier: %s.", s);
 		free(s);
 		return false;
 	}
-	bool is_decl = idecl->kind == IDECL_DECL;
+	bool is_decl = ident->decl_kind == IDECL_DECL;
 	Declaration *d = NULL;
 	if (is_decl) {
-		d = idecl->decl;
+		d = ident->decl;
 		if (d->flags & DECL_FOREIGN) {
 			if (!(d->flags & DECL_FOUND_VAL)) {
 #if COMPILE_TIME_FOREIGN_FN_SUPPORT
@@ -1110,8 +1108,8 @@ static bool eval_ident(Evaluator *ev, Identifier ident, Value *v, Location where
 			assert(d->type.flags & TYPE_IS_RESOLVED);
 		}
 	}
-	if (idecl->flags & IDECL_HAS_VAL) {
-		*v = idecl->val;
+	if (ident->flags & IDENT_HAS_VAL) {
+		*v = ident->val;
 	} else if (is_decl && (d->flags & DECL_IS_CONST)) {
 		if (!(d->flags & DECL_FOUND_VAL)) {
 			assert(d->flags & DECL_HAS_EXPR);
@@ -1310,6 +1308,22 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	} break;
 	case EXPR_FOR: {
 		ForExpr *fo = e->for_;
+		Value *index_val;
+		Value *value_val;
+		if (fo->index) {
+			Identifier i = fo->index;
+			i->flags |= IDENT_HAS_VAL;
+			index_val = &i->val;
+		} else {
+			index_val = NULL;
+		}
+		if (fo->value) {
+			Identifier i = fo->value;
+			i->flags |= IDENT_HAS_VAL;
+			value_val = &i->val;
+		} else {
+			value_val = NULL;
+		}
 		if (fo->flags & FOR_IS_RANGE) {
 			Value from, to;
 			Value stepval;
@@ -1323,23 +1337,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (fo->range.stepval)
 				stepval = *fo->range.stepval;
 			Value x = from;
-			Value *index_val;
-			Value *value_val;
-			if (!for_enter(e)) return false;
-			if (fo->index) {
-				IdentDecl *idecl = ident_decl(fo->index);
-				idecl->flags |= IDECL_HAS_VAL;
-				index_val = &idecl->val;
-			} else {
-				index_val = NULL;
-			}
-			if (fo->value) {
-				IdentDecl *idecl = ident_decl(fo->value);
-				idecl->flags |= IDECL_HAS_VAL;
-				value_val = &idecl->val;
-			} else {
-				value_val = NULL;
-			}
 			bool step_is_negative = fo->range.stepval && !val_is_nonnegative(&stepval, &fo->type);
 			if (index_val) index_val->i64 = 0;
 			while (1) {
@@ -1368,23 +1365,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		} else {
 			Value of;
 			if (!eval_expr(ev, fo->of, &of)) return false;
-			Value *index_val, *value_val;
-			Value i, val;
-			if (!for_enter(e)) return false;
-			if (fo->index) {
-				IdentDecl *idecl = ident_decl(fo->index);
-				idecl->flags |= IDECL_HAS_VAL;
-				index_val = &idecl->val;
-			} else {
-				index_val = &i;
-			}
-			if (fo->value) {
-				IdentDecl *idecl = ident_decl(fo->value);
-				idecl->flags |= IDECL_HAS_VAL;
-				value_val = &idecl->val;
-			} else {
-				value_val = &val;
-			}
 			I64 len;
 			bool uses_ptr = false;
 			Type *of_type = &fo->of->type;
@@ -1423,7 +1403,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				++index_val->i64;
 			}
 		}
-		for_exit(e);
 	} break;
 	case EXPR_BLOCK:
 		if (!eval_block(ev, &e->block, &e->type, v)) return false;
@@ -1518,18 +1497,9 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				if (!eval_expr(ev, &e->call.arg_exprs[arg], &arg_val))
 					return false;
 				Type *type = p->type.kind == TYPE_TUPLE ? &p->type.tuple[idx++] : &p->type;
-				IdentDecl *id = ident_add_decl(*i, p, &fn->body);
-				copy_val(NULL, &id->val, &arg_val, type);
-				id->flags |= IDECL_HAS_VAL;
-
-				arr_set_len(&(*i)->decls, arr_len((*i)->decls)-1);
-				
+				copy_val(NULL, &(*i)->val, &arg_val, type);
+				(*i)->flags |= IDENT_HAS_VAL;
 				++arg;
-			}
-		}
-		arr_foreach(params, Declaration, p) {
-			arr_foreach(p->idents, Identifier, i) {
-				arr_set_len(&(*i)->decls, arr_len((*i)->decls)+1);
 			}
 		}
 		
@@ -1540,18 +1510,14 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				if (!eval_expr(ev, &d->expr, &val))
 					return false;
 			
-			if (!add_ident_decls(&fn->body, d, 0))
-				return false;
 			arr_foreach(d->idents, Identifier, i) {
 				Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx] : &d->type;
-				IdentDecl *id = ident_decl(*i);
 				if (d->flags & DECL_HAS_EXPR) {
-					id->val = d->type.kind == TYPE_TUPLE ? val.tuple[idx] : val;
-					id->flags |= IDECL_HAS_VAL;
+					(*i)->val = d->type.kind == TYPE_TUPLE ? val.tuple[idx] : val;
 				} else {
-					id->flags |= IDECL_HAS_VAL;
-					id->val = val_zero(type);
+					(*i)->val = val_zero(type);
 				}
+				(*i)->flags |= IDENT_HAS_VAL;
 				++idx;
 			}
 		}

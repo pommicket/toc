@@ -954,6 +954,12 @@ static int op_precedence(Keyword op) {
 	}
 }
 
+static Identifier parser_ident_insert(Parser *p, char *str) {
+	/* TODO TODO TODO NOW */
+	(void)p;
+	return NULL;
+}
+
 static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	Tokenizer *t = p->tokr;
 
@@ -1006,7 +1012,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			} break;
 			case TOKEN_IDENT:
 				e->kind = EXPR_IDENT;
-				e->ident = t->token->ident;
+				e->ident = parser_ident_insert(p, t->token->ident);
 				break;
 			case TOKEN_LITERAL_STR:
 				e->kind = EXPR_LITERAL_STR;
@@ -1163,14 +1169,14 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 								&& t->token[2].kind == TOKEN_IDENT
 								&& token_is_kw(t->token + 3, KW_COLON))))) {
 					if (t->token->kind == TOKEN_IDENT) {
-						fo->value = t->token->ident;
+						fo->value = parser_ident_insert(p, t->token->ident);
 						if (ident_eq_str(fo->value, "_")) /* ignore value */
 							fo->value = NULL;
 						++t->token;
 						if (token_is_kw(t->token, KW_COMMA)) {
 							++t->token;
 							if (t->token->kind == TOKEN_IDENT) {
-								fo->index = t->token->ident;
+								fo->index = parser_ident_insert(p, t->token->ident);
 								if (ident_eq_str(fo->index, "_")) /* ignore index */
 									fo->index = NULL;
 								++t->token;
@@ -1829,7 +1835,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 			tokr_err(t, "Cannot declare non-identifier (%s).", token_kind_to_str(t->token->kind));
 			goto ret_false;
 		}
-		*ident = t->token->ident;
+		*ident = parser_ident_insert(p, t->token->ident);
 		++t->token;
 		if (token_is_kw(t->token, KW_COMMA)) {
 			++t->token;
@@ -2172,7 +2178,7 @@ static void fprint_args(FILE *out, Argument *args) {
 	arr_foreach(args, Argument, arg) {
 		if (arg != args) fprintf(out, ", ");
 		if (arg->name) {
-			fprint_ident_debug(out, arg->name);
+			fprint_ident_str(out, arg->name);
 			fprintf(out, " = ");
 		}
 		fprint_expr(out, &arg->val);
@@ -2445,12 +2451,10 @@ static inline Type *decl_type_at_index(Declaration *d, int i) {
 }
 
 static bool ident_is_definitely_const(Identifier i) {
-	IdentDecl *idecl = ident_decl(i);
-	assert(idecl);
-	Declaration *decl = idecl->decl;
-	if (idecl->kind != IDECL_DECL || !(decl->flags & DECL_IS_CONST))
+	Declaration *decl = i->decl;
+	if (i->decl_kind != IDECL_DECL || !(decl->flags & DECL_IS_CONST))
 		return false;
-	if (decl->flags & DECL_FOREIGN) {
+	if (i->flags & DECL_FOREIGN) {
 		if (decl->foreign.lib && COMPILE_TIME_FOREIGN_FN_SUPPORT)
 			return true;
 		else
