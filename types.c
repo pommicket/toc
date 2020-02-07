@@ -374,7 +374,8 @@ static bool type_of_ident(Typer *tr, Location where, Identifier *ident, Type *t)
 		long nblocks = (long)arr_len(tr->blocks);
 		long idx;
 		for (idx = nblocks - 1; idx >= 0; --idx) {
-		    Identifier translated = ident_translate(i, &tr->blocks[idx]->idents);
+			Block *b = tr->blocks[idx];
+		    Identifier translated = ident_translate(i, b ? &b->idents : tr->globals);
 			if (!translated) continue;
 			if (translated->decl_kind != IDECL_NONE) {
 				i = *ident = translated;
@@ -2184,6 +2185,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 
 static bool types_block(Typer *tr, Block *b) {
 	*(Block **)arr_add(&tr->blocks) = b;
+	tr->block = b;
 	if (b->flags & BLOCK_FOUND_TYPES)
 		return true;
 	
@@ -2219,6 +2221,7 @@ static bool types_block(Typer *tr, Block *b) {
 		
 	}
  ret:
+	tr->block = *(Block **)arr_last(tr->blocks);
 	arr_remove_last(&tr->blocks);
 	b->flags |= BLOCK_FOUND_TYPES;
 	return success;

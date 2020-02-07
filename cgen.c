@@ -214,6 +214,9 @@ static inline void cgen_write(CGenerator *g, const char *fmt, ...) {
 	va_start(args, fmt);
 	vfprintf(cgen_writing_to(g), fmt, args);
 	va_end(args);
+#ifdef TOC_DEBUG
+	fflush(cgen_writing_to(g));
+#endif
 }
 
 static inline void cgen_nl(CGenerator *g) {
@@ -2120,8 +2123,9 @@ static bool cgen_defs_stmt(CGenerator *g, Statement *s) {
 static bool cgen_defs_block(CGenerator *g, Block *b) {
 	/* 
 	   NOTE: since we exit as soon as there's an error for cgen, we don't need to make sure we
-	   set g->block to the previous block
+	   set g->block to the previous block if there's an error
 	*/
+	Block *prev_block = g->block;
 	g->block = b;
 	arr_foreach(b->stmts, Statement, s) {
 		if (!cgen_defs_stmt(g, s)) {
@@ -2131,6 +2135,7 @@ static bool cgen_defs_block(CGenerator *g, Block *b) {
 	if (b->ret_expr && !cgen_defs_expr(g, b->ret_expr)) {
 		return false;
 	}
+	g->block = prev_block;
 	return true;
 }
 

@@ -779,12 +779,16 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 	return ret;
 }
 
-static bool parse_block(Parser *p, Block *b) {
+enum {
+	  PARSE_BLOCK_DONT_CREATE_IDENTS = 0x01
+};
+static bool parse_block(Parser *p, Block *b, U8 flags) {
 	Tokenizer *t = p->tokr;
 	Block *prev_block = p->block;
 	b->flags = 0;
 	b->ret_expr = NULL;
-	idents_create(&b->idents, p->allocr, p->block);
+	if (!(flags & PARSE_BLOCK_DONT_CREATE_IDENTS))
+		idents_create(&b->idents, p->allocr, p->block);
 	if (!token_is_kw(t->token, KW_LBRACE)) {
 		tokr_err(t, "Expected '{' to open block.");
 		return false;
@@ -865,7 +869,11 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 	}
 	++t->token;
 	f->params = NULL;
-	bool ret = true;
+	bool success = true;
+	Block *prev_block = p->block;
+	/* enter block so that parameters' scope will be the function body */
+	p->block = &f->body;
+	idents_create(&f->body.idents, p->allocr, &f->body);
 	if (token_is_kw(t->token, KW_RPAREN)) {
 		++t->token;
 	} else {
@@ -874,14 +882,15 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 		arr_foreach(f->params, Declaration, param) {
 			if (param->flags & DECL_FOREIGN) {
 				err_print(param->where, "Parameters cannot be foreign.");
-				return false;
+				success = false;
+				goto ret;
 			}
 		}
 	}
 	
 	if (t->token->kind == TOKEN_EOF) {
 		tokr_err(t, "End of file encountered while parsing parameter list.");
-		return false;
+	    success = false; goto ret;
 	}
 	
 	if (token_is_kw(t->token, KW_LBRACE)) {
@@ -894,15 +903,15 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 		arr_foreach(f->ret_decls, Declaration, d) {
 			if ((d->flags & DECL_IS_CONST) || (d->flags & DECL_SEMI_CONST)) {
 				err_print(d->where, "Named return values cannot be constant.");
-				return false;
+				success = false; goto ret;
 			}
 			if (d->flags & DECL_INFER) {
 				err_print(d->where, "Can't infer the value of a named return value!");
-				return false;
+				success = false; goto ret;
 			}
 			if (d->flags & DECL_FOREIGN) {
 				err_print(d->where, "Named return values can't be foreign.");
-				return false;
+			    success = false; goto ret;
 			}
 		}
 		--t->token;	/* move back to { */
@@ -911,13 +920,16 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 		f->ret_type.flags = 0;
 	} else {
 		if (!parse_type(p, &f->ret_type)) {
-			ret = false;
+			success = false;
+			goto ret;
 		}
 	}
-	if (!parse_block(p, &f->body))
-		ret = false;
+	if (!parse_block(p, &f->body, PARSE_BLOCK_DONT_CREATE_IDENTS))
+		success = false;
+ ret:
 	f->body.flags |= BLOCK_IS_FN;
-	return ret;
+	p->block = prev_block;
+	return success;
 }
 
 static void fprint_expr(FILE *out, Expression *e);
@@ -1070,7 +1082,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				
 				e->kind = EXPR_NMS;
 				++t->token;
-				if (!parse_block(p, &n->body))
+				if (!parse_block(p, &n->body, 0))
 					return false;
  				goto success;
 			}
@@ -1087,7 +1099,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				}
 				i->cond = parser_new_expr(p);
 				if (!parse_expr(p, i->cond, cond_end)) return false;
-				if (!parse_block(p, &i->body)) return false;
+				if (!parse_block(p, &i->body, 0)) return false;
 				IfExpr *curr = i;
 				while (1) {
 					bool is_else = token_is_kw(t->token, KW_ELSE);
@@ -1110,7 +1122,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					if (is_else) {
 						++t->token;
 						nexti->cond = NULL;
-						if (!parse_block(p, &nexti->body)) return false;
+						if (!parse_block(p, &nexti->body, 0)) return false;
 					} else {
 						/* elif */
 						++t->token;
@@ -1125,7 +1137,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 						if (!parse_expr(p, cond, cond_end))
 							return false;
 						nexti->cond = cond;
-						if (!parse_block(p, &nexti->body)) return false;
+						if (!parse_block(p, &nexti->body, 0)) return false;
 					}
 					next->where.end = t->token;
 					curr = nexti;
@@ -1153,7 +1165,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					if (!parse_expr(p, cond, cond_end))
 						return false;
 				}
-				if (!parse_block(p, &w->body)) return false;
+				if (!parse_block(p, &w->body, 0)) return false;
 				goto success;
 			}
 			case KW_FOR: {
@@ -1162,6 +1174,9 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				fo->flags = 0;
 				fo->value = NULL;
 				fo->index = NULL;
+				Block *prev_block = p->block;
+				p->block = &fo->body;
+				idents_create(&p->block->idents, p->allocr, p->block);
 				++t->token;
 				if (token_is_kw(t->token, KW_COLON)
 					|| (t->token->kind == TOKEN_IDENT
@@ -1171,6 +1186,8 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 								&& token_is_kw(t->token + 3, KW_COLON))))) {
 					if (t->token->kind == TOKEN_IDENT) {
 						fo->value = parser_ident_insert(p, t->token->ident);
+						fo->value->decl_kind = IDECL_EXPR;
+						fo->value->expr = e;
 						if (ident_eq_str(fo->value, "_")) /* ignore value */
 							fo->value = NULL;
 						++t->token;
@@ -1178,39 +1195,41 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 							++t->token;
 							if (t->token->kind == TOKEN_IDENT) {
 								fo->index = parser_ident_insert(p, t->token->ident);
+								fo->index->decl_kind = IDECL_EXPR;
+								fo->index->expr = e;
 								if (ident_eq_str(fo->index, "_")) /* ignore index */
 									fo->index = NULL;
 								++t->token;
 							} else {
 								tokr_err(t, "Expected identifier after , in for loop.");
-								return false;
+								goto for_fail;
 							}
 						}
 					}
 					if (!token_is_kw(t->token, KW_COLON)) {
 						tokr_err(t, "Expected : following identifiers in for loop.");
-						return false;
+						goto for_fail;
 					}
 					++t->token;
 					if (token_is_kw(t->token, KW_COLON)) {
 						tokr_err(t, "The variable(s) in a for loop cannot be constant.");
-						return false;
+						goto for_fail;
 					}
 					if (!token_is_kw(t->token, KW_EQ)) {
 						fo->flags |= FOR_ANNOTATED_TYPE;
 						if (!parse_type(p, &fo->type))
-							return false;
+							goto for_fail;
 						if (!token_is_kw(t->token, KW_EQ)) {
 							tokr_err(t, "Expected = in for statement.");
-							return false;
+							goto for_fail;
 						}
 					}
 					++t->token;
 				}
-				Token *first_end = expr_find_end(p, EXPR_CAN_END_WITH_COMMA|EXPR_CAN_END_WITH_DOTDOT|EXPR_CAN_END_WITH_LBRACE);
-				Expression *first = parser_new_expr(p);
+				Token *first_end; first_end = expr_find_end(p, EXPR_CAN_END_WITH_COMMA|EXPR_CAN_END_WITH_DOTDOT|EXPR_CAN_END_WITH_LBRACE);
+				Expression *first; first = parser_new_expr(p);
 				if (!parse_expr(p, first, first_end))
-					return false;
+				    goto for_fail;
 				if (token_is_kw(first_end, KW_LBRACE)) {
 					fo->of = first;
 				} else if (token_is_kw(first_end, KW_DOTDOT) || token_is_kw(first_end, KW_COMMA)) {
@@ -1222,10 +1241,10 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 						fo->range.step = parser_new_expr(p);
 						Token *step_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE|EXPR_CAN_END_WITH_DOTDOT);
 						if (!parse_expr(p, fo->range.step, step_end))
-							return false;
+							goto for_fail;
 						if (!token_is_kw(step_end, KW_DOTDOT)) {
 							err_print(token_location(p->file, step_end), "Expected .. to follow step in for statement.");
-							return false;
+							goto for_fail;
 						}
 					} else {
 						fo->range.step = NULL;
@@ -1237,20 +1256,24 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 						fo->range.to = parser_new_expr(p);
 						Token *to_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE);
 						if (!parse_expr(p, fo->range.to, to_end))
-							return false;
+							goto for_fail;
 						if (!token_is_kw(t->token, KW_LBRACE)) {
 							tokr_err(t, "Expected { to open body of for statement.");
-							return false;
+							goto for_fail;
 						}
 					}
 				} else {
 					err_print(token_location(p->file, first_end), "Expected { or .. to follow expression in for statement.");
-					return false;
+				    goto for_fail;
 				}
 			
-				if (!parse_block(p, &fo->body))
-					return false;
+				if (!parse_block(p, &fo->body, PARSE_BLOCK_DONT_CREATE_IDENTS))
+				    goto for_fail;
+				p->block = prev_block;
 				goto success;
+				for_fail:
+				p->block = prev_block;
+				return false;
 			}
 			default: break;
 			}
@@ -1770,7 +1793,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			if (token_is_kw(t->token, KW_LBRACE)) {
 				/* it's a block */
 				e->kind = EXPR_BLOCK;
-				if (!parse_block(p, &e->block)) return false;
+				if (!parse_block(p, &e->block, 0)) return false;
 				if (t->token != end) {
 					tokr_err(t, "Expression continues after end of block."); /* TODO: improve this err message */
 					return false;
@@ -2165,6 +2188,11 @@ static void fprint_block(FILE *out,  Block *b) {
 		fprint_expr(out, b->ret_expr);
 	}
 	
+}
+
+static void print_block(Block *b) {
+	fprint_block(stdout, b);
+	printf("\n");
 }
 
 static void fprint_fn_expr(FILE *out, FnExpr *f) {

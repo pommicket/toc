@@ -1,27 +1,10 @@
-/*
-io ::= nms {
-	#include "std/io.toc";
+// it would be nice if Arr.data.len == Arr.len (: but this will require some C code...
+Arr ::= fn (t :: Type) Type {
+	struct {
+		   data : t;
+	}
 };
-
-n ::= nms {
-	x := 1;
-	counter ::= fn() int { x += 1; x };
-};
-
 
 main ::= fn() {
-	a := n.counter();
-	b := n.counter();
-	n.counter();
-	c := n.counter();
-	io.puti(a);
-	io.puti(b);
-	io.puti(c);
-};
-*/
-
-x := 5;
-main ::= fn() {
-	 
-	 x;
+	 arr : Arr(int);
 };
