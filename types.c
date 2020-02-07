@@ -19,6 +19,16 @@ static inline void *typer_arr_add_(Typer *tr, void **arr, size_t sz) {
 	return arr_adda_(arr, sz, tr->allocr);
 }
 
+static inline void typer_block_enter(Typer *tr, Block *b) {
+	*(Block **)arr_add(&tr->blocks) = b;
+	tr->block = b;
+}
+
+static inline void typer_block_exit(Typer *tr) {
+	arr_remove_last(&tr->blocks);
+	tr->block = *(Block **)arr_last(tr->blocks);
+}
+
 #define typer_arr_add(tr, a) typer_arr_add_(tr, (void **)(a), sizeof **(a))
 
 static bool type_eq(Type *a, Type *b) {
@@ -220,18 +230,11 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	FnExpr *prev_fn = tr->fn;
 	FnExpr fn_copy = {0};
 	
-	Block *prev_block = tr->block;
-	/* 
-	   fakely enter the body of the function, so that
-	   fn (x : int) y := x {} works
-	*/
-	tr->block = &f->body;
-	*(Block **)arr_adda(&tr->blocks, tr->allocr) = tr->block;
 		
 	/* f has compile time params, but it's not an instance! */
 	bool generic = !(flags & TYPE_OF_FN_IS_INSTANCE) && fn_has_any_const_params(f);
 	if (generic) {
-		Copier cop = copier_create(tr->allocr, tr->block);
+		Copier cop = copier_create(tr->allocr, &f->body);
 		copy_fn_expr(&cop, &fn_copy, f, false);
 		f = &fn_copy;
 	}
@@ -239,6 +242,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	bool has_constant_params = false;
 	Type *ret_type = typer_arr_add(tr, &t->fn.types);
 	tr->fn = f;
+	typer_block_enter(tr, &f->body);
 	size_t nparams = arr_len(f->params);
 	entered_fn = true;
 	for (param_idx = 0; param_idx < nparams; ++param_idx) {
@@ -356,9 +360,8 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	*ret_type = f->ret_type;
 
  ret:
-	arr_remove_lasta(&tr->blocks, tr->allocr);
-	tr->block = prev_block;
 	/* cleanup */
+	typer_block_exit(tr);
 	if (entered_fn) {
 		tr->fn = prev_fn;
 	}
@@ -369,7 +372,19 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 static bool type_of_ident(Typer *tr, Location where, Identifier *ident, Type *t) {
 	t->flags = 0;
 	Identifier i = *ident;
+#ifdef TOC_DEBUG
+	if (i->idents->scope != tr->block) {
+		printf("Ident declaration mismatch for this ident:\n");
+		print_location(where);
+		printf("Typer is typing:\n");
+		print_block_location(tr->block);
+		printf("But the identifier's scope is:\n");
+		print_block_location(i->idents->scope);
+		abort();
+	}
+#else
 	assert(i->idents->scope == tr->block);
+#endif
 	if (i->decl_kind == IDECL_NONE) {
 		long nblocks = (long)arr_len(tr->blocks);
 		long idx;
@@ -379,6 +394,11 @@ static bool type_of_ident(Typer *tr, Location where, Identifier *ident, Type *t)
 		    Identifier translated = ident_translate(i, b ? &b->idents : tr->globals);
 			if (!translated) continue;
 			if (translated->decl_kind != IDECL_NONE) {
+				/* printf("translated %s from\n", ident_to_str(i)); */
+				/* print_block_location(i->idents->scope); */
+				/* printf(" to \n"); */
+				/* print_block_location(translated->idents->scope); */
+				
 				i = *ident = translated;
 				break;
 			}
@@ -1127,9 +1147,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 	case EXPR_FOR: {
 		ForExpr *fo = e->for_;
 		*(Expression **)typer_arr_add(tr, &tr->in_expr_decls) = e;
+		typer_block_enter(tr, &fo->body); /* while this block is being typed, fo->body will be in tr->blocks twice. hopefully that doesn't mess anything up! */
 		if (fo->flags & FOR_IS_RANGE) {
 			/* TODO: allow user-defined numerical types */
-			if (!types_expr(tr, fo->range.from)) return false;
+			if (!types_expr(tr, fo->range.from)) goto for_fail;
 			{
 				Type *ft = &fo->range.from->type;
 				if (ft->kind != TYPE_BUILTIN || !type_builtin_is_numerical(ft->builtin)) {
@@ -1139,7 +1160,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				}
 			}
 			if (fo->range.step) {
-				if (!types_expr(tr, fo->range.step)) return false;
+				if (!types_expr(tr, fo->range.step)) goto for_fail;
 				Type *st = &fo->range.step->type;
 				if (st->kind != TYPE_BUILTIN || !type_builtin_is_numerical(st->builtin)) {
 					char *s = type_to_str(st);
@@ -1148,7 +1169,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				}
 			}
 			if (fo->range.to) {
-				if (!types_expr(tr, fo->range.to)) return false;
+				if (!types_expr(tr, fo->range.to)) goto for_fail;
 				Type *tt = &fo->range.to->type;
 				if (tt->kind != TYPE_BUILTIN || !type_builtin_is_numerical(tt->builtin)) {
 					char *s = type_to_str(tt);
@@ -1166,7 +1187,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				char *got = type_to_str(&fo->range.from->type);
 				err_print(e->where, "Type of for loop does not match the type of the from expression. Expected %s, but got %s.", exp, got);
 				free(exp); free(got);
-				return false;
+				goto for_fail;
 			}
 			
 			if (fo->range.step && !type_eq(&fo->type, &fo->range.step->type)) {
@@ -1174,7 +1195,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				char *got = type_to_str(&fo->range.step->type);
 				err_print(e->where, "Type of for loop does not match the type of the step expression. Expected %s, but got %s.", exp, got);
 				free(exp); free(got);
-				return false;
+				goto for_fail;
 			}
 			
 			if ((fo->type.flags & TYPE_IS_FLEXIBLE) && fo->range.step)
@@ -1185,7 +1206,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				char *got = type_to_str(&fo->range.to->type);
 				err_print(e->where, "Type of for loop does not match the type of the to expression. Expected %s, but got %s.", exp, got);
 				free(exp); free(got);
-				return false;
+				goto for_fail;
 			}
 			
 			if ((fo->type.flags & TYPE_IS_FLEXIBLE) && fo->range.to)
@@ -1193,7 +1214,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			fo->type.flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE;
 		} else {
 			if (!types_expr(tr, fo->of))
-				return false;
+				goto for_fail;
 			Type *iter_type = &fo->of->type;
 
 			bool uses_ptr = false;
@@ -1212,7 +1233,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				char *s = type_to_str(&fo->of->type);
 				err_print(e->where, "Cannot iterate over non-array non-slice type %s.", s);
 				free(s);
-				return false;
+				goto for_fail;
 			}
 			}
 			Type ptr_type = {0};
@@ -1228,7 +1249,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 					char *got = type_to_str(&fo->type);
 					err_print(e->where, "Expected to iterate over type %s, but it was annotated as iterating over type %s.");
 					free(exp); free(got);
-					return false;
+					goto for_fail;
 				}
 			} else fo->type = *iter_type;
 		}
@@ -1236,7 +1257,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			Value *stepval = typer_malloc(tr, sizeof *fo->range.stepval);
 			if (!eval_expr(tr->evalr, fo->range.step, stepval)) {
 				info_print(fo->range.step->where, "Note that the step of a for loop must be a compile-time constant.");
-				return false;
+				goto for_fail;
 			}
 			val_cast(stepval, &fo->range.step->type, stepval, &fo->type);
 			fo->range.stepval = stepval;
@@ -1244,7 +1265,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		
 		arr_remove_lasta(&tr->in_expr_decls, tr->allocr);
 		
-		if (!types_block(tr, &fo->body)) return false;
+		if (!types_block(tr, &fo->body)) goto for_fail;
 		
 		if (fo->body.ret_expr) {
 			*t = fo->body.ret_expr->type;
@@ -1252,7 +1273,12 @@ static bool types_expr(Typer *tr, Expression *e) {
 			t->kind = TYPE_VOID;
 			t->flags |= TYPE_IS_RESOLVED;
 		}
-	} break;
+		typer_block_exit(tr);
+		break;
+		for_fail:
+		typer_block_exit(tr);
+		return false;
+	};
 	case EXPR_IDENT: {
 		if (!type_of_ident(tr, e->where, &e->ident, t)) return false;
 	} break;
@@ -2183,12 +2209,11 @@ static bool types_expr(Typer *tr, Expression *e) {
 	return true;
 }
 
+
 static bool types_block(Typer *tr, Block *b) {
-	*(Block **)arr_add(&tr->blocks) = b;
-	tr->block = b;
 	if (b->flags & BLOCK_FOUND_TYPES)
 		return true;
-	
+	typer_block_enter(tr, b);
 	bool success = true;
 	arr_foreach(b->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {
@@ -2221,8 +2246,7 @@ static bool types_block(Typer *tr, Block *b) {
 		
 	}
  ret:
-	tr->block = *(Block **)arr_last(tr->blocks);
-	arr_remove_last(&tr->blocks);
+	typer_block_exit(tr);
 	b->flags |= BLOCK_FOUND_TYPES;
 	return success;
 }

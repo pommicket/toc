@@ -787,15 +787,18 @@ static bool parse_block(Parser *p, Block *b, U8 flags) {
 	Block *prev_block = p->block;
 	b->flags = 0;
 	b->ret_expr = NULL;
+	p->block = b;
 	if (!(flags & PARSE_BLOCK_DONT_CREATE_IDENTS))
 		idents_create(&b->idents, p->allocr, p->block);
 	if (!token_is_kw(t->token, KW_LBRACE)) {
 		tokr_err(t, "Expected '{' to open block.");
 		return false;
 	}
-	p->block = b;
 	b->where = parser_mk_loc(p);
 	b->where.start = t->token;
+#ifdef TOC_DEBUG
+	b->where.end = t->token + 1;
+#endif
 	++t->token;	/* move past { */
 	b->stmts = NULL;
 	bool ret = true;
@@ -970,6 +973,7 @@ static int op_precedence(Keyword op) {
 static Identifier parser_ident_insert(Parser *p, char *str) {
 	Identifiers *idents = p->block ? &p->block->idents : p->globals;
 	Identifier i = ident_insert(idents, &str);
+	assert(i->idents->scope == p->block);
 	return i;
 }
 
@@ -2191,8 +2195,19 @@ static void fprint_block(FILE *out,  Block *b) {
 }
 
 static void print_block(Block *b) {
-	fprint_block(stdout, b);
-	printf("\n");
+	if (b) {
+		fprint_block(stdout, b);
+		printf("\n");
+	} else {
+		printf("(null block)\n");
+	}
+}
+
+static void print_block_location(Block *b) {
+	if (b)
+		print_location(b->where);
+	else
+		printf("(global scope)\n");
 }
 
 static void fprint_fn_expr(FILE *out, FnExpr *f) {

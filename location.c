@@ -20,13 +20,16 @@ static void print_pos_highlight(FILE *out, ErrCtx *ctx, File *file, U32 start_po
 	/* go back to last newline / 0 byte */
 	while (*line_start != '\0' && *line_start != '\n') --line_start;
 	if (line_start < start) ++line_start;
+
+	/* skip space at start of line */
+	while (isspace(*line_start) && line_start < end)
+		++line_start;
 		
 	char *line_end = strchr(start, '\n');
 	int has_newline = line_end != NULL;
 	if (!has_newline)
 		line_end = strchr(start, '\0');
 	assert(line_end);
-	fprintf(out, "\t");
 	if (!line_start[0])
 		fprintf(out, "<end of file>");
 	else {
