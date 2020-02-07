@@ -2027,7 +2027,7 @@ static bool cgen_stmt(CGenerator *g, Statement *s) {
 	*/
 	switch (s->kind) {
 	case STMT_DECL:
-		if (!cgen_decl(g, &s->decl)) return false;
+		if (!cgen_decl(g, s->decl)) return false;
 		break;
 	case STMT_EXPR:
 		if (!cgen_expr_pre(g, &s->expr)) return false;
@@ -2099,7 +2099,7 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d) {
 static bool cgen_defs_stmt(CGenerator *g, Statement *s) {
 	switch (s->kind) {
 	case STMT_DECL:
-		if (!cgen_defs_decl(g, &s->decl))
+		if (!cgen_defs_decl(g, s->decl))
 			return false;
 		break;
 	case STMT_EXPR:

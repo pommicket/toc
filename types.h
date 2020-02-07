@@ -174,7 +174,7 @@ enum {
 typedef enum {
 			  IDECL_NONE,
 			  IDECL_DECL,
-			  IDECL_EXPR
+			  IDECL_FOR
 } IdentDeclKind;
 
 
@@ -185,7 +185,7 @@ typedef struct IdentSlot {
 	IdentDeclKind decl_kind;	
 	union {
 		struct Declaration *decl;
-		struct Expression *expr; /* for example, this identifier is declared in a for expression */
+		struct ForExpr *for_;
 	};
 	struct Identifiers *idents;
 	Value val;
@@ -842,7 +842,7 @@ typedef struct Statement {
 	StatementKind kind;
 	U8 flags;
 	union {
-		Declaration decl;
+		Declaration *decl; /* we want the pointer to be fixed so that we can refer to it from an identifier */
 		Expression expr;
 		Return ret;
 		Include inc;
@@ -896,7 +896,7 @@ typedef struct Typer {
 	Allocator *allocr;
 	Evaluator *evalr;
 	Identifiers *globals;
-	Expression **in_expr_decls; /* an array of expressions whose declarations (e.g. for **x := foo**) we are currently inside */
+	ForExpr **in_fors; /* which fors we are currently inside the header of */
 	Declaration **in_decls; /* array of declarations we are currently inside */
 	Block *block;
 	Block **blocks; /* dyn array of all the block's we're in ([0] = NULL for global scope) */

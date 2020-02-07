@@ -1654,7 +1654,7 @@ static bool eval_decl(Evaluator *ev, Declaration *d) {
 static bool eval_stmt(Evaluator *ev, Statement *stmt) {
 	switch (stmt->kind) {
 	case STMT_DECL:
-		if (!eval_decl(ev, &stmt->decl)) return false;
+		if (!eval_decl(ev, stmt->decl)) return false;
 		break;
 	case STMT_EXPR: {
 		Value unused;

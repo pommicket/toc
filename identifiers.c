@@ -200,18 +200,3 @@ static int ident_index_in_decl(Identifier i, Declaration *d) {
 	}
 	return -1;
 }
-
-static Location ident_decl_location(Identifier i) {
-	
-	switch (i->decl_kind) {
-	case IDECL_DECL:
-		return i->decl->where;
-	case IDECL_EXPR:
-		return i->expr->where;
-	case IDECL_NONE:
-		break;
-	}
-	assert(0);
-	Location def = {0};
-	return def;
-}

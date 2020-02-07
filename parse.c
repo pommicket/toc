@@ -1190,8 +1190,8 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 								&& token_is_kw(t->token + 3, KW_COLON))))) {
 					if (t->token->kind == TOKEN_IDENT) {
 						fo->value = parser_ident_insert(p, t->token->ident);
-						fo->value->decl_kind = IDECL_EXPR;
-						fo->value->expr = e;
+						fo->value->decl_kind = IDECL_FOR;
+						fo->value->for_ = fo;
 						if (ident_eq_str(fo->value, "_")) /* ignore value */
 							fo->value = NULL;
 						++t->token;
@@ -1199,8 +1199,8 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 							++t->token;
 							if (t->token->kind == TOKEN_IDENT) {
 								fo->index = parser_ident_insert(p, t->token->ident);
-								fo->index->decl_kind = IDECL_EXPR;
-								fo->index->expr = e;
+								fo->index->decl_kind = IDECL_FOR;
+								fo->index->for_ = fo;
 								if (ident_eq_str(fo->index, "_")) /* ignore index */
 									fo->index = NULL;
 								++t->token;
@@ -2106,7 +2106,7 @@ static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 	}
 	if (is_decl(t)) {
 		s->kind = STMT_DECL;
-		if (!parse_decl(p, &s->decl, DECL_END_SEMICOLON, PARSE_DECL_ALLOW_EXPORT)) {
+		if (!parse_decl(p, s->decl = parser_malloc(p, sizeof *s->decl), DECL_END_SEMICOLON, PARSE_DECL_ALLOW_EXPORT)) {
 			return false;
 		}
 	} else {
@@ -2448,7 +2448,7 @@ static void fprint_stmt(FILE *out, Statement *s) {
 	PARSE_PRINT_LOCATION(s->where);
 	switch (s->kind) {
 	case STMT_DECL:
-		fprint_decl(out, &s->decl);
+		fprint_decl(out, s->decl);
 		fprintf(out, ";\n");
 		break;
 	case STMT_EXPR:

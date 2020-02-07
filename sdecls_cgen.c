@@ -95,7 +95,7 @@ static bool cgen_sdecls_decl(CGenerator *g, Declaration *d) {
 static bool cgen_sdecls_stmt(CGenerator *g, Statement *s) {
 	switch (s->kind) {
 	case STMT_DECL:
-		if (!cgen_sdecls_decl(g, &s->decl))
+		if (!cgen_sdecls_decl(g, s->decl))
 			return false;
 		break;
 	case STMT_EXPR:

@@ -226,7 +226,7 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 static bool cgen_decls_stmt(CGenerator *g, Statement *s) {
 	switch (s->kind) {
 	case STMT_DECL:
-		if (!cgen_decls_decl(g, &s->decl))
+		if (!cgen_decls_decl(g, s->decl))
 			return false;
 		break;
 	case STMT_EXPR:

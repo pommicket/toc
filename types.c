@@ -483,29 +483,24 @@ static bool type_of_ident(Typer *tr, Location where, Identifier *ident, Type *t)
 			}
 		}
 	} break;
-	case IDECL_EXPR: {
-		Expression *e = i->expr;
-		/* are we inside this expression? */
-		typedef Expression *ExpressionPtr;
-		arr_foreach(tr->in_expr_decls, ExpressionPtr, in_e) {
-			if (*in_e == e) {
+	case IDECL_FOR: {
+		ForExpr *fo = i->for_;
+		/* are we inside this for? */
+		typedef ForExpr *ForExprPtr;
+		arr_foreach(tr->in_fors, ForExprPtr, in_f) {
+			if (*in_f == fo) {
 				char *s = ident_to_str(i);
 				err_print(where, "Use of identifier %s in its own declaration.", s);
 				free(s);
 				return false;
 			}
 		}
-		switch (e->kind) {
-		case EXPR_FOR:
-			if (i == e->for_->index) {
-				t->kind = TYPE_BUILTIN;
-				t->builtin = BUILTIN_I64;
-			} else {
-				assert(i == e->for_->value);
-				*t = e->for_->type;
-			}
-			break;
-		default: assert(0); return false;
+		if (i == fo->index) {
+			t->kind = TYPE_BUILTIN;
+			t->builtin = BUILTIN_I64;
+		} else {
+			assert(i == fo->value);
+			*t = fo->type;
 		}
 	} break;
 	case IDECL_NONE: {
@@ -1079,7 +1074,7 @@ static bool nms_translate_idents_in_stmts(Namespace *nms, Statement *stmts) {
 				return false;
 			break;
 		case STMT_DECL: {
-			Declaration *d = &s->decl;
+			Declaration *d = s->decl;
 			arr_foreach(d->idents, Identifier, i) {
 				*i = ident_translate_forced(*i, &nms->idents);
 			}
@@ -1146,7 +1141,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 		break;
 	case EXPR_FOR: {
 		ForExpr *fo = e->for_;
-		*(Expression **)typer_arr_add(tr, &tr->in_expr_decls) = e;
+		bool in_header = true;
+		*(ForExpr **)typer_arr_add(tr, &tr->in_fors) = fo;
 		typer_block_enter(tr, &fo->body); /* while this block is being typed, fo->body will be in tr->blocks twice. hopefully that doesn't mess anything up! */
 		if (fo->flags & FOR_IS_RANGE) {
 			/* TODO: allow user-defined numerical types */
@@ -1263,8 +1259,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 			fo->range.stepval = stepval;
 		}
 		
-		arr_remove_lasta(&tr->in_expr_decls, tr->allocr);
-		
+		arr_remove_lasta(&tr->in_fors, tr->allocr);
+		in_header = false;
 		if (!types_block(tr, &fo->body)) goto for_fail;
 		
 		if (fo->body.ret_expr) {
@@ -1276,6 +1272,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 		typer_block_exit(tr);
 		break;
 		for_fail:
+		if (in_header)
+			arr_remove_lasta(&tr->in_fors, tr->allocr);
 		typer_block_exit(tr);
 		return false;
 	};
@@ -2429,7 +2427,7 @@ static bool types_stmt(Typer *tr, Statement *s) {
 		}
 		break;
 	case STMT_DECL:
-		if (!types_decl(tr, &s->decl)) {
+		if (!types_decl(tr, s->decl)) {
 			return false;
 		}
 		break;
@@ -2504,7 +2502,7 @@ static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *a
 	tr->evalr = ev;
 	tr->err_ctx = err_ctx;
 	tr->in_decls = NULL;
-	tr->in_expr_decls = NULL;
+	tr->in_fors = NULL;
 	tr->allocr = allocr;
 	tr->globals = idents;
 	tr->is_reference_stack = NULL;

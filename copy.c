@@ -223,13 +223,13 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 
 		if (fout->index) {
 			copier_ident_translate(c, &fout->index);
-			fout->index->decl_kind = IDECL_EXPR;
-			fout->index->expr = out;
+			fout->index->decl_kind = IDECL_FOR;
+			fout->index->for_ = fout;
 		}
 		if (fout->value) {
 			copier_ident_translate(c, &fout->value);
-			fout->value->decl_kind = IDECL_EXPR;
-			fout->value->expr = out;
+			fout->value->decl_kind = IDECL_FOR;
+			fout->value->for_ = fout;
 		}
 		if (fin->flags & FOR_ANNOTATED_TYPE)
 			copy_type(c, &fout->type, &fin->type);
@@ -360,7 +360,7 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 		copy_expr(c, &out->expr, &in->expr);
 		break;
 	case STMT_DECL:
-		copy_decl(c, &out->decl, &in->decl);
+		copy_decl(c, out->decl = allocr_malloc(c->allocr, sizeof *out->decl), in->decl);
 		break;
 	}
 }

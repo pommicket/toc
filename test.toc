@@ -1,7 +1,7 @@
-getstdin ::= fn(){
-		 buffer : int;
-		 while true {
-			   while buffer {
-			   }
-		 }
+foo ::= nms {
+	bar ::= 5;
+};
+
+main ::= fn() {
+	 foo.bar;
 };
