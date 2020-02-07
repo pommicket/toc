@@ -751,7 +751,7 @@ static bool eval_address_of_ident(Identifier i, Type *type, Location where, void
 	return true;
 }
 
-static void *eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr) {
+static bool eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr, void **p) {
 	Type *struct_type = &dot_expr->binary.lhs->type;
 	bool is_ptr = struct_type->kind == TYPE_PTR;
 	if (is_ptr) {
@@ -768,22 +768,22 @@ static void *eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr) {
 			struc_data = struc.ptr;
 			if (struc_data == NULL) {
 				err_print(dot_expr->where, "Attempt to dereference NULL pointer.");
-				return NULL;
+			    return false;
 			}
 		} else {
 			struc_data = struc.struc;
 		}
-		return (char *)struc_data + dot_expr->binary.dot.field->offset;
+	    *p = (char *)struc_data + dot_expr->binary.dot.field->offset;
 	} else {
 		void *ptr;
 		assert(type_is_builtin(struct_type, BUILTIN_NMS));
 		Identifier translated = dot_expr->binary.dot.translated_ident;
 		if (!eval_address_of_ident(translated, &dot_expr->type, dot_expr->where, &ptr)) {
-			return NULL;
+		    return false;
 		}
-		return ptr;
+		*p = ptr;
 	}
-	
+	return false;
 }
 
 static bool eval_address_of(Evaluator *ev, Expression *e, void **ptr) {
@@ -817,9 +817,7 @@ static bool eval_address_of(Evaluator *ev, Expression *e, void **ptr) {
 			Value struc;
 			if (!eval_expr(ev, e->binary.lhs, &struc))
 				return false;
-
-			*ptr = eval_ptr_to_struct_field(ev, e);
-			if (!*ptr)
+			if (!eval_ptr_to_struct_field(ev, e, ptr))
 				return false;
 		} break;
 		default: assert(0); return false;
@@ -879,8 +877,9 @@ static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
 			eval_deref_set(ptr, to, type);
 		} break;
 		case BINARY_DOT: {
-			void *ptr = eval_ptr_to_struct_field(ev, set);
-			if (!ptr) return false;
+			void *ptr;
+			if (!eval_ptr_to_struct_field(ev, set, &ptr))
+				return false;
 			eval_deref_set(ptr, to, &set->binary.dot.field->type);
 		} break;
 		default: assert(0); break;
@@ -1217,8 +1216,9 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (!eval_expr(ev, rhs_expr, &rhs)) return false;
 		switch (e->binary.op) {
 		case BINARY_DOT: {
-			void *ptr = eval_ptr_to_struct_field(ev, e);
-			if (!ptr) return false;
+			void *ptr;
+			if (!eval_ptr_to_struct_field(ev, e, &ptr))
+				return false;
 			eval_deref(v, ptr, &e->type);
 		} break;
 		case BINARY_ADD:

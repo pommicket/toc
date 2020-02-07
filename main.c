@@ -18,10 +18,8 @@
 
 /* 
 TODO:
-make eval_ptr_to_struct_field return a bool (just in case it successfully returns a NULL pointer)
 nms["foo"]
 make sure #export still works properly
-fix cgen_ident_to_str for unicode idents
 check for leaks
 ---
 warn about non-anonymous namespace statements of expression with compile-only types (e.g. int;)
