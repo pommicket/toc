@@ -19,14 +19,15 @@
 /* 
 TODO:
 the problem right now is that we're copying blocks but not updating our references to the copy
-
 make eval_ptr_to_struct_field return a bool (just in case it successfully returns a NULL pointer)
 nms["foo"]
 make sure #export still works properly
 fix cgen_ident_to_str for unicode idents
 check for leaks
 ---
+error about statements of expression with compile-only types (e.g. int;)
 allow for circular dependencies in functions returning types---this will be complicated
+foo, _ := bar();
 nice syntax for #including something into a namespace
 run stuff at compile time without assigning it to a constant
 #compile_only declarations

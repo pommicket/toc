@@ -20,7 +20,10 @@ typedef struct {
 static Expression *copy_expr_(Copier *c, Expression *in);
 static void copy_expr(Copier *c, Expression *out, Expression *in);
 static void copy_decl(Copier *c, Declaration *out, Declaration *in);
-static void copy_block(Copier *c, Block *out, Block *in);
+enum {
+	  COPY_BLOCK_DONT_CREATE_IDENTS = 0x01
+};
+static void copy_block(Copier *c, Block *out, Block *in, U8 flags);
 static void copy_type(Copier *c, Type *out, Type *in);
 static Type *copy_type_(Copier *c, Type *in);
 
@@ -139,6 +142,12 @@ static Type *copy_type_(Copier *c, Type *in) {
 
 static void copy_fn_expr(Copier *c, FnExpr *fout, FnExpr *fin, bool copy_body) {
 	*fout = *fin;
+	Block *prev;
+	if (copy_body) {
+		prev = c->block;
+		c->block = &fout->body;
+		idents_create(&fout->body.idents, c->allocr, &fout->body);
+	}
 	size_t i;
 	size_t nparam_decls = arr_len(fin->params);
 	fout->params = NULL;
@@ -153,8 +162,16 @@ static void copy_fn_expr(Copier *c, FnExpr *fout, FnExpr *fin, bool copy_body) {
 			copy_decl(c, fout->ret_decls + i, fin->ret_decls + i);
 	}
 	copy_type(c, &fout->ret_type, &fin->ret_type);
-	if (copy_body)
-		copy_block(c, &fout->body, &fin->body);
+	if (copy_body) {
+		copy_block(c, &fout->body, &fin->body, COPY_BLOCK_DONT_CREATE_IDENTS);
+		c->block = prev;
+	}
+}
+
+static inline void copier_ident_translate(Copier *c, Identifier *i) {
+	assert(c->block);
+	assert(c->block->idents.scope == c->block);
+	*i = ident_translate_forced(*i, &c->block->idents);
 }
 
 static void copy_expr(Copier *c, Expression *out, Expression *in) {
@@ -167,7 +184,9 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 	case EXPR_LITERAL_STR:
 	case EXPR_LITERAL_CHAR:
 	case EXPR_LITERAL_BOOL:
+		break;
 	case EXPR_IDENT:
+		copier_ident_translate(c, &out->ident);
 		break;
 	case EXPR_UNARY_OP:
 		out->unary.of = copy_expr_(c, in->unary.of);
@@ -183,20 +202,35 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 			iout->cond = copy_expr_(c, iin->cond);
 		if (iin->next_elif)
 			iout->next_elif = copy_expr_(c, iin->next_elif);
-		copy_block(c, &iout->body, &iin->body);
+		copy_block(c, &iout->body, &iin->body, 0);
 	} break;
 	case EXPR_WHILE: {
 		WhileExpr *win = &in->while_;
 		WhileExpr *wout = &out->while_;
 		if (win->cond)
 			wout->cond = copy_expr_(c, win->cond);
-		copy_block(c, &wout->body, &win->body);
+		copy_block(c, &wout->body, &win->body, 0);
 	} break;
 	case EXPR_FOR: {
 	    ForExpr *fin = in->for_;
 	    ForExpr *fout = allocr_malloc(a, sizeof *fout);
 		out->for_ = fout;
 		*fout = *fin;
+		
+		Block *prev = c->block;
+		idents_create(&fout->body.idents, c->allocr, &fout->body);
+		c->block = &fout->body;
+
+		if (fout->index) {
+			copier_ident_translate(c, &fout->index);
+			fout->index->decl_kind = IDECL_EXPR;
+			fout->index->expr = out;
+		}
+		if (fout->value) {
+			copier_ident_translate(c, &fout->value);
+			fout->value->decl_kind = IDECL_EXPR;
+			fout->value->expr = out;
+		}
 		if (fin->flags & FOR_ANNOTATED_TYPE)
 			copy_type(c, &fout->type, &fin->type);
 		if (fin->flags & FOR_IS_RANGE) {
@@ -208,7 +242,8 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		} else {
 			fout->of = copy_expr_(c, fin->of);
 		}
-		copy_block(c, &fout->body, &fin->body);
+		copy_block(c, &fout->body, &fin->body, COPY_BLOCK_DONT_CREATE_IDENTS);
+		c->block = prev;
 	} break;
 	case EXPR_FN:
 		copy_fn_expr(c, out->fn = allocr_malloc(a, sizeof *out->fn), in->fn, true);
@@ -241,7 +276,7 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		}
 	} break;
 	case EXPR_BLOCK:
-		copy_block(c, &out->block, &in->block);
+		copy_block(c, &out->block, &in->block, 0);
 		break;
 	case EXPR_TUPLE: {
 		size_t nexprs = arr_len(in->tuple);
@@ -272,7 +307,7 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		copy_val(a, &out->val, &in->val, &in->type);
 		break;
 	case EXPR_NMS:
-		copy_block(c, &out->nms.body, &in->nms.body);
+		copy_block(c, &out->nms.body, &in->nms.body, 0);
 		break;
 	}
 }
@@ -286,7 +321,7 @@ static Expression *copy_expr_(Copier *c, Expression *in) {
 static void copy_decl(Copier *c, Declaration *out, Declaration *in) {
 	*out = *in;
 	assert(!(in->flags & DECL_FOUND_TYPE));
-		
+	
 	if (in->flags & DECL_HAS_EXPR)
 		copy_expr(c, &out->expr, &in->expr);
 	if (in->flags & DECL_FOUND_VAL) {
@@ -294,6 +329,12 @@ static void copy_decl(Copier *c, Declaration *out, Declaration *in) {
 	}
 	if (in->flags & DECL_ANNOTATES_TYPE)
 		copy_type(c, &out->type, &in->type);
+	arr_foreach(out->idents, Identifier, ident) {
+		assert(c->block);
+		copier_ident_translate(c, ident);
+		(*ident)->decl_kind = IDECL_DECL;
+		(*ident)->decl = out;
+	}
 	
 }
 
@@ -324,15 +365,19 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 	}
 }
 
-static void copy_block(Copier *c, Block *out, Block *in) {
+static void copy_block(Copier *c, Block *out, Block *in, U8 flags) {
+	Identifiers out_idents = out->idents;
 	*out = *in;
+	if (flags & COPY_BLOCK_DONT_CREATE_IDENTS)
+		out->idents = out_idents; /* reset Identifiers */
 	size_t nstmts = arr_len(in->stmts);
 	out->stmts = NULL;
 	Block *prev = c->block;
 	c->block = out;
 	if (in->ret_expr)
 		out->ret_expr = copy_expr_(c, in->ret_expr);
-	
+	if (!(flags & COPY_BLOCK_DONT_CREATE_IDENTS))
+		idents_create(&out->idents, c->allocr, out);
 	arr_set_lena(&out->stmts, nstmts, c->allocr);
 	for (size_t i = 0; i < nstmts; ++i) {
 		copy_stmt(c, &out->stmts[i], &in->stmts[i]);

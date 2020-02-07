@@ -152,7 +152,9 @@ static Identifier ident_get(Identifiers *ids, char *s) {
 /* translate and insert if not already there */
 static inline Identifier ident_translate_forced(Identifier i, Identifiers *to_idents) {
 	char *p = i->str;
-    return ident_insert(to_idents, &p);
+    Identifier translated = ident_insert(to_idents, &p);
+	assert(translated->idents == to_idents);
+	return translated;
 }
 
 /* translate but don't add it if it's not there */

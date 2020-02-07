@@ -57,10 +57,10 @@ static bool cgen_decls_fn_instances(CGenerator *g, FnExpr *f) {
 	Instance **data = f->instances.data;
 	for (U64 i = 0; i < f->instances.cap; ++i) {
 		if (f->instances.occupied[i]) {
-			if (cgen_should_gen_fn(&(*data)->fn)) {
-				(*data)->fn.c.name = f->c.name;
-				(*data)->fn.c.id = f->c.id;
-				if (!cgen_single_fn_decl(g, &(*data)->fn, (*data)->c.id, (*data)->val.tuple[0].u64))
+			if (cgen_should_gen_fn((*data)->fn)) {
+				(*data)->fn->c.name = f->c.name;
+				(*data)->fn->c.id = f->c.id;
+				if (!cgen_single_fn_decl(g, (*data)->fn, (*data)->c.id, (*data)->val.tuple[0].u64))
 					return false;
 				cgen_write(g, ";");
 				cgen_nl(g);

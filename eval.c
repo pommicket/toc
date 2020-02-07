@@ -1458,7 +1458,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	case EXPR_CALL: {
 		FnExpr *fn;
 		if (e->call.instance) {
-			fn = &e->call.instance->fn;
+			fn = e->call.instance->fn;
 		} else {
 			Value fnv;
 			if (!eval_expr(ev, e->call.fn, &fnv)) {

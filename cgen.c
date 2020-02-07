@@ -143,7 +143,7 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d);
 			Instance **data = fn->instances.data;						\
 			for (U64 i = 0; i < fn->instances.cap; ++i) {				\
 				if (fn->instances.occupied[i]) {						\
-					cgen_recurse_subexprs_fn_simple((&(*data)->fn), decl_f, block_f); \
+					cgen_recurse_subexprs_fn_simple(((*data)->fn), decl_f, block_f); \
 				}														\
 				++data;													\
 			}															\
@@ -2063,7 +2063,7 @@ static bool cgen_defs_fn(CGenerator *g, FnExpr *f, Type *t) {
 		for (U64 i = 0; i < instances->cap; ++i) {
 			if (instances->occupied[i]) {
 				/* generate this instance */
-				if (!cgen_fn(g, &is[i]->fn, is[i]->c.id, is[i]->val.tuple))
+				if (!cgen_fn(g, is[i]->fn, is[i]->c.id, is[i]->val.tuple))
 					return false;
 			}
 		}

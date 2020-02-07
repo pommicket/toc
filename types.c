@@ -375,6 +375,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier *ident, Type *t)
 		long idx;
 		for (idx = nblocks - 1; idx >= 0; --idx) {
 			Block *b = tr->blocks[idx];
+			/* OPTIM: only hash once */
 		    Identifier translated = ident_translate(i, b ? &b->idents : tr->globals);
 			if (!translated) continue;
 			if (translated->decl_kind != IDECL_NONE) {
@@ -775,7 +776,7 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 	bool has_named_ret_vals;
 	assert(t->kind == TYPE_FN);
 	if (instance) {
-		f = &instance->fn;
+		f = instance->fn;
 	} else {
 		if (t->fn.constness)
 			return true; /* don't type function body yet; we need to do that for every instance */
@@ -1488,7 +1489,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		FnExpr *original_fn = NULL;
 		Type table_index_type = {0};
 		Value table_index = {0};
-		FnExpr fn_copy;
+		FnExpr *fn_copy = NULL;
 		Copier cop = copier_create(tr->allocr, tr->block);
 		if (fn_type->constness) {
 			/* evaluate compile-time arguments + add an instance */
@@ -1502,9 +1503,9 @@ static bool types_expr(Typer *tr, Expression *e) {
 			FnExpr *fn = fn_val.fn;
 			/* fn is the instance, original_fn is not */
 			original_fn = fn;
-
-			copy_fn_expr(&cop, &fn_copy, fn, false);
-			fn = &fn_copy;
+			fn_copy = typer_malloc(tr, sizeof *fn_copy);
+			copy_fn_expr(&cop, fn_copy, fn, true);
+			fn = fn_copy;
 			/* keep track of the declaration */
 			Declaration *param_decl = fn->params;
 			size_t ident_idx = 0;
@@ -1649,7 +1650,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				}
 			}
 			/* type params, return declarations, etc */
-			if (!type_of_fn(tr, &fn_copy, &f->type, TYPE_OF_FN_IS_INSTANCE))
+			if (!type_of_fn(tr, fn_copy, &f->type, TYPE_OF_FN_IS_INSTANCE))
 				return false;
 			
 			/* deal with default arguments */
@@ -1709,7 +1710,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 				arr_cleara(&table_index_type.tuple, tr->allocr);
 				arr_cleara(&table_index.tuple, tr->allocr);
 			} else {
-				copy_block(&cop, &fn_copy.body, &original_fn->body);
 				c->instance->fn = fn_copy;
 				/* fix parameter and return types (they were kind of problematic before, because we didn't know about the instance) */
 				c->instance->c.id = original_fn->instances.n; /* let's help cgen out and assign an ID to this */
@@ -1718,7 +1718,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				/* if anything happens, make sure we let the user know that this happened while generating a fn */
 				ErrCtx *err_ctx = e->where.file->ctx;
 				*(Location *)typer_arr_add(tr, &err_ctx->instance_stack) = e->where;
-				bool success = types_fn(tr, &c->instance->fn, &f->type, c->instance);
+				bool success = types_fn(tr, c->instance->fn, &f->type, c->instance);
 				arr_remove_lasta(&err_ctx->instance_stack, tr->allocr);
 				if (!success) return false;
 				arr_cleara(&table_index_type.tuple, tr->allocr);

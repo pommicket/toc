@@ -112,11 +112,11 @@ static void warn_print_header_(Location where) {
 }
 
 
-static void err_print_footer_(Location where) {
+static void err_print_footer_(Location where, bool show_ctx_stack) {
 	ErrCtx *ctx = where.file->ctx;
 	err_fprint(ctx, "\n"); 
 	print_location_highlight(err_ctx_file(ctx), where);
-	if (ctx) {
+	if (ctx && show_ctx_stack) {
 		arr_foreach(ctx->instance_stack, Location, inst) {
 			err_fprint(ctx, "While generating the instance of a function\n");
 		    print_location_highlight(err_ctx_file(ctx), *inst);
@@ -132,7 +132,7 @@ static void err_vprint(Location where, const char *fmt, va_list args) {
 	ctx->have_errored = true;
 	err_print_header_(where);
 	err_vfprint(ctx, fmt, args);
-	err_print_footer_(where);
+	err_print_footer_(where, true);
 }
 
 
@@ -166,7 +166,7 @@ static void info_print(Location where, const char *fmt, ...) {
 	va_start(args, fmt);
 	info_print_header_(where);
 	err_vfprint(ctx, fmt, args);
-	err_print_footer_(where);
+	err_print_footer_(where, false);
 	va_end(args);
 }
 
@@ -185,7 +185,7 @@ static void warn_print_(
 	va_start(args, fmt);
 	warn_print_header_(where);
 	err_vfprint(ctx, fmt, args);
-	err_print_footer_(where);
+	err_print_footer_(where, true);
 	va_end(args);
 }
 

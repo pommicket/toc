@@ -81,7 +81,6 @@ static inline bool type_is_slicechar(Type *t) {
 static size_t compiler_alignof(Type *t);
 static size_t compiler_sizeof(Type *t);
 #include "instance_table.c"
-#include "copy.c"
 
 /* returns NULL on error */
 static char *read_file_contents(Allocator *a, const char *filename, Location where) {
@@ -112,6 +111,7 @@ static char *read_file_contents(Allocator *a, const char *filename, Location whe
 
 
 #include "identifiers.c"
+#include "copy.c"
 #include "tokenizer.c"
 #include "parse.c"
 #include "foreign.c"

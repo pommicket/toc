@@ -1,10 +1,19 @@
+
 // it would be nice if Arr.data.len == Arr.len (: but this will require some C code...
 Arr ::= fn (t :: Type) Type {
-	struct {
-		   data : t;
-	}
+	// struct {
+	// 	   data : []t;
+	// 	   len, cap : int;
+	// }
+	t
+};
+
+arr_add ::= fn(t :: Type, a : &Arr(t), x : t) {
 };
 
 main ::= fn() {
 	 arr : Arr(int);
+	 for i := 1..100 {
+	 	   arr_add(int, &arr, 3);
+	 }
 };
