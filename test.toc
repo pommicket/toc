@@ -1,7 +1,5 @@
-foo ::= nms {
-	bar ::= 5;
+
+nms {
+	x := 1;
 };
 
-main ::= fn() {
-	 foo.bar;
-};

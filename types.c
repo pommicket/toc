@@ -372,6 +372,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 static bool type_of_ident(Typer *tr, Location where, Identifier *ident, Type *t) {
 	t->flags = 0;
 	Identifier i = *ident;
+#if 0
 #ifdef TOC_DEBUG
 	if (i->idents->scope != tr->block) {
 		printf("Ident declaration mismatch for this ident:\n");
@@ -384,6 +385,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier *ident, Type *t)
 	}
 #else
 	assert(i->idents->scope == tr->block);
+#endif
 #endif
 	if (i->decl_kind == IDECL_NONE) {
 		long nblocks = (long)arr_len(tr->blocks);
@@ -1066,31 +1068,6 @@ static char *eval_expr_as_cstr(Typer *tr, Expression *e, const char *what_is_thi
 	return str;
 }
 
-static bool nms_translate_idents_in_stmts(Namespace *nms, Statement *stmts) {
-	arr_foreach(stmts, Statement, s) {
-		switch (s->kind) {
-		case STMT_INCLUDE:
-			if (!nms_translate_idents_in_stmts(nms, s->inc.stmts))
-				return false;
-			break;
-		case STMT_DECL: {
-			Declaration *d = s->decl;
-			arr_foreach(d->idents, Identifier, i) {
-				*i = ident_translate_forced(*i, &nms->idents);
-			}
-		} break;
-		case STMT_EXPR:
-		case STMT_RET:
-			err_print(s->where, "Only declarations can appear in namespaces.");
-			return false;
-		}
-	}
-	return true;
-}
-
-static inline bool nms_translate_idents(Namespace *nms) {
-	return nms_translate_idents_in_stmts(nms, nms->body.stmts);
-}
 
 static bool types_expr(Typer *tr, Expression *e) {
 	if (e->flags & EXPR_FOUND_TYPE) return true;
@@ -2128,17 +2105,17 @@ static bool types_expr(Typer *tr, Expression *e) {
 				Namespace *nms = nms_val.nms;
 				lhs->kind = EXPR_VAL;
 				lhs->val.nms = nms;
-				Identifier translated = ident_translate(rhs->ident, &nms->idents);
+				Identifier translated = ident_translate(rhs->ident, &nms->body.idents);
 				if (!translated) {
 					char *s = ident_to_str(rhs->ident);
 					err_print(rhs->where, "%s is not a member of this namespace.", s);
 					return false;
 				}
+				assert(translated->decl_kind != IDECL_NONE);
 				if (!type_of_ident(tr, rhs->where, &translated, t)) {
 					return false;
 				}
-				e->kind = EXPR_IDENT;
-				e->ident = translated;
+				e->binary.dot.translated_ident = translated;
 			} else {
 				char *s = type_to_str(lhs_type);
 				err_print(e->where, "Operator . applied to type %s, which is not a structure or pointer to structure.", s);
@@ -2196,8 +2173,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 		e->nms.associated_ident = NULL; /* set when we type the declaration */
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_NMS;
-		if (!nms_translate_idents(&e->nms))
-			return false;
 	} break;
 	case EXPR_VAL:
 		assert(0);

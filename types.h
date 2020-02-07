@@ -700,7 +700,6 @@ const char *const builtin_val_names[BUILTIN_VAL_COUNT] =
 
 typedef struct Namespace {
 	Block body;
-	Identifiers idents;
 	Identifier associated_ident; /* if this is foo ::= nms { ... }, then associated_ident is foo; can be NULL */
 	struct {
 		IdentID id; /* used as prefix if prefix is NULL */
@@ -733,6 +732,7 @@ typedef struct Expression {
 			struct Expression *rhs;
 			union {
 				Field *field; /* for struct. */
+				Identifier translated_ident; /* for nms. */
 			} dot;
 		} binary;
 		CallExpr call;

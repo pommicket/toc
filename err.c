@@ -114,11 +114,11 @@ static void warn_print_header_(Location where) {
 
 static void err_print_footer_(Location where, bool show_ctx_stack) {
 	ErrCtx *ctx = where.file->ctx;
-	err_fprint(ctx, "\n"); 
+	err_fprint(ctx, "\n\t");
 	print_location_highlight(err_ctx_file(ctx), where);
 	if (ctx && show_ctx_stack) {
 		arr_foreach(ctx->instance_stack, Location, inst) {
-			err_fprint(ctx, "While generating the instance of a function\n");
+			err_fprint(ctx, "While generating the instance of a function\n\t");
 		    print_location_highlight(err_ctx_file(ctx), *inst);
 		}
 	}

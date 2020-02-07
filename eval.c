@@ -777,7 +777,7 @@ static void *eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr) {
 	} else {
 		void *ptr;
 		assert(type_is_builtin(struct_type, BUILTIN_NMS));
-		Identifier translated = ident_translate(dot_expr->binary.rhs->ident, &dot_expr->binary.lhs->val.nms->idents);
+		Identifier translated = dot_expr->binary.dot.translated_ident;
 		if (!eval_address_of_ident(translated, &dot_expr->type, dot_expr->where, &ptr)) {
 			return NULL;
 		}

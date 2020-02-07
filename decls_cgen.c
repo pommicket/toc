@@ -202,17 +202,14 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 					cgen_ident(g, ident);
 					if (!cgen_type_post(g, type, d->where))
 						return false;
-					if (g->block) {
-						assert(g->block->flags & BLOCK_IS_NMS);
-						if (d->flags & DECL_HAS_EXPR) {
-							Value *val = decl_val_at_index(d, i);
-							cgen_write(g, " = ");
-							if (!cgen_val(g, *val, type, d->where))
-								return false;
-						} else {
-							cgen_write(g, " = ");
-							cgen_zero_value(g, type);
-						}
+					if (d->flags & DECL_HAS_EXPR) {
+						Value *val = decl_val_at_index(d, i);
+						cgen_write(g, " = ");
+						if (!cgen_val(g, *val, type, d->where))
+							return false;
+					} else {
+						cgen_write(g, " = ");
+						cgen_zero_value(g, type);
 					}
 					cgen_write(g, ";");
 					cgen_nl(g);

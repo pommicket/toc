@@ -224,12 +224,11 @@ static inline void cgen_nl(CGenerator *g) {
 	g->will_indent = true;
 }
 
-static char *cgen_ident_to_str(Identifier i) {
-	/* TODO: FIXME for unicode idents */
-	return ident_to_str(i);
+static inline char *cgen_ident_to_str(Identifier i) {
+	return ident_to_str_reduced_charset(i);
 }
 
-static void cgen_ident_id(CGenerator *g, IdentID id) {
+static inline void cgen_ident_id(CGenerator *g, IdentID id) {
 	cgen_write(g, "a%lu_", (unsigned long)id);
 }
 /* used for fields */
@@ -1896,7 +1895,8 @@ static bool cgen_val(CGenerator *g, Value v, Type *t, Location where) {
 static bool cgen_decl(CGenerator *g, Declaration *d) {
 	if (d->flags & DECL_FOREIGN)
 		return true; /* already dealt with */
-	
+	if (g->block == NULL && g->fn == NULL)
+		return true; /* already dealt with */
 	int has_expr = d->flags & DECL_HAS_EXPR;
 	if (cgen_fn_is_direct(g, d))
 		return true; /* dealt with in cgen_defs_ */
@@ -1909,8 +1909,6 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 			    continue;
 			}
 			Value *val = decl_val_at_index(d, idx);
-			if (g->block == NULL && g->fn == NULL)
-				cgen_write(g, "static ");
 			if (has_expr) {
 				if (!cgen_val_pre(g, *val, type, d->where))
 					return false;
@@ -1936,7 +1934,6 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 		for (int idx = 0; idx < nidents; ++idx) {
 			Identifier i = d->idents[idx];
 			Type *type = decl_type_at_index(d, idx);
-			if (g->block == NULL && g->fn == NULL) cgen_write(g, "static ");
 			if (!cgen_type_pre(g, type, d->where)) return false;
 			cgen_write(g, " ");
 			cgen_ident(g, i);
@@ -2013,8 +2010,7 @@ static bool cgen_ret(CGenerator *g, Expression *ret) {
 		cgen_write(g, "return ");
 		if (!cgen_expr(g, ret)) return false;
 	}
-	cgen_write(g, ";");
-	cgen_nl(g);
+	cgen_writeln(g, ";");
 	return true;
 
 }
@@ -2030,10 +2026,11 @@ static bool cgen_stmt(CGenerator *g, Statement *s) {
 		if (!cgen_decl(g, s->decl)) return false;
 		break;
 	case STMT_EXPR:
-		if (!cgen_expr_pre(g, &s->expr)) return false;
-		if (!cgen_expr(g, &s->expr)) return false;
-		cgen_write(g, ";");
-		cgen_nl(g);
+		if (!type_is_compileonly(&s->expr.type)) {
+			if (!cgen_expr_pre(g, &s->expr)) return false;
+			if (!cgen_expr(g, &s->expr)) return false;
+			cgen_writeln(g, ";");
+		}
 		break;
 	case STMT_RET: {
 		unsigned has_expr = s->ret.flags & RET_HAS_EXPR;

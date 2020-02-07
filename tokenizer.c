@@ -200,7 +200,7 @@ static void tokenization_err_(
 	err_fprint(ctx, " at line %lu of %s:\n", (unsigned long)t->line, t->file->filename);
 	err_vfprint(ctx, fmt, args);
 	va_end(args);
-	err_fprint(ctx, "\n");
+	err_fprint(ctx, "\n\t");
 	U32 pos = (U32)(t->s - t->file->contents);
 	print_pos_highlight(err_ctx_file(ctx), ctx, t->file, pos, pos + 1);
 	while (*t->s) {

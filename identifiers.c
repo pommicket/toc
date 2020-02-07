@@ -136,12 +136,38 @@ static void fprint_ident_reduced_charset(FILE *out, Identifier id) {
 	for (const char *s = id->str; is_ident(*s); ++s) {
 		int c = (unsigned char)(*s);
 		if (c > 127) {
-			fprintf(out, "x__%x", c);
+			fprintf(out, "x__%02x", c);
 		} else {
 		    putc(*s, out);
 		}
 	}
 }
+
+static char *ident_to_str_reduced_charset(Identifier id) {
+	assert(id);
+	size_t nchars = 0;
+	for (const char *s = id->str; is_ident(*s); ++s) {
+		int c = (unsigned char)(*s);
+		if (c > 127)
+			nchars += 5;
+		else
+			++nchars;
+	}
+	char *ret = err_malloc(nchars+1);
+	char *p = ret;
+	for (const char *s = id->str; is_ident(*s); ++s) {
+		int c = (unsigned char)(*s);
+		if (c > 127)
+			sprintf(p, "x__%02x", c);
+		else
+			*p = (char)c;
+		++p;
+	}
+	*p = 0;
+	assert(p == ret + nchars);
+	return ret;
+}
+
 
 /* NULL = no such identifier. returns identifier "foo" for both "foo\0" and "foo+92384324..." */
 static Identifier ident_get(Identifiers *ids, char *s) {

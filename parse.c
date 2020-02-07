@@ -1082,8 +1082,6 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			}
 			case KW_NMS: {
 				Namespace *n = &e->nms;
-				idents_create(&n->idents, p->allocr, p->block);
-				
 				e->kind = EXPR_NMS;
 				++t->token;
 				if (!parse_block(p, &n->body, 0))

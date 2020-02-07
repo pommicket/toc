@@ -18,14 +18,13 @@
 
 /* 
 TODO:
-the problem right now is that we're copying blocks but not updating our references to the copy
 make eval_ptr_to_struct_field return a bool (just in case it successfully returns a NULL pointer)
 nms["foo"]
 make sure #export still works properly
 fix cgen_ident_to_str for unicode idents
 check for leaks
 ---
-error about statements of expression with compile-only types (e.g. int;)
+warn about non-anonymous namespace statements of expression with compile-only types (e.g. int;)
 allow for circular dependencies in functions returning types---this will be complicated
 foo, _ := bar();
 nice syntax for #including something into a namespace
@@ -35,6 +34,7 @@ constants in structs
 #if
 
 variadic fns
+switch to / add as an alternative: libffi
 
 ---
 X ::= newtype(int); or something
