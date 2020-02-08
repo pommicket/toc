@@ -562,7 +562,8 @@ static bool cgen_fn_args(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_c
 static bool cgen_fn_header(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_const) {
 	bool out_param = cgen_uses_ptr(&f->ret_type);
 	assert(cgen_should_gen_fn(f));
-	cgen_write(g, "static ");
+	if (!(f->flags & FN_EXPR_EXPORT))
+		cgen_write(g, "static ");
 	if (out_param) {
 		cgen_write(g, "void ");
 	} else {

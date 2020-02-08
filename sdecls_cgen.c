@@ -88,6 +88,10 @@ static bool cgen_sdecls_decl(CGenerator *g, Declaration *d) {
 	if (d->flags & DECL_HAS_EXPR) {
 		if (!cgen_sdecls_expr(g, &d->expr))
 			return false;
+		if (d->flags & DECL_EXPORT) {
+			if (d->expr.kind == EXPR_FN)
+				d->expr.fn->flags |= FN_EXPR_EXPORT;
+		}
 	}
 	return true;
 }

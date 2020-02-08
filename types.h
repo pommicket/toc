@@ -612,7 +612,7 @@ typedef struct ForExpr {
 
 enum {
 	  FN_EXPR_FOREIGN = 0x01,
-	  FN_EXPR_HAS_BEEN_IMPORTED = 0x02
+	  FN_EXPR_EXPORT = 0x02 /* set by sdecls_cgen.c */
 };
 
 typedef struct FnExpr {

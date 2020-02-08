@@ -18,7 +18,6 @@
 
 /* 
 TODO:
-make sure #export still works properly
 check for leaks
 ---
 warn about non-anonymous namespace statements of expression with compile-only types (e.g. int;)

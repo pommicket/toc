@@ -195,7 +195,8 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 				Identifier ident = d->idents[i];
 				Type *type = decl_type_at_index(d, i);
 				if (!type_is_compileonly(type)) {
-					cgen_write(g, "static ");
+					if (!(d->flags & DECL_EXPORT))
+						cgen_write(g, "static ");
 					if (!cgen_type_pre(g, type, d->where))
 						return false;
 					cgen_write(g, " ");

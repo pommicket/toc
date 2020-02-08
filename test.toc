@@ -3,12 +3,12 @@ io ::= nms {
 };
 
 n ::= nms {
-	x := 1;
-	counter ::= fn() int { x += 1; x };
+	#export x := 1;
+	#export counter ::= fn() int { x += 1; x };
 };
 
 
-main ::= fn() {
+#export main ::= fn() {
 	a := n.counter();
 	b := n.counter();
 	n.counter();
