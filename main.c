@@ -18,10 +18,7 @@
 
 /* 
 TODO:
-check for leaks
----
-warn about non-anonymous namespace statements of expression with compile-only types (e.g. int;)
-allow for circular dependencies in functions returning types---this will be complicated
+struct parameters - to allow circular dependencies in types
 foo, _ := bar();
 nice syntax for #including something into a namespace
 run stuff at compile time without assigning it to a constant

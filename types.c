@@ -2422,10 +2422,18 @@ static bool types_stmt(Typer *tr, Statement *s) {
 		if (!types_expr(tr, &s->expr)) {
 			return false;
 		}
-				
-		if (s->expr.kind == EXPR_TUPLE && !(s->flags & STMT_EXPR_NO_SEMICOLON)) {
-			err_print(s->where, "Statement of a tuple is not allowed. Use a semicolon instead of a comma here.");
-			return false;
+
+		if (!(s->flags & STMT_EXPR_NO_SEMICOLON)) {
+			if (s->expr.kind == EXPR_TUPLE) {
+				err_print(s->where, "Statement of a tuple is not allowed. Use a semicolon instead of a comma here.");
+				return false;
+			}
+			Type *t = &s->expr.type;
+			if (type_is_compileonly(t)) {
+				char *str = type_to_str(t);
+				warn_print(s->where, "This expression has a compile-only type (%s), so this statement will not actually be outputted in C code.", str);
+				free(str);
+			}
 		}
 		break;
 	case STMT_DECL:

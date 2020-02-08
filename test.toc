@@ -2,19 +2,7 @@ io ::= nms {
 	#include "std/io.toc";
 };
 
-n ::= nms {
-	#export x := 1;
-	#export counter ::= fn() int { x += 1; x };
-};
-
-
-#export main ::= fn() {
-	a := n.counter();
-	b := n.counter();
-	n.counter();
-	c := n.counter();
-	io.puts("Hello!");
-	io.puti(a);
-	io.puti(b);
-	io.puti(c);
+main ::= fn() {
+	 io.puts("Hello");
+	 int;
 };
