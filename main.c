@@ -18,6 +18,9 @@
 
 /* 
 TODO:
+fix eval recursion
+make sure that you can't access runtime things from eval
+big leak check with tuples (see "TODO: tuples allocated here will never be freed!")
 struct parameters - to allow circular dependencies in types
 foo, _ := bar();
 nice syntax for #including something into a namespace
@@ -32,7 +35,7 @@ switch to / add as an alternative: libffi
 ---
 X ::= newtype(int); or something
 don't allow while {3; 5} (once break is added)
-better printing of types (take was_expr into account)
+do we need was_expr? (now that, presumably, we have struct arguments)
 any odd number of "s for a string
 make sure futurely/currently-declared types are only used by pointer/slice
 allow omission of trailing ; in foo ::= fn() {...} or foo ::= nms {...} ?

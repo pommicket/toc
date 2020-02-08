@@ -1173,6 +1173,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 			case KW_FOR: {
 				e->kind = EXPR_FOR;
 				ForExpr *fo = e->for_ = parser_malloc(p, sizeof *fo);
+				fo->val_stack = NULL;
 				fo->flags = 0;
 				fo->value = NULL;
 				fo->index = NULL;
@@ -1849,7 +1850,8 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 	d->where.start = t->token;
 	d->idents = NULL;
 	d->flags = 0;
-
+	d->val_stack = NULL;
+	
 	if ((flags & PARSE_DECL_ALLOW_EXPORT) && token_is_direct(t->token, DIRECT_EXPORT)) {
 		d->flags |= DECL_EXPORT;
 		++t->token;
@@ -2502,7 +2504,7 @@ static bool ident_is_definitely_const(Identifier i) {
 	Declaration *decl = i->decl;
 	if (i->decl_kind != IDECL_DECL || !(decl->flags & DECL_IS_CONST))
 		return false;
-	if (i->flags & DECL_FOREIGN) {
+	if (i->decl->flags & DECL_FOREIGN) {
 		if (decl->foreign.lib && COMPILE_TIME_FOREIGN_FN_SUPPORT)
 			return true;
 		else

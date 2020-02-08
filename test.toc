@@ -1,8 +1,7 @@
-io ::= nms {
-	#include "std/io.toc";
+factorial ::= fn(x: int) int {
+x*2
 };
 
 main ::= fn() {
-	 io.puts("Hello");
-	 int;
+	 a ::= factorial(10);
 };

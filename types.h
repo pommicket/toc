@@ -166,11 +166,6 @@ typedef union Value {
 	struct Namespace *nms;
 } Value;
 
-enum {
-	  IDENT_HAS_VAL = 0x01
-	  
-};
-
 typedef enum {
 			  IDECL_NONE,
 			  IDECL_DECL,
@@ -188,9 +183,7 @@ typedef struct IdentSlot {
 		struct ForExpr *for_;
 	};
 	struct Identifiers *idents;
-	Value val;
 	SOURCE_LOCATION
-	U16 flags;
 } IdentSlot;
 
 typedef struct StrHashTableSlot {
@@ -607,6 +600,7 @@ typedef struct ForExpr {
 		} range;
 		struct Expression *of;
 	};
+	Value **val_stack; /* see Declaration for comments */
 } ForExpr;
 
 
@@ -810,7 +804,14 @@ typedef struct Declaration {
 			};
 		} foreign;
 	};
-	Value val; /* only for constant decls. */
+	union {
+		Value val; /* only for constant decls. */
+
+		/* for eval, for non-constant decls.: */
+		/* the pointers to values need to be fixed, which is why this isn't just Value *.  */
+		/* OPTIM: some freeable block array of values somewhere which we can just use a pointer to? */
+		Value **val_stack;
+	};	
 } Declaration;
 
 typedef enum {
