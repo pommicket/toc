@@ -107,6 +107,7 @@ static char *read_file_contents(Allocator *a, const char *filename, Location whe
 		}
 	}
 	++contents;
+	fclose(in);
 	return contents;
 }
 	

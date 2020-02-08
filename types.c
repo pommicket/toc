@@ -20,12 +20,12 @@ static inline void *typer_arr_add_(Typer *tr, void **arr, size_t sz) {
 }
 
 static inline void typer_block_enter(Typer *tr, Block *b) {
-	*(Block **)arr_add(&tr->blocks) = b;
+	*(Block **)arr_adda(&tr->blocks, tr->allocr) = b;
 	tr->block = b;
 }
 
 static inline void typer_block_exit(Typer *tr) {
-	arr_remove_last(&tr->blocks);
+	arr_remove_lasta(&tr->blocks, tr->allocr);
 	tr->block = *(Block **)arr_last(tr->blocks);
 }
 

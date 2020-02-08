@@ -13,7 +13,7 @@ static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *e
 	g->globals = ids;
 	g->allocr = allocr;
 	g->nms_prefix = NULL;
-	*(char *)arr_add(&g->nms_prefix) = '\0';
+	*(char *)arr_adda(&g->nms_prefix, g->allocr) = '\0';
 }
 
 static bool cgen_stmt(CGenerator *g, Statement *s);
@@ -287,7 +287,7 @@ static void cgen_nms_enter(CGenerator *g, Namespace *n) {
 	char *s = cgen_nms_prefix(g, n);
 	size_t chars_so_far = arr_len(g->nms_prefix) - 1; /* -1 for '\0' byte */
 	size_t new_chars = strlen(s) + 1; /* + 1 for '\0' byte */
-	arr_set_len(&g->nms_prefix, chars_so_far + new_chars);
+	arr_set_lena(&g->nms_prefix, chars_so_far + new_chars, g->allocr);
 	for (size_t i = 0; i < new_chars; ++i) {
 		g->nms_prefix[i+chars_so_far] = s[i];
 	}
@@ -296,7 +296,7 @@ static void cgen_nms_enter(CGenerator *g, Namespace *n) {
 
 static void cgen_nms_exit(CGenerator *g, Namespace *n, Namespace *prev) {
 	char *s = cgen_nms_prefix(g, n);
-	arr_set_len(&g->nms_prefix, arr_len(g->nms_prefix) - strlen(s));
+	arr_set_lena(&g->nms_prefix, arr_len(g->nms_prefix) - strlen(s), g->allocr);
 	g->nms = prev;
 	free(s);
 }

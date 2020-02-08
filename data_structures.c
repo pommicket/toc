@@ -89,6 +89,10 @@ static void arr_cleara_(void **arr, size_t size, Allocator *allocr) {
 }
 
 static void arr_set_len_(void **arr, size_t n, size_t item_sz) {
+	if (n == 0) {
+		arr_clear_(arr);
+		return;
+	}
 	if (n > arr_len(*arr)) {
 		arr_resv_(arr, n, item_sz);
 	}
@@ -96,6 +100,10 @@ static void arr_set_len_(void **arr, size_t n, size_t item_sz) {
 	/* OPTIM: shrink */
 }
 static void arr_set_lena_(void **arr, size_t n, size_t item_sz, Allocator *a) {
+	if (n == 0) {
+		arr_cleara_(arr, item_sz, a);
+		return;
+	}
 	arr_resva_(arr, n, item_sz, a);
 	arr_hdr(*arr)->len = n;
 }
@@ -272,7 +280,7 @@ static void str_hash_table_grow(StrHashTable *t) {
 	if (slots_cap <= 2 * t->nentries) {
 		StrHashTableSlot **new_slots = NULL;
 		size_t new_slots_cap = slots_cap * 2 + 10;
-		arr_set_len(&new_slots, new_slots_cap);
+		arr_set_lena(&new_slots, new_slots_cap, t->allocr);
 		arr_zero(new_slots);
 		arr_foreach(t->slots, StrHashTableSlotPtr, slotp) {
 			StrHashTableSlot *slot = *slotp;
