@@ -195,6 +195,7 @@ static void warn_print_(
 #define warn_print warn_print_
 #endif
 
+
 static void *err_malloc(size_t size) {
 	if (size == 0) return NULL;
 	void *ret = malloc(size);
@@ -202,6 +203,10 @@ static void *err_malloc(size_t size) {
 		fprintf(stderr, "Error: Out of memory.\n");
 		abort();
 	}
+	
+#ifdef MALLOC_FILL
+	memset(ret, MALLOC_FILL, size);
+#endif
 	return ret;
 }
 

@@ -1518,6 +1518,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		arr_foreach(params, Declaration, p) {
 			int idx = 0;
 			Value *pval = decl_add_val(p);
+			--arr_hdr(p->val_stack)->len;
 			bool is_tuple = p->type.kind == TYPE_TUPLE;
 			arr_foreach(p->idents, Identifier, i) {
 				Value arg_val;
@@ -1529,6 +1530,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				++arg;
 				++idx;
 			}
+			++arr_hdr(p->val_stack)->len;
 		}
 		
 		arr_foreach(fn->ret_decls, Declaration, d) {
