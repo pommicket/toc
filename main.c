@@ -18,7 +18,6 @@
 
 /* 
 TODO:
-nms["foo"]
 make sure #export still works properly
 check for leaks
 ---

@@ -783,7 +783,7 @@ static bool eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr, void *
 		}
 		*p = ptr;
 	}
-	return false;
+	return true;
 }
 
 static bool eval_address_of(Evaluator *ev, Expression *e, void **ptr) {

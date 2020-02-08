@@ -2009,6 +2009,12 @@ static bool types_expr(Typer *tr, Expression *e) {
 				err_print(e->where, "The index of an array must be a builtin numerical type.");
 				return false;
 			}
+			if (lhs_type->kind == TYPE_PTR) {
+				if (lhs_type->ptr->kind == TYPE_STRUCT
+					|| type_is_builtin(lhs_type->ptr, BUILTIN_NMS)) {
+					lhs_type = lhs_type->ptr;
+				}
+			}
 			switch (lhs_type->kind) {
 			case TYPE_ARR:
 				*t = *lhs_type->arr.of;
@@ -2016,10 +2022,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 			case TYPE_SLICE:
 				*t = *lhs_type->slice;
 				break;
-			case TYPE_PTR:
-				lhs_type = lhs_type->ptr;
-				if (lhs_type->kind != TYPE_STRUCT) break;
-				/* fallthrough */
 			case TYPE_STRUCT: {
 				/* allow accessing struct members with a string */
 				if (!type_is_slicechar(rhs_type)) {
@@ -2050,12 +2052,37 @@ static bool types_expr(Typer *tr, Expression *e) {
 					return false;
 				}
 			} break;
+			case TYPE_BUILTIN:
+				if (lhs_type->builtin == BUILTIN_NMS) {
+					if (!type_is_slicechar(rhs_type)) 
+					break;
+				}
+				/* fallthrough */
 			default: {
-				char *s = type_to_str(lhs_type);
-				err_print(e->where, "Trying to take index of non-array type %s.", s);
-				free(s);
-				return false;
-			}
+				/* allow accessing namespace members with a string */
+				if (!type_is_slicechar(rhs_type)) {
+					char *s = type_to_str(rhs_type);
+					err_print(e->where, "Expected a string for namsepace member access with [], but got type %s.", s);
+					return false;
+				}
+
+				Value nms_val;
+				if (!eval_expr(tr->evalr, lhs, &nms_val))
+					return false;
+				Namespace *nms = nms_val.nms;
+				lhs->kind = EXPR_VAL;
+				lhs->val.nms = nms;
+				
+				Value member_name;
+				if (!eval_expr(tr->evalr, rhs, &member_name)) return false;
+				e->binary.op = BINARY_DOT;
+				e->binary.rhs->kind = EXPR_IDENT;
+				Identifier ident = e->binary.rhs->ident = e->binary.dot.translated_ident =
+					ident_get_with_len(&nms->body.idents, member_name.slice.data, (size_t)member_name.slice.n);
+				if (!type_of_ident(tr, rhs->where, &ident, t)) {
+					return false;
+				}
+			} break;
 			}
 			break;
 		case BINARY_DOT: {

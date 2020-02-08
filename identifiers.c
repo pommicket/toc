@@ -169,10 +169,15 @@ static char *ident_to_str_reduced_charset(Identifier id) {
 }
 
 
-/* NULL = no such identifier. returns identifier "foo" for both "foo\0" and "foo+92384324..." */
-static Identifier ident_get(Identifiers *ids, char *s) {
-	size_t len = ident_str_len(s);
+
+static inline Identifier ident_get_with_len(Identifiers *ids, char *s, size_t len) {
 	return (Identifier)str_hash_table_get_(&ids->table, s, len);
+}
+
+/* NULL = no such identifier. returns identifier "foo" for both "foo\0" and "foo+92384324..." */
+static inline Identifier ident_get(Identifiers *ids, char *s) {
+	size_t len = ident_str_len(s);
+	return ident_get_with_len(ids, s, len);
 }
 
 /* translate and insert if not already there */
