@@ -18,9 +18,10 @@
 
 /* 
 TODO:
-fix eval recursion
 make sure that you can't access runtime things from eval
 big leak check with tuples (see "TODO: tuples allocated here will never be freed!")
+just make the ffmgr use the allocr
+---
 struct parameters - to allow circular dependencies in types
 foo, _ := bar();
 nice syntax for #including something into a namespace

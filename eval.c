@@ -7,13 +7,12 @@
 static bool types_block(Typer *tr, Block *b);
 static bool types_decl(Typer *tr, Declaration *d);
 static bool type_resolve(Typer *tr, Type *t, Location where);
-static bool eval_block(Evaluator *ev, Block *b, Type *t, Value *v);
+static bool eval_block(Evaluator *ev, Block *b, Value *v);
 static bool eval_expr(Evaluator *ev, Expression *e, Value *v);
 static Value get_builtin_val(BuiltinVal val);
 
 static void evalr_create(Evaluator *ev, Typer *tr, Allocator *allocr) {
 	ev->returning = NULL;
-	ev->to_free = NULL;
 	ev->typer = tr;
 	ev->enabled = true;
 	ev->allocr = allocr;
@@ -21,11 +20,6 @@ static void evalr_create(Evaluator *ev, Typer *tr, Allocator *allocr) {
 }
 
 static void evalr_free(Evaluator *ev) {
-	typedef void *VoidPtr;
-	arr_foreach(ev->to_free, VoidPtr, f) {
-		free(*f);
-	}
-	arr_clear(&ev->to_free);
 	ffmgr_free(&ev->ffmgr);
 }
 
@@ -1145,8 +1139,9 @@ static bool eval_ident(Evaluator *ev, Identifier ident, Value *v, Location where
 static Value *decl_add_val(Declaration *d) {
 	Value **valpp = arr_add(&d->val_stack);
 	Value *valp = *valpp = err_malloc(sizeof *valp);
-	if (d->type.kind == TYPE_TUPLE)
+	if (d->type.kind == TYPE_TUPLE) {
 		valp->tuple = err_malloc(arr_len(d->idents) * sizeof *valp->tuple);
+	}
 	return valp;
 }
 	
@@ -1308,12 +1303,12 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			Value cond;
 			if (!eval_expr(ev, i->cond, &cond)) return false;
 			if (val_truthiness(&cond, &i->cond->type)) {
-				if (!eval_block(ev, &i->body, &e->type, v)) return false;
+				if (!eval_block(ev, &i->body, v)) return false;
 			} else if (i->next_elif) {
 				if (!eval_expr(ev, i->next_elif, v)) return false;
 			}
 		} else {
-			if (!eval_block(ev, &i->body, &e->type, v)) return false;
+			if (!eval_block(ev, &i->body, v)) return false;
 		}
 	} break;
 	case EXPR_WHILE: {
@@ -1326,7 +1321,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				if (!val_truthiness(&cond, cond_type))
 					break;
 			}
-			if (!eval_block(ev, &w->body, &e->type, v)) return false;
+			if (!eval_block(ev, &w->body, v)) return false;
 		}
 	} break;
 	case EXPR_FOR: {
@@ -1345,7 +1340,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			index_val = NULL;
 		}
 		if (fo->value) {
-		    value_val = fo->value ? &for_valp->tuple[1] : for_valp;
+		    value_val = fo->index ? &for_valp->tuple[1] : for_valp;
 		} else {
 			value_val = NULL;
 		}
@@ -1375,12 +1370,13 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 					boolt.kind = TYPE_BUILTIN;
 					boolt.builtin = BUILTIN_BOOL;
 					Value cont;
+					
 					eval_numerical_bin_op(lhs, &fo->type, step_is_negative ? BINARY_GE : BINARY_LE, rhs, &fo->range.to->type, &cont, &boolt);
 					if (!cont.boolv) break;
 				}
 				if (value_val) *value_val = x;
 
-				if (!eval_block(ev, &fo->body, &e->type, v)) return false;
+				if (!eval_block(ev, &fo->body, v)) return false;
 				if (index_val) {
 					++index_val->i64;
 				}
@@ -1423,14 +1419,19 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 					value_val->ptr = ptr;
 				else
 					eval_deref(value_val, ptr, &fo->type);
-				if (!eval_block(ev, &fo->body, &e->type, v))
+				if (!eval_block(ev, &fo->body, v))
 					return false;
 				++index_val->i64;
 			}
 		}
+		arr_remove_last(&fo->val_stack);
+		if (fo->index && fo->value) {
+			free(for_valp->tuple);
+		}
+		free(for_valp);
 	} break;
 	case EXPR_BLOCK:
-		if (!eval_block(ev, &e->block, &e->type, v)) return false;
+		if (!eval_block(ev, &e->block, v)) return false;
 		break;
 	case EXPR_LITERAL_BOOL:
 		v->boolv = e->booll;
@@ -1457,7 +1458,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	case EXPR_TUPLE: {
 		size_t i, n = arr_len(e->tuple);
 		v->tuple = err_malloc(n * sizeof *v->tuple);
-		*(void **)arr_add(&ev->to_free) = v->tuple;
 		for (i = 0; i < n; ++i) {
 			if (!eval_expr(ev, &e->tuple[i], &v->tuple[i]))
 				return false;
@@ -1551,7 +1551,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				++idx;
 			}
 		}
-		if (!eval_block(ev, &fn->body, &e->type, v)) {
+		if (!eval_block(ev, &fn->body, v)) {
 			return false;
 		}
 		if (fn->ret_decls) {
@@ -1569,9 +1569,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 					Value *element = arr_add(&tuple);
 					Type *type = decl_type_at_index(d, i);
 					copy_val(NULL, element, &this_one, type);
-					void *to_free = val_ptr_to_free(element, type);
-					if (to_free)
-						*(void **)arr_add(&ev->to_free) = to_free;
 					++i;
 				}
 			}
@@ -1587,6 +1584,11 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				*v = ev->ret_val;
 			ev->returning = false;
 		}
+		arr_foreach(fn->params, Declaration, p) {
+			/* remove value */
+			arr_remove_last(&p->val_stack);
+		}
+		
 	} break;
 	case EXPR_SLICE: {
 		SliceExpr *s = &e->slice;
@@ -1709,10 +1711,17 @@ static bool eval_stmt(Evaluator *ev, Statement *stmt) {
 	return true;
 }
 
-/* t is the type of the block. */
-static bool eval_block(Evaluator *ev, Block *b, Type *t, Value *v) {
-	void **prev_to_free = ev->to_free;
-	ev->to_free = NULL;
+static void eval_exit_stmts(Statement *stmts) {
+	arr_foreach(stmts, Statement, s) {
+		if (s->kind == STMT_DECL && !(s->decl->flags & DECL_IS_CONST)) {
+			arr_remove_last(&s->decl->val_stack);
+		} else if (s->kind == STMT_INCLUDE) {
+			eval_exit_stmts(s->inc.stmts);
+		}
+	}
+}
+
+static bool eval_block(Evaluator *ev, Block *b, Value *v) {
 	arr_foreach(b->stmts, Statement, stmt) {
 		if (!eval_stmt(ev, stmt))
 			return false;
@@ -1724,15 +1733,8 @@ static bool eval_block(Evaluator *ev, Block *b, Type *t, Value *v) {
 			return false;
 		/* make a copy so that r's data isn't freed when we exit the block */
 		copy_val(NULL, v, &r, &b->ret_expr->type);
-		void *free_ptr = val_ptr_to_free(v, t);
-		if (free_ptr)
-			*(void **)arr_add(&prev_to_free) = free_ptr;
 	}
-	typedef void *VoidPtr;
-	arr_foreach(ev->to_free, VoidPtr, f) {
-		free(*f);
-	}
-	arr_clear(&ev->to_free);
-	ev->to_free = prev_to_free;
+	eval_exit_stmts(b->stmts);
+	
 	return true;
 }

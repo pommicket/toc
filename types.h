@@ -809,7 +809,7 @@ typedef struct Declaration {
 
 		/* for eval, for non-constant decls.: */
 		/* the pointers to values need to be fixed, which is why this isn't just Value *.  */
-		/* OPTIM: some freeable block array of values somewhere which we can just use a pointer to? */
+		/* OPTIM: some block array of values somewhere which we can just use a pointer to, which is freed when the block is exited? */
 		Value **val_stack;
 	};	
 } Declaration;
@@ -888,7 +888,6 @@ typedef struct Evaluator {
 	struct Typer *typer;
 	bool returning;
 	Value ret_val;
-	void **to_free; /* an array of data to free for this scope. */
 	bool enabled;
 	ForeignFnManager ffmgr;
 } Evaluator;

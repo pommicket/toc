@@ -1,8 +1,14 @@
-factorial ::= fn(x: int) int {
-		  if x < 2 { 1 }
-		  else { x * factorial(x-1) }
+x := 10;
+
+twotothe ::= fn(x: int) int {
+		  total := 1;
+		  for i := 0..x-1 {
+		  	  total += twotothe(i);
+			  x += 1;
+		  }
+		  total
 };
 
 main ::= fn() {
-	 a ::= factorial(10);
+	 a ::= twotothe(10);
 };
