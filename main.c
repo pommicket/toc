@@ -18,10 +18,7 @@
 
 /* 
 TODO:
-big leak check with tuples (see "TODO: tuples allocated here will never be freed!")
-just make the ffmgr use the allocr
----
-iterating over an array of arrays (make sure you do  a leak check)
+change the way arrays work (a := b, where b is an array probably shouldn't copy)
 struct parameters - to allow circular dependencies in types
 foo, _ := bar();
 nice syntax for #including something into a namespace
@@ -140,7 +137,6 @@ int main(int argc, char **argv) {
 	}
 	
 	allocr_free_all(&main_allocr);
-	evalr_free(&ev);
 	fclose(out);
 	return 0;
 }

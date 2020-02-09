@@ -264,8 +264,8 @@ static bool arg_list_add(av_alist *arg_list, Value *val, Type *type, Location wh
 	return true;
 }
 
-static void ffmgr_create(ForeignFnManager *ffmgr) {
-	str_hash_table_create(&ffmgr->libs_loaded, sizeof(Library), NULL);
+static void ffmgr_create(ForeignFnManager *ffmgr, Allocator *allocr) {
+	str_hash_table_create(&ffmgr->libs_loaded, sizeof(Library), allocr);
 }
 
 static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *fn_type, Value *args, Location call_where, Value *ret) {
@@ -315,16 +315,6 @@ static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *fn_type, Val
 	return true;
 }
 
-static void ffmgr_free(ForeignFnManager *ffmgr) {
-	arr_foreach(ffmgr->libs_loaded.slots, StrHashTableSlotPtr, slotp) {
-		if (*slotp) {
-			Library *lib = (void *)((*slotp)->data);
-			dlclose(lib->handle);
-		}
-	}
-	str_hash_table_free(&ffmgr->libs_loaded);
-}
-
 #else
 static void ffmgr_create(ForeignFnManager *ffmgr) {
 	(void)ffmgr;
@@ -336,8 +326,5 @@ static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *fn_type, Val
 	return false;
 }
 
-static void ffmgr_free(ForeignFnManager *ffmgr) {
-	(void)ffmgr;
-}
 #endif
 

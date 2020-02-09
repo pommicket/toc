@@ -16,11 +16,7 @@ static void evalr_create(Evaluator *ev, Typer *tr, Allocator *allocr) {
 	ev->typer = tr;
 	ev->enabled = true;
 	ev->allocr = allocr;
-	ffmgr_create(&ev->ffmgr);
-}
-
-static void evalr_free(Evaluator *ev) {
-	ffmgr_free(&ev->ffmgr);
+	ffmgr_create(&ev->ffmgr, ev->allocr);
 }
 
 static inline void *evalr_malloc(Evaluator *ev, size_t bytes) {
