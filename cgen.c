@@ -23,6 +23,8 @@ enum {
 static bool cgen_block(CGenerator *g, Block *b, const char *ret_name, uint16_t flags);
 static bool cgen_expr_pre(CGenerator *g, Expression *e);
 static bool cgen_expr(CGenerator *g, Expression *e);
+static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, Expression *to_expr,
+					 const char *to_str);
 static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents, const char *prefix, Expression *to);
 static bool cgen_type_pre(CGenerator *g, Type *t, Location where);
 static bool cgen_type_post(CGenerator *g, Type *t, Location where);
@@ -257,10 +259,10 @@ static void cgen_ident(CGenerator *g, Identifier i) {
 }
 
 
-#define CGEN_IDENT_ID_STR_SIZE 48
+#define CGEN_IDENT_ID_STR_SIZE 32
 /* buffer should be at least CGEN_IDENT_ID_STR_SIZE bytes */
 static inline void cgen_ident_id_to_str(char *buffer, IdentID id) {
-	snprintf(buffer, 32, "a%lu_", (unsigned long)id);
+	snprintf(buffer, CGEN_IDENT_ID_STR_SIZE, "a%lu_", (unsigned long)id);
 }
 
 static char *cgen_nms_prefix(CGenerator *g, Namespace *n) {
@@ -558,6 +560,36 @@ static bool cgen_fn_args(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_c
 	return true;
 }
 
+static inline bool cgen_arg_pre(CGenerator *g, Expression *arg) {
+	if (!cgen_expr_pre(g, arg)) return false;
+	if (arg->type.kind == TYPE_ARR) {
+		/* create copy of array */
+		IdentID copy = ++g->ident_counter;
+		arg->cgen.id = copy;
+		if (!cgen_type_pre(g, &arg->type, arg->where))
+			return false;
+		char s[CGEN_IDENT_ID_STR_SIZE];
+		cgen_ident_id_to_str(s, copy);
+
+		cgen_write(g, " %s", s);
+		if (!cgen_type_post(g, &arg->type, arg->where))
+			return false;
+		cgen_write(g, "; ");
+		if (!cgen_set(g, NULL, s, arg, NULL))
+			return false;
+	}
+	return true;
+}
+
+static inline bool cgen_arg(CGenerator *g, Expression *arg) {
+	if (arg->type.kind == TYPE_ARR) {
+		cgen_ident_id(g, arg->cgen.id);
+		return true;
+	} else {
+		return cgen_expr(g, arg);
+	}
+}
+
 /* unless f has const/semi-const args, instance and which_are_const can be set to 0 */
 static bool cgen_fn_header(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_const) {
 	bool out_param = cgen_uses_ptr(&f->ret_type);
@@ -663,7 +695,6 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 
 /* one of exprs, idents, and prefix should be NULL. does NOT call cgen_expr_pre for to/exprs */
 static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents, const char *prefix, Expression *to) {
-	IdentID prefix_id; /* ID of prefix for block */
 	switch (to->kind) {
 	case EXPR_VAL:
 		assert(0); /* never needed at the moment */
@@ -696,7 +727,7 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 		/* e.g. a, b = fn_which_returns_tuple(); */
 		arr_foreach(to->call.arg_exprs, Expression, arg) {
 			if (!constness || !arg_is_const(arg, constness[i])) {
-				if (!cgen_expr_pre(g, arg))
+				if (!cgen_arg_pre(g, arg))
 					return false;
 			}
 		}
@@ -713,7 +744,7 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 				if (any_args)
 					cgen_write(g, ", ");
 				any_args = true;
-				if (!cgen_expr(g, arg))
+				if (!cgen_arg(g, arg))
 					return false;
 			}
 			++i;
@@ -738,18 +769,10 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 		cgen_writeln(g, "); ");
 	} break;
 	case EXPR_IF:
-		prefix_id = to->if_.c.id;
-		goto prefixed;
 	case EXPR_BLOCK:
-		prefix_id = to->block_ret_id;
-		goto prefixed;
 	case EXPR_WHILE:
-		prefix_id = to->while_.c.id;
-		goto prefixed;
-	case EXPR_FOR:
-		prefix_id = to->for_->c.id;
-		goto prefixed;
-	prefixed:
+	case EXPR_FOR: {
+		IdentID prefix_id = to->cgen.id = ++g->ident_counter;
 		for (size_t i = 0; i < arr_len(to->type.tuple); ++i) {
 			if (exprs)
 				if (!cgen_expr_pre(g, &exprs[i]))
@@ -770,8 +793,7 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 			cgen_write(g, "%lu_", i);
 			cgen_write(g, "; ");
 		}
-		break;
-		
+	} break;
 		/* things which can never be tuples */
 	case EXPR_SLICE:
 	case EXPR_IDENT:
@@ -834,7 +856,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 	switch (e->kind) {
 	case EXPR_IF: {
 		IfExpr *curr = &e->if_;
-		curr->c.id = id;
+		e->cgen.id = id;
 		while (1) {
 			if (curr->cond) {
 				cgen_write(g, "if (");
@@ -852,7 +874,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 	} break;
 	case EXPR_WHILE: {
 		WhileExpr *w = &e->while_;
-		w->c.id = id;
+		e->cgen.id = id;
 		cgen_write(g, "while (");
 		if (w->cond) {
 			if (!cgen_expr(g, w->cond))
@@ -874,7 +896,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			if (!cgen_expr_pre(g, fo->of)) return false;
 		}
 		
-		fo->c.id = id;
+		e->cgen.id = id;
 		cgen_write(g, "{");
 		if (is_range) {
 			if (fo->range.to) {
@@ -1051,7 +1073,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		cgen_write(g, "}}");
 	} break;
 	case EXPR_BLOCK:
-		e->block_ret_id = id;
+		e->cgen.id = id;
 		if (!cgen_block(g, &e->block, ret_name, 0))
 			return false;
 		break;
@@ -1061,7 +1083,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		Constness *constness = e->call.fn->type.fn.constness;
 		arr_foreach(e->call.arg_exprs, Expression, arg) {
 			if (!constness || !arg_is_const(arg, constness[i])) {
-				if (!cgen_expr_pre(g, arg)) return false;
+				if (!cgen_arg_pre(g, arg)) return false;
 			}
 			++i;
 		}
@@ -1090,7 +1112,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 				if (!constness || !arg_is_const(arg, constness[i])) {
 					if (any_args) cgen_write(g, ", ");
 					any_args = true;
-					if (!cgen_expr(g, arg))
+					if (!cgen_arg(g, arg))
 						return false;
 				}
 				++i;
@@ -1103,10 +1125,10 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			}
 			cgen_write(g, ");");
 		} else if (cgen_uses_ptr(&e->type)) {
-			e->call.c.id = ++g->ident_counter;
+			e->cgen.id = ++g->ident_counter;
 			if (!cgen_type_pre(g, &e->type, e->where)) return false;
 			cgen_write(g, " ");
-			cgen_ident_id(g, e->call.c.id);
+			cgen_ident_id(g, id);
 			if (!cgen_type_post(g, &e->type, e->where)) return false;
 			cgen_write(g, ";"); cgen_nl(g);
 			if (!cgen_expr(g, e->call.fn)) return false;
@@ -1120,7 +1142,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 				if (!constness || !arg_is_const(arg, constness[i])) {
 					if (any_args) cgen_write(g, ", ");
 					any_args = true;
-					if (!cgen_expr(g, arg))
+					if (!cgen_arg(g, arg))
 						return false;
 				}
 				++i;
@@ -1129,7 +1151,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 				cgen_write(g, ", ");
 			}
 			cgen_write(g, "&");
-			cgen_ident_id(g, e->call.c.id);
+			cgen_ident_id(g, e->cgen.id);
 			cgen_write(g, ");");
 			cgen_nl(g);
 		}
@@ -1214,9 +1236,9 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 		if (!cgen_val_pre(g, e->val, &e->type, e->where))
 			return false;
 		if (!cgen_type_pre(g, &e->type, e->where)) return false;
-		e->val_c_id = ++g->ident_counter;
+		e->cgen.id = ++g->ident_counter;
 		cgen_write(g, " ");
-		cgen_ident_id(g, e->val_c_id);
+		cgen_ident_id(g, e->cgen.id);
 		if (!cgen_type_post(g, &e->type, e->where)) return false;
 		cgen_write(g, " = ");
 		if (!cgen_val(g, e->val, &e->type, e->where))
@@ -1497,26 +1519,17 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		}
 	} break;
 	case EXPR_IF:
-		if (e->type.kind != TYPE_VOID)
-			cgen_ident_id(g, e->if_.c.id);
-		break;
 	case EXPR_WHILE:
-		if (e->type.kind != TYPE_VOID)
-			cgen_ident_id(g, e->while_.c.id);
-		break;
 	case EXPR_BLOCK:
-		if (e->type.kind != TYPE_VOID)
-			cgen_ident_id(g, e->block_ret_id);
-		break;
 	case EXPR_FOR:
 		if (e->type.kind != TYPE_VOID)
-			cgen_ident_id(g, e->for_->c.id);
+			cgen_ident_id(g, e->cgen.id);
 		break;
 	case EXPR_CALL:
 		if (e->type.kind == TYPE_TUPLE) {
 			/* the only situation in which this could happen is if the return value doesn't matter */
 		} else if (cgen_uses_ptr(&e->type)) {
-			cgen_ident_id(g, e->call.c.id);
+			cgen_ident_id(g, e->cgen.id);
 		} else {
 			FnType *fn_type = &e->call.fn->type.fn;
 			cgen_write(g, "(");
@@ -1533,7 +1546,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 					if (!first_arg)
 						cgen_write(g, ", ");
 					first_arg = false;
-					if (!cgen_expr(g, arg))
+					if (!cgen_arg(g, arg))
 						return false;
 				}
 				++i;
@@ -1618,7 +1631,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		cgen_ident_id(g, e->slice.c.id);
 		break;
 	case EXPR_VAL:
-		cgen_ident_id(g, e->val_c_id);
+		cgen_ident_id(g, e->cgen.id);
 		break;
 	case EXPR_NMS:
 		break;

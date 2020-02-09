@@ -1,13 +1,20 @@
-p ::= fn() [3]int {
-  x: [3]int;
-  x[0] = 16;
-  x
+io ::= nms{
+   #include "std/io.toc";
+};
+
+foo ::= fn(a: [3]int) {
+	a[0] = 128;
 };
 
 f ::= fn() int {
-  a := p();
+  a : [3]int;
+  foo(a);
   a[0]
 };
 main ::= fn() {
 	 a ::= f();
+	 b := f();
+	 io.puti(a);
+	 io.puti(b);
+	 
 };

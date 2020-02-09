@@ -18,7 +18,6 @@
 
 /* 
 TODO:
-change the way arrays work (a := b, where b is an array probably shouldn't copy)
 struct parameters - to allow circular dependencies in types
 foo, _ := bar();
 nice syntax for #including something into a namespace
@@ -32,7 +31,7 @@ switch to / add as an alternative: libffi
 
 ---
 X ::= newtype(int); or something
-don't allow while {3; 5} (once break is added)
+don't allow while {3; 5} or for 0..10 { 3; 5 } (once break is added)
 do we need was_expr? (now that, presumably, we have struct arguments)
 any odd number of "s for a string
 make sure futurely/currently-declared types are only used by pointer/slice

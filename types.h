@@ -551,25 +551,16 @@ typedef struct CallExpr {
 		struct Expression *arg_exprs; /* after typing */
 	};
 	struct Instance *instance; /* NULL = ordinary function, no compile time args */
-	struct {
-		IdentID id;
-	} c;
 } CallExpr;
 
 typedef struct IfExpr {
 	struct Expression *cond; /* NULL = this is an else */
 	struct Expression *next_elif; /* next elif/else of this statement */
-	struct {
-		IdentID id;
-	} c;
 	Block body;
 } IfExpr;
 
 typedef struct WhileExpr {
 	struct Expression *cond;
-	struct {
-		IdentID id;
-	} c;
 	Block body;
 } WhileExpr;
 
@@ -581,9 +572,6 @@ enum {
 
 typedef struct ForExpr {
 	U8 flags;
-	struct {
-		IdentID id;
-	} c;
 	Type type; /* uninitialized unless typed or flags & FOR_ANNOTATED_TYPE */
 	Identifier index; /* NULL = no index */
 	Identifier value; /* NULL = no value */
@@ -707,8 +695,11 @@ enum {
 typedef struct Expression {
 	Type type;
 	Location where;
-	ExprKind kind;
+	ExprKind kind : 8;
 	U8 flags;
+	struct {
+		IdentID id; /* cgen ID used for this expression */
+	} cgen;
 	union {
 		Floating floatl;
 		/* Floating floatl; */
@@ -751,16 +742,10 @@ typedef struct Expression {
 		FnExpr *fn;
 		CastExpr cast;
 		SliceExpr slice;
-		struct {
-			Block block;
-			IdentID block_ret_id;
-		};
+		Block block;
 		struct Expression *tuple;
 		Type typeval;
-		struct {
-			Value val;
-			IdentID val_c_id;
-		};
+		Value val;
 	};
 } Expression;
 
