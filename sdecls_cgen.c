@@ -37,11 +37,15 @@ static bool cgen_sdecls_type(CGenerator *g, Type *type) {
 }
 
 static bool cgen_sdecls_block(CGenerator *g, Block *b) {
+	Block *prev_block = g->block;
+	g->block = b;
+	
 	arr_foreach(b->stmts, Statement, s)
 		if (!cgen_sdecls_stmt(g, s))
 			return false;
 	if (b->ret_expr && !cgen_sdecls_expr(g, b->ret_expr))
 		return false;
+	g->block = prev_block;
 	return true;
 }
 

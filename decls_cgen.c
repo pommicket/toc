@@ -117,11 +117,14 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 }
 
 static bool cgen_decls_block(CGenerator *g, Block *b) {
+	Block *prev_block = g->block;
+	g->block = b;
 	arr_foreach(b->stmts, Statement, s)
 		if (!cgen_decls_stmt(g, s))
 			return false;
 	if (b->ret_expr && !cgen_decls_expr(g, b->ret_expr))
 		return false;
+	g->block = prev_block;
 	return true;
 }
 
@@ -181,7 +184,6 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 	if (!cgen_decls_type(g, &d->type))
 		return false;
 	if (cgen_fn_is_direct(g, d)) {
-		d->expr.fn->c.name = d->idents[0];
 		if (!cgen_fn_decl(g, d->expr.fn, &d->expr.type))
 			return false;
 		cgen_recurse_subexprs(g, (&d->expr), cgen_decls_expr, cgen_decls_block, cgen_decls_decl);

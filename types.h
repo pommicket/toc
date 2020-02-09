@@ -804,14 +804,12 @@ typedef struct Declaration {
 			};
 		} foreign;
 	};
-	union {
-		Value val; /* only for constant decls. */
+	Value val; /* only for constant decls and non-constant globals. */
 
-		/* for eval, for non-constant decls.: */
-		/* the pointers to values need to be fixed, which is why this isn't just Value *.  */
-		/* OPTIM: some block array of values somewhere which we can just use a pointer to, which is freed when the block is exited? */
-		Value **val_stack;
-	};	
+	/* for eval, for non-constant local decls: */
+	/* the pointers to values need to be fixed, which is why this isn't just Value *.  */
+	/* OPTIM: some block array of values somewhere which we can just use a pointer to, which is freed when the block is exited? */
+	Value **val_stack;
 } Declaration;
 
 typedef enum {
