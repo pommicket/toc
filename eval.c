@@ -1529,6 +1529,10 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		}
 		/* NOTE: we're not calling fn_enter because we're manually entering the function */
 		
+		Value *ret_val;
+		Value *arg_tuple = NULL;
+		Type *arg_type_tuple = NULL;
+		
 		/* set parameter values */
 		Declaration *params = fn->params;
 		long arg = 0;
@@ -1545,10 +1549,34 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				Type *type = is_tuple ? &p->type.tuple[idx] : &p->type;
 				Value *ival = multiple_idents ? &pval->tuple[idx] : pval;
 				copy_val(NULL, ival, &arg_val, type);
+				if (fn->flags & FN_EXPR_CACHE) {
+					Value *arg_tuple_member = arr_add(&arg_tuple);
+					*(Type *)arr_add(&arg_type_tuple) = *type;
+					copy_val(ev->allocr, arg_tuple_member, &arg_val, type);
+				}
 				++arg;
 				++idx;
 			}
 			++arr_hdr(p->val_stack)->len;
+		}
+
+		if (fn->flags & FN_EXPR_CACHE) {
+			Value args;
+			args.tuple = arg_tuple;
+			Type args_type = {0};
+			args_type.flags = TYPE_IS_RESOLVED;
+			args_type.tuple = arg_type_tuple;
+			bool already_there;
+			Instance *i = instance_table_adda(ev->allocr, fn->cache, args, &args_type, &already_there);
+			arr_clear(&arg_tuple);
+			arr_clear(&arg_type_tuple);
+			if (already_there) {
+				*v = *i->ret_val;
+				return true;
+			} else {
+				ret_val = i->ret_val = evalr_calloc(ev, 1, sizeof *ret_val);
+			}
+			
 		}
 		
 		arr_foreach(fn->ret_decls, Declaration, d) {
@@ -1608,7 +1636,8 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			decl_remove_val(p);
 		arr_foreach(fn->ret_decls, Declaration, d)
 			decl_remove_val(d);
-		
+		if (fn->flags & FN_EXPR_CACHE)
+			*ret_val = *v;
 	} break;
 	case EXPR_SLICE: {
 		SliceExpr *s = &e->slice;

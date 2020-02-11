@@ -2,19 +2,13 @@ io ::= nms{
    #include "std/io.toc";
 };
 
-foo ::= fn(a: [3]int) {
-	a[0] = 128;
+ll ::= fn() Type {
+   struct {
+   head : int;
+   tail : &ll();
+   }
 };
 
-f ::= fn() int {
-  a : [3]int;
-  foo(a);
-  a[0]
-};
 main ::= fn() {
-	 a ::= f();
-	 b := f();
-	 io.puti(a);
-	 io.puti(b);
-	 
+	l : ll();
 };

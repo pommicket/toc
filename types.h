@@ -131,6 +131,7 @@ typedef struct BlockArr {
 	ArrBlock *blocks;
 } BlockArr;
 
+/* initialize to 0 */
 typedef struct HashTable {
 	void *data;
 	bool *occupied;
@@ -229,6 +230,7 @@ typedef enum {
 			  DIRECT_FOREIGN,
 			  DIRECT_BUILTIN,
 			  DIRECT_INCLUDE,
+			  DIRECT_CACHE,
 			  DIRECT_COUNT
 } Directive;
 
@@ -594,7 +596,8 @@ typedef struct ForExpr {
 
 enum {
 	  FN_EXPR_FOREIGN = 0x01,
-	  FN_EXPR_EXPORT = 0x02 /* set by sdecls_cgen.c */
+	  FN_EXPR_EXPORT = 0x02, /* set by sdecls_cgen.c */
+	  FN_EXPR_CACHE = 0x04
 };
 
 typedef struct FnExpr {
@@ -614,6 +617,7 @@ typedef struct FnExpr {
 							the first element is a u64 value whose ith bit (1<<i) is 1
 							if the ith semi-constant parameter is constant.
 						 */
+	HashTable *cache; /* only set for FN_EXPR_CACHE */
 	struct {
 		/* if name = NULL, this is an anonymous function, and id will be the ID of the fn. */
 		Identifier name;
@@ -624,10 +628,15 @@ typedef struct FnExpr {
 
 typedef struct Instance {
 	Value val; /* key into hash table */
-	FnExpr *fn; /* the typed function */
-	struct {
-		U64 id;
-	} c;
+	union {
+		struct {
+			FnExpr *fn; /* the typed function */
+			struct {
+				U64 id;
+			} c;
+		};
+		Value *ret_val; /* return value (for #cached functions). pointer must stay fixed, so this is a Value * */
+	};
 } Instance;
 
 typedef struct CastExpr {
