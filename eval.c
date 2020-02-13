@@ -1113,11 +1113,11 @@ static bool eval_ident(Evaluator *ev, Identifier ident, Value *v, Location where
 			v->fn = d->val.fn;
 			return true;
 		}
-		if ((d->flags & DECL_FOUND_VAL) && type_is_builtin(&d->type, BUILTIN_TYPE) && d->val.type->kind == TYPE_STRUCT) {
+		if ((d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_TYPE && d->expr.typeval.kind == TYPE_STRUCT) {
 			v->type = allocr_malloc(ev->allocr, sizeof *v->type);
 			v->type->flags = TYPE_IS_RESOLVED;
 			v->type->kind = TYPE_STRUCT;
-			v->type->struc = d->val.type->struc;
+			v->type->struc = d->expr.typeval.struc;
 			return true;
 		} else {
 			if (!types_decl(ev->typer, d)) return false;

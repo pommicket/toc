@@ -748,7 +748,7 @@ typedef struct Expression {
 		CastExpr cast;
 		SliceExpr slice;
 		Block block;
-		struct Expression *tuple;
+		struct Expression *tuple; /* dynamic array, even after typing */
 		Type typeval;
 		Value val;
 	};

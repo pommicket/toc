@@ -204,10 +204,7 @@ static bool type_is_compileonly(Type *t) {
 				return true;
 		return false;
 	case TYPE_STRUCT:
-		arr_foreach(t->struc->fields, Field, f)
-			if (type_is_compileonly(&f->type))
-				return true;
-		return false;
+		return false; /* structs can only have non-compileonly members */
 	case TYPE_EXPR: break;
 	}
 	assert(0);

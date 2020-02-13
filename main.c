@@ -18,7 +18,6 @@
 
 /* 
 TODO:
-fix circular dependencies in types
 struct parameters
 fix struct copying
 replace is_reference in type_resolve_ with system for checking if type is
@@ -67,17 +66,13 @@ static void signal_handler(int num) {
 	static void *addrs[30];
     int naddrs = (int)(sizeof addrs / sizeof *addrs);
     naddrs = backtrace(addrs, naddrs);
-	char **syms = backtrace_symbols(addrs, naddrs);
-	
-
+	/* char **syms = backtrace_symbols(addrs, naddrs); */
+	char command[2048] = "addr2line -p -f -a -e toc ";
 	for (int i = 4; i < naddrs; ++i) {
-		fprintf(stderr,"\t%s - ",syms[i]);
-	    char buf[256];
-		snprintf(buf, sizeof buf, "addr2line -e toc %p", addrs[i]);
-		system(buf);
+		snprintf(command + strlen(command), sizeof command - strlen(command), "%p ", addrs[i]);
 	}
-	
-	free(syms);
+	system(command);
+	/* free(syms); */
 	
 }
 #endif

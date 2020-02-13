@@ -1,9 +1,28 @@
-b ::= struct {
-   next : &a;
+io ::= nms {
+  #include "std/io.toc";
 };
-a::=struct {
-		   next : &b;
+
+ll ::= struct {
+   head : int;
+   tail : &ll;
 };
+
+slice_to_ll ::= fn(x: []int) l: ll {
+	if x.len == 1 {
+	   l.head = x[0];
+	   l.tail = 0 as &ll;
+	   return;
+	}
+	l.head = x[0];
+	l.tail = new(ll);
+	*l.tail = slice_to_ll(x[1:]);
+};
+
 main ::= fn() {
-	l : ll;
+	 a : []int = new(int,3);
+	 a[0] = 1;
+	 a[1] = 2;
+	 a[2] = 3;
+	 l : ll = slice_to_ll(a);
+	 io.puti(l.tail.tail.head);
 };

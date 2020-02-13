@@ -1125,7 +1125,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 			}
 			cgen_write(g, ");");
 		} else if (cgen_uses_ptr(&e->type)) {
-			e->cgen.id = ++g->ident_counter;
+			e->cgen.id = id = ++g->ident_counter;
 			if (!cgen_type_pre(g, &e->type, e->where)) return false;
 			cgen_write(g, " ");
 			cgen_ident_id(g, id);
@@ -1750,36 +1750,8 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, U64 instance, Value *compile_time_
 	if (!cgen_block(g, &f->body, NULL, CGEN_BLOCK_NOBRACES))
 		return false;
 	if (f->ret_decls) {
-		/* OPTIM */
-
-		/* long-winded code to generate a return expression using the ret_decls. */
-		Expression ret_expr;
-		ret_expr.flags = EXPR_FOUND_TYPE;
-		ret_expr.type = f->ret_type;
-		if (arr_len(f->ret_decls) == 1
-			&& arr_len(f->ret_decls[0].idents) == 1) {
-			ret_expr.kind = EXPR_IDENT;
-			ret_expr.ident = f->ret_decls[0].idents[0];
-		} else {
-			ret_expr.kind = EXPR_TUPLE;
-			ret_expr.tuple = NULL;
-			size_t i = 0;
-			arr_foreach(f->ret_decls, Declaration, d) {
-				arr_foreach(d->idents, Identifier, ident) {
-					Expression *element = arr_add(&ret_expr.tuple);
-					element->flags = EXPR_FOUND_TYPE;
-					element->kind = EXPR_IDENT;
-					element->type = f->ret_type.tuple[i];
-					element->ident = *ident;
-					++i;
-				}
-			}
-		}
-		
-		if (!cgen_ret(g, &ret_expr))
+		if (!cgen_ret(g, NULL))
 			return false;
-		if (ret_expr.kind == EXPR_TUPLE)
-			arr_clear(&ret_expr.tuple);
 	} else if (f->body.ret_expr) {
 		if (!cgen_ret(g, f->body.ret_expr)) return false;
 	}
@@ -2004,16 +1976,59 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 }
 
 static bool cgen_ret(CGenerator *g, Expression *ret) {
-	assert((g->fn->ret_type.kind == TYPE_VOID) == (ret == NULL));
+	FnExpr *f = g->fn;
+	if (f->ret_decls) {
+		assert(!ret);
+		if (f->ret_type.kind == TYPE_TUPLE) {
+			/* TODO TODO */
+			Expression ret_expr = {0};
+			ret_expr.flags = EXPR_FOUND_TYPE;
+			ret_expr.type = f->ret_type;
+			ret_expr.kind = EXPR_TUPLE;
+			ret_expr.tuple = NULL;
+			arr_set_len(&ret_expr.tuple, arr_len(f->ret_type.tuple));
+			int idx = 0;
+			arr_foreach(f->ret_decls, Declaration, d) {
+				arr_foreach(d->idents, Identifier, ident) {
+					Expression *e = &ret_expr.tuple[idx];
+					e->flags = EXPR_FOUND_TYPE;
+					e->type = f->ret_type.tuple[idx];
+					e->kind = EXPR_IDENT;
+					e->ident = *ident;
+					++idx;
+				}
+			}
+		    bool success = cgen_set_tuple(g, NULL, NULL, "*ret", &ret_expr);
+			arr_clear(&ret_expr.tuple);
+			if (!success)
+				return false;
+		} else if (cgen_uses_ptr(&f->ret_type)) {
+			Expression ret_expr = {0};
+			ret_expr.flags = EXPR_FOUND_TYPE;
+			ret_expr.type = f->ret_type;
+			ret_expr.kind = EXPR_IDENT;
+			ret_expr.ident = f->ret_decls[0].idents[0];
+			if (!cgen_set(g, NULL, "*ret_", &ret_expr, NULL)) {
+				return false;
+			}
+			cgen_writeln(g, ";");
+			cgen_writeln(g, "return;");
+		} else {
+			cgen_write(g, "return ");
+			cgen_ident(g, f->ret_decls[0].idents[0]);
+			cgen_writeln(g, ";");
+		}
+		return true;
+	}
 	if (ret) {
-		assert(type_eq(&g->fn->ret_type, &ret->type));
+		assert(type_eq(&f->ret_type, &ret->type));
 		if (!cgen_expr_pre(g, ret))
 			return false;
 	}
 	if (!ret) {
 		cgen_write(g, "return");
-	} else if (cgen_uses_ptr(&g->fn->ret_type)) {
-		if (g->fn->ret_type.kind == TYPE_TUPLE) {
+	} else if (cgen_uses_ptr(&f->ret_type)) {
+		if (f->ret_type.kind == TYPE_TUPLE) {
 			if (!cgen_set_tuple(g, NULL, NULL, "*ret", ret))
 				return false;
 		} else {
