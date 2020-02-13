@@ -18,7 +18,11 @@
 
 /* 
 TODO:
-allow circular dependencies in types
+fix circular dependencies in types
+struct parameters
+fix struct copying
+replace is_reference in type_resolve_ with system for checking if type is
+   circularly dependent in a bad way, with compiler_sizeof
 foo, _ := bar();
 nice syntax for #including something into a namespace
 run stuff at compile time without assigning it to a constant
@@ -35,14 +39,14 @@ don't allow while {3; 5} or for 0..10 { 3; 5 } (once break is added)
 do we need was_expr? (now that, presumably, we have struct arguments)
 any odd number of "s for a string
 make sure futurely/currently-declared types are only used by pointer/slice
-allow omission of trailing ; in foo ::= fn() {...} or foo ::= nms {...} ?
+allow omission of trailing ; in foo ::= fn() {...} or foo ::= nms {...} or foo ::= struct { ... }?
 */
 
 
 #include "toc.c"
 
 
-#if defined TOC_DEBUG && defined __linux__
+#if defined TOC_DEBUG && defined __linux__ && defined __GNU_LIBRARY__
 #include <signal.h>
 #include <execinfo.h>
 #include <unistd.h>

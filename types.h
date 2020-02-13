@@ -230,7 +230,6 @@ typedef enum {
 			  DIRECT_FOREIGN,
 			  DIRECT_BUILTIN,
 			  DIRECT_INCLUDE,
-			  DIRECT_CACHE,
 			  DIRECT_COUNT
 } Directive;
 
@@ -472,10 +471,12 @@ typedef struct StructDef {
 enum {
 	  BLOCK_IS_FN = 0x01,
 	  BLOCK_IS_NMS = 0x02,
-	  BLOCK_FOUND_TYPES = 0x04
+	  BLOCK_FINDING_TYPES = 0x04,
+	  BLOCK_FOUND_TYPES = 0x08
 };
+typedef U8 BlockFlags;
 typedef struct Block {
-	U8 flags;
+	BlockFlags flags;
 	Location where;
 	Identifiers idents;
 	struct Statement *stmts;
@@ -596,8 +597,7 @@ typedef struct ForExpr {
 
 enum {
 	  FN_EXPR_FOREIGN = 0x01,
-	  FN_EXPR_EXPORT = 0x02, /* set by sdecls_cgen.c */
-	  FN_EXPR_CACHE = 0x04
+	  FN_EXPR_EXPORT = 0x02 /* set by sdecls_cgen.c */
 };
 
 typedef struct FnExpr {
@@ -617,7 +617,6 @@ typedef struct FnExpr {
 							the first element is a u64 value whose ith bit (1<<i) is 1
 							if the ith semi-constant parameter is constant.
 						 */
-	HashTable *cache; /* only set for FN_EXPR_CACHE */
 	struct {
 		/* if name = NULL, this is an anonymous function, and id will be the ID of the fn. */
 		Identifier name;
@@ -628,14 +627,11 @@ typedef struct FnExpr {
 
 typedef struct Instance {
 	Value val; /* key into hash table */
-	union {
+	struct {
+		FnExpr *fn; /* the typed function */
 		struct {
-			FnExpr *fn; /* the typed function */
-			struct {
-				U64 id;
-			} c;
-		};
-		Value *ret_val; /* return value (for #cached functions). pointer must stay fixed, so this is a Value * */
+			U64 id;
+		} c;
 	};
 } Instance;
 

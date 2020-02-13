@@ -866,11 +866,6 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 	/* only called when token is fn */
 	assert(token_is_kw(t->token, KW_FN));
 	++t->token;
-	if (token_is_direct(t->token, DIRECT_CACHE)) {
-		f->flags |= FN_EXPR_CACHE;
-		f->cache = parser_calloc(p, 1, sizeof *f->cache);
-		++t->token;
-	}
 	if (!token_is_kw(t->token, KW_LPAREN)) {
 		tokr_err(t, "Expected '(' after 'fn'.");
 		return false;
@@ -1775,7 +1770,6 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 				case DIRECT_FOREIGN:
 				case DIRECT_EXPORT:
 				case DIRECT_INCLUDE:
-				case DIRECT_CACHE:
 					tokr_err(t, "Unrecognized expression.");
 					return false;
 				case DIRECT_COUNT: assert(0); break;

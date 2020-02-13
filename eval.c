@@ -1523,15 +1523,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				return false;
 			break;
 		}
-		/* make sure function body is typed before calling it */
-		if (!types_block(ev->typer, &fn->body)) {
-			return false;
-		}
-		/* NOTE: we're not calling fn_enter because we're manually entering the function */
-		
-		Value *ret_val;
-		Value *arg_tuple = NULL;
-		Type *arg_type_tuple = NULL;
 		
 		/* set parameter values */
 		Declaration *params = fn->params;
@@ -1549,42 +1540,12 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				Type *type = is_tuple ? &p->type.tuple[idx] : &p->type;
 				Value *ival = multiple_idents ? &pval->tuple[idx] : pval;
 				copy_val(NULL, ival, &arg_val, type);
-				if (fn->flags & FN_EXPR_CACHE) {
-					Value *arg_tuple_member = arr_add(&arg_tuple);
-					*(Type *)arr_add(&arg_type_tuple) = *type;
-					copy_val(ev->allocr, arg_tuple_member, &arg_val, type);
-				}
 				++arg;
 				++idx;
 			}
 			++arr_hdr(p->val_stack)->len;
 		}
 
-		if (fn->flags & FN_EXPR_CACHE) {
-			Value args;
-			args.tuple = arg_tuple;
-			Type args_type = {0};
-			args_type.flags = TYPE_IS_RESOLVED;
-			args_type.tuple = arg_type_tuple;
-			bool already_there;
-			Instance *i = instance_table_adda(ev->allocr, fn->cache, args, &args_type, &already_there);
-			arr_clear(&arg_tuple);
-			arr_clear(&arg_type_tuple);
-			if (already_there) {
-				*v = *i->ret_val;
-				return true;
-			} else {
-				ret_val = i->ret_val = evalr_calloc(ev, 1, sizeof *ret_val);
-				if (type_is_builtin(&e->type, BUILTIN_TYPE)) {
-					/* placeholder type, overwritten when done */
-					ret_val->type = evalr_calloc(ev, 1, sizeof *ret_val);
-					ret_val->type->kind = TYPE_UNKNOWN;
-					ret_val->type->flags = TYPE_IS_RESOLVED;
-				}
-			}
-			
-		}
-		
 		arr_foreach(fn->ret_decls, Declaration, d) {
 			int idx = 0;
 			Value ret_decl_val;
@@ -1605,6 +1566,11 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				++idx;
 			}
 		}
+			
+		/* make sure function body is typed before calling it */
+		if (!types_block(ev->typer, &fn->body))
+			return false;
+		
 		if (!eval_block(ev, &fn->body, v)) {
 			return false;
 		}
@@ -1642,13 +1608,6 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			decl_remove_val(p);
 		arr_foreach(fn->ret_decls, Declaration, d)
 			decl_remove_val(d);
-		if (fn->flags & FN_EXPR_CACHE) {
-			if (type_is_builtin(&e->type, BUILTIN_TYPE)) {
-				*ret_val->type = *v->type;
-			} else {
-				*ret_val = *v;
-			}
-		}
 	} break;
 	case EXPR_SLICE: {
 		SliceExpr *s = &e->slice;
@@ -1792,21 +1751,33 @@ static void eval_exit_stmts(Statement *stmts) {
 }
 
 static bool eval_block(Evaluator *ev, Block *b, Value *v) {
+	Block *prev = ev->typer->block;
+	ev->typer->block = b;
+	bool success = true;
 	arr_foreach(b->stmts, Statement, stmt) {
-		if (!eval_stmt(ev, stmt))
-			return false;
+		if (!eval_stmt(ev, stmt)) {
+			success = false;
+			goto ret;
+		}
 		if (ev->returning) break;
 	}
 	if (!ev->returning && b->ret_expr) {
 		Value r;
-		if (!eval_expr(ev, b->ret_expr, &r))
-			return false;
-		/* make a copy so that r's data isn't freed when we exit the block */
-		copy_val(NULL, v, &r, &b->ret_expr->type);
-		if (b->ret_expr->kind == EXPR_TUPLE)
-			free(r.tuple);
+		if (!eval_expr(ev, b->ret_expr, &r)) {
+			success = false;
+			goto ret;
+		}
+		if (!type_is_builtin(&b->ret_expr->type, BUILTIN_TYPE)) {
+			/* make a copy so that r's data isn't freed when we exit the block */
+			copy_val(NULL, v, &r, &b->ret_expr->type);
+			if (b->ret_expr->kind == EXPR_TUPLE)
+				free(r.tuple);
+		} else {
+			*v = r;
+		}
 	}
 	eval_exit_stmts(b->stmts);
-	
-	return true;
+ ret:
+	ev->typer->block = prev;
+	return success;
 }

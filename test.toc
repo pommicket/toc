@@ -1,14 +1,9 @@
-io ::= nms{
-   #include "std/io.toc";
+b ::= struct {
+   next : &a;
 };
-
-ll ::= fn() Type {
-   struct {
-   head : int;
-   tail : &ll();
-   }
+a::=struct {
+		   next : &b;
 };
-
 main ::= fn() {
-	l : ll();
+	l : ll;
 };

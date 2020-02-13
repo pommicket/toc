@@ -118,6 +118,7 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 		out->slice = copy_type_(c, in->slice);
 		break;
 	case TYPE_STRUCT: {
+		/* FIXME */
 		out->struc = allocr_malloc(c->allocr, sizeof *out->struc);
 		*out->struc = *in->struc;
 		size_t nfields = arr_len(in->struc->fields);
@@ -366,6 +367,8 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 }
 
 static void copy_block(Copier *c, Block *out, Block *in, U8 flags) {
+	assert(!(in->flags & BLOCK_FINDING_TYPES));
+	
 	Identifiers out_idents = out->idents;
 	*out = *in;
 	if (flags & COPY_BLOCK_DONT_CREATE_IDENTS)

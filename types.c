@@ -2213,6 +2213,14 @@ static bool types_expr(Typer *tr, Expression *e) {
 static bool types_block(Typer *tr, Block *b) {
 	if (b->flags & BLOCK_FOUND_TYPES)
 		return true;
+
+	if (b->flags & BLOCK_FINDING_TYPES) {
+		err_print(b->where, "A circular dependency was found when finding types in this block.\n"
+				  "You are using recursion in a way that is not allowed by this language. Sorry!");
+		return false;
+	}
+	b->flags |= BLOCK_FINDING_TYPES;
+	
 	typer_block_enter(tr, b);
 	bool success = true;
 	arr_foreach(b->stmts, Statement, s) {
@@ -2248,6 +2256,8 @@ static bool types_block(Typer *tr, Block *b) {
  ret:
 	typer_block_exit(tr);
 	b->flags |= BLOCK_FOUND_TYPES;
+	b->flags &= (BlockFlags)~(BlockFlags)BLOCK_FINDING_TYPES;
+	
 	return success;
 }
 
