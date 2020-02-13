@@ -18,7 +18,7 @@
 
 /* 
 TODO:
-struct parameters - to allow circular dependencies in types
+allow circular dependencies in types
 foo, _ := bar();
 nice syntax for #including something into a namespace
 run stuff at compile time without assigning it to a constant
@@ -42,8 +42,47 @@ allow omission of trailing ; in foo ::= fn() {...} or foo ::= nms {...} ?
 #include "toc.c"
 
 
+#if defined TOC_DEBUG && defined __linux__
+#include <signal.h>
+#include <execinfo.h>
+#include <unistd.h>
+static void signal_handler(int num) {
+    switch (num) {
+	case SIGABRT:
+		fprintf(stderr, "Aborted.\n");
+		break;
+	case SIGSEGV:
+		fprintf(stderr, "Segmentation fault.\n");
+		break;
+	default:
+	    fprintf(stderr, "Terminated for unknown reason.\n");
+		break;
+	}
+	fprintf(stderr, "Stack trace:\n");
+
+	static void *addrs[30];
+    int naddrs = (int)(sizeof addrs / sizeof *addrs);
+    naddrs = backtrace(addrs, naddrs);
+	char **syms = backtrace_symbols(addrs, naddrs);
+	
+
+	for (int i = 4; i < naddrs; ++i) {
+		fprintf(stderr,"\t%s - ",syms[i]);
+	    char buf[256];
+		snprintf(buf, sizeof buf, "addr2line -e toc %p", addrs[i]);
+		system(buf);
+	}
+	
+	free(syms);
+	
+}
+#endif
+
 int main(int argc, char **argv) {
 #ifdef TOC_DEBUG
+	signal(SIGABRT, signal_handler);
+	signal(SIGSEGV, signal_handler);
+	
 	test_all();
 #endif
 

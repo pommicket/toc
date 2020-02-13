@@ -1575,6 +1575,12 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				return true;
 			} else {
 				ret_val = i->ret_val = evalr_calloc(ev, 1, sizeof *ret_val);
+				if (type_is_builtin(&e->type, BUILTIN_TYPE)) {
+					/* placeholder type, overwritten when done */
+					ret_val->type = evalr_calloc(ev, 1, sizeof *ret_val);
+					ret_val->type->kind = TYPE_UNKNOWN;
+					ret_val->type->flags = TYPE_IS_RESOLVED;
+				}
 			}
 			
 		}
@@ -1636,8 +1642,13 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			decl_remove_val(p);
 		arr_foreach(fn->ret_decls, Declaration, d)
 			decl_remove_val(d);
-		if (fn->flags & FN_EXPR_CACHE)
-			*ret_val = *v;
+		if (fn->flags & FN_EXPR_CACHE) {
+			if (type_is_builtin(&e->type, BUILTIN_TYPE)) {
+				*ret_val->type = *v->type;
+			} else {
+				*ret_val = *v;
+			}
+		}
 	} break;
 	case EXPR_SLICE: {
 		SliceExpr *s = &e->slice;
