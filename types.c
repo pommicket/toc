@@ -59,7 +59,8 @@ static bool type_eq(Type *a, Type *b) {
 	case TYPE_UNKNOWN: assert(0); return false;
 	case TYPE_BUILTIN:
 		return a->builtin == b->builtin;
-	case TYPE_STRUCT: return a->struc == b->struc;
+	case TYPE_STRUCT:
+		return a->struc.def == b->struc.def;
 	case TYPE_FN: {
 		if (arr_len(a->fn.types) != arr_len(b->fn.types)) return false;
 		Type *a_types = a->fn.types, *b_types = b->fn.types;
@@ -571,7 +572,8 @@ static bool type_resolve_(Typer *tr, Type *t, Location where, bool is_reference)
 			return false;
 		break;
 	case TYPE_STRUCT:
-		arr_foreach(t->struc->fields, Field, f) {
+		/* TODO: lookup args! */
+		arr_foreach(t->struc.def->fields, Field, f) {
 			if (!type_resolve_(tr, &f->type, where, is_reference))
 				return false;
 		}
@@ -2032,7 +2034,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				e->binary.op = BINARY_DOT;
 				bool is_field = false;
 				if (!eval_expr(tr->evalr, rhs, &field_name)) return false;
-				arr_foreach(lhs_type->struc->fields, Field, f) {
+				arr_foreach(lhs_type->struc.def->fields, Field, f) {
 					if (ident_eq_str(f->name, field_name.slice.data)) {
 						is_field = true;
 						*t = f->type;
@@ -2095,7 +2097,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			}
 			if (struct_type->kind == TYPE_STRUCT) {
 				bool is_field = false;
-				arr_foreach(struct_type->struc->fields, Field, f) {
+				arr_foreach(struct_type->struc.def->fields, Field, f) {
 					if (ident_eq(f->name, rhs->ident)) {
 						is_field = true;
 						*t = f->type;
@@ -2265,7 +2267,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 	if ((d->flags & DECL_HAS_EXPR)
 		&& d->expr.kind == EXPR_TYPE
 		&& d->expr.typeval.kind == TYPE_STRUCT) {
-		d->expr.typeval.struc->name = d->idents[0];
+		d->expr.typeval.struc.def->name = d->idents[0];
 	}
 	
 	if (d->flags & DECL_INFER) {

@@ -62,6 +62,7 @@ static void copy_val(Allocator *a, Value *out, Value *in, Type *t) {
 	} break;
 	case TYPE_EXPR:
 		assert(0);
+		break;
 	}
 }
 
@@ -76,7 +77,7 @@ static void copy_val_full(Copier *c, Value *out, Value *in, Type *t) {
 }
 
 
-/* works on unresolved and resolved types */
+/* works on unresolved and resolved types (for inference) */
 static void copy_type(Copier *c, Type *out, Type *in) {
 	*out = *in;
 	switch (in->kind) {
@@ -118,18 +119,34 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 		out->slice = copy_type_(c, in->slice);
 		break;
 	case TYPE_STRUCT: {
-		/* FIXME */
-		out->struc = allocr_malloc(c->allocr, sizeof *out->struc);
-		*out->struc = *in->struc;
-		size_t nfields = arr_len(in->struc->fields);
-		out->struc->fields = NULL;
+		if (in->flags & TYPE_IS_RESOLVED) {
+			/* we don't actually need to make a copy of the struct for inference */
+		} else {
+			/* 
+			   it's okay to copy the struct definition here, because before resolving,
+			   only one thing can point to a given StructDef
+			*/
+			StructType *sout = &out->struc, *sin = &in->struc;
+			
+			sout->def = allocr_malloc(c->allocr, sizeof *sout->def);
+			*sout->def = *sin->def;
+			size_t nfields = arr_len(sin->def->fields);
+			sout->def->fields = NULL;
 
-		arr_set_lena(&out->struc->fields, nfields, c->allocr);
-		for (size_t i = 0; i < nfields; ++i) {
-			Field *fout = &out->struc->fields[i];
-			Field *fin = &in->struc->fields[i];
-			*fout = *fin;
-			copy_type(c, &fout->type, &fin->type);
+			arr_set_lena(&sout->def->fields, nfields, c->allocr);
+			for (size_t i = 0; i < nfields; ++i) {
+				Field *fout = &sout->def->fields[i];
+				Field *fin = &sin->def->fields[i];
+				*fout = *fin;
+				copy_type(c, &fout->type, &fin->type);
+			}
+
+			size_t nargs = arr_len(sin->args);
+			sout->args = NULL;
+			arr_set_lena(&sout->args, nargs, c->allocr);
+			for (size_t i = 0; i < nargs; ++i) {
+				copy_expr(c, &sout->args[i], &sin->args[i]);
+			}
 		}
 	} break;
 	}

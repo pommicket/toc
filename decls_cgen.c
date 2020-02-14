@@ -11,7 +11,7 @@ static bool cgen_decls_type(CGenerator *g, Type *type) {
 	if (!(type->flags & TYPE_IS_RESOLVED)) /* non-instance constant fn parameter type */
 		return true;
 	if (type->kind == TYPE_STRUCT) {
-		StructDef *sdef = type->struc;
+		StructDef *sdef = type->struc.def;
 		if (!(sdef->flags & STRUCT_DEF_CGEN_DEFINED)) {
 			/* generate struct definition */
 			cgen_write(g, "struct ");
@@ -158,7 +158,7 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 				cgen_write(g, "static ");
 				if (!cgen_type_pre(g, &d->type, d->where))
 					return false;
-				cgen_write(g, " ");
+				cgen_write(g, " const ");
 				cgen_ident(g, d->idents[0]);
 				if (!cgen_type_post(g, &d->type, d->where))
 					return false;

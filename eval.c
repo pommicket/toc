@@ -94,8 +94,8 @@ static size_t compiler_alignof(Type *t) {
 			return sizeof(size_t);
 	case TYPE_STRUCT: {
 		/* assume the align of a struct is (at most) the greatest align out of its children's */
-		eval_struct_find_offsets(t->struc);
-		return t->struc->align;
+		eval_struct_find_offsets(t->struc.def);
+		return t->struc.def->align;
 	}
 	case TYPE_UNKNOWN:
 	case TYPE_EXPR:
@@ -123,8 +123,8 @@ static size_t compiler_sizeof(Type *t) {
 	case TYPE_SLICE:
 		return sizeof v.slice;
 	case TYPE_STRUCT: {
-		eval_struct_find_offsets(t->struc);
-		return t->struc->size;
+		eval_struct_find_offsets(t->struc.def);
+		return t->struc.def->size;
 	} break;
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
@@ -341,8 +341,8 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 	} break;
 	case TYPE_STRUCT:
 		fprintf(f, "["); /* TODO: change? when struct initializers are added */
-		arr_foreach(t->struc->fields, Field, fi) {
-			if (fi != t->struc->fields)
+		arr_foreach(t->struc.def->fields, Field, fi) {
+			if (fi != t->struc.def->fields)
 				fprintf(f, ", ");
 			fprint_ident_debug(f, fi->name);
 			fprintf(f, ": ");
@@ -777,7 +777,7 @@ static bool eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr, void *
 		struct_type = struct_type->ptr;
 	}
 	if (struct_type->kind == TYPE_STRUCT) {
-		eval_struct_find_offsets(struct_type->struc);
+		eval_struct_find_offsets(struct_type->struc.def);
 			
 		Value struc;
 		if (!eval_expr(ev, dot_expr->binary.lhs, &struc))

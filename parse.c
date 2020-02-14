@@ -184,6 +184,7 @@ static Keyword builtin_type_to_kw(BuiltinType t) {
 
 /* returns the number of characters written, not including the null character */
 static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
+	bool resolved = (t->flags & TYPE_IS_RESOLVED) != 0;
 	switch (t->kind) {
 	case TYPE_VOID:
 		return str_copy(buffer, bufsize, "void");
@@ -223,18 +224,44 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 		return written;
 	}
 	case TYPE_STRUCT: {
-		if (t->struc->name) {
-			char *namestr = ident_to_str(t->struc->name);
-			size_t bytes = str_copy(buffer, bufsize, namestr);
+		size_t written = 0;
+		StructDef *def = t->struc.def;
+		Identifier name = def->name;
+		if (name) {
+			char *namestr = ident_to_str(name);
+			written = str_copy(buffer, bufsize, namestr);
 			free(namestr);
-			return bytes;
+		} else {
+			 written = str_copy(buffer, bufsize, "anonymous struct");
 		}
-		return str_copy(buffer, bufsize, "anonymous struct");
-		
+		if (resolved) {
+			if (t->struc.args) {
+				written += str_copy(buffer + written, bufsize - written, "(");
+				arr_foreach(t->struc.args, Expression, arg) {
+					/* TODO: print arguments, maybe, but do we even ever call this (for non-debugging purposes) with an unresolved type? */
+					if (arg != t->struc.args)
+						written += str_copy(buffer + written, bufsize - written, ", ");
+					written += str_copy(buffer + written, bufsize - written, "<argument>");
+				}
+				written += str_copy(buffer + written, bufsize - written, ")");
+			}
+		} else {
+			if (def->params) {
+				written += str_copy(buffer + written, bufsize - written, "(");
+				arr_foreach(def->params, Declaration, param) {
+					/* TODO: val to str */
+					if (param != def->params)
+						written += str_copy(buffer + written, bufsize - written, ", ");
+					written += str_copy(buffer + written, bufsize - written, "<argument>");
+				}
+				written += str_copy(buffer + written, bufsize - written, ")");
+			}
+		}
+		return written;
 	}
 	case TYPE_ARR: {
 		size_t written = str_copy(buffer, bufsize, "[");
-		if (t->flags & TYPE_IS_RESOLVED) {
+		if (resolved) {
 			snprintf(buffer + written, bufsize - written, U64_FMT, t->arr.n);
 			written += strlen(buffer + written);
 		} else {
@@ -574,7 +601,8 @@ static bool parse_type(Parser *p, Type *type) {
 		case KW_STRUCT: {
 			/* struct */
 			type->kind = TYPE_STRUCT;
-			StructDef *struc = type->struc = parser_malloc(p, sizeof *type->struc);
+			type->struc.args = NULL;
+			StructDef *struc = type->struc.def = parser_malloc(p, sizeof *type->struc.def);
 			struc->flags = 0;
 			struc->name = NULL;
 			/* help cgen out */
@@ -612,7 +640,7 @@ static bool parse_type(Parser *p, Type *type) {
 					long idx = 0;
 					arr_foreach(field_decl.idents, Identifier, fident) {
 						Type *ftype = field_decl.type.kind == TYPE_TUPLE ? &field_decl.type.tuple[idx] : &field_decl.type;
-						Field *f = parser_arr_add(p, &type->struc->fields);
+						Field *f = parser_arr_add(p, &struc->fields);
 						f->name = *fident;
 						f->type = *ftype;
 						++idx;

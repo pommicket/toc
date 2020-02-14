@@ -19,7 +19,8 @@
 /* 
 TODO:
 struct parameters
-fix struct copying
+- make sure you test inference
+see infer.c "is resolved_to necessary" (now that ident system has changed)
 replace is_reference in type_resolve_ with system for checking if type is
    circularly dependent in a bad way, with compiler_sizeof
 foo, _ := bar();
