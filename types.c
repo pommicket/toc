@@ -572,7 +572,11 @@ static bool type_resolve_(Typer *tr, Type *t, Location where, bool is_reference)
 			return false;
 		break;
 	case TYPE_STRUCT:
-		/* TODO: lookup args! */
+		if (t->struc.def->params) {
+			err_print(where, "Expected arguments to structure.");
+			info_print(t->struc.def->where, "Structure was declared here.");
+			return false;
+		}
 		arr_foreach(t->struc.def->fields, Field, f) {
 			if (!type_resolve_(tr, &f->type, where, is_reference))
 				return false;
@@ -2186,12 +2190,19 @@ static bool types_expr(Typer *tr, Expression *e) {
 		}
 		break;
 	}
-	case EXPR_TYPE:
-		if (!type_resolve(tr, &e->typeval, e->where))
+	case EXPR_TYPE: {
+		Type *tval = &e->typeval;
+		if (tval->kind == TYPE_STRUCT && tval->struc.def->params) {
+			/* don't try to resolve this */
+			t->kind = TYPE_BUILTIN;
+			t->builtin = BUILTIN_TYPE;
+			break;
+		}
+		if (!type_resolve(tr, tval, e->where))
 			return false;
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_TYPE;
-		break;
+	} break;
 	case EXPR_NMS: {
 		e->nms.body.flags |= BLOCK_IS_NMS;
 		if (!types_block(tr, &e->nms.body))
@@ -2368,11 +2379,15 @@ static bool types_decl(Typer *tr, Declaration *d) {
 		if (type_is_builtin(t, BUILTIN_TYPE)) {
 			if (d->flags & DECL_HAS_EXPR) {
 				Value *val = d->type.kind == TYPE_TUPLE ? &d->val.tuple[i] : &d->val;
-				if (!type_resolve(tr, val->type, d->where)) return false;
-				if (val->type->kind == TYPE_TUPLE) {
-					err_print(d->where, "You can't declare a new type to be a tuple.");
-					success = false;
-					goto ret;
+				if (val->type->kind == TYPE_STRUCT && val->type->struc.def->params) {
+					/* don't resolve it because it's not really complete */
+				} else {
+					if (!type_resolve(tr, val->type, d->where)) return false;
+					if (val->type->kind == TYPE_TUPLE) {
+						err_print(d->where, "You can't declare a new type to be a tuple.");
+						success = false;
+						goto ret;
+					}
 				}
 			}
 		} else if (!(d->flags & DECL_IS_CONST) && t->kind == TYPE_FN && t->fn.constness) {

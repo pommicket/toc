@@ -608,12 +608,18 @@ static bool parse_type(Parser *p, Type *type) {
 			/* help cgen out */
 			struc->c.id = 0;
 			struc->fields = NULL;
+			struc->params = NULL;
 			struc->where = parser_mk_loc(p);
 			struc->where.start = t->token;
 				
 			++t->token;
+			if (token_is_kw(t->token, KW_LPAREN)) {
+				++t->token;
+				if (!parse_decl_list(p, &struc->params, DECL_END_RPAREN_COMMA))
+					return false;
+			}
 			if (!token_is_kw(t->token, KW_LBRACE)) {
-				tokr_err(t, "Expected { or ( to follow struct.");
+				tokr_err(t, "Expected { to follow struct.");
 				return false;
 			}
 			++t->token;
