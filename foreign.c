@@ -316,8 +316,9 @@ static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *fn_type, Val
 }
 
 #else
-static void ffmgr_create(ForeignFnManager *ffmgr) {
+static void ffmgr_create(ForeignFnManager *ffmgr, Allocator *allocr) {
 	(void)ffmgr;
+	(void)allocr;
 }
 
 static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *fn_type, Value *args, Location call_where, Value *ret) {
