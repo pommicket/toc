@@ -7,5 +7,5 @@ foo ::= struct(t::Type) {
 };
 
 main ::= fn() {
-	 
+	a:foo(int); 
 };

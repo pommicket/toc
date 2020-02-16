@@ -13,7 +13,7 @@ static bool cgen_sdecls_type(CGenerator *g, Type *type) {
 	if (!(type->flags & TYPE_IS_RESOLVED)) /* non-instance constant fn parameter type */
 		return true;
 	if (type->kind == TYPE_STRUCT) {
-		StructDef *sdef = type->struc.def;
+		StructDef *sdef = type->struc;
 		/* we'll actually define the struct later; here we can just declare it */
 	
 		if (sdef->flags & STRUCT_DEF_CGEN_DECLARED) {

@@ -60,7 +60,7 @@ static bool type_eq(Type *a, Type *b) {
 	case TYPE_BUILTIN:
 		return a->builtin == b->builtin;
 	case TYPE_STRUCT:
-		return a->struc.def == b->struc.def;
+		return a->struc == b->struc;
 	case TYPE_FN: {
 		if (arr_len(a->fn.types) != arr_len(b->fn.types)) return false;
 		Type *a_types = a->fn.types, *b_types = b->fn.types;
@@ -572,12 +572,12 @@ static bool type_resolve_(Typer *tr, Type *t, Location where, bool is_reference)
 			return false;
 		break;
 	case TYPE_STRUCT:
-		if (t->struc.def->params) {
+		if (t->struc->params) {
 			err_print(where, "Expected arguments to structure.");
-			info_print(t->struc.def->where, "Structure was declared here.");
+			info_print(t->struc->where, "Structure was declared here.");
 			return false;
 		}
-		arr_foreach(t->struc.def->fields, Field, f) {
+		arr_foreach(t->struc->fields, Field, f) {
 			if (!type_resolve_(tr, &f->type, where, is_reference))
 				return false;
 		}
@@ -598,10 +598,13 @@ static bool type_resolve_(Typer *tr, Type *t, Location where, bool is_reference)
 		if (!eval_expr(tr->evalr, t->expr, &typeval))
 			return false;
 		*t = *typeval.type;
-		if (t->kind == TYPE_STRUCT && !t->struc.args && t->struc.def->params) {
-			err_print(where, "Expected arguments to structure, but you didn't provide any.");
-			info_print(t->struc.def->where, "Structure was declared here.");
-			return false;
+		if (t->kind == TYPE_STRUCT) {
+			Declaration *params = t->struc->params;
+			if (params && !(params[0].flags & DECL_FOUND_VAL)) {
+				err_print(where, "Expected arguments to structure, but you didn't provide any.");
+				info_print(t->struc->where, "Structure was declared here.");
+				return false;
+			}
 		}
 		t->was_expr = expr;
 		assert(t->flags & TYPE_IS_RESOLVED);
@@ -1396,11 +1399,33 @@ static bool types_expr(Typer *tr, Expression *e) {
 			e->type.kind = TYPE_UNKNOWN;
 			return true;
 		}
-		if (f->type.kind != TYPE_FN) {
+		if (type_is_builtin(&f->type, BUILTIN_TYPE)) {
+			/* maybe it's a parameterized type */
+		} else if (f->type.kind != TYPE_FN) {
 			char *type = type_to_str(&f->type);
 			err_print(e->where, "Calling non-function (type %s).", type);
 			return false;
 		}
+		
+		if (expr_is_definitely_const(f) || type_is_builtin(&f->type, BUILTIN_TYPE)) {
+			Value val;
+			if (!eval_expr(tr->evalr, f, &val))
+				return false;
+			if (type_is_builtin(&f->type, BUILTIN_TYPE)) {
+				Type *base = val.type;
+				if (base->kind != TYPE_STRUCT) {
+					err_print(e->where, "Cannot pass arguments to non-struct type.");
+					return false;
+				}
+				if (!base->struc->params) {
+					int x;
+				}
+				return true;
+			}
+			fn_decl = val.fn;
+			
+		}
+		
 		Type *ret_type = f->type.fn.types;
 		Type *param_types = ret_type + 1;
 		Argument *args = c->args;
@@ -1409,12 +1434,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 		Expression *arg_exprs = NULL;
 		arr_set_lena(&arg_exprs, nparams, tr->allocr);
 		bool *params_set = nparams ? typer_calloc(tr, nparams, sizeof *params_set) : NULL;
-		if (expr_is_definitely_const(f)) {
-			Value val;
-			if (!eval_expr(tr->evalr, f, &val))
-				return false;
-			fn_decl = val.fn;
-		}
 
 		if (fn_decl) {
 			U16 *order;
@@ -2043,7 +2062,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 				e->binary.op = BINARY_DOT;
 				bool is_field = false;
 				if (!eval_expr(tr->evalr, rhs, &field_name)) return false;
-				arr_foreach(lhs_type->struc.def->fields, Field, f) {
+				arr_foreach(lhs_type->struc->fields, Field, f) {
 					if (ident_eq_str(f->name, field_name.slice.data)) {
 						is_field = true;
 						*t = f->type;
@@ -2106,7 +2125,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			}
 			if (struct_type->kind == TYPE_STRUCT) {
 				bool is_field = false;
-				arr_foreach(struct_type->struc.def->fields, Field, f) {
+				arr_foreach(struct_type->struc->fields, Field, f) {
 					if (ident_eq(f->name, rhs->ident)) {
 						is_field = true;
 						*t = f->type;
@@ -2197,7 +2216,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 	}
 	case EXPR_TYPE: {
 		Type *tval = &e->typeval;
-		if (tval->kind == TYPE_STRUCT && tval->struc.def->params) {
+		if (tval->kind == TYPE_STRUCT && tval->struc->params) {
 			/* don't try to resolve this */
 			t->kind = TYPE_BUILTIN;
 			t->builtin = BUILTIN_TYPE;
@@ -2283,7 +2302,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 	if ((d->flags & DECL_HAS_EXPR)
 		&& d->expr.kind == EXPR_TYPE
 		&& d->expr.typeval.kind == TYPE_STRUCT) {
-		d->expr.typeval.struc.def->name = d->idents[0];
+		d->expr.typeval.struc->name = d->idents[0];
 	}
 	
 	if (d->flags & DECL_INFER) {
@@ -2384,7 +2403,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 		if (type_is_builtin(t, BUILTIN_TYPE)) {
 			if (d->flags & DECL_HAS_EXPR) {
 				Value *val = d->type.kind == TYPE_TUPLE ? &d->val.tuple[i] : &d->val;
-				if (val->type->kind == TYPE_STRUCT && val->type->struc.def->params) {
+				if (val->type->kind == TYPE_STRUCT && val->type->struc->params) {
 					/* don't resolve it because it's not really complete */
 				} else {
 					if (!type_resolve(tr, val->type, d->where)) return false;

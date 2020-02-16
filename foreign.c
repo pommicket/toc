@@ -146,7 +146,7 @@ static bool arg_list_start(av_alist *arg_list, void (*fn)(), Value *return_val, 
 		break;
 	case TYPE_STRUCT: {
 		size_t struct_size = compiler_sizeof(return_type);
-		StructDef *struc = return_type->struc.def;
+		StructDef *struc = return_type->struc;
 		return_val->struc = err_calloc(1, struct_size);
 		bool splittable;
 		/* hopefully this is right! */

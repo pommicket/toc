@@ -24,6 +24,29 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Expres
 		}
 		break;
 	case EXPR_CALL: {
+#if 0
+		/* TODO: infer from parameterized structs */
+		size_t nargs = arr_len(match->struc.args);
+		Declaration *param = to->struc->params;
+	    int ident_idx = 0;
+		for (i = 0; i < nargs; ++i) {
+			Expression *arg = &match->struc.args[i];
+			Value val = *decl_val_at_index(param, ident_idx);
+			Expression val_expr = {0};
+			val_expr.kind = EXPR_VAL;
+			val_expr.val = val;
+			val_expr.type = *decl_type_at_index(param, ident_idx);
+			val_expr.flags = EXPR_FOUND_TYPE;
+			if (!infer_from_expr(tr, arg, &val_expr, &val_expr, idents, vals, types)) {
+				return false;
+			}
+			++ident_idx;
+			if (ident_idx >= (int)arr_len(param->idents)) {
+				++param;
+				ident_idx = 0;
+			}
+		}
+#endif
 		while (to->kind == EXPR_IDENT) {
 			Identifier i = to->ident;
 			if (i->decl_kind == IDECL_DECL) {
@@ -119,33 +142,13 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 		break;
 	case TYPE_STRUCT: {
 		if (to->kind != TYPE_STRUCT) return true;
-		Field *fields_m = match->struc.def->fields;
-		Field *fields_t = to->struc.def->fields;
+		Field *fields_m = match->struc->fields;
+		Field *fields_t = to->struc->fields;
 		size_t i, len = arr_len(fields_m);
 		if (len != arr_len(fields_t)) return true;
 		for (i = 0; i < len; ++i) {
 			if (!infer_from_type(tr, &fields_m[i].type, &fields_t[i].type, idents, vals, types))
 				return false;
-		}
-		size_t nargs = arr_len(match->struc.args);
-		Declaration *param = to->struc.def->params;
-	    int ident_idx = 0;
-		for (i = 0; i < nargs; ++i) {
-			Expression *arg = &match->struc.args[i];
-			Value val = *decl_val_at_index(param, ident_idx);
-			Expression val_expr = {0};
-			val_expr.kind = EXPR_VAL;
-			val_expr.val = val;
-			val_expr.type = *decl_type_at_index(param, ident_idx);
-			val_expr.flags = EXPR_FOUND_TYPE;
-			if (!infer_from_expr(tr, arg, &val_expr, &val_expr, idents, vals, types)) {
-				return false;
-			}
-			++ident_idx;
-			if (ident_idx >= (int)arr_len(param->idents)) {
-				++param;
-				ident_idx = 0;
-			}
 		}
 	} break;
 	case TYPE_EXPR: {

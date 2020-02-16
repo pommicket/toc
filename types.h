@@ -417,10 +417,6 @@ enum {
 	  TYPE_IS_RESOLVED = 0x02,
 };
 typedef U8 TypeFlags;
-typedef struct {
-	struct StructDef *def; /* it's a pointer so that multiple Types can reference the same struct definition */
-	struct Expression *args; /* only exists before resolving */
-} StructType;
 typedef struct Type {
 	Location where;
 	struct Expression *was_expr; /* if non-NULL, indicates that this type used to be an expression (TYPE_EXPR) */
@@ -439,7 +435,7 @@ typedef struct Type {
 		} arr;
 		struct Type *ptr;
 		struct Type *slice;
-		StructType struc;
+		struct StructDef *struc; /* multiple resolved types can refer to the same struct */
 		struct Expression *expr;
 	};
 } Type;

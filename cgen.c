@@ -387,10 +387,10 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
 		return false;
 	case TYPE_STRUCT:
 		cgen_write(g, "struct ");
-		if (t->struc.def->name) {
-			cgen_ident(g, t->struc.def->name);
-		} else if (t->struc.def->c.id) {
-			cgen_ident_id(g, t->struc.def->c.id);
+		if (t->struc->name) {
+			cgen_ident(g, t->struc->name);
+		} else if (t->struc->c.id) {
+			cgen_ident_id(g, t->struc->c.id);
 		} else {
 			assert(0);
 		}
@@ -1832,8 +1832,8 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 		break;
 	case TYPE_STRUCT:
 		cgen_write(g, "{");
-		arr_foreach(t->struc.def->fields, Field, f) {
-			if (f != t->struc.def->fields)
+		arr_foreach(t->struc->fields, Field, f) {
+			if (f != t->struc->fields)
 				cgen_write(g, ", ");
 			cgen_val_ptr(g, (char *)v + f->offset, &f->type, where);
 		}

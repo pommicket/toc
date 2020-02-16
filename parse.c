@@ -225,7 +225,7 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 	}
 	case TYPE_STRUCT: {
 		size_t written = 0;
-		StructDef *def = t->struc.def;
+		StructDef *def = t->struc;
 		Identifier name = def->name;
 		if (name) {
 			char *namestr = ident_to_str(name);
@@ -235,17 +235,6 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 			 written = str_copy(buffer, bufsize, "anonymous struct");
 		}
 		if (resolved) {
-			if (t->struc.args) {
-				written += str_copy(buffer + written, bufsize - written, "(");
-				arr_foreach(t->struc.args, Expression, arg) {
-					/* TODO: print arguments, maybe, but do we even ever call this (for non-debugging purposes) with an unresolved type? */
-					if (arg != t->struc.args)
-						written += str_copy(buffer + written, bufsize - written, ", ");
-					written += str_copy(buffer + written, bufsize - written, "<argument>");
-				}
-				written += str_copy(buffer + written, bufsize - written, ")");
-			}
-		} else {
 			if (def->params) {
 				written += str_copy(buffer + written, bufsize - written, "(");
 				arr_foreach(def->params, Declaration, param) {
@@ -601,8 +590,7 @@ static bool parse_type(Parser *p, Type *type) {
 		case KW_STRUCT: {
 			/* struct */
 			type->kind = TYPE_STRUCT;
-			type->struc.args = NULL;
-			StructDef *struc = type->struc.def = parser_malloc(p, sizeof *type->struc.def);
+			StructDef *struc = type->struc = parser_malloc(p, sizeof *type->struc);
 			struc->flags = 0;
 			struc->name = NULL;
 			/* help cgen out */
