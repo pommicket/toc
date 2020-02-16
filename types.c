@@ -598,6 +598,11 @@ static bool type_resolve_(Typer *tr, Type *t, Location where, bool is_reference)
 		if (!eval_expr(tr->evalr, t->expr, &typeval))
 			return false;
 		*t = *typeval.type;
+		if (t->kind == TYPE_STRUCT && !t->struc.args && t->struc.def->params) {
+			err_print(where, "Expected arguments to structure, but you didn't provide any.");
+			info_print(t->struc.def->where, "Structure was declared here.");
+			return false;
+		}
 		t->was_expr = expr;
 		assert(t->flags & TYPE_IS_RESOLVED);
 	} break;
