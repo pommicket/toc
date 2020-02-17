@@ -1,5 +1,4 @@
 allocr - allocator
-anon - anonymous
 arg - argument
 cap - capacity
 ctx - context
@@ -12,10 +11,8 @@ err - error
 eval - evaluate
 evalr - evaluator
 expr - expression
-exptr - exporter
 fn - function
 ident - identifier
-imptr - importer
 inc - include
 kw - keyword
 len - length
