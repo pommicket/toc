@@ -862,8 +862,8 @@ static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Type *fn_type, A
 	size_t nparams = arr_len(fn_type->fn.types)-1;
 	size_t nargs = arr_len(args);
 	if (nargs > nparams) {
-		err_print(where, "Expected at most %lu arguments to function, but got %lu.",
-				  nparams, nargs);
+		err_print(where, "Expected at most %lu argument%s to function, but got %lu.",
+				  nparams, plural_suffix(nparams), nargs);
 		return false;
 	}
 
@@ -1418,8 +1418,77 @@ static bool types_expr(Typer *tr, Expression *e) {
 					return false;
 				}
 				if (!base->struc->params) {
-					int x;
+					err_print(e->where, "Passing arguments to struct, but it doesn't take any.");
+					info_print(base->struc->where, "struct was declared here.");
+					return false;
 				}
+
+				size_t nparams = 0;
+				arr_foreach(base->struc->params, Declaration, param)
+					nparams += arr_len(param->idents);
+				size_t nargs = arr_len(c->args);
+				if (nargs > nparams) {
+					err_print(e->where, "Expected at most %lu argument%s to parameterized type, but got %lu.", nparams, plural_suffix(nparams), nargs);
+					return false;
+				}
+				
+				/* 
+				   it would be nice if this code and the code for arguments to normal functions
+				   used the same stuff for named arguments, etc.
+				*/
+				Value *arg_vals = err_malloc(nparams * sizeof *arg_vals);
+				Type *arg_types = err_malloc(nparams * sizeof *arg_types);
+				U8 *params_set = err_calloc(1, nparams);
+				int p = 0; /* sequential parameter */
+				
+				arr_foreach(c->args, Argument, arg) {
+					int param_idx;
+					if (arg->name) {
+						param_idx = 0;
+						arr_foreach(base->struc->params, Declaration, param) {
+							arr_foreach(param->idents, Identifier, ident) {
+								if (ident_eq_str(*ident, arg->name))
+									goto struct_params_done;
+								++param_idx;
+							}
+						}
+						struct_params_done:;
+					} else {
+						param_idx = p;
+						++p;
+					}
+					if (params_set[param_idx]) {
+						Identifier param_name = NULL;
+						int counter = param_idx;
+						arr_foreach(base->struc->params, Declaration, param) {
+							arr_foreach(param->idents, Identifier, ident) {
+								if (--counter < 0) {
+									param_name = *ident;
+									break;
+								}
+							}
+							if (param_name) break;
+						}
+
+						char *s = ident_to_str(param_name);
+						err_print(arg->where, "Parameter #%d (%s) set twice in parameterized type instantiation.", param_idx+1, s);
+						free(s);
+						return false;
+					}
+					params_set[param_idx] = true;
+					arg_types[param_idx] = arg->val.type;
+					if (!eval_expr(tr->evalr, &arg->val, &arg_vals[param_idx]))
+						return false;
+				}
+
+				for (size_t i = 0; i < nparams; ++i)
+					print_val(arg_vals[i], arg_types + i);
+				
+				/* TODO: look up args in instance table, etc. */
+				
+				free(arg_vals);
+				free(arg_types);
+				free(params_set);
 				return true;
 			}
 			fn_decl = val.fn;

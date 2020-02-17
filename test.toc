@@ -2,10 +2,10 @@
   // #include "std/io.toc";
 // };
 
-foo ::= struct(t::Type) {
+foo ::= struct(t::Type,u::Type) {
    x: t;
 };
 
 main ::= fn() {
-	a:foo(int); 
+	 foo(u = int, u = float);
 };

@@ -57,3 +57,6 @@ static inline U32 rand_u32(U32 seed) {
 static inline bool strs_equal(const char *a, const char *b) {
 	return strcmp(a, b) == 0;
 }
+
+#define plural_suffix(x) ((x) == 1 ? "" : "s")
+

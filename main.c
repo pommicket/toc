@@ -19,8 +19,10 @@
 /* 
 TODO:
 struct parameters
-- check for empty parameter lists
+- error on empty parameter list
+- error on non-const param decls
 - make sure inference works
+- should argument set twice error be in call_arg_param_order?
 ---
 see infer.c "is resolved_to necessary" (now that ident system has changed)
 replace is_reference in type_resolve_ with system for checking if type is
