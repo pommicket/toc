@@ -609,8 +609,19 @@ static bool parse_type(Parser *p, Type *type) {
 			++t->token;
 			if (token_is_kw(t->token, KW_LPAREN)) {
 				++t->token;
+				if (token_is_kw(t->token, KW_RPAREN)) {
+					tokr_err(t, "Empty struct parameter lists are not allowed.");
+					goto struct_fail;
+				}
 				if (!parse_decl_list(p, &struc->params, DECL_END_RPAREN_COMMA))
 					goto struct_fail;
+
+				arr_foreach(struc->params, Declaration, param) {
+					if (!(param->flags & DECL_IS_CONST)) {
+						err_print(param->where, "Struct parameters must be constant.");
+						goto struct_fail;
+					}
+				}
 			}
 			if (!token_is_kw(t->token, KW_LBRACE)) {
 				tokr_err(t, "Expected { to follow struct.");

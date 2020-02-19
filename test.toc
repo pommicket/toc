@@ -2,8 +2,8 @@ io ::= nms {
   #include "std/io.toc";
 };
 
-Arr ::= struct(t::Type) {
-   data: []t;
+Arr ::= struct(x::Type) {
+   data: []x;
 };
 
 main ::= fn() {
