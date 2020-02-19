@@ -1,11 +1,14 @@
-// io ::= nms {
-  // #include "std/io.toc";
-// };
+io ::= nms {
+  #include "std/io.toc";
+};
 
-foo ::= struct(t::Type,u::Type) {
-   x: t;
+Arr ::= struct(t::Type) {
+   data: []t;
 };
 
 main ::= fn() {
-	 foo(u = int, u = float);
+	 x:Arr(int);
+	 x.data = new(int, 10);
+	 x.data[0] = 17;
+	 io.puti(x.data[0]);
 };

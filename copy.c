@@ -76,6 +76,25 @@ static void copy_val_full(Copier *c, Value *out, Value *in, Type *t) {
 	}
 }
 
+static void copy_struct(Copier *c, StructDef *out, StructDef *in) {
+	*out = *in;
+	size_t nfields = arr_len(in->fields);
+	out->fields = NULL;
+
+	arr_set_lena(&out->fields, nfields, c->allocr);
+	for (size_t i = 0; i < nfields; ++i) {
+		Field *fout = &out->fields[i];
+		Field *fin = &in->fields[i];
+		*fout = *fin;
+		copy_type(c, &fout->type, &fin->type);
+	}
+	size_t nparams = arr_len(in->params);
+	out->params = NULL;
+	arr_set_lena(&out->params, nparams, c->allocr);
+	for (size_t i = 0; i < nparams; ++i) {
+		copy_decl(c, &out->params[i], &in->params[i]);
+	}
+}
 
 /* works on unresolved and resolved types (for inference) */
 static void copy_type(Copier *c, Type *out, Type *in) {
@@ -127,17 +146,7 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 			   only one thing can point to a given StructDef
 			*/
 			out->struc = allocr_malloc(c->allocr, sizeof *out->struc);
-			*out->struc = *in->struc;
-			size_t nfields = arr_len(in->struc->fields);
-			out->struc->fields = NULL;
-
-			arr_set_lena(&out->struc->fields, nfields, c->allocr);
-			for (size_t i = 0; i < nfields; ++i) {
-				Field *fout = &out->struc->fields[i];
-				Field *fin = &in->struc->fields[i];
-				*fout = *fin;
-				copy_type(c, &fout->type, &fin->type);
-			}
+			copy_struct(c, out->struc, in->struc);
 		}
 	} break;
 	}

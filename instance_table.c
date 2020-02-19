@@ -283,6 +283,7 @@ static bool val_eq(Value u, Value v, Type *t) {
 /*
   if already_exists is not NULL, this will create the instance if it does not exist,
   and set already_exists accordingly
+  make sure v's data remains valid
 */
 /* OPTIM: store instances in a block array (remember that the pointers need to stay valid!) */
 static Instance *instance_table_adda(Allocator *a, HashTable *h, Value v, Type *t,

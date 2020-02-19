@@ -599,37 +599,43 @@ static bool parse_type(Parser *p, Type *type) {
 			struc->params = NULL;
 			struc->where = parser_mk_loc(p);
 			struc->where.start = t->token;
-				
+			memset(&struc->scope, 0, sizeof struc->scope);
+			idents_create(&struc->scope.idents, p->allocr, &struc->scope);
+		    memset(&struc->instances, 0, sizeof struc->instances);
+			
+			Block *prev_block = p->block;
+			p->block = &struc->scope;
+			
 			++t->token;
 			if (token_is_kw(t->token, KW_LPAREN)) {
 				++t->token;
 				if (!parse_decl_list(p, &struc->params, DECL_END_RPAREN_COMMA))
-					return false;
+					goto struct_fail;
 			}
 			if (!token_is_kw(t->token, KW_LBRACE)) {
 				tokr_err(t, "Expected { to follow struct.");
-				return false;
+				goto struct_fail;
 			}
 			++t->token;
 			{
 				while (!token_is_kw(t->token, KW_RBRACE)) {
 					Declaration field_decl;
 					if (!parse_decl(p, &field_decl, DECL_END_SEMICOLON, 0)) {
-						return false;
+						goto struct_fail;
 					}
 					if (field_decl.flags & DECL_IS_CONST) {
 						/* TODO */
 						err_print(field_decl.where, "Constant struct members are not supported (yet).");
-						return false;
+						goto struct_fail;
 					}
 					if ((field_decl.flags & DECL_FOREIGN) && !(field_decl.flags & DECL_IS_CONST)) {
 						err_print(field_decl.where, "Non-constant struct members cannot be foreign.");
-						return false;
+						goto struct_fail;
 					}
 					
 					if (field_decl.flags & DECL_HAS_EXPR) {
 						err_print(field_decl.where, "struct members cannot have initializers.");
-						return false;
+						goto struct_fail;
 					}
 					long idx = 0;
 					arr_foreach(field_decl.idents, Identifier, fident) {
@@ -643,7 +649,14 @@ static bool parse_type(Parser *p, Type *type) {
 				++t->token;
 				struc->where.end = t->token;
 			}
-		} break;
+			p->block = prev_block;
+			break;
+			
+		struct_fail:
+			p->block = prev_block;
+			return false;
+		}
+			
 		default:
 			goto type_expr;
 		}

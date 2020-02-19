@@ -571,17 +571,20 @@ static bool type_resolve_(Typer *tr, Type *t, Location where, bool is_reference)
 		if (!type_resolve_(tr, t->slice, where, true))
 			return false;
 		break;
-	case TYPE_STRUCT:
-		if (t->struc->params) {
-			err_print(where, "Expected arguments to structure.");
-			info_print(t->struc->where, "Structure was declared here.");
-			return false;
+	case TYPE_STRUCT: {
+		if (!(t->struc->flags & STRUCT_DEF_RESOLVED)) {
+			typer_block_enter(tr, &t->struc->scope);
+			arr_foreach(t->struc->fields, Field, f) {
+				if (!type_resolve_(tr, &f->type, where, is_reference)) {
+					typer_block_exit(tr);
+					return false;
+				}
+			}
+			typer_block_exit(tr);
+			t->struc->instance_id = 0;
+			t->struc->flags |= STRUCT_DEF_RESOLVED;
 		}
-		arr_foreach(t->struc->fields, Field, f) {
-			if (!type_resolve_(tr, &f->type, where, is_reference))
-				return false;
-		}
-		break;
+	} break;
 	case TYPE_EXPR: {
 		Value typeval;
 		*(bool *)arr_add(&tr->is_reference_stack) = is_reference;
@@ -1436,8 +1439,9 @@ static bool types_expr(Typer *tr, Expression *e) {
 				   it would be nice if this code and the code for arguments to normal functions
 				   used the same stuff for named arguments, etc.
 				*/
-				Value *arg_vals = err_malloc(nparams * sizeof *arg_vals);
-				Type *arg_types = err_malloc(nparams * sizeof *arg_types);
+				Value *arg_vals = typer_malloc(tr, nparams * sizeof *arg_vals);
+				Type *arg_types = NULL;
+				arr_set_len(&arg_types, nparams);
 				U8 *params_set = err_calloc(1, nparams);
 				int p = 0; /* sequential parameter */
 				
@@ -1483,13 +1487,54 @@ static bool types_expr(Typer *tr, Expression *e) {
 
 				for (size_t i = 0; i < nparams; ++i)
 					print_val(arg_vals[i], arg_types + i);
-				
-				/* TODO: look up args in instance table, etc. */
-				
-				free(arg_vals);
-				free(arg_types);
+
+				HashTable *table = &base->struc->instances;
+				bool already_exists;
+				Value args_val = {0};
+				Type args_type = {0};
+				args_val.tuple = arg_vals;
+				args_type.tuple = arg_types;
+				args_type.kind = TYPE_TUPLE;
+				args_type.flags = TYPE_IS_RESOLVED;
+				Instance *inst = instance_table_adda(tr->allocr, table, args_val, &args_type, &already_exists);
+				if (!already_exists) {
+					Copier cop = copier_create(tr->allocr, tr->block);
+					copy_struct(&cop, &inst->struc, base->struc);
+					size_t i = 0;
+					arr_foreach(inst->struc.params, Declaration, param) {
+					    param->flags |= DECL_FOUND_VAL;
+						if (arr_len(param->idents) == 1) {
+							param->val = arg_vals[i];
+							++i;
+						} else {
+							assert(param->type.kind == TYPE_TUPLE);
+							size_t nmembers = arr_len(param->type.tuple);
+							param->val.tuple = typer_malloc(tr, nmembers * sizeof *param->val.tuple);
+							for (size_t idx = 0; idx < nmembers; ++idx) {
+								param->val.tuple[idx] = arg_vals[i];
+								++i;
+							}
+						}
+					}
+					assert(i == nparams);
+					Type struct_t = {0};
+					struct_t.kind = TYPE_STRUCT;
+					struct_t.struc = &inst->struc;
+					if (!type_resolve(tr, &struct_t, e->where)) /* resolve the struct */
+						return false;
+					inst->struc.instance_id = table->n;
+				}
+				/* expression is actually a type */
+				e->kind = EXPR_TYPE;
+				memset(&e->typeval, 0, sizeof e->typeval);
+				e->typeval.kind = TYPE_STRUCT;
+				e->typeval.flags = TYPE_IS_RESOLVED;
+				e->typeval.struc = &inst->struc;
+			    t->kind = TYPE_BUILTIN;
+				t->builtin = BUILTIN_TYPE;
+				arr_clear(&arg_types);
 				free(params_set);
-				return true;
+				goto ret;
 			}
 			fn_decl = val.fn;
 			
@@ -2308,6 +2353,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		assert(0);
 		return false;
 	}
+ ret:
 	t->flags |= TYPE_IS_RESOLVED;
 	return true;
 }

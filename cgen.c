@@ -338,6 +338,19 @@ static bool cgen_uses_ptr(Type *t) {
 	return false;
 }
 
+static void cgen_struct_name(CGenerator *g, StructDef *sdef) {
+	if (sdef->name) {
+		cgen_ident(g, sdef->name);
+	} else {
+		assert(sdef->c.id);
+		cgen_ident_id(g, sdef->c.id);
+	}
+	if (sdef->instance_id) {
+		possibly_static_assert(sizeof sdef->instance_id == 8);
+		cgen_write(g, U64_FMT, sdef->instance_id);
+	}
+}
+
 static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
@@ -387,13 +400,7 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
 		return false;
 	case TYPE_STRUCT:
 		cgen_write(g, "struct ");
-		if (t->struc->name) {
-			cgen_ident(g, t->struc->name);
-		} else if (t->struc->c.id) {
-			cgen_ident_id(g, t->struc->c.id);
-		} else {
-			assert(0);
-		}
+		cgen_struct_name(g, t->struc);
 		break;
 	case TYPE_TUPLE:
 	case TYPE_EXPR:
@@ -1591,7 +1598,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 		case BUILTIN_SIZEOF_SIZE_T:
 		case BUILTIN_TSIZEOF_SIZE_T: {
 			Value val = get_builtin_val(e->builtin.which.val);
-			cgen_write(g, "%"I64_FMT, val.i64);
+			cgen_write(g, I64_FMT, val.i64);
 		} break;
 		}
 		break;

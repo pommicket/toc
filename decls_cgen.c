@@ -15,12 +15,7 @@ static bool cgen_decls_type(CGenerator *g, Type *type) {
 		if (!(sdef->flags & STRUCT_DEF_CGEN_DEFINED)) {
 			/* generate struct definition */
 			cgen_write(g, "struct ");
-			if (sdef->name) {
-				cgen_ident(g, sdef->name);
-			} else {
-				assert(sdef->c.id);
-				cgen_ident_id(g, sdef->c.id);
-			}
+			cgen_struct_name(g, sdef);
 			cgen_write(g, "{");
 			cgen_nl(g);
 			++g->indent_lvl;

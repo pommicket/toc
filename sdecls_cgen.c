@@ -20,13 +20,10 @@ static bool cgen_sdecls_type(CGenerator *g, Type *type) {
 			/* we've already done this */
 		} else {
 			cgen_write(g, "struct ");
-			if (sdef->name) {
-				cgen_ident(g, sdef->name);
-			} else {
-				IdentID id = ++g->ident_counter;
-				cgen_ident_id(g, id);
-				sdef->c.id = id;
-			}
+			if (!sdef->name) {
+				sdef->c.id = ++g->ident_counter;
+			} 
+			cgen_struct_name(g, sdef);
 			cgen_write(g, ";");
 			cgen_nl(g);
 			sdef->flags |= STRUCT_DEF_CGEN_DECLARED;

@@ -448,26 +448,6 @@ typedef struct Field {
 	size_t offset; /* offset during compile time */
 } Field;
 
-enum {
-	  STRUCT_DEF_FOUND_OFFSETS = 0x01,
-	  STRUCT_DEF_CGEN_DECLARED = 0x02,
-	  STRUCT_DEF_CGEN_DEFINED = 0x04
-};
-
-typedef struct StructDef {
-	Field *fields;
-	Location where;
-	U8 flags;
-	size_t size; /* size of this struct during compile time */
-	size_t align;
-	Identifier name;
-	struct Declaration *params;
-	struct {
-		/* if name is NULL, use this */
-		IdentID id;
-	} c;
-} StructDef;
-
 
 enum {
 	  BLOCK_IS_FN = 0x01,
@@ -483,6 +463,34 @@ typedef struct Block {
 	struct Statement *stmts;
 	struct Expression *ret_expr; /* the return expression of this block, e.g. {foo(); 3} => 3  NULL for no expression. */
 } Block;
+
+enum {
+	  STRUCT_DEF_FOUND_OFFSETS = 0x01,
+	  STRUCT_DEF_CGEN_DECLARED = 0x02,
+	  STRUCT_DEF_CGEN_DEFINED = 0x04,
+	  STRUCT_DEF_RESOLVED = 0x08
+};
+typedef struct StructDef {
+	Field *fields;
+	Location where;
+	U8 flags;
+	Block scope; /* to make sure that parameters live somewhere. fields are not kept here. */
+	union {
+		HashTable instances;
+		struct {
+			size_t size; /* size of this struct during compile time */
+			size_t align;
+			U64 instance_id; /* ID of instance */
+		};
+	};
+	Identifier name;
+	struct Declaration *params;
+	struct {
+		/* if name is NULL, use this */
+		IdentID id;
+	} c;
+} StructDef;
+
 
 typedef enum {
 			  EXPR_LITERAL_FLOAT,
@@ -628,11 +636,14 @@ typedef struct FnExpr {
 
 typedef struct Instance {
 	Value val; /* key into hash table */
-	struct {
-		FnExpr *fn; /* the typed function */
+	union {
 		struct {
-			U64 id;
-		} c;
+			FnExpr *fn; /* the typed function */
+			struct {
+				U64 id;
+			} c;
+		};
+		StructDef struc;
 	};
 } Instance;
 
