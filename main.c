@@ -19,9 +19,8 @@
 /* 
 TODO:
 struct parameters
-- error on non-const param decls
 - allow accessing parameters with .
-- get rid of inference
+- make sure inference works with struct params
 - should argument set twice error be in call_arg_param_order?
 ---
 see infer.c "is resolved_to necessary" (now that ident system has changed)

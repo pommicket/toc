@@ -581,6 +581,7 @@ static bool type_resolve_(Typer *tr, Type *t, Location where, bool is_reference)
 				}
 			}
 			typer_block_exit(tr);
+			assert(tr->block != &t->struc->scope);
 			t->struc->instance_id = 0;
 			t->struc->flags |= STRUCT_DEF_RESOLVED;
 		}

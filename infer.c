@@ -47,6 +47,7 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Expres
 			}
 		}
 #endif
+		
 		while (to->kind == EXPR_IDENT) {
 			Identifier i = to->ident;
 			if (i->decl_kind == IDECL_DECL) {
