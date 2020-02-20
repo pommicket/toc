@@ -1293,7 +1293,8 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		case BINARY_AT_INDEX: {
 			void *ptr;
 			Type *type;
-			eval_expr_ptr_at_index(ev, e, &ptr, &type);
+			if (!eval_expr_ptr_at_index(ev, e, &ptr, &type))
+				return false;
 			eval_deref(v, ptr, type);
 		} break;
 		}	
@@ -1633,7 +1634,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			assert(s->to->type.kind == TYPE_BUILTIN);
 			to = val_to_u64(&tov, s->to->type.builtin);
 		} else {
-			to = n - 1;
+			to = n;
 		}
 		/* TODO: is this the best check? (Go also checks if from > to) */
 		if (to > n) {
@@ -1641,12 +1642,10 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			return false;
 		}
 		if (from < to) {
-			void *ptr1 = NULL, *ptr2 = NULL;
-			if (!eval_val_ptr_at_index(e->where, &ofv, from, of_type, &ptr1, NULL))
+			void *ptr_start = NULL;
+			if (!eval_val_ptr_at_index(e->where, &ofv, from, of_type, &ptr_start, NULL))
 				return false;
-			if (!eval_val_ptr_at_index(e->where, &ofv, to, of_type, &ptr2, NULL))
-				return false;
-			v->slice.data = ptr1;
+			v->slice.data = ptr_start;
 			v->slice.n = (I64)(to - from);
 		} else {
 			v->slice.data = NULL;
