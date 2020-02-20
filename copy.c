@@ -81,6 +81,12 @@ static void copy_struct(Copier *c, StructDef *out, StructDef *in) {
 	size_t nfields = arr_len(in->fields);
 	out->fields = NULL;
 
+	out->scope = in->scope;
+	idents_create(&out->scope.idents, c->allocr, &out->scope);
+	
+	Block *prev = c->block;
+	c->block = &out->scope;
+
 	arr_set_lena(&out->fields, nfields, c->allocr);
 	for (size_t i = 0; i < nfields; ++i) {
 		Field *fout = &out->fields[i];
@@ -94,6 +100,7 @@ static void copy_struct(Copier *c, StructDef *out, StructDef *in) {
 	for (size_t i = 0; i < nparams; ++i) {
 		copy_decl(c, &out->params[i], &in->params[i]);
 	}
+	c->block = prev;
 }
 
 /* works on unresolved and resolved types (for inference) */
@@ -347,11 +354,15 @@ static void copy_decl(Copier *c, Declaration *out, Declaration *in) {
 	}
 	if (in->flags & DECL_ANNOTATES_TYPE)
 		copy_type(c, &out->type, &in->type);
-	arr_foreach(out->idents, Identifier, ident) {
+	out->idents = NULL;
+	size_t nidents = arr_len(in->idents);
+	arr_set_lena(&out->idents, nidents, c->allocr);
+	for (size_t i = 0; i < nidents; ++i) {
+		out->idents[i] = in->idents[i];
 		assert(c->block);
-		copier_ident_translate(c, ident);
-		(*ident)->decl_kind = IDECL_DECL;
-		(*ident)->decl = out;
+		copier_ident_translate(c, &out->idents[i]);
+		out->idents[i]->decl_kind = IDECL_DECL;
+	    out->idents[i]->decl = out;
 	}
 	
 }

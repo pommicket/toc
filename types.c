@@ -1486,9 +1486,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 						return false;
 				}
 
-				for (size_t i = 0; i < nparams; ++i)
-					print_val(arg_vals[i], arg_types + i);
-
 				HashTable *table = &base->struc->instances;
 				bool already_exists;
 				Value args_val = {0};

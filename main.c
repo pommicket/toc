@@ -19,8 +19,8 @@
 /* 
 TODO:
 struct parameters
-- allow accessing parameters with .
 - make sure inference works with struct params
+- allow accessing parameters with .
 - should argument set twice error be in call_arg_param_order?
 ---
 see infer.c "is resolved_to necessary" (now that ident system has changed)
