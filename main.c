@@ -20,8 +20,9 @@
 TODO:
 struct parameters
 - make sure inference works with struct params
+- split up a,b::int for parameterized structs (?also maybe normal parameters?)
 - allow accessing parameters with .
-- should argument set twice error be in call_arg_param_order?
+- make call_arg_param_order work more like parameterized_struct_arg_order
 ---
 see infer.c "is resolved_to necessary" (now that ident system has changed)
 replace is_reference in type_resolve_ with system for checking if type is

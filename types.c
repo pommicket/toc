@@ -956,6 +956,61 @@ static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Type *fn_type, A
 	return true;
 }
 
+/* *order must be freed, regardless of return value. if (*order)[i] == -1, that parameter was not set. */
+static bool parameterized_struct_arg_order(StructDef *struc, Argument *args, I16 **order) {
+	/* 
+	   it would be nice if this code and the code for arguments to normal functions
+	   weren't split into two separate functions.
+	*/
+	size_t nparams = 0;
+	arr_foreach(struc->params, Declaration, param)
+		nparams += arr_len(param->idents);
+
+	*order = err_malloc(nparams * sizeof **order);
+	for (size_t i = 0; i < nparams; ++i)
+		(*order)[i] = -1;
+	int p = 0; /* sequential parameter */
+	
+
+	arr_foreach(args, Argument, arg) {
+		int param_idx;
+		if (arg->name) {
+			param_idx = 0;
+			arr_foreach(struc->params, Declaration, param) {
+				arr_foreach(param->idents, Identifier, ident) {
+					if (ident_eq_str(*ident, arg->name))
+						goto struct_params_done;
+					++param_idx;
+				}
+			}
+		struct_params_done:;
+		} else {
+			param_idx = p;
+			++p;
+		}
+		if ((*order)[param_idx] != -1) {
+			Identifier param_name = NULL;
+			int counter = param_idx;
+			arr_foreach(struc->params, Declaration, param) {
+				arr_foreach(param->idents, Identifier, ident) {
+					if (--counter < 0) {
+						param_name = *ident;
+						break;
+					}
+				}
+				if (param_name) break;
+			}
+
+			char *s = ident_to_str(param_name);
+			err_print(arg->where, "Parameter #%d (%s) set twice in parameterized type instantiation.", param_idx+1, s);
+			free(s);
+			return false;
+		}
+	    (*order)[arg - args] = (I16)param_idx;
+	}
+	return true;
+}
+
 static Value get_builtin_val(BuiltinVal val) {
 	Value v;
 	switch (val) {
@@ -1435,61 +1490,48 @@ static bool types_expr(Typer *tr, Expression *e) {
 					err_print(e->where, "Expected at most %lu argument%s to parameterized type, but got %lu.", nparams, plural_suffix(nparams), nargs);
 					return false;
 				}
-				
-				/* 
-				   it would be nice if this code and the code for arguments to normal functions
-				   used the same stuff for named arguments, etc.
-				*/
-				Value *arg_vals = typer_malloc(tr, nparams * sizeof *arg_vals);
-				Type *arg_types = NULL;
-				arr_set_len(&arg_types, nparams);
-				U8 *params_set = err_calloc(1, nparams);
-				int p = 0; /* sequential parameter */
-				
-				arr_foreach(c->args, Argument, arg) {
-					int param_idx;
-					if (arg->name) {
-						param_idx = 0;
-						arr_foreach(base->struc->params, Declaration, param) {
-							arr_foreach(param->idents, Identifier, ident) {
-								if (ident_eq_str(*ident, arg->name))
-									goto struct_params_done;
-								++param_idx;
-							}
-						}
-						struct_params_done:;
-					} else {
-						param_idx = p;
-						++p;
-					}
-					if (params_set[param_idx]) {
-						Identifier param_name = NULL;
-						int counter = param_idx;
-						arr_foreach(base->struc->params, Declaration, param) {
-							arr_foreach(param->idents, Identifier, ident) {
-								if (--counter < 0) {
-									param_name = *ident;
-									break;
-								}
-							}
-							if (param_name) break;
-						}
-
-						char *s = ident_to_str(param_name);
-						err_print(arg->where, "Parameter #%d (%s) set twice in parameterized type instantiation.", param_idx+1, s);
-						free(s);
-						return false;
-					}
-					params_set[param_idx] = true;
-					arg_types[param_idx] = arg->val.type;
-					if (!eval_expr(tr->evalr, &arg->val, &arg_vals[param_idx]))
-						return false;
-				}
-
 				HashTable *table = &base->struc->instances;
 				bool already_exists;
 				Value args_val = {0};
 				Type args_type = {0};
+				I16 *order;
+				if (!parameterized_struct_arg_order(base->struc, c->args, &order)) {
+					free(order);
+					return false;
+				}
+				Type *arg_types = NULL;
+				arr_set_len(&arg_types, nparams);
+				Value *arg_vals = typer_malloc(tr, nparams * sizeof *arg_vals);
+				
+				for (size_t i = 0; i < nparams; ++i) {
+					if (order[i] == -1) {
+						Declaration *ith_parameter = NULL; 
+						int index_in_decl = -1;
+						size_t i_copy = i;
+						/* fetch ith parameter */
+						arr_foreach(base->struc->params, Declaration, param) {
+							arr_foreach(param->idents, Identifier, ident) {
+								if (i_copy == 0) {
+									/* here we are */
+									ith_parameter = param;
+									index_in_decl = (int)(ident - param->idents);
+									break;
+								}
+								--i_copy;
+							}
+						}
+						assert(ith_parameter);
+					    arg_types[i] = *decl_type_at_index(ith_parameter, index_in_decl);
+						arg_vals[i] = *decl_val_at_index(ith_parameter, index_in_decl);
+					} else {
+						Argument *arg = &c->args[order[i]];
+						arg_types[i] = arg->val.type;
+						if (!eval_expr(tr->evalr, &arg->val, &arg_vals[i]))
+							return false;
+					}
+					assert(arg_types[i].flags & TYPE_IS_RESOLVED);
+				}
+				
 				args_val.tuple = arg_vals;
 				args_type.tuple = arg_types;
 				args_type.kind = TYPE_TUPLE;
@@ -1531,7 +1573,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 			    t->kind = TYPE_BUILTIN;
 				t->builtin = BUILTIN_TYPE;
 				arr_clear(&arg_types);
-				free(params_set);
 				goto ret;
 			}
 			fn_decl = val.fn;

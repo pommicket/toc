@@ -1,41 +1,11 @@
-io ::= nms {
-#include "std/io.toc";
-};
+// io ::= nms {
+// #include "std/io.toc";
+// };
 
-LinkedList ::= struct(t::Type) {
-   head : t;
-   tail : &LinkedList(t);
-};
-
-arr_to_ll ::= fn(t::Type, data: []t) l : LinkedList(t) {
-	if data.len == 1 {
-	   l.head = data[0];
-	   l.tail = 0 as &LinkedList(t);
-	} else {
-		l.head = data[0];
-		l.tail = new(LinkedList(t));
-		*l.tail = arr_to_ll(t, data[1:]);
-	}
-};
-
-do_thing ::= fn() int {
-
-	 a := new(int, 3);
-	 a[0] = 10;
-	 a[1] = 20;
-	 a[2] = 30;
-	 x := arr_to_ll(int, a);
-	 p := &x;
-	 i := 0;
-	 while p {
-	 	 io.puti(p.head);
-		 p = p.tail;
-		 i += 1;
-	 }
-	 i
+Thing ::= struct(t::Type=int) {
+   it : t;
 };
 
 main ::= fn() {
-	 x ::= do_thing();
-	 do_thing();
+	 a: Thing();
 };
