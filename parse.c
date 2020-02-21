@@ -2543,6 +2543,8 @@ static inline Value *decl_val_at_index(Declaration *d, int i) {
 }
 
 static inline Type *decl_type_at_index(Declaration *d, int i) {
+	if (d->type.kind == TYPE_TUPLE)
+		assert(i < (int)arr_len(d->type.tuple));
 	Type *ret = d->type.kind == TYPE_TUPLE ? &d->type.tuple[i] : &d->type;
 	assert(ret->kind != TYPE_TUPLE);
 	return ret;

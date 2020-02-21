@@ -23,7 +23,7 @@ TODO:
 - allow accessing parameters with .
 - make call_arg_param_order work more like parameterized_struct_arg_order
 
-- inferred struct params?
+- error on inferred struct param
 does this work: fn (a::=3, b::=2)
  - should either work or give an error: fn()
 ---

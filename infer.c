@@ -24,8 +24,7 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Expres
 		}
 		break;
 	case EXPR_CALL: {
-#if 0
-		if (to->kind == EXPR_TYPE) {
+		if (to->kind == EXPR_TYPE && to->typeval.kind == TYPE_STRUCT) {
 			/* maybe it's a parameterized struct? */
 			/* it might not be possible that it's not, but might as well keep that possibility around. */
 			Value fn_val = {0};
@@ -37,14 +36,19 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Expres
 				if (!eval_expr(tr->evalr, match->call.fn, &fn_val)) {
 					return false;
 				}
+				
 				assert(fn_val.type->kind == TYPE_STRUCT);
+
+				I16 *order;
+				if (!parameterized_type_arg_order(tr, &order, match->where))
+					return false;
 				
 				size_t nargs = arr_len(match->call.args);
-				Declaration *param = fn_val.type->struc->params;
+				Declaration *param = to->typeval.struc->params;
 				int ident_idx = 0;
 				for (size_t i = 0; i < nargs; ++i) {
-					Expression *arg = &match->call.args[i];
-					Value val = *decl_val_at_index(param, ident_idx);
+					Expression *arg = &match->call.args[i].val;
+					Value val = arr_len(param->idents) > 1 ? param->val.tuple[ident_idx] : param->val;
 					Expression val_expr = {0};
 					val_expr.kind = EXPR_VAL;
 					val_expr.val = val;
@@ -62,7 +66,6 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Expres
 			}
 		}
 
-#endif
 		
 		while (to->kind == EXPR_IDENT) {
 			Identifier i = to->ident;

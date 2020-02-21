@@ -9,11 +9,12 @@ Thing ::= struct(t::=int, u::t=3) {
    that : [u]t;
 };
 
+f ::= fn(t::=,u::=,th : Thing(t,u)) {
+  x: t = 17 as t;
+  th.it = x;
+};
+
 main ::= fn() {
 	 a: Thing(u = 172, t = u8);
-	 b: Thing();
-	 c : Thing(i16);
-	 d: Thing(u8, 428);
-	 e: Thing(t = int, u = 3);
-	 f: Thing(i16, 3);
+	 f(a);
 };
