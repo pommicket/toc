@@ -118,7 +118,7 @@ static void err_print_footer_(Location where, bool show_ctx_stack) {
 	print_location_highlight(err_ctx_file(ctx), where);
 	if (ctx && show_ctx_stack) {
 		arr_foreach(ctx->instance_stack, Location, inst) {
-			err_fprint(ctx, "While generating the instance of a function\n\t");
+			err_fprint(ctx, "While generating this instance of a function or struct:\n\t");
 		    print_location_highlight(err_ctx_file(ctx), *inst);
 		}
 	}

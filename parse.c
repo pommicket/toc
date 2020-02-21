@@ -621,6 +621,7 @@ static bool parse_type(Parser *p, Type *type) {
 						err_print(param->where, "Struct parameters must be constant.");
 						goto struct_fail;
 					}
+					param->flags |= DECL_IS_PARAM;
 				}
 			}
 			if (!token_is_kw(t->token, KW_LBRACE)) {
@@ -934,6 +935,7 @@ static bool parse_fn_expr(Parser *p, FnExpr *f) {
 				success = false;
 				goto ret;
 			}
+			param->flags |= DECL_IS_PARAM;
 		}
 	}
 	

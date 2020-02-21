@@ -2,10 +2,18 @@
 // #include "std/io.toc";
 // };
 
-Thing ::= struct(t::Type=int) {
+
+
+Thing ::= struct(t::=int, u::t=3) {
    it : t;
+   that : [u]t;
 };
 
 main ::= fn() {
-	 a: Thing();
+	 a: Thing(u = 172, t = u8);
+	 b: Thing();
+	 c : Thing(i16);
+	 d: Thing(u8, 428);
+	 e: Thing(t = int, u = 3);
+	 f: Thing(i16, 3);
 };

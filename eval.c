@@ -741,7 +741,21 @@ static Value *ident_val(Identifier i) {
 	case IDECL_DECL: {
 		Declaration *decl = i->decl;
 		int idx = decl_ident_index(decl, i);
-		if (decl->flags & DECL_IS_CONST)
+		if (decl->flags & DECL_IS_PARAM) {
+			if (decl->val_stack) {
+				Value *valp = *(Value **)arr_last(decl->val_stack);
+				if (arr_len(decl->idents) > 1)
+					return &valp->tuple[idx];
+				else
+					return valp;
+			} else {
+				/* struct parameter */
+				if (arr_len(decl->idents) > 1)
+					return &decl->val.tuple[idx];
+				else
+					return &decl->val;
+			}
+		} else if (decl->flags & DECL_IS_CONST)
 			return decl_val_at_index(decl, idx);
 		else if (decl->val_stack) {
 			Value *valp = *(Value **)arr_last(decl->val_stack);

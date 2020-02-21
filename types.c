@@ -956,8 +956,12 @@ static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Type *fn_type, A
 	return true;
 }
 
-/* *order must be freed, regardless of return value. if (*order)[i] == -1, that parameter was not set. */
-static bool parameterized_struct_arg_order(StructDef *struc, Argument *args, I16 **order) {
+/* 
+ *order must be freed, regardless of return value. if (*order)[i] == -1, that parameter was not set.
+*/
+static bool parameterized_struct_arg_order(StructDef *struc, Argument *args, I16 **order, Location where) {
+	size_t nargs = arr_len(args);
+	
 	/* 
 	   it would be nice if this code and the code for arguments to normal functions
 	   weren't split into two separate functions.
@@ -967,11 +971,16 @@ static bool parameterized_struct_arg_order(StructDef *struc, Argument *args, I16
 		nparams += arr_len(param->idents);
 
 	*order = err_malloc(nparams * sizeof **order);
+	
+	if (nargs > nparams) {
+		err_print(args[nparams].where, "Expected at most %lu argument%s to parameterized type, but got %lu.", nparams, plural_suffix(nparams), nargs);
+		return false;
+	}
 	for (size_t i = 0; i < nparams; ++i)
 		(*order)[i] = -1;
 	int p = 0; /* sequential parameter */
+	I16 argno = 0;
 	
-
 	arr_foreach(args, Argument, arg) {
 		int param_idx;
 		if (arg->name) {
@@ -1006,8 +1015,23 @@ static bool parameterized_struct_arg_order(StructDef *struc, Argument *args, I16
 			free(s);
 			return false;
 		}
-	    (*order)[arg - args] = (I16)param_idx;
+	    (*order)[param_idx] = argno;
+		++argno;
 	}
+	
+	p = 0;
+	arr_foreach(struc->params, Declaration, param) {
+		arr_foreach(param->idents, Identifier, ident) {
+			if ((*order)[p] == -1 && !(param->flags & DECL_HAS_EXPR)) {
+				char *s = ident_to_str(*ident);
+				err_print(where, "Parameter #%d (%s) not set in parameterized struct instantiation.", p+1, s);
+				free(s);
+				return false;
+			}
+			++p;
+		}
+	}
+	
 	return true;
 }
 
@@ -1468,6 +1492,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 		
 		if (expr_is_definitely_const(f) || type_is_builtin(&f->type, BUILTIN_TYPE)) {
 			Value val;
+			
+			
 			if (!eval_expr(tr->evalr, f, &val))
 				return false;
 			if (type_is_builtin(&f->type, BUILTIN_TYPE)) {
@@ -1481,65 +1507,76 @@ static bool types_expr(Typer *tr, Expression *e) {
 					info_print(base->struc->where, "struct was declared here.");
 					return false;
 				}
+				Copier cop = copier_create(tr->allocr, tr->block);
+				HashTable *table = &base->struc->instances;
+				StructDef struc;
+				copy_struct(&cop, &struc, base->struc);
 
 				size_t nparams = 0;
-				arr_foreach(base->struc->params, Declaration, param)
+				arr_foreach(struc.params, Declaration, param)
 					nparams += arr_len(param->idents);
-				size_t nargs = arr_len(c->args);
-				if (nargs > nparams) {
-					err_print(e->where, "Expected at most %lu argument%s to parameterized type, but got %lu.", nparams, plural_suffix(nparams), nargs);
-					return false;
-				}
-				HashTable *table = &base->struc->instances;
 				bool already_exists;
 				Value args_val = {0};
 				Type args_type = {0};
 				I16 *order;
-				if (!parameterized_struct_arg_order(base->struc, c->args, &order)) {
+				if (!parameterized_struct_arg_order(&struc, c->args, &order, e->where)) {
 					free(order);
 					return false;
 				}
 				Type *arg_types = NULL;
 				arr_set_len(&arg_types, nparams);
 				Value *arg_vals = typer_malloc(tr, nparams * sizeof *arg_vals);
-				
-				for (size_t i = 0; i < nparams; ++i) {
-					if (order[i] == -1) {
-						Declaration *ith_parameter = NULL; 
-						int index_in_decl = -1;
-						size_t i_copy = i;
-						/* fetch ith parameter */
-						arr_foreach(base->struc->params, Declaration, param) {
-							arr_foreach(param->idents, Identifier, ident) {
-								if (i_copy == 0) {
-									/* here we are */
-									ith_parameter = param;
-									index_in_decl = (int)(ident - param->idents);
-									break;
-								}
-								--i_copy;
-							}
-						}
-						assert(ith_parameter);
-					    arg_types[i] = *decl_type_at_index(ith_parameter, index_in_decl);
-						arg_vals[i] = *decl_val_at_index(ith_parameter, index_in_decl);
-					} else {
-						Argument *arg = &c->args[order[i]];
-						arg_types[i] = arg->val.type;
-						if (!eval_expr(tr->evalr, &arg->val, &arg_vals[i]))
-							return false;
+				ErrCtx *err_ctx = tr->err_ctx;
+				size_t p = 0;
+				arr_foreach(struc.params, Declaration, param) {
+					Value param_val = {0};
+					bool is_tuple = arr_len(param->idents) > 1;
+					int ident_idx = 0;
+					/* temporarily add this instance to the stack, while we type the decl, in case you, e.g., pass t = float to struct(t::Type, u::t = "hello") */
+					*(Location *)arr_add(&err_ctx->instance_stack) = e->where;
+					if (!types_decl(tr, param)) {
+						arr_remove_last(&err_ctx->instance_stack);
+						return false;
 					}
-					assert(arg_types[i].flags & TYPE_IS_RESOLVED);
+					arr_remove_last(&err_ctx->instance_stack);
+
+					arr_foreach(param->idents, Identifier, ident) {
+						Type *type = decl_type_at_index(param, ident_idx);
+						arg_types[p] = *type;
+						Value ident_val;
+						if (order[p] == -1) {
+						    ident_val = *decl_val_at_index(param, ident_idx);
+						} else {
+							Argument *arg = &c->args[order[p]];
+							assert(arg->val.type.flags & TYPE_IS_RESOLVED);
+							assert(type->flags & TYPE_IS_RESOLVED);
+							if (!type_eq(&arg->val.type, type)) {
+								char *expected = type_to_str(type),
+									*got = type_to_str(&arg->val.type);
+								err_print(arg->where, "Wrong struct parameter type. Expected %s, but got %s.", expected, got);
+								return false;
+							}
+							if (!eval_expr(tr->evalr, &arg->val, &ident_val))
+								return false;
+						}
+						if (is_tuple)
+							*(Value *)arr_adda(&param_val.tuple, tr->allocr) = ident_val;
+						else
+							param_val = ident_val;
+						arg_vals[p] = ident_val;
+						++p;
+						++ident_idx;
+					}
+					param->val = param_val;
+					param->flags |= DECL_FOUND_VAL;
 				}
-				
 				args_val.tuple = arg_vals;
 				args_type.tuple = arg_types;
 				args_type.kind = TYPE_TUPLE;
 				args_type.flags = TYPE_IS_RESOLVED;
 				Instance *inst = instance_table_adda(tr->allocr, table, args_val, &args_type, &already_exists);
 				if (!already_exists) {
-					Copier cop = copier_create(tr->allocr, tr->block);
-					copy_struct(&cop, &inst->struc, base->struc);
+					inst->struc = struc;
 					size_t i = 0;
 					arr_foreach(inst->struc.params, Declaration, param) {
 					    param->flags |= DECL_FOUND_VAL;
@@ -1547,8 +1584,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 							param->val = arg_vals[i];
 							++i;
 						} else {
-							assert(param->type.kind == TYPE_TUPLE);
-							size_t nmembers = arr_len(param->type.tuple);
+
+							size_t nmembers = arr_len(param->idents);
 							param->val.tuple = typer_malloc(tr, nmembers * sizeof *param->val.tuple);
 							for (size_t idx = 0; idx < nmembers; ++idx) {
 								param->val.tuple[idx] = arg_vals[i];
@@ -1560,8 +1597,13 @@ static bool types_expr(Typer *tr, Expression *e) {
 					Type struct_t = {0};
 					struct_t.kind = TYPE_STRUCT;
 					struct_t.struc = &inst->struc;
-					if (!type_resolve(tr, &struct_t, e->where)) /* resolve the struct */
+					*(Location *)arr_add(&err_ctx->instance_stack) = e->where;
+					if (!type_resolve(tr, &struct_t, e->where)) /* resolve the struct */ {
+						arr_remove_last(&err_ctx->instance_stack);
 						return false;
+					}
+				    arr_remove_last(&err_ctx->instance_stack);
+						
 					inst->struc.instance_id = table->n;
 				}
 				/* expression is actually a type */
