@@ -867,8 +867,9 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 	return success;
 }
 
-/* puts a dynamic array of the parameter indices of the arguments into param_indices. */
-static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Type *fn_type, Argument *args, Location where, U16 **param_indices) {
+/* puts a dynamic array of the argument indices of the parameters into order. *order must be freed, even if function fails */
+static bool call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Location where, I16 **orderp) {
+	*orderp = NULL;
 	size_t nparams = arr_len(fn_type->fn.types)-1;
 	size_t nargs = arr_len(args);
 	if (nargs > nparams) {
@@ -877,17 +878,19 @@ static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Type *fn_type, A
 		return false;
 	}
 
-	U16 *order = NULL;
+	I16 *order = *orderp = err_malloc(nparams * sizeof *order);
+	for (size_t i = 0; i < nparams; ++i)
+		order[i] = -1;
+	
 	if (fn->flags & FN_EXPR_FOREIGN) {
-		U16 i = 0;
+		I16 i = -1;
 		arr_foreach(args, Argument, arg) {
 			if (arg->name) {
 				err_print(arg->where, "Foreign function calls cannot use named arguments.");
 				return false;
 			}
-			*(U16 *)arr_adda(&order, allocr) = i++;
+			*order++ = ++i;
 		}
-		*param_indices = order;
 		return true;
 	}
 	
@@ -901,7 +904,9 @@ static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Type *fn_type, A
 	}
 	Declaration *param = fn->params;
 	size_t ident_idx = 0;
+	I16 arg_idx = -1;
 	arr_foreach(args, Argument, arg) {
+		++arg_idx;
 		bool named = arg->name != NULL;
 		int param_idx = -1;
 		if (named) {
@@ -945,7 +950,11 @@ static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Type *fn_type, A
 		}
 
 		if (param_idx != -1) {
-			*(U16 *)arr_adda(&order, allocr) = (U16)param_idx;
+			if (order[param_idx] != -1) {
+				err_print(arg->where, "Parameter #%d set twice.", param_idx+1);
+				info_print(args[order[param_idx]].where, "Parameter was previously set here.");
+			}
+			order[param_idx] = arg_idx;
 		}
 
 		if (!named) {
@@ -958,7 +967,21 @@ static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Type *fn_type, A
 			}
 		}
 	}
-	*param_indices = order;
+	size_t param_idx = 0;
+	arr_foreach(fn->params, Declaration, decl) {
+		arr_foreach(decl->idents, Identifier, ident) {
+			if (order[param_idx] == -1) {
+				if (!(decl->flags & DECL_HAS_EXPR) && !(decl->flags & DECL_INFER)) {
+					char *s = ident_to_str(*ident);
+					err_print(where, "Parameter #%lu (%s) was not set in function call.", param_idx-1, s);
+					free(s);
+					return false;
+				}
+				
+			}
+			++param_idx;
+		}
+	}
 	return true;
 }
 
@@ -1638,38 +1661,31 @@ static bool types_expr(Typer *tr, Expression *e) {
 		size_t nargs = arr_len(c->args);
 		Expression *arg_exprs = NULL;
 		arr_set_lena(&arg_exprs, nparams, tr->allocr);
-		bool *params_set = nparams ? typer_calloc(tr, nparams, sizeof *params_set) : NULL;
 
+		I16 *order = NULL;
 		if (fn_decl) {
-			U16 *order;
-			if (!call_arg_param_order(tr->allocr, fn_decl, &f->type, c->args, e->where, &order))
+			if (!call_arg_param_order(fn_decl, &f->type, c->args, e->where, &order)) {
+				free(order);
 				return false;
-			size_t arg;
-			for (arg = 0; arg < nargs; ++arg) {
-				U16 idx = order[arg];
-				Expression expr = args[arg].val;
-				arg_exprs[idx] = expr;
-				if (params_set[idx]) {
-					Declaration *param = fn_decl->params;
-					Identifier *ident = NULL;
-					for (Declaration *end = arr_end(fn_decl->params); param < end; ++param) {
-						ident = param->idents;
-						for (Identifier *iend = arr_end(param->idents); ident != iend; ++ident) {
-							if (idx == 0)
-								goto dblbreak;
-							--idx;
-						}
-					}
-					assert(0);
-				dblbreak:;
-					char *s = ident_to_str(*ident);
-					err_print(args[arg].where, "Argument #%lu (%s) set twice in function call.", idx+1, s);
-					free(s);
-					return false;
-				}
-				params_set[idx] = true;
 			}
-			arr_cleara(&order, tr->allocr);
+			size_t i = 0;
+			arr_foreach(fn_decl->params, Declaration, param) {
+				arr_foreach(param->idents, Identifier, ident) { 
+					I16 arg_idx = order[i];
+					if (arg_idx == -1) {
+						if (param->flags & DECL_HAS_EXPR) {
+							assert(param->expr.kind == EXPR_VAL); /* evaluated in type_of_fn */
+							arg_exprs[i].kind = EXPR_VAL;
+							arg_exprs[i].flags = param->expr.flags;
+							arg_exprs[i].type = param->type;
+							arg_exprs[i].val = param->expr.val;
+						}
+						/* else, it's inferred */
+					} else {
+						arg_exprs[i] = args[arg_idx].val;
+					}
+				}
+			}
 		} else {
 			if (nargs != nparams) {
 				err_print(e->where, "Expected %lu arguments to function call, but got %lu.", (unsigned long)nparams, (unsigned long)nargs);
@@ -1680,44 +1696,10 @@ static bool types_expr(Typer *tr, Expression *e) {
 					err_print(args[p].where, "You can only use named arguments if you directly call a function.");
 				}
 				arg_exprs[p] = args[p].val;
-				params_set[p] = true;
 			}
 		}
 
 		FnType *fn_type = &f->type.fn;
-		for (size_t i = 0; i < nparams; ++i) {
-			if (!params_set[i]) {
-				size_t index = 0;
-				assert(fn_decl); /* we can only miss an arg if we're using named/optional args */
-				
-				arr_foreach(fn_decl->params, Declaration, param) {
-					bool is_required = !(param->flags & (DECL_HAS_EXPR|DECL_INFER));
-					int ident_idx = 0;
-
-					arr_foreach(param->idents, Identifier, ident) {
-						if (index == i) {
-							if (is_required) {
-								char *s = ident_to_str(*ident);
-								err_print(e->where, "Argument %lu (%s) not set in function call.", 1+(unsigned long)i, s);
-								free(s);
-								return false;
-							} else {
-								if (!fn_type->constness) {
-									/* default arg */
-									assert(param->expr.kind == EXPR_VAL); /* evaluated in type_of_fn */
-									arg_exprs[i].kind = EXPR_VAL;
-									arg_exprs[i].flags = param->expr.flags;
-									arg_exprs[i].type = param->type;
-									arg_exprs[i].val = param->expr.val;
-								}
-							}
-						}
-						++ident_idx;
-						++index;
-					}
-				}
-			}
-		}
 		c->arg_exprs = arg_exprs;
 		FnExpr *original_fn = NULL;
 		Type table_index_type = {0};
@@ -1837,7 +1819,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			for (i = 0; i < nparams; ++i) {
 				bool should_be_evald = arg_is_const(&arg_exprs[i], fn_type->constness[i]);
 				if (should_be_evald) {
-					if (params_set[i]) {
+					if (!order || order[i] != -1) {
 						Expression *expr = &arg_exprs[i];
 						Value *arg_val = typer_arr_add(tr, &table_index.tuple);
 						if (!eval_expr(tr->evalr, expr, arg_val)) {
@@ -1890,13 +1872,12 @@ static bool types_expr(Typer *tr, Expression *e) {
 			i = 0;
 			arr_foreach(fn->params, Declaration, param) {
 				arr_foreach(param->idents, Identifier, ident) {
-					if (!params_set[i]) {
+					if (order && order[i] == -1) {
 						if (param->flags & DECL_INFER) {
 							arg_exprs[i].kind = EXPR_VAL;
 							arg_exprs[i].flags = EXPR_FOUND_TYPE;
 							arg_exprs[i].type = table_index_type.tuple[i+1] = param_types[i] = param->type;
 							arg_exprs[i].val = table_index.tuple[i+1] = param->val;
-							params_set[i] = true;
 							++i;
 							continue;
 						}
@@ -1908,7 +1889,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 						Value *arg_val = &table_index.tuple[i+1];
 						copy_val(tr->allocr, arg_val, &param->expr.val, &param->expr.type);
 						table_index_type.tuple[i+1] = param->expr.type;
-						params_set[i] = true;
 					}
 					++i;
 				}
@@ -1957,7 +1937,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 				arr_cleara(&table_index_type.tuple, tr->allocr);
 			}
 		}
-
+		free(order);
+			
 		*t = *ret_type;
 	} break;
 	case EXPR_BLOCK: {

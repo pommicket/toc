@@ -1,4 +1,4 @@
-static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Type *fn_type, Argument *args, Location where, U16 **param_indices);
+static bool call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Location where, I16 **orderp);
 static bool parameterized_struct_arg_order(StructDef *struc, Argument *args, I16 **order, Location where);
 static bool types_expr(Typer *tr, Expression *e);
 
@@ -106,9 +106,7 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Expres
 		
 		Argument *m_args = match->call.args;
 		Expression *t_args = to->call.arg_exprs;
-		size_t nargs = arr_len(m_args);
-		
-		U16 *order = NULL;
+		I16 *order = NULL;
 		Expression *f = match->call.fn;
 		Identifier ident = f->ident;
 		bool is_direct_fn = f->kind == EXPR_IDENT && ident->decl_kind == IDECL_DECL && (ident->decl->flags & DECL_HAS_EXPR) && ident->decl->expr.kind == EXPR_FN;
@@ -116,23 +114,29 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Expres
 			if (!types_expr(tr, f))
 				return false;
 			FnExpr *fn_decl = ident->decl->expr.fn;
-			if (!call_arg_param_order(tr->allocr, fn_decl, &f->type, m_args, match->where, &order))
+			if (!call_arg_param_order(fn_decl, &f->type, m_args, match->where, &order)) {
+				free(order);
 				return false;
-		}
-		for (size_t i = 0; i < nargs; ++i) {
-			Argument *m_arg = &m_args[i];
-			Expression *t_arg;
-			if (is_direct_fn) {
-				t_arg = &t_args[order[i]];
-			} else {
-				t_arg = &t_args[i];
-			}
-			if (t_arg->kind == EXPR_VAL) {
-				/* was evaluated, because it's const */
-				if (!infer_from_expr(tr, &m_arg->val, t_arg, t_arg, idents, vals, types))
-					return false;
 			}
 		}
+		size_t nparams = arr_len(f->type.fn.types) - 1;
+		for (size_t i = 0; i < nparams; ++i) {
+			if (order[i] != -1) {
+				Argument *m_arg = &m_args[order[i]];
+				Expression *t_arg;
+				if (is_direct_fn) {
+					t_arg = &t_args[i];
+				} else {
+					t_arg = &t_args[i];
+				}
+				if (t_arg->kind == EXPR_VAL) {
+					/* was evaluated, because it's const */
+					if (!infer_from_expr(tr, &m_arg->val, t_arg, t_arg, idents, vals, types))
+						return false;
+				}
+			}
+		}
+		free(order);
 	} break;
 	default: break;
 	}

@@ -18,8 +18,7 @@
 
 /* 
 TODO:
-- allow accessing parameters with .
-- make call_arg_param_order work more like parameterized_struct_arg_order
+remember to free order
 ---
 see infer.c "is resolved_to necessary" (now that ident system has changed)
 replace is_reference in type_resolve_ with system for checking if type is
