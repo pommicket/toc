@@ -2,33 +2,12 @@ io ::= nms {
 #include "std/io.toc";
 };
 
-
-
-Thing ::= struct(t::=int, u::t=3) {
-   it : t;
-   that : [u]t;
-};
-
-f ::= fn(t,u::=,th : &Thing(t,u)) {
-  x: t = 17 as t;
-  th.it = x;
-  for p, i := &th.that {
-  	  *p = i as t;
-  }
-};
-
-print_thing ::= fn(t, u::=, th: Thing(t, u)) {
-	io.puti(th.it as int);
-	for x := th.that {
-		io.puti(x as int);
-	}
+f ::= fn(a,b::=3) int {
+  a + b
 };
 
 main ::= fn() {
-	 a: Thing(u = 5, t = u8);
-	 f(&a);
-	 print_thing(a);
-	 b: Thing();
-	 f(&b);
-	 print_thing(b);
+	 x ::= f();
+	 io.puti(x);
+	 io.puti(f());
 };

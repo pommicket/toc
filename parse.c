@@ -621,6 +621,11 @@ static bool parse_type(Parser *p, Type *type) {
 						err_print(param->where, "Struct parameters must be constant.");
 						goto struct_fail;
 					}
+					if (param->flags & DECL_INFER) {
+						/* TODO(eventually) */
+						err_print(param->where, "Struct parameters cannot be inferred (yet).");
+						goto struct_fail;
+					}
 					param->flags |= DECL_IS_PARAM;
 				}
 			}
