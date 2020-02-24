@@ -170,7 +170,7 @@ typedef union Value {
 typedef enum {
 			  IDECL_NONE,
 			  IDECL_DECL,
-			  IDECL_FOR
+			  IDECL_EXPR
 } IdentDeclKind;
 
 
@@ -181,7 +181,7 @@ typedef struct IdentSlot {
 	IdentDeclKind decl_kind;	
 	union {
 		struct Declaration *decl;
-		struct ForExpr *for_;
+		struct Expression *decl_expr;
 	};
 	struct Identifiers *idents;
 	SOURCE_LOCATION
@@ -899,7 +899,7 @@ typedef struct Typer {
 	Allocator *allocr;
 	Evaluator *evalr;
 	Identifiers *globals;
-	ForExpr **in_fors; /* which fors we are currently inside the header of */
+	Expression **in_exprs; /* which expression declarations we are currently inside (e.g. for x := foo)*/
 	Declaration **in_decls; /* array of declarations we are currently inside */
 	Block *block;
 	Block **blocks; /* dyn array of all the block's we're in ([0] = NULL for global scope) */

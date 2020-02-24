@@ -2,12 +2,10 @@ io ::= nms {
 #include "std/io.toc";
 };
 
-f ::= fn(a,b::=3) int {
-  a + b
+p ::= struct(x::Type) {
+  y:int;
 };
-
 main ::= fn() {
-	 x ::= f();
-	 io.puti(x);
-	 io.puti(f());
+z:p(int);
+for z := 1..100 {z:=12;}
 };

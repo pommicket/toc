@@ -483,24 +483,30 @@ static bool type_of_ident(Typer *tr, Location where, Identifier *ident, Type *t)
 			}
 		}
 	} break;
-	case IDECL_FOR: {
-		ForExpr *fo = i->for_;
-		/* are we inside this for? */
-		typedef ForExpr *ForExprPtr;
-		arr_foreach(tr->in_fors, ForExprPtr, in_f) {
-			if (*in_f == fo) {
+	case IDECL_EXPR: {
+		Expression *e = i->decl_expr;
+		/* are we inside this expr? */
+		typedef Expression *ExprPtr;
+		arr_foreach(tr->in_exprs, ExprPtr, in_e) {
+			if (*in_e == e) {
 				char *s = ident_to_str(i);
 				err_print(where, "Use of identifier %s in its own declaration.", s);
 				free(s);
 				return false;
 			}
 		}
-		if (i == fo->index) {
-			t->kind = TYPE_BUILTIN;
-			t->builtin = BUILTIN_I64;
-		} else {
-			assert(i == fo->value);
-			*t = fo->type;
+		switch (e->kind) {
+		case EXPR_FOR: {
+			ForExpr *fo = e->for_;
+			if (i == fo->index) {
+				t->kind = TYPE_BUILTIN;
+				t->builtin = BUILTIN_I64;
+			} else {
+				assert(i == fo->value);
+				*t = fo->type;
+			}
+		} break;
+		default: assert(0); break;
 		}
 	} break;
 	case IDECL_NONE: {
@@ -1213,7 +1219,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 	case EXPR_FOR: {
 		ForExpr *fo = e->for_;
 		bool in_header = true;
-		*(ForExpr **)typer_arr_add(tr, &tr->in_fors) = fo;
+		*(Expression **)typer_arr_add(tr, &tr->in_exprs) = e;
 		typer_block_enter(tr, &fo->body); /* while this block is being typed, fo->body will be in tr->blocks twice. hopefully that doesn't mess anything up! */
 		if (fo->flags & FOR_IS_RANGE) {
 			/* TODO: allow user-defined numerical types */
@@ -1224,6 +1230,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 					char *s = type_to_str(ft);
 					err_print(e->where, "from expression of for loop must be a builtin numerical type, not %s", s);
 					free(s);
+					goto for_fail;
 				}
 			}
 			if (fo->range.step) {
@@ -1233,6 +1240,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 					char *s = type_to_str(st);
 					err_print(e->where, "step expression of for loop must be a builtin numerical type, not %s", s);
 					free(s);
+					goto for_fail;
 				}
 			}
 			if (fo->range.to) {
@@ -1242,6 +1250,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 					char *s = type_to_str(tt);
 					err_print(e->where, "to expression of for loop must be a builtin numerical type, not %s", s);
 					free(s);
+				    goto for_fail;
 				}
 			}
 
@@ -1330,7 +1339,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			fo->range.stepval = stepval;
 		}
 		
-		arr_remove_lasta(&tr->in_fors, tr->allocr);
+		arr_remove_lasta(&tr->in_exprs, tr->allocr);
 		in_header = false;
 		if (!types_block(tr, &fo->body)) goto for_fail;
 		
@@ -1344,7 +1353,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		break;
 		for_fail:
 		if (in_header)
-			arr_remove_lasta(&tr->in_fors, tr->allocr);
+			arr_remove_lasta(&tr->in_exprs, tr->allocr);
 		typer_block_exit(tr);
 		return false;
 	};
@@ -1535,12 +1544,12 @@ static bool types_expr(Typer *tr, Expression *e) {
 					int ident_idx = 0;
 					/* temporarily add this instance to the stack, while we type the decl, in case you, e.g., pass t = float to struct(t::Type, u::t = "hello") */
 					*(Location *)arr_add(&err_ctx->instance_stack) = e->where;
-					if (!types_decl(tr, param)) {
-						arr_remove_last(&err_ctx->instance_stack);
-						return false;
-					}
+					typer_block_enter(tr, &struc.scope);
+				    bool success = types_decl(tr, param);
 					arr_remove_last(&err_ctx->instance_stack);
-
+					typer_block_exit(tr);
+					if (!success) return false;
+					
 					arr_foreach(param->idents, Identifier, ident) {
 						Type *type = decl_type_at_index(param, ident_idx);
 						arg_types[p] = *type;
@@ -1599,11 +1608,9 @@ static bool types_expr(Typer *tr, Expression *e) {
 					struct_t.kind = TYPE_STRUCT;
 					struct_t.struc = &inst->struc;
 					*(Location *)arr_add(&err_ctx->instance_stack) = e->where;
-					if (!type_resolve(tr, &struct_t, e->where)) /* resolve the struct */ {
-						arr_remove_last(&err_ctx->instance_stack);
-						return false;
-					}
+					bool success = type_resolve(tr, &struct_t, e->where); /* resolve the struct */
 				    arr_remove_last(&err_ctx->instance_stack);
+					if (!success) return false;
 						
 					inst->struc.instance_id = table->n;
 				}
@@ -2759,7 +2766,7 @@ static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *a
 	tr->evalr = ev;
 	tr->err_ctx = err_ctx;
 	tr->in_decls = NULL;
-	tr->in_fors = NULL;
+	tr->in_exprs = NULL;
 	tr->allocr = allocr;
 	tr->globals = idents;
 	tr->is_reference_stack = NULL;

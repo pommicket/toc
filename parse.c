@@ -1042,6 +1042,20 @@ static Identifier parser_ident_insert(Parser *p, char *str) {
 	return i;
 }
 
+static bool check_ident_redecl(Parser *p, Identifier i) {
+	Tokenizer *t = p->tokr;
+	if (i->idents == &p->block->idents) {
+		if (i->decl_kind != IDECL_NONE) {
+			char *s = ident_to_str(i);
+			tokr_err(t, "Redeclaration of identifier %s.", s);
+			info_print(ident_decl_location(i), "Previous declaration was here.");
+			free(s);
+			return false;
+		}
+	}
+	return true;
+}
+
 static bool parse_expr(Parser *p, Expression *e, Token *end) {
 	Tokenizer *t = p->tokr;
 
@@ -1254,8 +1268,10 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 								&& token_is_kw(t->token + 3, KW_COLON))))) {
 					if (t->token->kind == TOKEN_IDENT) {
 						fo->value = parser_ident_insert(p, t->token->ident);
-						fo->value->decl_kind = IDECL_FOR;
-						fo->value->for_ = fo;
+					    if (!check_ident_redecl(p, fo->value))
+							goto for_fail;
+						fo->value->decl_kind = IDECL_EXPR;
+						fo->value->decl_expr = e;
 						if (ident_eq_str(fo->value, "_")) /* ignore value */
 							fo->value = NULL;
 						++t->token;
@@ -1263,8 +1279,10 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 							++t->token;
 							if (t->token->kind == TOKEN_IDENT) {
 								fo->index = parser_ident_insert(p, t->token->ident);
-								fo->index->decl_kind = IDECL_FOR;
-								fo->index->for_ = fo;
+								if (!check_ident_redecl(p, fo->index))
+									goto for_fail;
+								fo->index->decl_kind = IDECL_EXPR;
+								fo->index->decl_expr = e;
 								if (ident_eq_str(fo->index, "_")) /* ignore index */
 									fo->index = NULL;
 								++t->token;
@@ -1334,7 +1352,7 @@ static bool parse_expr(Parser *p, Expression *e, Token *end) {
 					err_print(token_location(p->file, first_end), "Expected { or .. to follow expression in for statement.");
 				    goto for_fail;
 				}
-			
+				e->where.end = t->token; /* temporarily set end so that redeclaration errors aren't messed up */
 				if (!parse_block(p, &fo->body, PARSE_BLOCK_DONT_CREATE_IDENTS))
 				    goto for_fail;
 				p->block = prev_block;
@@ -1931,6 +1949,8 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 		*ident = parser_ident_insert(p, t->token->ident);
 		{
 			Identifier i = *ident;
+			if (!check_ident_redecl(p, i))
+				goto ret_false;
 			i->decl_kind = IDECL_DECL;
 			i->decl = d;
 		}
