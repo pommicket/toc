@@ -898,6 +898,18 @@ static bool parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end
 				++t->token;
 			break;
 		}
+		if (decl->flags & DECL_INFER) {
+			/* split this declaration */
+			size_t nidents = arr_len(decl->idents);
+			for (size_t i = 1; i < nidents; ++i) {
+				Declaration *new_decl = parser_arr_add(p, decls);
+				*new_decl = *decl;
+				new_decl->idents = NULL;
+				arr_set_lena(&new_decl->idents, 1, p->allocr);
+				new_decl->idents[0] = decl->idents[i];
+			}
+			arr_set_lena(&decl->idents, 1, p->allocr);
+		}
 	}
 	return ret;
 }
@@ -2009,10 +2021,6 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 			} else if ((flags & PARSE_DECL_ALLOW_INFER) && ends_decl(t->token, ends_with)) {
 				/* inferred expression */
 				d->flags |= DECL_INFER;
-				if (arr_len(d->idents) > 1) {
-				    tokr_err(t, "Inferred declarations can only have one identifier. Please separate this declaration.");
-					goto ret_false;
-				}
 				if (!(d->flags & DECL_IS_CONST)) {
 					tokr_err(t, "Inferred parameters must be constant.");
 					goto ret_false;

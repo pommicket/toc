@@ -18,8 +18,7 @@
 
 /* 
 TODO:
-- make sure inference works with struct params
-- split up a,b::int for parameterized structs (?also maybe normal parameters?)
+- split up a,b::int for parameterized structs (?also maybe normal const parameters?)
 - allow accessing parameters with .
 - make call_arg_param_order work more like parameterized_struct_arg_order
 
@@ -89,7 +88,8 @@ int main(int argc, char **argv) {
 #ifdef TOC_DEBUG
 	signal(SIGABRT, signal_handler);
 	signal(SIGSEGV, signal_handler);
-	
+#endif
+#ifdef RUN_TESTS	
 	test_all();
 #endif
 

@@ -1,6 +1,6 @@
-// io ::= nms {
-// #include "std/io.toc";
-// };
+io ::= nms {
+#include "std/io.toc";
+};
 
 
 
@@ -9,12 +9,26 @@ Thing ::= struct(t::=int, u::t=3) {
    that : [u]t;
 };
 
-f ::= fn(t::=,u::=,th : Thing(t,u)) {
+f ::= fn(t,u::=,th : &Thing(t,u)) {
   x: t = 17 as t;
   th.it = x;
+  for p, i := &th.that {
+  	  *p = i as t;
+  }
+};
+
+print_thing ::= fn(t, u::=, th: Thing(t, u)) {
+	io.puti(th.it as int);
+	for x := th.that {
+		io.puti(x as int);
+	}
 };
 
 main ::= fn() {
-	 a: Thing(u = 172, t = u8);
-	 f(a);
+	 a: Thing(u = 5, t = u8);
+	 f(&a);
+	 print_thing(a);
+	 b: Thing();
+	 f(&b);
+	 print_thing(b);
 };

@@ -1,9 +1,18 @@
 static bool call_arg_param_order(Allocator *allocr, FnExpr *fn, Type *fn_type, Argument *args, Location where, U16 **param_indices);
+static bool parameterized_struct_arg_order(StructDef *struc, Argument *args, I16 **order, Location where);
 static bool types_expr(Typer *tr, Expression *e);
 
 /* resolved_to should have the same value as to, but not consist of any identifiers which aren't in scope right now */
 /* TODO: is resolved_to necessary? */
 static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Expression *resolved_to, Identifier *idents, Value *vals, Type *types) {
+#if 0
+	printf("Matching ");
+	fprint_expr(stdout, match);
+	printf(" to ");
+	fprint_expr(stdout, to);
+	printf("\n");
+#endif
+	
 	assert(!(match->flags & EXPR_FOUND_TYPE));
 	assert(to->flags & EXPR_FOUND_TYPE);
 	switch (match->kind) {
@@ -24,6 +33,7 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Expres
 		}
 		break;
 	case EXPR_CALL: {
+		
 		if (to->kind == EXPR_TYPE && to->typeval.kind == TYPE_STRUCT) {
 			/* maybe it's a parameterized struct? */
 			/* it might not be possible that it's not, but might as well keep that possibility around. */
@@ -40,32 +50,35 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Expres
 				assert(fn_val.type->kind == TYPE_STRUCT);
 
 				I16 *order;
-				if (!parameterized_type_arg_order(tr, &order, match->where))
+				if (!parameterized_struct_arg_order(fn_val.type->struc, match->call.args, &order, match->where)) {
+					free(order);
 					return false;
-				
-				size_t nargs = arr_len(match->call.args);
-				Declaration *param = to->typeval.struc->params;
-				int ident_idx = 0;
-				for (size_t i = 0; i < nargs; ++i) {
-					Expression *arg = &match->call.args[i].val;
-					Value val = arr_len(param->idents) > 1 ? param->val.tuple[ident_idx] : param->val;
-					Expression val_expr = {0};
-					val_expr.kind = EXPR_VAL;
-					val_expr.val = val;
-					val_expr.type = *decl_type_at_index(param, ident_idx);
-					val_expr.flags = EXPR_FOUND_TYPE;
-					if (!infer_from_expr(tr, arg, &val_expr, &val_expr, idents, vals, types)) {
-						return false;
-					}
-					++ident_idx;
-					if (ident_idx >= (int)arr_len(param->idents)) {
-						++param;
-						ident_idx = 0;
+				}
+				Declaration *params = to->typeval.struc->params;
+				int arg_idx = 0;
+				arr_foreach(params, Declaration, param) {
+					int ident_idx = 0;
+					arr_foreach(param->idents, Identifier, i) {
+						if (order[arg_idx] != -1) {
+							Expression *arg = &match->call.args[order[arg_idx]].val;
+							Value val = *decl_val_at_index(param, ident_idx);
+							Expression val_expr = {0};
+							val_expr.kind = EXPR_VAL;
+							val_expr.val = val;
+							val_expr.type = *decl_type_at_index(param, ident_idx);
+							val_expr.flags = EXPR_FOUND_TYPE;
+							if (!infer_from_expr(tr, arg, &val_expr, &val_expr, idents, vals, types)) {
+								free(order);
+								return false;
+							}
+						}
+						++arg_idx;
+						++ident_idx;
 					}
 				}
+				free(order);
 			}
 		}
-
 		
 		while (to->kind == EXPR_IDENT) {
 			Identifier i = to->ident;
@@ -83,7 +96,14 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Expres
 				if (expr) to = expr;
 			} else break;
 		}
-		if (to->kind != EXPR_CALL) return true; /* give up */
+		if (to->kind != EXPR_CALL) {
+			if (to->kind == EXPR_TYPE) {
+				to = to->typeval.was_expr;
+			}
+			if (!to || to->kind != EXPR_CALL)
+				return true; /* give up */
+		}
+		
 		Argument *m_args = match->call.args;
 		Expression *t_args = to->call.arg_exprs;
 		size_t nargs = arr_len(m_args);

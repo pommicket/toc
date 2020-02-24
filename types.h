@@ -709,11 +709,13 @@ enum {
 	  EXPR_FOUND_TYPE = 0x01
 };
 
+typedef U8 ExprFlags;
+
 typedef struct Expression {
 	Type type;
 	Location where;
 	ExprKind kind : 8;
-	U8 flags;
+    ExprFlags flags;
 	struct {
 		IdentID id; /* cgen ID used for this expression */
 	} cgen;

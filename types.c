@@ -1472,6 +1472,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		CallExpr *c = &e->call;
 		c->instance = NULL;
 		Expression *f = c->fn;
+		Copier cop = {0};
 		FnExpr *fn_decl = NULL;
 		if (!types_expr(tr, f)) return false;
 		arr_foreach(c->args, Argument, arg) {
@@ -1507,7 +1508,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 					info_print(base->struc->where, "struct was declared here.");
 					return false;
 				}
-				Copier cop = copier_create(tr->allocr, tr->block);
+			    cop = copier_create(tr->allocr, tr->block);
 				HashTable *table = &base->struc->instances;
 				StructDef struc;
 				copy_struct(&cop, &struc, base->struc);
@@ -1606,6 +1607,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 						
 					inst->struc.instance_id = table->n;
 				}
+
+				
 				/* expression is actually a type */
 				e->kind = EXPR_TYPE;
 				memset(&e->typeval, 0, sizeof e->typeval);
@@ -1713,7 +1716,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 		Type table_index_type = {0};
 		Value table_index = {0};
 		FnExpr *fn_copy = NULL;
-		Copier cop = copier_create(tr->allocr, tr->block);
+		cop = copier_create(tr->allocr, tr->block);
 		if (fn_type->constness) {
 			/* evaluate compile-time arguments + add an instance */
 			

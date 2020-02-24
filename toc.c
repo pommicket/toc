@@ -127,7 +127,7 @@ static bool cgen_sdecls_file(CGenerator *g, ParsedFile *f);
 #include "sdecls_cgen.c"
 #include "decls_cgen.c"
 
-#ifdef TOC_DEBUG
+#ifdef RUN_TESTS
 #include "tests.c"
 #endif
 
