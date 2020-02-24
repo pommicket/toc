@@ -2337,12 +2337,31 @@ static bool types_expr(Typer *tr, Expression *e) {
 						e->binary.dot.field = f;
 					}
 				}
-
 				if (!is_field) {
-					char *member = ident_to_str(rhs->ident);
-					char *struc = type_to_str(struct_type);
-					err_print(e->where, "%s is not a member of structure %s.", member, struc);
-					return false;
+					Declaration *param = NULL;
+				    int ident_idx;
+					arr_foreach(struct_type->struc->params, Declaration, p) {
+						ident_idx = 0;
+						arr_foreach(p->idents, Identifier, ident) {
+							if (ident_eq(*ident, rhs->ident)) {
+								param = p;
+								goto dblbreak_dot;
+							}	
+							++ident_idx;
+						}
+					}
+				dblbreak_dot:
+					if (!param) {
+						char *member = ident_to_str(rhs->ident);
+						char *struc = type_to_str(struct_type);
+						err_print(e->where, "%s is not a member of structure %s.", member, struc);
+						return false;
+					}
+					/* replace with parameter value */
+					e->kind = EXPR_VAL;
+					e->val = *decl_val_at_index(param, ident_idx);
+					*t = *decl_type_at_index(param, ident_idx);
+					break;
 				}
 			} else if (struct_type->kind == TYPE_SLICE || struct_type->kind == TYPE_ARR) {
 				if (!ident_eq_str(rhs->ident, "len")) {

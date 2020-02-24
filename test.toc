@@ -2,10 +2,10 @@ io ::= nms {
 #include "std/io.toc";
 };
 
-p ::= struct(x::Type) {
-  y:int;
+p ::= struct(x::Type,y::=3) {
+  b:int;
 };
 main ::= fn() {
 z:p(int);
-for z := 1..100 {z:=12;}
+x:[z.y]z.x;
 };
