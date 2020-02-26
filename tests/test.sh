@@ -34,6 +34,7 @@ STARTPWD="$(pwd)"
 do_tests bf
 do_tests arr
 do_tests arr2
+do_tests arr3
 do_tests foreign
 do_tests params
 do_tests nms

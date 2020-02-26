@@ -1,0 +1,54 @@
+#include "io.toc";
+
+Arr ::= struct (t :: Type) {
+	data: []t;
+	len, cap: int;
+};
+
+
+arr_add ::= fn(t ::=, a : &Arr(t), x : t) {
+		if a.len >= a.cap {
+		   a.cap = a.cap * 2 + 2;
+		   new_data := new(t, a.cap);
+		   for i := 0..a.len-1 {
+		   		new_data[i] = a.data[i];
+		   }
+		   a.data = new_data;
+		}
+		a.data[a.len] = x;
+		a.len += 1;
+};
+
+square ::= fn(t ::=, x : t) t {
+	   a : Arr(t);
+	   for i := 1,2..2*x-1 {
+	   		arr_add(&a, i);
+	   };
+	   sum := 0 as t;
+	   for i := 0..a.len-1 {
+	   		sum += a.data[i];
+	   };
+	   sum
+};
+
+
+// ArrInt ::= Arr(int);
+
+inc ::= fn(t ::=, x : t) t {
+	x + 1
+};
+
+main ::= fn() {
+	 arr : Arr(int);
+	 farr : Arr(float);
+	 for i := 1..100 {	
+	 	   arr_add(&arr, inc(square(i)));
+	 	   arr_add(&farr, inc(square(i as float)));
+	 }
+	 for i := 0..arr.len - 1 {
+	 	  puti(arr.data[i]);
+	 }
+	 for i := 0..farr.len - 1 {
+	 	  puti(farr.data[i] as int);
+	 }
+};

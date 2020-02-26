@@ -1747,6 +1747,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 					param->val = param_val;
 					param->flags |= DECL_FOUND_VAL;
 				}
+				free(order);
 				args_val.tuple = arg_vals;
 				args_type.tuple = arg_types;
 				args_type.kind = TYPE_TUPLE;
@@ -1896,12 +1897,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 
 			size_t ninferred_idents = arr_len(inferred_idents);
 			if (ninferred_idents) {
-				Value *inferred_vals;
-				Type *inferred_types;
-				size_t inferred_vals_size = ninferred_idents * sizeof *inferred_vals;
-				inferred_vals = typer_malloc(tr, inferred_vals_size);
-				size_t inferred_types_size = ninferred_idents * sizeof *inferred_types;
-				inferred_types = typer_malloc(tr, inferred_types_size);
+				Value *inferred_vals = err_malloc(ninferred_idents * sizeof *inferred_vals);
+				Type *inferred_types = err_malloc(ninferred_idents * sizeof *inferred_types);
 				
 				if (!infer_ident_vals(tr, decl_types, arg_types, inferred_idents, inferred_vals, inferred_types))
 					return false;
@@ -1940,8 +1937,8 @@ static bool types_expr(Typer *tr, Expression *e) {
 						++i;
 					}
 				}
-				allocr_free(tr->allocr, inferred_vals, inferred_vals_size);
-				allocr_free(tr->allocr, inferred_types, inferred_types_size);
+				free(inferred_vals);
+				free(inferred_types);
 			}
 			
 
