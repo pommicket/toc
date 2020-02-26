@@ -4,11 +4,11 @@
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
 
-static bool types_block(Typer *tr, Block *b);
-static bool types_decl(Typer *tr, Declaration *d);
-static bool type_resolve(Typer *tr, Type *t, Location where);
-static bool eval_block(Evaluator *ev, Block *b, Value *v);
-static bool eval_expr(Evaluator *ev, Expression *e, Value *v);
+static Status types_block(Typer *tr, Block *b);
+static Status types_decl(Typer *tr, Declaration *d);
+static Status type_resolve(Typer *tr, Type *t, Location where);
+static Status eval_block(Evaluator *ev, Block *b, Value *v);
+static Status eval_expr(Evaluator *ev, Expression *e, Value *v);
 static Value get_builtin_val(BuiltinVal val);
 
 static void evalr_create(Evaluator *ev, Typer *tr, Allocator *allocr) {
@@ -567,7 +567,7 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 	}
 }
 
-static bool eval_val_ptr_at_index(Location where, Value *arr, U64 i, Type *arr_type, void **ptr, Type **type) {
+static Status eval_val_ptr_at_index(Location where, Value *arr, U64 i, Type *arr_type, void **ptr, Type **type) {
 	switch (arr_type->kind) {
 	case TYPE_ARR: {
 		U64 arr_sz = (U64)arr_type->arr.n;
@@ -592,7 +592,7 @@ static bool eval_val_ptr_at_index(Location where, Value *arr, U64 i, Type *arr_t
 	return true;
 }
 
-static bool eval_expr_ptr_at_index(Evaluator *ev, Expression *e, void **ptr, Type **type) {
+static Status eval_expr_ptr_at_index(Evaluator *ev, Expression *e, void **ptr, Type **type) {
 	Value arr;
 	if (!eval_expr(ev, e->binary.lhs, &arr)) return false;
 	Value index;
@@ -679,7 +679,7 @@ static inline bool eval_address_of_ident(Identifier i, Location where, Type *typ
 	return true;
 }
 
-static bool eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr, void **p) {
+static Status eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr, void **p) {
 	Type *struct_type = &dot_expr->binary.lhs->type;
 	bool is_ptr = struct_type->kind == TYPE_PTR;
 	if (is_ptr) {
@@ -711,7 +711,7 @@ static bool eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr, void *
 	return true;
 }
 
-static bool eval_address_of(Evaluator *ev, Expression *e, void **ptr) {
+static Status eval_address_of(Evaluator *ev, Expression *e, void **ptr) {
 	switch (e->kind) {
 	case EXPR_IDENT: {
 		if (!eval_address_of_ident(e->ident, e->where, &e->type, ptr))
@@ -755,7 +755,7 @@ static bool eval_address_of(Evaluator *ev, Expression *e, void **ptr) {
 	return true;
 }
 
-static bool eval_set(Evaluator *ev, Expression *set, Value *to) {
+static Status eval_set(Evaluator *ev, Expression *set, Value *to) {
 	switch (set->kind) {
 	case EXPR_IDENT: {
 		Identifier i = set->ident;
@@ -996,7 +996,7 @@ static bool val_is_nonnegative(Value *v, Type *t) {
 	return val_to_i64(v, t->builtin) >= 0;
 }
 
-static bool eval_ident(Evaluator *ev, Identifier ident, Value *v, Location where) {
+static Status eval_ident(Evaluator *ev, Identifier ident, Value *v, Location where) {
 	if (ident->decl_kind == IDECL_NONE) {
 		char *s = ident_to_str(ident);
 		err_print(where, "Undeclared identifier: %s.", s);
@@ -1068,7 +1068,7 @@ static void decl_remove_val(Declaration *d) {
 	arr_remove_last(&d->val_stack);
 }
 
-static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
+static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	
 #define eval_unary_op_one(low, up, op)			\
 	case BUILTIN_##up:							\
@@ -1572,7 +1572,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	return true;
 }
 
-static bool eval_decl(Evaluator *ev, Declaration *d) {
+static Status eval_decl(Evaluator *ev, Declaration *d) {
 	unsigned has_expr = d->flags & DECL_HAS_EXPR;
 	unsigned is_const = d->flags & DECL_IS_CONST;
 	Value val = {0};
@@ -1620,7 +1620,7 @@ static bool eval_decl(Evaluator *ev, Declaration *d) {
 	return true;
 }
 
-static bool eval_stmt(Evaluator *ev, Statement *stmt) {
+static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 	switch (stmt->kind) {
 	case STMT_DECL:
 		if (!eval_decl(ev, stmt->decl)) return false;
@@ -1656,7 +1656,7 @@ static void eval_exit_stmts(Statement *stmts) {
 	}
 }
 
-static bool eval_block(Evaluator *ev, Block *b, Value *v) {
+static Status eval_block(Evaluator *ev, Block *b, Value *v) {
 	Block *prev = ev->typer->block;
 	ev->typer->block = b;
 	bool success = true;

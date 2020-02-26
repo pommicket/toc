@@ -3,8 +3,8 @@
   This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
-static bool types_stmt(Typer *tr, Statement *s);
-static bool type_resolve(Typer *tr, Type *t, Location where);
+static Status types_stmt(Typer *tr, Statement *s);
+static Status type_resolve(Typer *tr, Type *t, Location where);
 
 
 static inline void *typer_malloc(Typer *tr, size_t bytes) {
@@ -72,7 +72,7 @@ static size_t compiler_alignof_builtin(BuiltinType b) {
 }
 
 /* finds offsets and size */
-static bool struct_find_offsets(StructDef *s) {
+static Status struct_find_offsets(StructDef *s) {
 	/* assume the align of a struct is the greatest align out of its children's */
 	if (!(s->flags & STRUCT_DEF_FOUND_OFFSETS)) {
 		if (s->flags & STRUCT_DEF_FINDING_OFFSETS) {
@@ -246,7 +246,7 @@ static bool type_eq(Type *a, Type *b) {
 }
 
 /* expected must equal got, or an error will be produced */
-static bool type_must_eq(Location where, Type *expected, Type *got) {
+static Status type_must_eq(Location where, Type *expected, Type *got) {
 	if (!type_eq(expected, got)) {
 		char *str_ex = type_to_str(expected);
 		char *str_got = type_to_str(got);
@@ -257,7 +257,7 @@ static bool type_must_eq(Location where, Type *expected, Type *got) {
 }
 
 /* prints an error and returns false if the given expression is not an l-value */
-static bool expr_must_lval(Expression *e) {
+static Status expr_must_lval(Expression *e) {
 	/* NOTE: make sure you update eval when you change this */
 	switch (e->kind) {
 	case EXPR_IDENT: {
@@ -359,7 +359,7 @@ enum {
 	  TYPE_OF_FN_IS_INSTANCE = 0x01
 };
 
-static bool type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
+static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	t->kind = TYPE_FN;
 	t->fn.types = NULL;
 	t->fn.constness = NULL; /* OPTIM: constness doesn't need to be a dynamic array */
@@ -509,7 +509,7 @@ static bool type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 }
 
 /* may modify ident */
-static bool type_of_ident(Typer *tr, Location where, Identifier *ident, Type *t) {
+static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *t) {
 	t->flags = 0;
 	Identifier i = *ident;
 #if 0
@@ -660,7 +660,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier *ident, Type *t)
 }
 
 /* fixes the type (replaces [5+3]int with [8]int, etc.) */
-static bool type_resolve(Typer *tr, Type *t, Location where) {
+static Status type_resolve(Typer *tr, Type *t, Location where) {
 	Evaluator *ev = tr->evalr;
 	if (t->flags & TYPE_IS_RESOLVED) return true;
 	t->was_expr = NULL;
@@ -817,22 +817,22 @@ static bool type_can_be_truthy(Type *t) {
 }
 
 typedef enum {
-			  STATUS_NONE,
-			  STATUS_WARN,
-			  STATUS_ERR
-} Status;
+			  CAST_STATUS_NONE,
+			  CAST_STATUS_WARN,
+			  CAST_STATUS_ERR
+} CastStatus;
 
-static Status type_cast_status(Type *from, Type *to) {
+static CastStatus type_cast_status(Type *from, Type *to) {
 	assert(from->flags & TYPE_IS_RESOLVED);
 	assert(to->flags & TYPE_IS_RESOLVED);
 	
 	if (to->kind == TYPE_UNKNOWN)
-		return STATUS_NONE;
+		return CAST_STATUS_NONE;
 	switch (from->kind) {
-	case TYPE_UNKNOWN: return STATUS_NONE;
+	case TYPE_UNKNOWN: return CAST_STATUS_NONE;
 	case TYPE_STRUCT:
 	case TYPE_VOID:
-		return STATUS_ERR;
+		return CAST_STATUS_ERR;
 	case TYPE_BUILTIN:
 		switch (from->builtin) {
 		case BUILTIN_I8:
@@ -858,24 +858,24 @@ static Status type_cast_status(Type *from, Type *to) {
 				case BUILTIN_F64:
 				case BUILTIN_BOOL:
 				case BUILTIN_CHAR:
-					return STATUS_NONE;
+					return CAST_STATUS_NONE;
 				case BUILTIN_TYPE:
 				case BUILTIN_NMS:
-					return STATUS_ERR;
+					return CAST_STATUS_ERR;
 				}
 				assert(0);
 				break;
 			case TYPE_UNKNOWN:
-				return STATUS_NONE;
+				return CAST_STATUS_NONE;
 			case TYPE_PTR:
-				return STATUS_WARN;
+				return CAST_STATUS_WARN;
 			default:
-				return STATUS_ERR;
+				return CAST_STATUS_ERR;
 			}
 			break;
 		case BUILTIN_F32:
 		case BUILTIN_F64:
-			if (to->kind != TYPE_BUILTIN) return STATUS_ERR;
+			if (to->kind != TYPE_BUILTIN) return CAST_STATUS_ERR;
 			switch (to->builtin) {
 			case BUILTIN_I8:
 			case BUILTIN_U8:
@@ -888,50 +888,50 @@ static Status type_cast_status(Type *from, Type *to) {
 			case BUILTIN_F32:
 			case BUILTIN_F64:
 			case BUILTIN_BOOL:
-				return STATUS_NONE;
+				return CAST_STATUS_NONE;
 			case BUILTIN_CHAR:
 			case BUILTIN_TYPE:
 			case BUILTIN_NMS:
-				return STATUS_ERR;
+				return CAST_STATUS_ERR;
 			}
 			assert(0);
 			break;
 		case BUILTIN_CHAR:
 			if (to->kind == TYPE_BUILTIN && type_builtin_is_int(to->builtin))
-				return STATUS_NONE;
-			return STATUS_ERR;
+				return CAST_STATUS_NONE;
+			return CAST_STATUS_ERR;
 		case BUILTIN_BOOL:
-			return type_can_be_truthy(to) ? STATUS_NONE : STATUS_ERR;
+			return type_can_be_truthy(to) ? CAST_STATUS_NONE : CAST_STATUS_ERR;
 		case BUILTIN_TYPE:
 		case BUILTIN_NMS:
-			return STATUS_ERR;
+			return CAST_STATUS_ERR;
 		}
 		break;
-	case TYPE_TUPLE: return STATUS_ERR;
+	case TYPE_TUPLE: return CAST_STATUS_ERR;
 	case TYPE_FN:
 		if (to->kind == TYPE_PTR || to->kind == TYPE_FN)
-			return STATUS_WARN;
-		return STATUS_ERR;
+			return CAST_STATUS_WARN;
+		return CAST_STATUS_ERR;
 	case TYPE_PTR:
 		if (to->kind == TYPE_BUILTIN && type_builtin_is_int(to->builtin))
-			return STATUS_WARN;
+			return CAST_STATUS_WARN;
 		if (to->kind == TYPE_PTR)
-			return STATUS_NONE;
+			return CAST_STATUS_NONE;
 		if (to->kind == TYPE_FN)
-			return STATUS_WARN;
+			return CAST_STATUS_WARN;
 		/* TODO: Cast from ptr to arr */
-		return STATUS_ERR;
+		return CAST_STATUS_ERR;
 	case TYPE_ARR:
-		return STATUS_ERR;
+		return CAST_STATUS_ERR;
 	case TYPE_SLICE:
 		if (to->kind == TYPE_PTR && type_eq(from->slice, to->ptr))
-			return STATUS_NONE;
-		return STATUS_ERR;
+			return CAST_STATUS_NONE;
+		return CAST_STATUS_ERR;
 	case TYPE_EXPR:
 		break;
 	}
 	assert(0);
-	return STATUS_ERR;
+	return CAST_STATUS_ERR;
 }
 
 static bool arg_is_const(Expression *arg, Constness constness) {
@@ -947,7 +947,7 @@ static bool arg_is_const(Expression *arg, Constness constness) {
 
 /* MUST be called after type_of_fn. */
 /* pass NULL for instance if this isn't an instance */
-static bool types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
+static Status types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 	FnExpr *prev_fn = tr->fn;
 	bool success = true;
 	Expression *ret_expr;
@@ -1009,7 +1009,7 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 }
 
 /* puts a dynamic array of the argument indices of the parameters into order. *order must be freed, even if function fails */
-static bool call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Location where, I16 **orderp) {
+static Status call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Location where, I16 **orderp) {
 	*orderp = NULL;
 	assert(fn_type->flags & TYPE_IS_RESOLVED);
 	size_t nparams = arr_len(fn_type->fn.types)-1;
@@ -1132,7 +1132,7 @@ static bool call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Loca
 /* 
  *order must be freed, regardless of return value. if (*order)[i] == -1, that parameter was not set.
 */
-static bool parameterized_struct_arg_order(StructDef *struc, Argument *args, I16 **order, Location where) {
+static Status parameterized_struct_arg_order(StructDef *struc, Argument *args, I16 **order, Location where) {
 	size_t nargs = arr_len(args);
 	
 	/* 
@@ -1336,10 +1336,10 @@ static char *eval_expr_as_cstr(Typer *tr, Expression *e, const char *what_is_thi
 }
 
 
-static bool types_expr(Typer *tr, Expression *e) {
+static Status types_expr(Typer *tr, Expression *e) {
 	if (e->flags & EXPR_FOUND_TYPE) return true;
 	Type *t = &e->type;
-	t->flags = 0;
+	t->flags = TYPE_IS_RESOLVED;
 	t->was_expr = NULL;
 	t->kind = TYPE_UNKNOWN; /* default to unknown type (in the case of an error) */
 	e->flags |= EXPR_FOUND_TYPE; /* even if failed, pretend we found the type */
@@ -1533,18 +1533,18 @@ static bool types_expr(Typer *tr, Expression *e) {
 			return false;
 		if (!type_resolve(tr, &c->type, e->where))
 			return false;
-		Status status = type_cast_status(&c->expr->type, &c->type);
-		if (status != STATUS_NONE) {
+		CastStatus status = type_cast_status(&c->expr->type, &c->type);
+		if (status != CAST_STATUS_NONE) {
 			char *from = type_to_str(&c->expr->type);
 			char *to = type_to_str(&c->type);
-			if (status == STATUS_ERR)
+			if (status == CAST_STATUS_ERR)
 
 				err_print(e->where, "Cannot cast from type %s to %s.", from, to);
 			else
 				warn_print(e->where, "Casting from type %s to %s.", from, to);
 			free(from);
 			free(to);
-			if (status == STATUS_ERR)
+			if (status == CAST_STATUS_ERR)
 				return false;
 		}
 		*t = c->type;
@@ -2592,7 +2592,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 }
 
 
-static bool types_block(Typer *tr, Block *b) {
+static Status types_block(Typer *tr, Block *b) {
 	if (b->flags & BLOCK_FOUND_TYPES)
 		return true;
 
@@ -2643,7 +2643,7 @@ static bool types_block(Typer *tr, Block *b) {
 	return success;
 }
 
-static bool types_decl(Typer *tr, Declaration *d) {
+static Status types_decl(Typer *tr, Declaration *d) {
 	if (d->flags & DECL_FOUND_TYPE) return true;
 	bool success = true;
 
@@ -2673,6 +2673,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 			success = false;
 			goto ret;
 		}
+		assert(d->expr.type.flags & TYPE_IS_RESOLVED);
 		if (d->flags & DECL_ANNOTATES_TYPE) {
 			if (!type_must_eq(d->expr.where, &d->type, &d->expr.type)) {
 				success = false;
@@ -2783,6 +2784,14 @@ static bool types_decl(Typer *tr, Declaration *d) {
 			goto ret;
 		}
 	}
+	if (d->flags & DECL_IS_CONST) {
+		if (d->type.kind == TYPE_PTR) {
+			err_print(d->where, "You can't have a constant pointer.");
+			success = false;
+		    goto ret;
+		}
+	}
+	
 	if (n_idents == 1 && (d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_NMS) {
 		bool is_at_top_level = true;
 		typedef Block *BlockPtr;
@@ -2811,7 +2820,7 @@ static bool types_decl(Typer *tr, Declaration *d) {
 	return success;
 }
 
-static bool types_stmt(Typer *tr, Statement *s) {
+static Status types_stmt(Typer *tr, Statement *s) {
 	if (s->flags & STMT_TYPED) return true;
 	switch (s->kind) {
 	case STMT_EXPR:
@@ -2914,7 +2923,7 @@ static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *a
 	*(Block **)arr_adda(&tr->blocks, allocr) = NULL;
 }
 
-static bool types_file(Typer *tr, ParsedFile *f) {
+static Status types_file(Typer *tr, ParsedFile *f) {
 	bool ret = true;
 	tr->parsed_file = f;
 	arr_foreach(f->stmts, Statement, s) {

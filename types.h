@@ -64,6 +64,11 @@ typedef U8 bool;
 #define true ((bool)1)
 #endif
 
+#if defined __GNUC__ && !defined NO_WARN_UNUSED_RESULT
+#define Status bool __attribute__((warn_unused_result)) 
+#else
+#define Status bool
+#endif
 
 typedef int8_t I8;
 #define I8_MAX INT8_MAX
@@ -923,7 +928,6 @@ typedef struct CGenerator {
 	Block *block;
 	Namespace *nms;
 	FnExpr *fn; /* which function are we in? (NULL for none) - not used during decls */
-	Evaluator *evalr;
 	Identifier main_ident;
 	Identifiers *globals;
 	char *nms_prefix; /* dynamic (null-terminated) array of characters, the current namespace C prefix (e.g. "foo__bar__") */

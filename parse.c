@@ -3,16 +3,16 @@
   This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
-static bool parse_expr(Parser *p, Expression *e, Token *end);
-static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement);
+static Status parse_expr(Parser *p, Expression *e, Token *end);
+static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement);
 enum {
 	  PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR = 0x01,
 	  PARSE_DECL_ALLOW_SEMI_CONST = 0x02,
 	  PARSE_DECL_ALLOW_INFER = 0x04,
 	  PARSE_DECL_ALLOW_EXPORT = 0x08
 };
-static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_t flags);
-static bool parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end);
+static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_t flags);
+static Status parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end);
 
 static bool is_decl(Tokenizer *t);
 static inline bool ends_decl(Token *t, DeclEndKind ends_with);
@@ -421,7 +421,7 @@ static Token *expr_find_end(Parser *p, ExprEndFlags flags)  {
 }
 
 /* parses, e.g. "(3, 5, foo)" */
-static bool parse_args(Parser *p, Argument **args) {
+static Status parse_args(Parser *p, Argument **args) {
 	Tokenizer *t = p->tokr;
 	Token *start = t->token;
 	assert(token_is_kw(start, KW_LPAREN));
@@ -460,7 +460,7 @@ static bool parse_args(Parser *p, Argument **args) {
 	return true;
 }
 
-static bool parse_type(Parser *p, Type *type) {
+static Status parse_type(Parser *p, Type *type) {
 	Tokenizer *t = p->tokr;
 	type->where = parser_mk_loc(p);
 	type->where.start = t->token;
@@ -835,7 +835,7 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 enum {
 	  PARSE_BLOCK_DONT_CREATE_IDENTS = 0x01
 };
-static bool parse_block(Parser *p, Block *b, U8 flags) {
+static Status parse_block(Parser *p, Block *b, U8 flags) {
 	Tokenizer *t = p->tokr;
 	Block *prev_block = p->block;
 	b->flags = 0;
@@ -886,7 +886,7 @@ static bool parse_block(Parser *p, Block *b, U8 flags) {
 }
 
 /* does NOT handle empty declaration lists */
-static bool parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end) {
+static Status parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end) {
 	Tokenizer *t = p->tokr;
 	bool ret = true;
 	bool first = true;
@@ -920,7 +920,7 @@ static bool parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end
 	return ret;
 }
 
-static bool parse_fn_expr(Parser *p, FnExpr *f) {
+static Status parse_fn_expr(Parser *p, FnExpr *f) {
 	Tokenizer *t = p->tokr;
 	f->ret_decls = NULL;
 	{
@@ -1043,7 +1043,7 @@ static Identifier parser_ident_insert(Parser *p, char *str) {
 	return i;
 }
 
-static bool check_ident_redecl(Parser *p, Identifier i) {
+static Status check_ident_redecl(Parser *p, Identifier i) {
 	Tokenizer *t = p->tokr;
 	if (i->idents == &p->block->idents) {
 		if (i->decl_kind != IDECL_NONE) {
@@ -1057,7 +1057,7 @@ static bool check_ident_redecl(Parser *p, Identifier i) {
 	return true;
 }
 
-static bool parse_expr(Parser *p, Expression *e, Token *end) {
+static Status parse_expr(Parser *p, Expression *e, Token *end) {
 	Tokenizer *t = p->tokr;
 
 #if 0
@@ -1928,7 +1928,7 @@ static inline bool ends_decl(Token *t, DeclEndKind ends_with) {
 	}
 }
 
-static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 flags) {
+static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 flags) {
 	Tokenizer *t = p->tokr;
 	d->where = parser_mk_loc(p);
 	d->where.start = t->token;
@@ -2126,7 +2126,7 @@ static bool is_decl(Tokenizer *t) {
 }
 
 /* sets *was_a_statement to false if s was not filled, but the token was advanced */
-static bool parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
+static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 	Tokenizer *t = p->tokr;
 	if (t->token->kind == TOKEN_EOF) {
 		tokr_err(t, "Expected statement.");
@@ -2223,7 +2223,7 @@ static void parser_create(Parser *p, Identifiers *globals, Tokenizer *t, Allocat
 	p->allocr = allocr;
 }
 
-static bool parse_file(Parser *p, ParsedFile *f) {
+static Status parse_file(Parser *p, ParsedFile *f) {
 	Tokenizer *t = p->tokr;
 	f->stmts = NULL;
 	p->file = t->file;

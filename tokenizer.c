@@ -277,7 +277,7 @@ static Token *tokr_add(Tokenizer *t) {
 	return token;
 }
 
-static bool tokenize_file(Tokenizer *t, File *file) {
+static Status tokenize_file(Tokenizer *t, File *file) {
 	int has_err = 0;
 	t->s = file->contents;
 	t->file = file;

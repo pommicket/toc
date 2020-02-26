@@ -1,13 +1,5 @@
-io ::= nms {
-#include "std/io.toc";
-};
-
-foo ::= fn() <int, int> {
-	3, 5
-};
 
 main ::= fn() {
-	 _, x := foo();
-	 y, _ := foo();
-	 io.puti(x); io.puti(y);
+	 x :: &int = new(int);
+	 y := x;
 };

@@ -3,7 +3,7 @@
   This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
-static bool cgen_sdecls_stmt(CGenerator *g, Statement *s);
+static void cgen_sdecls_stmt(CGenerator *g, Statement *s);
 static bool cgen_sdecls_decl(CGenerator *g, Declaration *d);
 static bool cgen_sdecls_expr(CGenerator *g, Expression *e);
 
@@ -33,19 +33,20 @@ static bool cgen_sdecls_type(CGenerator *g, Type *type) {
 	return true;
 }
 
+/* ALWAYS RETURNS TRUE. just returns a bool for cgen_recurse_subexprs to work. */
 static bool cgen_sdecls_block(CGenerator *g, Block *b) {
 	Block *prev_block = g->block;
 	g->block = b;
 	
 	arr_foreach(b->stmts, Statement, s)
-		if (!cgen_sdecls_stmt(g, s))
-			return false;
-	if (b->ret_expr && !cgen_sdecls_expr(g, b->ret_expr))
-		return false;
+		cgen_sdecls_stmt(g, s);
+	if (b->ret_expr)
+		cgen_sdecls_expr(g, b->ret_expr);
 	g->block = prev_block;
 	return true;
 }
 
+/* ALWAYS RETURNS TRUE. just returns a bool for cgen_recurse_subexprs to work. */
 static bool cgen_sdecls_expr(CGenerator *g, Expression *e) {
 	switch (e->kind) {
 	case EXPR_CAST:
@@ -56,8 +57,7 @@ static bool cgen_sdecls_expr(CGenerator *g, Expression *e) {
 		e->fn->c.id = ++g->ident_counter;
 		break;
 	case EXPR_TYPE:
-		if (!cgen_sdecls_type(g, &e->typeval))
-			return false;
+		cgen_sdecls_type(g, &e->typeval);
 		break;
 	case EXPR_NMS:
 		e->nms.c.id = 0;
@@ -66,15 +66,16 @@ static bool cgen_sdecls_expr(CGenerator *g, Expression *e) {
 	}
 	cgen_recurse_subexprs(g, e, cgen_sdecls_expr, cgen_sdecls_block, cgen_sdecls_decl);
 	return true;
-
 }
 
+
+/* ALWAYS RETURNS TRUE. just returns a bool for cgen_recurse_subexprs to work. */
 static bool cgen_sdecls_decl(CGenerator *g, Declaration *d) {
 	if (d->flags & DECL_FOREIGN) {
 		/* handled by cgen_decls */
 		return true;
 	}
-	cgen_sdecls_type(g, &d->type);
+    cgen_sdecls_type(g, &d->type);
 	if (cgen_fn_is_direct(g, d)) {
 		d->expr.fn->c.name = d->idents[0];
 	}
@@ -82,13 +83,11 @@ static bool cgen_sdecls_decl(CGenerator *g, Declaration *d) {
 		Type *type = decl_type_at_index(d, idx);
 		Value *val = decl_val_at_index(d, idx);
 		if (type_is_builtin(type, BUILTIN_TYPE)) {
-			if (!cgen_sdecls_type(g, val->type))
-				return false;
+		    cgen_sdecls_type(g, val->type);
 		}
 	}
 	if (d->flags & DECL_HAS_EXPR) {
-		if (!cgen_sdecls_expr(g, &d->expr))
-			return false;
+	    cgen_sdecls_expr(g, &d->expr);
 		if (d->flags & DECL_EXPORT) {
 			if (d->expr.kind == EXPR_FN)
 				d->expr.fn->flags |= FN_EXPR_EXPORT;
@@ -97,34 +96,27 @@ static bool cgen_sdecls_decl(CGenerator *g, Declaration *d) {
 	return true;
 }
 
-static bool cgen_sdecls_stmt(CGenerator *g, Statement *s) {
+static void cgen_sdecls_stmt(CGenerator *g, Statement *s) {
 	switch (s->kind) {
 	case STMT_DECL:
-		if (!cgen_sdecls_decl(g, s->decl))
-			return false;
+		cgen_sdecls_decl(g, s->decl);
 		break;
 	case STMT_EXPR:
-		if (!cgen_sdecls_expr(g, &s->expr))
-			return false;
+		cgen_sdecls_expr(g, &s->expr);
 		break;
 	case STMT_RET:
 		if (s->ret.flags & RET_HAS_EXPR)
-			if (!cgen_sdecls_expr(g, &s->ret.expr))
-				return false;
+			cgen_sdecls_expr(g, &s->ret.expr);
 		break;
 	case STMT_INCLUDE:
 		arr_foreach(s->inc.stmts, Statement, sub)
-			if (!cgen_sdecls_stmt(g, sub))
-				return false;
+			cgen_sdecls_stmt(g, sub);
 	    break;
 	}
-	return true;
 }
 
-static bool cgen_sdecls_file(CGenerator *g, ParsedFile *f) {
+static void cgen_sdecls_file(CGenerator *g, ParsedFile *f) {
 	arr_foreach(f->stmts, Statement, s) {
-		if (!cgen_sdecls_stmt(g, s))
-			return false;
+		cgen_sdecls_stmt(g, s);
 	}
-	return true;
 }

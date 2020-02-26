@@ -4,25 +4,14 @@
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
 
-/* 
-   NOTE:
-   Structure of the toc compiler:
-   tokenizer => parser => typing (types.c) => cgen 
-   (lexing)
-
-   toc tries to continue even after the first error. 
-   It will not continue during cgen, but it will during tokenization,
-   parsing, and typing. If one stage fails, the following ones do not
-   start.
-*/
+/* see toc.c for development information */
 
 /* 
 TODO:
-make sure we're checking for redecls with #include
-
+try to make cgen not have return values anymore
 nice syntax for #including something into a namespace
 run stuff at compile time without assigning it to a constant
-the problem of #foreign stuff currently requiring that source and target have the same sizeof(int), etc. -- we may need #C_int, etc.
+better #foreign system- something like f := #foreign fn (int,float, #C int);
 ---
 constants in structs
 #if
@@ -123,6 +112,7 @@ int main(int argc, char **argv) {
 	tokr_create(&t, &err_ctx, &main_allocr);
 	if (!tokenize_file(&t, &file)) {
 		err_text_important(&err_ctx, "Errors occured during preprocessing.\n");
+		allocr_free_all(&main_allocr);
 		return EXIT_FAILURE;
 	}
 
@@ -140,6 +130,7 @@ int main(int argc, char **argv) {
 	ParsedFile f;
 	if (!parse_file(&p, &f)) {
 		err_text_important(&err_ctx, "Errors occured during parsing.\n");
+		allocr_free_all(&main_allocr);
 		return EXIT_FAILURE;
 	}
 	/* fprint_parsed_file(stdout, &f); */
@@ -154,6 +145,7 @@ int main(int argc, char **argv) {
 	if (!types_file(&tr, &f)) {
 		/* TODO(eventually): fix this if the error occured while exporting something */
 		err_text_important(&err_ctx, "Errors occured while determining types.\n");
+		allocr_free_all(&main_allocr);
 		return EXIT_FAILURE;
 	}
 #ifdef TOC_DEBUG
@@ -164,13 +156,16 @@ int main(int argc, char **argv) {
 	if (!out) {
 		err_text_important(&err_ctx, "Could not open output file: ");
 		err_fprint(&err_ctx, "%s\n", out_filename);
+		allocr_free_all(&main_allocr);
 		return EXIT_FAILURE;
 	}
 	CGenerator g;
-	cgen_create(&g, out, &globals, &ev, &main_allocr);
+	cgen_create(&g, out, &globals, &main_allocr);
 	if (!cgen_file(&g, &f)) {
 		fclose(out);
 		err_text_important(&err_ctx, "Errors occured while generating C code.\n");
+		allocr_free_all(&main_allocr);
+		fclose(out);
 		return EXIT_FAILURE;
 	}
 	

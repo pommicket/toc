@@ -3,11 +3,10 @@
   This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
-static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *ev, Allocator *allocr) {
+static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Allocator *allocr) {
 	g->outc = out;
 	g->ident_counter = 0;
 	g->main_ident = ident_get(ids, "main");
-	g->evalr = ev;
 	g->will_indent = true;
 	g->indent_lvl = 0;
 	g->globals = ids;
@@ -16,25 +15,25 @@ static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Evaluator *e
 	*(char *)arr_adda(&g->nms_prefix, g->allocr) = '\0';
 }
 
-static bool cgen_stmt(CGenerator *g, Statement *s);
+static Status cgen_stmt(CGenerator *g, Statement *s);
 enum {
 	  CGEN_BLOCK_NOBRACES = 0x01 /* should it use braces? */
 };
-static bool cgen_block(CGenerator *g, Block *b, const char *ret_name, uint16_t flags);
-static bool cgen_expr_pre(CGenerator *g, Expression *e);
-static bool cgen_expr(CGenerator *g, Expression *e);
-static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, Expression *to_expr,
+static Status cgen_block(CGenerator *g, Block *b, const char *ret_name, uint16_t flags);
+static Status cgen_expr_pre(CGenerator *g, Expression *e);
+static Status cgen_expr(CGenerator *g, Expression *e);
+static Status cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, Expression *to_expr,
 					 const char *to_str);
-static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents, const char *prefix, Expression *to);
-static bool cgen_type_pre(CGenerator *g, Type *t, Location where);
-static bool cgen_type_post(CGenerator *g, Type *t, Location where);
-static bool cgen_decl(CGenerator *g, Declaration *d);
-static bool cgen_ret(CGenerator *g, Expression *ret);
-static bool cgen_val(CGenerator *g, Value v, Type *t, Location where);
-static bool cgen_val_pre(CGenerator *g, Value v, Type *t, Location where);
-static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where);
-static bool cgen_defs_block(CGenerator *g, Block *b);
-static bool cgen_defs_decl(CGenerator *g, Declaration *d);
+static Status cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents, const char *prefix, Expression *to);
+static Status cgen_type_pre(CGenerator *g, Type *t, Location where);
+static Status cgen_type_post(CGenerator *g, Type *t, Location where);
+static Status cgen_decl(CGenerator *g, Declaration *d);
+static Status cgen_ret(CGenerator *g, Expression *ret);
+static Status cgen_val(CGenerator *g, Value v, Type *t, Location where);
+static Status cgen_val_pre(CGenerator *g, Value v, Type *t, Location where);
+static Status cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where);
+static Status cgen_defs_block(CGenerator *g, Block *b);
+static Status cgen_defs_decl(CGenerator *g, Declaration *d);
 
 #define cgen_recurse_subexprs_fn_simple(fn, decl_f, block_f)	\
 	FnExpr *prev_fn = g->f##n;									\
@@ -351,7 +350,7 @@ static void cgen_struct_name(CGenerator *g, StructDef *sdef) {
 	}
 }
 
-static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
+static Status cgen_type_pre(CGenerator *g, Type *t, Location where) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_BUILTIN:
@@ -411,7 +410,7 @@ static bool cgen_type_pre(CGenerator *g, Type *t, Location where) {
 	return true;
 }
 
-static bool cgen_type_post(CGenerator *g, Type *t, Location where) {
+static Status cgen_type_post(CGenerator *g, Type *t, Location where) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_PTR:
@@ -513,7 +512,7 @@ static void cgen_full_fn_name(CGenerator *g, FnExpr *f, U64 instance) {
 	}
 }
 
-static bool cgen_fn_args(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_const) {
+static Status cgen_fn_args(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_const) {
 	(void)instance; /* not needed atm */
 	bool out_param = cgen_uses_ptr(&f->ret_type);
 	bool any_params = false;
@@ -598,7 +597,7 @@ static inline bool cgen_arg(CGenerator *g, Expression *arg) {
 }
 
 /* unless f has const/semi-const args, instance and which_are_const can be set to 0 */
-static bool cgen_fn_header(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_const) {
+static Status cgen_fn_header(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_const) {
 	bool out_param = cgen_uses_ptr(&f->ret_type);
 	assert(cgen_should_gen_fn(f));
 	if (!(f->flags & FN_EXPR_EXPORT))
@@ -624,7 +623,7 @@ static bool cgen_fn_header(CGenerator *g, FnExpr *f, U64 instance, U64 which_are
    Also, set_str and/or to_str should be NULL
    this DOES NOT call cgen_expr_pre for set_expr or to_expr
 */
-static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, Expression *to_expr,
+static Status cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, Expression *to_expr,
 					 const char *to_str) {
 	Type *type;
 	Location where;
@@ -701,7 +700,7 @@ static bool cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 }
 
 /* one of exprs, idents, and prefix should be NULL. does NOT call cgen_expr_pre for to/exprs */
-static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents, const char *prefix, Expression *to) {
+static Status cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents, const char *prefix, Expression *to) {
 	switch (to->kind) {
 	case EXPR_VAL:
 		assert(0); /* never needed at the moment */
@@ -853,7 +852,7 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 	return true;
 }
 
-static bool cgen_expr_pre(CGenerator *g, Expression *e) {
+static Status cgen_expr_pre(CGenerator *g, Expression *e) {
 	IdentID id = 0;
 	char ret_name[CGEN_IDENT_ID_STR_SIZE+20];
 	switch (e->kind) {
@@ -1319,7 +1318,7 @@ static bool cgen_expr_pre(CGenerator *g, Expression *e) {
 	return true;
 }
 
-static bool cgen_expr(CGenerator *g, Expression *e) {
+static Status cgen_expr(CGenerator *g, Expression *e) {
 	switch (e->kind) {
 	case EXPR_LITERAL_FLOAT:
 		cgen_write(g, "%.16Lf", (long double)e->floatl); /* TODO(eventually): better precision? */
@@ -1453,7 +1452,8 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 			if (struct_type->kind == TYPE_PTR) struct_type = struct_type->ptr;
 			if (struct_type->kind == TYPE_STRUCT) {
 				cgen_write(g, "(");
-				cgen_expr(g, e->binary.lhs);
+				if (!cgen_expr(g, e->binary.lhs))
+					return false;
 				bool is_ptr = e->binary.lhs->type.kind == TYPE_PTR;
 				cgen_write(g, is_ptr ? "->" :".");
 				cgen_ident_simple(g, e->binary.dot.field->name);
@@ -1640,8 +1640,10 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
 				return false;
 		} else {
 			cgen_write(g, "((");
-			cgen_type_pre(g, to, e->where);
-			cgen_type_post(g, to, e->where);
+			if (!cgen_type_pre(g, to, e->where))
+				return false;
+			if (!cgen_type_post(g, to, e->where))
+				return false;
 			cgen_write(g, ")(");
 			if (!cgen_expr(g, e->cast.expr))
 				return false;
@@ -1680,7 +1682,7 @@ static bool cgen_expr(CGenerator *g, Expression *e) {
   functions always call with NULL as ret_name, even if they use out params, for now
   at least. 
 */
-static bool cgen_block(CGenerator *g, Block *b, const char *ret_name, U16 flags) {
+static Status cgen_block(CGenerator *g, Block *b, const char *ret_name, U16 flags) {
 	if (!(flags & CGEN_BLOCK_NOBRACES)) {
 		cgen_write(g, "{");
 		cgen_nl(g);
@@ -1732,7 +1734,7 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 }
 
 /* pass 0 for instance and NULL for compile_time_args if there are no compile time arguments. */
-static bool cgen_fn(CGenerator *g, FnExpr *f, U64 instance, Value *compile_time_args) {
+static Status cgen_fn(CGenerator *g, FnExpr *f, U64 instance, Value *compile_time_args) {
 	/* see also cgen_defs_expr */
 	FnExpr *prev_fn = g->fn;
 	U64 which_are_const = compile_time_args ? compile_time_args->u64 : 0;
@@ -1800,7 +1802,7 @@ static bool cgen_fn(CGenerator *g, FnExpr *f, U64 instance, Value *compile_time_
 	return true;
 }
 
-static bool cgen_val_ptr_pre(CGenerator *g, void *v, Type *t, Location where) {
+static Status cgen_val_ptr_pre(CGenerator *g, void *v, Type *t, Location where) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_SLICE: {
@@ -1843,7 +1845,7 @@ static bool cgen_val_ptr_pre(CGenerator *g, void *v, Type *t, Location where) {
 }
 
 /* generate a value from a pointer */
-static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
+static Status cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_TUPLE:
@@ -1871,7 +1873,8 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 		arr_foreach(t->struc->fields, Field, f) {
 			if (f != t->struc->fields)
 				cgen_write(g, ", ");
-			cgen_val_ptr(g, (char *)v + f->offset, &f->type, where);
+			if (!cgen_val_ptr(g, (char *)v + f->offset, &f->type, where))
+				return false;
 		}
 		cgen_write(g, "}");
 		break;
@@ -1879,8 +1882,9 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 		cgen_fn_name(g, *(FnExpr **)v);
 		break;
 	case TYPE_PTR:
-		err_print(where, "Cannot bring compile time pointer to runtime.");
-		return false;
+		/* see: You can't have a constant pointer. */
+		assert(0);
+		break;
 	case TYPE_BUILTIN:
 		switch (t->builtin) {
 		case BUILTIN_I8: cgen_write(g, I8_FMT, *(I8 *)v); break;
@@ -1905,16 +1909,16 @@ static bool cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 	return true;
 }
 
-static bool cgen_val_pre(CGenerator *g, Value v, Type *t, Location where) {
+static Status cgen_val_pre(CGenerator *g, Value v, Type *t, Location where) {
 	return cgen_val_ptr_pre(g, val_get_ptr(&v, t), t, where);
 }
 
 /* generates a value fit for use as an initializer */
-static bool cgen_val(CGenerator *g, Value v, Type *t, Location where) {
+static Status cgen_val(CGenerator *g, Value v, Type *t, Location where) {
 	return cgen_val_ptr(g, val_get_ptr(&v, t), t, where);
 }
 
-static bool cgen_decl(CGenerator *g, Declaration *d) {
+static Status cgen_decl(CGenerator *g, Declaration *d) {
 	if (d->flags & DECL_FOREIGN)
 		return true; /* already dealt with */
 	if (g->block == NULL && g->fn == NULL)
@@ -2012,7 +2016,7 @@ static bool cgen_decl(CGenerator *g, Declaration *d) {
 	return true;
 }
 
-static bool cgen_ret(CGenerator *g, Expression *ret) {
+static Status cgen_ret(CGenerator *g, Expression *ret) {
 	FnExpr *f = g->fn;
 	if (f->ret_decls) {
 		assert(!ret);
@@ -2080,7 +2084,7 @@ static bool cgen_ret(CGenerator *g, Expression *ret) {
 
 }
 
-static bool cgen_stmt(CGenerator *g, Statement *s) {
+static Status cgen_stmt(CGenerator *g, Statement *s) {
 	/*
 	  TODO(eventually): optionally this:
 	  cgen_write(g, "/\* %s:%d *\/", s->where.ctx->filename, s->where.line);
@@ -2111,7 +2115,7 @@ static bool cgen_stmt(CGenerator *g, Statement *s) {
 	return true;
 }
 
-static bool cgen_defs_fn(CGenerator *g, FnExpr *f, Type *t) {
+static Status cgen_defs_fn(CGenerator *g, FnExpr *f, Type *t) {
 	FnType *fn_type = &t->fn;
 	bool any_const = false;
 	if (fn_type->constness) {
@@ -2137,7 +2141,7 @@ static bool cgen_defs_fn(CGenerator *g, FnExpr *f, Type *t) {
 	return true;
 }
 
-static bool cgen_defs_expr(CGenerator *g, Expression *e) {
+static Status cgen_defs_expr(CGenerator *g, Expression *e) {
 	if (e->kind == EXPR_FN) {
 	    if (!cgen_defs_fn(g, e->fn, &e->type))
 			return false;
@@ -2146,7 +2150,7 @@ static bool cgen_defs_expr(CGenerator *g, Expression *e) {
 	return true;
 }
 
-static bool cgen_defs_decl(CGenerator *g, Declaration *d) {
+static Status cgen_defs_decl(CGenerator *g, Declaration *d) {
 	if (d->flags & DECL_FOREIGN) {
 		return true; /* dealt with by decls_cgen */
 	}
@@ -2158,7 +2162,7 @@ static bool cgen_defs_decl(CGenerator *g, Declaration *d) {
 }
 
 
-static bool cgen_defs_stmt(CGenerator *g, Statement *s) {
+static Status cgen_defs_stmt(CGenerator *g, Statement *s) {
 	switch (s->kind) {
 	case STMT_DECL:
 		if (!cgen_defs_decl(g, s->decl))
@@ -2182,7 +2186,7 @@ static bool cgen_defs_stmt(CGenerator *g, Statement *s) {
 	return true;
 }
 
-static bool cgen_defs_block(CGenerator *g, Block *b) {
+static Status cgen_defs_block(CGenerator *g, Block *b) {
 	/* 
 	   NOTE: since we exit as soon as there's an error for cgen, we don't need to make sure we
 	   set g->block to the previous block if there's an error
@@ -2201,7 +2205,7 @@ static bool cgen_defs_block(CGenerator *g, Block *b) {
 	return true;
 }
 
-static bool cgen_file(CGenerator *g, ParsedFile *f) {
+static Status cgen_file(CGenerator *g, ParsedFile *f) {
 	g->block = NULL;
 	g->nms = NULL;
 	g->fn = NULL;
@@ -2230,8 +2234,7 @@ static bool cgen_file(CGenerator *g, ParsedFile *f) {
 			   "static void _free(void *data) { extern void free(void *data); free(data); }\n" /* don't introduce free to global namespace */
 			   "static void *_ecalloc(size_t n, size_t sz) { extern void *calloc(size_t n, size_t size); extern void abort(void); extern int printf(const char *fmt, ...); void *ret = calloc(n, sz); if (n && sz && !ret) { printf(\"Out of memory.\\n\"); abort(); } return ret; }\n\n\n");
 
-	if (!cgen_sdecls_file(g, f))
-		return false;
+	cgen_sdecls_file(g, f);
 	if (!cgen_decls_file(g, f))
 		return false;
 	cgen_write(g, "/* code */\n");

@@ -3,11 +3,11 @@
   This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
-static bool cgen_decls_stmt(CGenerator *g, Statement *s);
-static bool cgen_decls_block(CGenerator *g, Block *b);
-static bool cgen_decls_decl(CGenerator *g, Declaration *d);
+static Status cgen_decls_stmt(CGenerator *g, Statement *s);
+static Status cgen_decls_block(CGenerator *g, Block *b);
+static Status cgen_decls_decl(CGenerator *g, Declaration *d);
 
-static bool cgen_decls_type(CGenerator *g, Type *type) {
+static Status cgen_decls_type(CGenerator *g, Type *type) {
 	if (!(type->flags & TYPE_IS_RESOLVED)) /* non-instance constant fn parameter type */
 		return true;
 	if (type->kind == TYPE_STRUCT) {
@@ -37,7 +37,7 @@ static bool cgen_decls_type(CGenerator *g, Type *type) {
 	return true;
 }
 
-static bool cgen_single_fn_decl(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_const) {
+static Status cgen_single_fn_decl(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_const) {
 	if (cgen_should_gen_fn(f)) {
 		if (!cgen_fn_header(g, f, instance, which_are_const))
 			return false;
@@ -48,7 +48,7 @@ static bool cgen_single_fn_decl(CGenerator *g, FnExpr *f, U64 instance, U64 whic
 }
 
 
-static bool cgen_decls_fn_instances(CGenerator *g, FnExpr *f) {
+static Status cgen_decls_fn_instances(CGenerator *g, FnExpr *f) {
 	Instance **data = f->instances.data;
 	for (U64 i = 0; i < f->instances.cap; ++i) {
 		if (f->instances.occupied[i]) {
@@ -66,7 +66,7 @@ static bool cgen_decls_fn_instances(CGenerator *g, FnExpr *f) {
 	return true;
 }
 
-static bool cgen_fn_decl(CGenerator *g, FnExpr *f, Type *t) {
+static Status cgen_fn_decl(CGenerator *g, FnExpr *f, Type *t) {
 	FnType *fn_type = &t->fn;
 	if (fn_type->constness) {
 		if (!cgen_decls_fn_instances(g, f))
@@ -78,7 +78,7 @@ static bool cgen_fn_decl(CGenerator *g, FnExpr *f, Type *t) {
 	return true;
 }
 
-static bool cgen_decls_expr(CGenerator *g, Expression *e) {
+static Status cgen_decls_expr(CGenerator *g, Expression *e) {
 	assert(e->flags & EXPR_FOUND_TYPE);
 	cgen_recurse_subexprs(g, e, cgen_decls_expr, cgen_decls_block, cgen_decls_decl);
 	switch (e->kind) {
@@ -111,7 +111,7 @@ static bool cgen_decls_expr(CGenerator *g, Expression *e) {
 	return true;
 }
 
-static bool cgen_decls_block(CGenerator *g, Block *b) {
+static Status cgen_decls_block(CGenerator *g, Block *b) {
 	Block *prev_block = g->block;
 	g->block = b;
 	arr_foreach(b->stmts, Statement, s)
@@ -123,7 +123,7 @@ static bool cgen_decls_block(CGenerator *g, Block *b) {
 	return true;
 }
 
-static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
+static Status cgen_decls_decl(CGenerator *g, Declaration *d) {
 	if (d->flags & DECL_FOREIGN) {
 		cgen_write(g, "extern ");
 	    if ((d->flags & DECL_IS_CONST) && (d->type.kind == TYPE_FN) && arr_len(d->idents) == 1) {
@@ -218,7 +218,7 @@ static bool cgen_decls_decl(CGenerator *g, Declaration *d) {
 	return true;
 }
 
-static bool cgen_decls_stmt(CGenerator *g, Statement *s) {
+static Status cgen_decls_stmt(CGenerator *g, Statement *s) {
 	switch (s->kind) {
 	case STMT_DECL:
 		if (!cgen_decls_decl(g, s->decl))
@@ -242,7 +242,7 @@ static bool cgen_decls_stmt(CGenerator *g, Statement *s) {
 	return true;
 }
 
-static bool cgen_decls_file(CGenerator *g, ParsedFile *f) {
+static Status cgen_decls_file(CGenerator *g, ParsedFile *f) {
 	cgen_write(g, "/* declarations */\n");
 	arr_foreach(f->stmts, Statement, s) {
 		if (!cgen_decls_stmt(g, s))
