@@ -1948,7 +1948,7 @@ static bool parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 fla
 			goto ret_false;
 		}
 		*ident = parser_ident_insert(p, t->token->ident);
-		{
+		if (!ident_eq_str(*ident, "_")) {
 			Identifier i = *ident;
 			if (!check_ident_redecl(p, i))
 				goto ret_false;

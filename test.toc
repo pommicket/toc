@@ -1,19 +1,13 @@
-// io ::= nms {
-// #include "std/io.toc";
-// };
-
-FOO ::= fn(t::Type) Type {
-	&ll(int)
+io ::= nms {
+#include "std/io.toc";
 };
 
-ll ::= struct(t::Type) {
-   head: t;
-   tail: FOO(t);
+foo ::= fn() <int, int> {
+	3, 5
 };
 
 main ::= fn() {
-	 l:ll(int);
-	 m:ll(i16);
-	 x::=#alignof(l);
-	 y::=#alignof(m);
+	 _, x := foo();
+	 y, _ := foo();
+	 io.puti(x); io.puti(y);
 };

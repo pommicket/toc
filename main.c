@@ -18,7 +18,8 @@
 
 /* 
 TODO:
-foo, _ := bar();
+make sure we're checking for redecls with #include
+
 nice syntax for #including something into a namespace
 run stuff at compile time without assigning it to a constant
 the problem of #foreign stuff currently requiring that source and target have the same sizeof(int), etc. -- we may need #C_int, etc.
