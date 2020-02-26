@@ -12,7 +12,7 @@ static bool eval_expr(Evaluator *ev, Expression *e, Value *v);
 static Value get_builtin_val(BuiltinVal val);
 
 static void evalr_create(Evaluator *ev, Typer *tr, Allocator *allocr) {
-	ev->returning = NULL;
+	ev->returning = false;
 	ev->typer = tr;
 	ev->enabled = true;
 	ev->allocr = allocr;

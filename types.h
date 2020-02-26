@@ -60,6 +60,8 @@ typedef uint64_t U64;
 #elif defined __cplusplus
 #else
 typedef U8 bool;
+#define false ((bool)0)
+#define true ((bool)1)
 #endif
 
 

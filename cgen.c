@@ -721,7 +721,7 @@ static bool cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 			else if (exprs)
 				e = &exprs[i];
 			else {
-				snprintf(buf, sizeof buf, "(%s%lu_)", prefix, i);
+				snprintf(buf, sizeof buf, "(%s%lu_)", prefix, (unsigned long)i);
 				s = buf;
 			}
 			if (!cgen_set(g, e, s, &to->tuple[i], NULL)) return false;
