@@ -870,6 +870,7 @@ static bool types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 /* puts a dynamic array of the argument indices of the parameters into order. *order must be freed, even if function fails */
 static bool call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Location where, I16 **orderp) {
 	*orderp = NULL;
+	assert(fn_type->flags & TYPE_IS_RESOLVED);
 	size_t nparams = arr_len(fn_type->fn.types)-1;
 	size_t nargs = arr_len(args);
 	if (nargs > nparams) {
@@ -901,13 +902,6 @@ static bool call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Loca
 	}
 	
 	int p = 0; /* counter for sequential parameters */
-
-	Declaration *last_param_without_default_value = NULL;
-	arr_foreach(fn->params, Declaration, param) {
-		if (!(param->flags & DECL_HAS_EXPR)) {
-			last_param_without_default_value = param;
-		}
-	}
 	Declaration *param = fn->params;
 	size_t ident_idx = 0;
 	I16 arg_idx = -1;
@@ -941,18 +935,21 @@ static bool call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Loca
 			}
 			param_idx = index;
 		} else {
+			/* move past inferred parameters because they must be named */
+			while (param < (Declaration *)arr_end(fn->params) && (param->flags & DECL_INFER)) {
+				++p;
+				++ident_idx;
+				if (ident_idx == arr_len(param->idents)) {
+					++param;
+					ident_idx = 0;
+				}
+			}
 			if (param > (Declaration *)arr_last(fn->params)) {
 				err_print(arg->where, "Too many arguments to function!");
 				info_print(fn->where, "Declaration is here.");
 				return false;
 			}
-		
-			if ((param->flags & (DECL_HAS_EXPR | DECL_INFER)) && param < last_param_without_default_value) {
-				/* this param must be named; so this is referring to a later parameter */
-				--arg;
-			} else {
-				param_idx = p;
-			}
+			param_idx = p;
 		}
 
 		if (param_idx != -1) {
@@ -979,7 +976,7 @@ static bool call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Loca
 			if (order[param_idx] == -1) {
 				if (!(decl->flags & DECL_HAS_EXPR) && !(decl->flags & DECL_INFER)) {
 					char *s = ident_to_str(*ident);
-					err_print(where, "Parameter #%lu (%s) was not set in function call.", param_idx-1, s);
+					err_print(where, "Parameter #%lu (%s) was not set in function call.", param_idx+1, s);
 					free(s);
 					return false;
 				}
@@ -1751,7 +1748,6 @@ static bool types_expr(Typer *tr, Expression *e) {
 						*p = &param->type;
 						Type **q = typer_arr_add(tr, &arg_types);
 						*q = &arg_exprs[i].type;
-					    print_expr(arg_exprs + i);
 					}
 					++i;
 				}

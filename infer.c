@@ -105,14 +105,20 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Expres
 		}
 		
 		Argument *m_args = match->call.args;
+		size_t nargs = arr_len(m_args);
 		Expression *t_args = to->call.arg_exprs;
 		I16 *order = NULL;
 		Expression *f = match->call.fn;
 		Identifier ident = f->ident;
 		bool is_direct_fn = f->kind == EXPR_IDENT && ident->decl_kind == IDECL_DECL && (ident->decl->flags & DECL_HAS_EXPR) && ident->decl->expr.kind == EXPR_FN;
+		if (!types_expr(tr, f))
+			return false;
+		if (f->type.kind != TYPE_FN) {
+			char *s = type_to_str(&f->type);
+			err_print(f->where, "Calling non-function type %s.", s);
+			return false;
+		}
 		if (is_direct_fn) {
-			if (!types_expr(tr, f))
-				return false;
 			FnExpr *fn_decl = ident->decl->expr.fn;
 			if (!call_arg_param_order(fn_decl, &f->type, m_args, match->where, &order)) {
 				free(order);
@@ -120,9 +126,14 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Expres
 			}
 		}
 		size_t nparams = arr_len(f->type.fn.types) - 1;
+		if (!order && nparams != nargs) {
+			/* wrong number of parameters? let typing deal with it... */
+			free(order);
+			return true;
+		}
 		for (size_t i = 0; i < nparams; ++i) {
-			if (order[i] != -1) {
-				Argument *m_arg = &m_args[order[i]];
+			if (!order || order[i] != -1) {
+				Argument *m_arg = &m_args[order ? (size_t)order[i] : i];
 				Expression *t_arg;
 				if (is_direct_fn) {
 					t_arg = &t_args[i];

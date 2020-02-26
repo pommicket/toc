@@ -10,6 +10,8 @@ compile() {
 		EXTRA_FLAGS="-Wno-builtin-declaration-mismatch"
 	elif [ "$CC" = "clang -O3 -s" ]; then
 		EXTRA_FLAGS="-Wno-builtin-requires-header"
+	elif [ "$CC" = "tcc" ]; then
+		EXTRA_FLAGS="-w"
 	fi
 	$CC $CFLAGS $EXTRA_FLAGS -o $DIR/$1/$1.bin $DIR/$1/$1.c || exit 1
 }

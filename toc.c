@@ -34,9 +34,14 @@
 #endif
 
 #if __STDC_VERSION__ >= 201112
+#ifdef __GNUC__
+/* GCC supports non-string literals as the message for a static assertion */
 #define possibly_static_assert(cond) static_assert(cond, "Assertion " #cond " failed.")
 #else
-#define possibly_static_assert assert
+#define possibly_static_assert(cond) static_assert(cond, "Assertion failed")
+#endif
+#else
+#define possibly_static_assert(cond) assert(cond)
 #endif
 
 

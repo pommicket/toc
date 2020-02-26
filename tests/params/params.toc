@@ -7,7 +7,10 @@ do_foo ::= fn (x := 3) y := x {
 };
 
 puti ::= fn(x: int) {
-	 #C("extern int printf(const char *fmt, ...)");
+	 #C("#ifndef __TINYC__
+extern int printf(const char *fmt, ...);
+#endif
+");
 	 #C("printf(\"%ld\\n\", x)");
 };
 

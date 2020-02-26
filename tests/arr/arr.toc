@@ -1,9 +1,16 @@
 puti ::= fn(x: int) {
-	 #C("extern int printf(const char *fmt, ...)");
+//tcc's giving me "incompatible types for redefinition of 'printf'" for some reason (even though the declarations have the exact same type)
+	 #C("#ifndef __TINYC__
+extern int printf(const char *fmt, ...);
+#endif
+");
 	 #C("printf(\"%ld\\n\", (long)x)");
 };
 putf ::= fn(x: float) {
-	 #C("extern int printf(const char *fmt, ...)");
+	 #C("#ifndef __TINYC__
+extern int printf(const char *fmt, ...);
+#endif
+");
 	 #C("printf(\"%f\\n\", (double)x)");
 };
 

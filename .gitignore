@@ -15,3 +15,5 @@ compatibility
 std/*.c
 std/*.o
 *.so
+README.html
+docs/*.html
