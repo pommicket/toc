@@ -107,7 +107,6 @@ static bool struct_find_offsets(StructDef *s) {
 }
 
 static size_t compiler_alignof(Type *t) {
-	Value v;
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_BUILTIN:
@@ -115,11 +114,11 @@ static size_t compiler_alignof(Type *t) {
 	case TYPE_VOID:
 		return 1;
 	case TYPE_FN:
-		return toc_alignof v.fn;
+		return toc_alignof(FnExpr *);
 	case TYPE_PTR:
-		return toc_alignof v.ptr;
+		return toc_alignof(void *);
 	case TYPE_TUPLE:
-		return toc_alignof v.tuple;
+		return toc_alignof(Value *);
 	case TYPE_ARR:
 		return compiler_alignof(t->arr.of);
 	case TYPE_SLICE:

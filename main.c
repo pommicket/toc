@@ -18,8 +18,6 @@
 
 /* 
 TODO:
-replace is_reference in type_resolve_ with system for checking if type is
-   circularly dependent in a bad way, with compiler_sizeof
 foo, _ := bar();
 nice syntax for #including something into a namespace
 run stuff at compile time without assigning it to a constant

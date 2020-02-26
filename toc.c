@@ -35,7 +35,7 @@
 
 
 /* use toc_alignof only for non-structs. it may be incorrect for pre-C(++)11. */
-#if __STDC_VERSION__ >= 201112 || __cplusplus >= 201103L
+#if (__STDC_VERSION__ >= 201112 || __cplusplus >= 201103L) && !defined __TINYC__
 #include <stdalign.h>
 #define toc_alignof alignof
 
