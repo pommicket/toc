@@ -1,11 +1,19 @@
-io ::= nms {
-#include "std/io.toc";
+// io ::= nms {
+// #include "std/io.toc";
+// };
+
+// p ::= struct(x::Type,y::=3) {
+//   b:int;
+// };
+
+foo ::= fn(x::int) Type {
+	[x]int
 };
 
-p ::= struct(x::Type,y::=3) {
-  b:int;
+z ::= fn(a::=,b:foo(a)) {
 };
+
 main ::= fn() {
-z:p(int);
-x:[z.y]z.x;
+	 n:foo(3);
+	 z(n);
 };

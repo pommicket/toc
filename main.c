@@ -18,8 +18,6 @@
 
 /* 
 TODO:
-remember to free order
----
 see infer.c "is resolved_to necessary" (now that ident system has changed)
 replace is_reference in type_resolve_ with system for checking if type is
    circularly dependent in a bad way, with compiler_sizeof

@@ -877,8 +877,14 @@ static bool call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Loca
 				  nparams, plural_suffix(nparams), nargs);
 		return false;
 	}
-
-	I16 *order = *orderp = err_malloc(nparams * sizeof *order);
+    
+	
+	I16 *order = *orderp =
+		/* thanks, gcc, for making me do this! (getting erroneous -Walloc-size-larger-than) */
+#if defined __GNUC__ && !defined __clang__
+		nparams > PTRDIFF_MAX ? NULL :
+#endif
+		err_malloc(nparams * sizeof *order);
 	for (size_t i = 0; i < nparams; ++i)
 		order[i] = -1;
 	
@@ -1684,6 +1690,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 					} else {
 						arg_exprs[i] = args[arg_idx].val;
 					}
+					++i;
 				}
 			}
 		} else {
@@ -1729,7 +1736,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 			Type **arg_types = NULL;
 			Type **decl_types = NULL;
 			Identifier *inferred_idents = NULL;
-			
+
 			arr_foreach(fn->params, Declaration, param) {
 				arr_foreach(param->idents, Identifier, ident) {
 					if (param->flags & DECL_INFER) {
@@ -1744,6 +1751,7 @@ static bool types_expr(Typer *tr, Expression *e) {
 						*p = &param->type;
 						Type **q = typer_arr_add(tr, &arg_types);
 						*q = &arg_exprs[i].type;
+					    print_expr(arg_exprs + i);
 					}
 					++i;
 				}
