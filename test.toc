@@ -1,5 +1,7 @@
 
+realloc ::= fn() int {
+	 #C("4")
+};
 main ::= fn() {
-	 x :: &int = new(int);
-	 y := x;
+	 y := realloc();
 };

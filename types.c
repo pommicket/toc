@@ -2783,6 +2783,10 @@ static Status types_decl(Typer *tr, Declaration *d) {
 			success = false;
 			goto ret;
 		}
+	} else if (d->type.kind == TYPE_UNKNOWN) {
+		err_print(d->where, "Can't determine type of declaration.");
+		success = false;
+		goto ret;
 	}
 	if (d->flags & DECL_IS_CONST) {
 		if (d->type.kind == TYPE_PTR) {

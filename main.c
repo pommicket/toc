@@ -165,7 +165,6 @@ int main(int argc, char **argv) {
 		fclose(out);
 		err_text_important(&err_ctx, "Errors occured while generating C code.\n");
 		allocr_free_all(&main_allocr);
-		fclose(out);
 		return EXIT_FAILURE;
 	}
 	

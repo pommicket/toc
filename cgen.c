@@ -394,15 +394,13 @@ static Status cgen_type_pre(CGenerator *g, Type *t, Location where) {
 		cgen_write(g, "_slice");
 		break;
 	case TYPE_VOID: cgen_write(g, "void"); break;
-	case TYPE_UNKNOWN:
-		err_print(where, "Can't determine type.");
-		return false;
 	case TYPE_STRUCT:
 		cgen_write(g, "struct ");
 		cgen_struct_name(g, t->struc);
 		break;
 	case TYPE_TUPLE:
 	case TYPE_EXPR:
+	case TYPE_UNKNOWN:
 		/* We should never try to generate this type */
 		assert(0);
 		return false;
@@ -1851,10 +1849,8 @@ static Status cgen_val_ptr(CGenerator *g, void *v, Type *t, Location where) {
 	case TYPE_TUPLE:
 	case TYPE_VOID:
 	case TYPE_EXPR:
-		assert(0);
-		return false;
 	case TYPE_UNKNOWN:
-		err_print(where, "Cannot determine type.");
+		assert(0);
 		return false;
 	case TYPE_ARR:
 		cgen_write(g, "{");
