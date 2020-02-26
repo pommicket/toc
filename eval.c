@@ -26,116 +26,6 @@ static inline void *evalr_calloc(Evaluator *ev, size_t n, size_t bytes) {
 	return allocr_calloc(ev->allocr, n, bytes);
 }
 
-
-static size_t compiler_sizeof_builtin(BuiltinType b) {
-	switch (b) {
-	case BUILTIN_I8: return sizeof(I8);
-	case BUILTIN_U8: return sizeof(U8);
-	case BUILTIN_I16: return sizeof(I16);
-	case BUILTIN_U16: return sizeof(U16);
-	case BUILTIN_I32: return sizeof(I32);
-	case BUILTIN_U32: return sizeof(U32);
-	case BUILTIN_I64: return sizeof(I64);
-	case BUILTIN_U64: return sizeof(U64);
-	case BUILTIN_F32: return sizeof(F32);
-	case BUILTIN_F64: return sizeof(F64);
-	case BUILTIN_CHAR: return sizeof(char); /* = 1 */
-	case BUILTIN_BOOL: return sizeof(bool);
-	case BUILTIN_TYPE: return sizeof(Type *);
-	case BUILTIN_NMS: return sizeof(Namespace *);
-	}
-	assert(0);
-	return 0;
-}
-
-/* finds offsets and size */
-static void eval_struct_find_offsets(StructDef *s) {
-	if (!(s->flags & STRUCT_DEF_FOUND_OFFSETS)) {
-		size_t bytes = 0;
-		size_t total_align = 0;
-		arr_foreach(s->fields, Field, f) {
-			size_t falign = compiler_alignof(&f->type);
-			if (falign > total_align)
-				total_align = falign;
-			/* align */
-			bytes += ((falign - bytes) % falign + falign) % falign; /* = -bytes mod falign */
-			assert(bytes % falign == 0);
-			f->offset = bytes;
-			/* add size */
-			bytes += compiler_sizeof(&f->type);
-		}
-		bytes += ((total_align - bytes) % total_align + total_align) % total_align; /* = -bytes mod align */
-		s->size = bytes;
-		s->align = total_align;
-		s->flags |= STRUCT_DEF_FOUND_OFFSETS;
-	}
-}
-
-static size_t compiler_alignof(Type *t) {
-	Value v;
-	assert(t->flags & TYPE_IS_RESOLVED);
-	switch (t->kind) {
-	case TYPE_BUILTIN:
-		return compiler_sizeof_builtin(t->builtin);
-	case TYPE_VOID:
-		return 1;
-	case TYPE_FN:
-		return sizeof v.fn;
-	case TYPE_PTR:
-		return sizeof v.ptr;
-	case TYPE_TUPLE:
-		return sizeof v.tuple;
-	case TYPE_ARR:
-		return compiler_alignof(t->arr.of);
-	case TYPE_SLICE:
-		if (sizeof(void *) > sizeof(size_t))
-			return sizeof(void *);
-		else
-			return sizeof(size_t);
-	case TYPE_STRUCT: {
-		/* assume the align of a struct is (at most) the greatest align out of its children's */
-		eval_struct_find_offsets(t->struc);
-		return t->struc->align;
-	}
-	case TYPE_UNKNOWN:
-	case TYPE_EXPR:
-		break;
-	}
-	assert(0);
-	return 0;
-}
-
-/* size of a type at compile time */
-static size_t compiler_sizeof(Type *t) {
-	Value v;
-	assert(t->flags & TYPE_IS_RESOLVED);
-	switch (t->kind) {
-	case TYPE_BUILTIN:
-		return compiler_sizeof_builtin(t->builtin);
-	case TYPE_FN:
-		return sizeof v.fn;
-	case TYPE_PTR:
-		return sizeof v.ptr;
-	case TYPE_ARR:
-		return t->arr.n * compiler_sizeof(t->arr.of);
-	case TYPE_TUPLE:
-		return sizeof v.tuple;
-	case TYPE_SLICE:
-		return sizeof v.slice;
-	case TYPE_STRUCT: {
-		eval_struct_find_offsets(t->struc);
-		return t->struc->size;
-	} break;
-	case TYPE_VOID:
-	case TYPE_UNKNOWN:
-		return 0;
-	case TYPE_EXPR:
-		break;
-	}
-	assert(0);
-	return 0;
-}
-
 static bool builtin_truthiness(Value *v, BuiltinType b) {
 	switch (b) {
 	case BUILTIN_I8: return v->i8 != 0;
@@ -796,8 +686,6 @@ static bool eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr, void *
 		struct_type = struct_type->ptr;
 	}
 	if (struct_type->kind == TYPE_STRUCT) {
-		eval_struct_find_offsets(struct_type->struc);
-			
 		Value struc;
 		if (!eval_expr(ev, dot_expr->binary.lhs, &struc))
 			return NULL;

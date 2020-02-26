@@ -29,6 +29,149 @@ static inline void typer_block_exit(Typer *tr) {
 	tr->block = *(Block **)arr_last(tr->blocks);
 }
 
+
+static size_t compiler_sizeof_builtin(BuiltinType b) {
+	switch (b) {
+	case BUILTIN_I8: return sizeof(I8);
+	case BUILTIN_U8: return sizeof(U8);
+	case BUILTIN_I16: return sizeof(I16);
+	case BUILTIN_U16: return sizeof(U16);
+	case BUILTIN_I32: return sizeof(I32);
+	case BUILTIN_U32: return sizeof(U32);
+	case BUILTIN_I64: return sizeof(I64);
+	case BUILTIN_U64: return sizeof(U64);
+	case BUILTIN_F32: return sizeof(F32);
+	case BUILTIN_F64: return sizeof(F64);
+	case BUILTIN_CHAR: return sizeof(char); /* = 1 */
+	case BUILTIN_BOOL: return sizeof(bool);
+	case BUILTIN_TYPE: return sizeof(Type *);
+	case BUILTIN_NMS: return sizeof(Namespace *);
+	}
+	assert(0);
+	return 0;
+}
+static size_t compiler_alignof_builtin(BuiltinType b) {
+	switch (b) {
+	case BUILTIN_I8: return toc_alignof(I8);
+	case BUILTIN_U8: return toc_alignof(U8);
+	case BUILTIN_I16: return toc_alignof(I16);
+	case BUILTIN_U16: return toc_alignof(U16);
+	case BUILTIN_I32: return toc_alignof(I32);
+	case BUILTIN_U32: return toc_alignof(U32);
+	case BUILTIN_I64: return toc_alignof(I64);
+	case BUILTIN_U64: return toc_alignof(U64);
+	case BUILTIN_F32: return toc_alignof(F32);
+	case BUILTIN_F64: return toc_alignof(F64);
+	case BUILTIN_CHAR: return toc_alignof(char);
+	case BUILTIN_BOOL: return toc_alignof(bool);
+	case BUILTIN_TYPE: return toc_alignof(Type *);
+	case BUILTIN_NMS: return toc_alignof(Namespace *);
+	}
+	assert(0);
+	return 0;
+}
+
+/* finds offsets and size */
+static bool struct_find_offsets(StructDef *s) {
+	/* assume the align of a struct is the greatest align out of its children's */
+	if (!(s->flags & STRUCT_DEF_FOUND_OFFSETS)) {
+		if (s->flags & STRUCT_DEF_FINDING_OFFSETS) {
+			err_print(s->where, "Circular dependency in struct!");
+			return false;
+		}
+		s->flags |= STRUCT_DEF_FINDING_OFFSETS;
+		size_t bytes = 0;
+		size_t total_align = 0;
+		arr_foreach(s->fields, Field, f) {
+			size_t size = compiler_sizeof(&f->type);
+			if (size == SIZE_MAX) {
+				info_print(f->where, "... while descending into this field of a struct.");
+				return false;
+			}
+			size_t falign = compiler_alignof(&f->type);
+			if (falign > total_align)
+				total_align = falign;
+			/* align */
+			bytes += ((falign - bytes) % falign + falign) % falign; /* = -bytes mod falign */
+			assert(bytes % falign == 0);
+			f->offset = bytes;
+			/* add size */
+			bytes += size;
+		}
+		bytes += ((total_align - bytes) % total_align + total_align) % total_align; /* = -bytes mod align */
+		s->size = bytes;
+		s->align = total_align;
+		s->flags |= STRUCT_DEF_FOUND_OFFSETS;
+	}
+	return true;
+}
+
+static size_t compiler_alignof(Type *t) {
+	Value v;
+	assert(t->flags & TYPE_IS_RESOLVED);
+	switch (t->kind) {
+	case TYPE_BUILTIN:
+		return compiler_sizeof_builtin(t->builtin);
+	case TYPE_VOID:
+		return 1;
+	case TYPE_FN:
+		return toc_alignof v.fn;
+	case TYPE_PTR:
+		return toc_alignof v.ptr;
+	case TYPE_TUPLE:
+		return toc_alignof v.tuple;
+	case TYPE_ARR:
+		return compiler_alignof(t->arr.of);
+	case TYPE_SLICE:
+		if (sizeof(void *) > sizeof(size_t))
+			return toc_alignof(void *);
+		else
+			return toc_alignof(size_t);
+	case TYPE_STRUCT:
+		if (!struct_find_offsets(t->struc))
+			return SIZE_MAX;
+		return t->struc->align;
+	case TYPE_UNKNOWN:
+	case TYPE_EXPR:
+		break;
+	}
+	assert(0);
+	return 0;
+}
+
+/* size of a type at compile time */
+static size_t compiler_sizeof(Type *t) {
+	Value v;
+	assert(t->flags & TYPE_IS_RESOLVED);
+	switch (t->kind) {
+	case TYPE_BUILTIN:
+		return compiler_sizeof_builtin(t->builtin);
+	case TYPE_FN:
+		return sizeof v.fn;
+	case TYPE_PTR:
+		return sizeof v.ptr;
+	case TYPE_ARR:
+		return t->arr.n * compiler_sizeof(t->arr.of);
+	case TYPE_TUPLE:
+		return sizeof v.tuple;
+	case TYPE_SLICE:
+		return sizeof v.slice;
+	case TYPE_STRUCT: {
+		if (!struct_find_offsets(t->struc))
+			return SIZE_MAX;
+		return t->struc->size;
+	} break;
+	case TYPE_VOID:
+	case TYPE_UNKNOWN:
+		return 0;
+	case TYPE_EXPR:
+		break;
+	}
+	assert(0);
+	return 0;
+}
+
+
 #define typer_arr_add(tr, a) typer_arr_add_(tr, (void **)(a), sizeof **(a))
 
 static bool type_eq(Type *a, Type *b) {
@@ -431,9 +574,7 @@ static bool type_of_ident(Typer *tr, Location where, Identifier *ident, Type *t)
 			err_print(where, "Variables cannot be captured into inner functions (but constants can).");
 			return false;
 		}
-		if (arr_len(tr->is_reference_stack)
-			&& *(bool *)arr_last(tr->is_reference_stack)
-			&& (d->flags & DECL_HAS_EXPR) && (d->expr.kind == EXPR_TYPE)) {
+		if ((d->flags & DECL_HAS_EXPR) && (d->expr.kind == EXPR_TYPE)) {
 			/* allow using a type before declaring it */
 			t->kind = TYPE_BUILTIN;
 			t->builtin = BUILTIN_TYPE;
@@ -519,7 +660,8 @@ static bool type_of_ident(Typer *tr, Location where, Identifier *ident, Type *t)
 	return true;
 }
 
-static bool type_resolve_(Typer *tr, Type *t, Location where, bool is_reference) {
+/* fixes the type (replaces [5+3]int with [8]int, etc.) */
+static bool type_resolve(Typer *tr, Type *t, Location where) {
 	Evaluator *ev = tr->evalr;
 	if (t->flags & TYPE_IS_RESOLVED) return true;
 	t->was_expr = NULL;
@@ -554,34 +696,34 @@ static bool type_resolve_(Typer *tr, Type *t, Location where, bool is_reference)
 			size = val_to_u64(&val, n_expr->type.builtin);
 		}
 		t->arr.n = (U64)size;
-		if (!type_resolve_(tr, t->arr.of, where, is_reference))
+		if (!type_resolve(tr, t->arr.of, where))
 			return false;
 	} break;
 	case TYPE_FN:
 		arr_foreach(t->fn.types, Type, child_type) {
-			if (!type_resolve_(tr, child_type, where, true))
+			if (!type_resolve(tr, child_type, where))
 				return false;
 		}
 		break;
 	case TYPE_TUPLE:
 		arr_foreach(t->tuple, Type, child_type) {
-			if (!type_resolve_(tr, child_type, where, is_reference))
+			if (!type_resolve(tr, child_type, where))
 				return false;
 		}
 		break;
 	case TYPE_PTR:
-		if (!type_resolve_(tr, t->ptr, where, true))
+		if (!type_resolve(tr, t->ptr, where))
 			return false;
 		break;
 	case TYPE_SLICE:
-		if (!type_resolve_(tr, t->slice, where, true))
+		if (!type_resolve(tr, t->slice, where))
 			return false;
 		break;
 	case TYPE_STRUCT: {
 		if (!(t->struc->flags & STRUCT_DEF_RESOLVED)) {
 			typer_block_enter(tr, &t->struc->scope);
 			arr_foreach(t->struc->fields, Field, f) {
-				if (!type_resolve_(tr, &f->type, where, is_reference)) {
+				if (!type_resolve(tr, &f->type, where)) {
 					typer_block_exit(tr);
 					return false;
 				}
@@ -594,10 +736,8 @@ static bool type_resolve_(Typer *tr, Type *t, Location where, bool is_reference)
 	} break;
 	case TYPE_EXPR: {
 		Value typeval;
-		*(bool *)arr_add(&tr->is_reference_stack) = is_reference;
-		bool success = types_expr(tr, t->expr);
-	    arr_remove_last(&tr->is_reference_stack);
-		if (!success) return false;
+		if (!types_expr(tr, t->expr))
+			return false;
 		if (t->expr->type.kind == TYPE_UNKNOWN && tr->err_ctx->have_errored)
 			return false; /* silently fail (e.g. if a function couldn't be typed) */
 		if (!type_is_builtin(&t->expr->type, BUILTIN_TYPE)) {
@@ -616,24 +756,26 @@ static bool type_resolve_(Typer *tr, Type *t, Location where, bool is_reference)
 				return false;
 			}
 		}
+		if (!(t->flags & TYPE_IS_RESOLVED)) {
+			/* this can happen with functions returning parameterized structs */
+			if (!type_resolve(tr, t, where))
+				return false;
+		}
 		t->was_expr = expr;
-		assert(t->flags & TYPE_IS_RESOLVED);
 	} break;
 	case TYPE_UNKNOWN:
 	case TYPE_VOID:
 	case TYPE_BUILTIN:
 		break;
 	}
+	if (t->kind == TYPE_STRUCT && !!(t->struc->params) == !!(t->struc->instance_id)) { /* don't want it to try to deal with templates */
+		if (!struct_find_offsets(t->struc))
+			return false;
+	}
 	assert(t->kind != TYPE_EXPR);
 	t->flags |= TYPE_IS_RESOLVED;
 	return true;
 }
-
-/* fixes the type (replaces [5+3]int with [8]int, etc.) */
-static bool type_resolve(Typer *tr, Type *t, Location where) {
-	return type_resolve_(tr, t, where, false);
-}
-
 
 
 static bool type_can_be_truthy(Type *t) {
@@ -2773,7 +2915,6 @@ static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *a
 	tr->in_exprs = NULL;
 	tr->allocr = allocr;
 	tr->globals = idents;
-	tr->is_reference_stack = NULL;
 	*(Block **)arr_adda(&tr->blocks, allocr) = NULL;
 }
 

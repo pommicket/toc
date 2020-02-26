@@ -33,14 +33,24 @@
 #endif
 #endif
 
-#if __STDC_VERSION__ >= 201112
+
+/* use toc_alignof only for non-structs. it may be incorrect for pre-C(++)11. */
+#if __STDC_VERSION__ >= 201112 || __cplusplus >= 201103L
+#include <stdalign.h>
+#define toc_alignof alignof
+
 #ifdef __GNUC__
 /* GCC supports non-string literals as the message for a static assertion */
 #define possibly_static_assert(cond) static_assert(cond, "Assertion " #cond " failed.")
 #else
 #define possibly_static_assert(cond) static_assert(cond, "Assertion failed")
 #endif
+
+
 #else
+
+#define toc_alignof sizeof
+
 #define possibly_static_assert(cond) assert(cond)
 #endif
 

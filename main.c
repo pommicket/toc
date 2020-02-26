@@ -38,6 +38,8 @@ do we need was_expr? (now that, presumably, we have struct arguments)
 any odd number of "s for a string
 make sure futurely/currently-declared types are only used by pointer/slice
 allow omission of trailing ; in foo ::= fn() {...} or foo ::= nms {...} or foo ::= struct { ... }?
+consider- should #sizeof always take a Type? it would be more verbose, but we might not actually need
+	#sizeof that much, given that we have new.
 */
 
 

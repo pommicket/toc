@@ -659,6 +659,7 @@ static bool parse_type(Parser *p, Type *type) {
 						Type *ftype = field_decl.type.kind == TYPE_TUPLE ? &field_decl.type.tuple[idx] : &field_decl.type;
 						Field *f = parser_arr_add(p, &struc->fields);
 						f->name = *fident;
+						f->where = field_decl.where;
 						f->type = *ftype;
 						++idx;
 					}

@@ -445,6 +445,7 @@ typedef struct Type {
 
 /* field of a struct */
 typedef struct Field {
+	Location where;
 	Identifier name;
 	Type type;
 	size_t offset; /* offset during compile time */
@@ -468,9 +469,10 @@ typedef struct Block {
 
 enum {
 	  STRUCT_DEF_FOUND_OFFSETS = 0x01,
-	  STRUCT_DEF_CGEN_DECLARED = 0x02,
-	  STRUCT_DEF_CGEN_DEFINED = 0x04,
-	  STRUCT_DEF_RESOLVED = 0x08
+	  STRUCT_DEF_FINDING_OFFSETS = 0x02,
+	  STRUCT_DEF_CGEN_DECLARED = 0x04,
+	  STRUCT_DEF_CGEN_DEFINED = 0x08,
+	  STRUCT_DEF_RESOLVED = 0x10
 };
 typedef struct StructDef {
 	Field *fields;
@@ -907,8 +909,6 @@ typedef struct Typer {
 	Block **blocks; /* dyn array of all the block's we're in ([0] = NULL for global scope) */
 	FnExpr *fn; /* the function we're currently parsing. */
 	ErrCtx *err_ctx;
-	/* for checking for problematic struct circular dependencies */
-	bool *is_reference_stack;
 	ParsedFile *parsed_file;
 	Namespace *nms;
 } Typer;

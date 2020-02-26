@@ -2,18 +2,18 @@
 // #include "std/io.toc";
 // };
 
-// p ::= struct(x::Type,y::=3) {
-//   b:int;
-// };
-
-foo ::= fn(x::int) Type {
-	[x]int
+FOO ::= fn(t::Type) Type {
+	&ll(int)
 };
 
-z ::= fn(a::=,b:foo(a)) {
+ll ::= struct(t::Type) {
+   head: t;
+   tail: FOO(t);
 };
 
 main ::= fn() {
-	 n:foo(3);
-	 z(n);
+	 l:ll(int);
+	 m:ll(i16);
+	 x::=#alignof(l);
+	 y::=#alignof(m);
 };
