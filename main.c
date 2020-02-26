@@ -18,16 +18,16 @@
 
 /* 
 TODO:
-see infer.c "is resolved_to necessary" (now that ident system has changed)
 replace is_reference in type_resolve_ with system for checking if type is
    circularly dependent in a bad way, with compiler_sizeof
 foo, _ := bar();
 nice syntax for #including something into a namespace
 run stuff at compile time without assigning it to a constant
-#compile_only declarations
+the problem of #foreign stuff currently requiring that source and target have the same sizeof(int), etc. -- we may need #C_int, etc.
+---
 constants in structs
 #if
-
+#returns_code (function/struct body is a block, to be evaluated at compile time, which returns the actual statements -- you can use this for implementation of printf)
 variadic fns
 switch to / add as an alternative: libffi
 
