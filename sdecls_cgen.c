@@ -4,14 +4,13 @@
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
 static void cgen_sdecls_stmt(CGenerator *g, Statement *s);
-static bool cgen_sdecls_decl(CGenerator *g, Declaration *d);
-static bool cgen_sdecls_expr(CGenerator *g, Expression *e);
+static void cgen_sdecls_decl(CGenerator *g, Declaration *d);
+static void cgen_sdecls_expr(CGenerator *g, Expression *e);
 
 /* i is the name for this type, NULL if not available */
-/* ALWAYS RETURNS TRUE. it just returns a bool for cgen_recurse_into_type to work */
-static bool cgen_sdecls_type(CGenerator *g, Type *type) {
+static void cgen_sdecls_type(CGenerator *g, Type *type) {
 	if (!(type->flags & TYPE_IS_RESOLVED)) /* non-instance constant fn parameter type */
-		return true;
+		return;
 	if (type->kind == TYPE_STRUCT) {
 		StructDef *sdef = type->struc;
 		/* we'll actually define the struct later; here we can just declare it */
@@ -30,11 +29,9 @@ static bool cgen_sdecls_type(CGenerator *g, Type *type) {
 		}
 	}
 	cgen_recurse_subtypes(cgen_sdecls_type, g, type);
-	return true;
 }
 
-/* ALWAYS RETURNS TRUE. just returns a bool for cgen_recurse_subexprs to work. */
-static bool cgen_sdecls_block(CGenerator *g, Block *b) {
+static void cgen_sdecls_block(CGenerator *g, Block *b) {
 	Block *prev_block = g->block;
 	g->block = b;
 	
@@ -43,11 +40,9 @@ static bool cgen_sdecls_block(CGenerator *g, Block *b) {
 	if (b->ret_expr)
 		cgen_sdecls_expr(g, b->ret_expr);
 	g->block = prev_block;
-	return true;
 }
 
-/* ALWAYS RETURNS TRUE. just returns a bool for cgen_recurse_subexprs to work. */
-static bool cgen_sdecls_expr(CGenerator *g, Expression *e) {
+static void cgen_sdecls_expr(CGenerator *g, Expression *e) {
 	switch (e->kind) {
 	case EXPR_CAST:
 		cgen_sdecls_type(g, &e->cast.type);
@@ -65,15 +60,13 @@ static bool cgen_sdecls_expr(CGenerator *g, Expression *e) {
 	default: break;
 	}
 	cgen_recurse_subexprs(g, e, cgen_sdecls_expr, cgen_sdecls_block, cgen_sdecls_decl);
-	return true;
 }
 
 
-/* ALWAYS RETURNS TRUE. just returns a bool for cgen_recurse_subexprs to work. */
-static bool cgen_sdecls_decl(CGenerator *g, Declaration *d) {
+static void cgen_sdecls_decl(CGenerator *g, Declaration *d) {
 	if (d->flags & DECL_FOREIGN) {
 		/* handled by cgen_decls */
-		return true;
+		return;
 	}
     cgen_sdecls_type(g, &d->type);
 	if (cgen_fn_is_direct(g, d)) {
@@ -93,7 +86,6 @@ static bool cgen_sdecls_decl(CGenerator *g, Declaration *d) {
 				d->expr.fn->flags |= FN_EXPR_EXPORT;
 		}
 	}
-	return true;
 }
 
 static void cgen_sdecls_stmt(CGenerator *g, Statement *s) {

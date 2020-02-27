@@ -8,7 +8,6 @@
 
 /* 
 TODO:
-try to make cgen not have return values anymore
 nice syntax for #including something into a namespace
 run stuff at compile time without assigning it to a constant
 better #foreign system- something like f := #foreign fn (int,float, #C int);
@@ -161,12 +160,7 @@ int main(int argc, char **argv) {
 	}
 	CGenerator g;
 	cgen_create(&g, out, &globals, &main_allocr);
-	if (!cgen_file(&g, &f)) {
-		fclose(out);
-		err_text_important(&err_ctx, "Errors occured while generating C code.\n");
-		allocr_free_all(&main_allocr);
-		return EXIT_FAILURE;
-	}
+	cgen_file(&g, &f);
 	
 	allocr_free_all(&main_allocr);
 	fclose(out);
