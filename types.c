@@ -2843,6 +2843,10 @@ static Status types_stmt(Typer *tr, Statement *s) {
 				free(str);
 			}
 		}
+		if (tr->block == NULL) {
+			if (!eval_stmt(tr->evalr, s))
+				return false;
+		}
 		break;
 	case STMT_DECL:
 		if (!types_decl(tr, s->decl)) {

@@ -9,6 +9,7 @@
 /* 
 TODO:
 run stuff at compile time without assigning it to a constant
+only include stuff once- (#include "io.toc", foo +  #include "io.toc", bar => #define foo__puts bar__puts ; this is ok because __ is reserved)
 better #foreign system- something like f := #foreign fn (int,float, #C int);
 ---
 constants in structs

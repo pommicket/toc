@@ -1559,6 +1559,9 @@ static void cgen_expr(CGenerator *g, Expression *e) {
   at least. 
 */
 static void cgen_block(CGenerator *g, Block *b, const char *ret_name, U16 flags) {
+	Block *prev_block = g->block;
+	g->block = b;
+	
 	if (!(flags & CGEN_BLOCK_NOBRACES)) {
 		cgen_write(g, "{");
 		cgen_nl(g);
@@ -1576,6 +1579,7 @@ static void cgen_block(CGenerator *g, Block *b, const char *ret_name, U16 flags)
 	}
 	if (!(flags & CGEN_BLOCK_NOBRACES))
 		cgen_write(g, "}");
+	g->block = prev_block;
 }
 
 static void cgen_zero_value(CGenerator *g, Type *t) {
@@ -1936,7 +1940,7 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 		cgen_decl(g, s->decl);
 		break;
 	case STMT_EXPR:
-		if (!type_is_compileonly(&s->expr.type)) {
+		if (g->block != NULL && !type_is_compileonly(&s->expr.type)) {
 		    cgen_expr_pre(g, &s->expr);
 			cgen_expr(g, &s->expr);
 			cgen_writeln(g, ";");

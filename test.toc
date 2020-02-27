@@ -8,3 +8,5 @@ main ::= fn() {
 	 super.puts("hey");
 	 great.puti(1232);
 };
+
+main();
