@@ -1,6 +1,6 @@
-#include "std/io.toc", io;
-#include "std/io.toc", foo;
-#include "std/io.toc";
+#include #force "std/io.toc", io;
+#include #force "std/io.toc", foo;
+#include  #force "std/io.toc";
 
 a ::= nms {
   b ::= nms {

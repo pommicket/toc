@@ -232,8 +232,12 @@ typedef enum {
 			  DIRECT_FOREIGN,
 			  DIRECT_BUILTIN,
 			  DIRECT_INCLUDE,
+			  DIRECT_FORCE,
 			  DIRECT_COUNT
 } Directive;
+
+static const char *directives[DIRECT_COUNT] =
+	{"C", "sizeof", "alignof", "export", "foreign", "builtin", "include", "force"};
 
 typedef enum {
 			  KW_SEMICOLON,
@@ -300,6 +304,18 @@ typedef enum {
 			  KW_COUNT
 } Keyword;
 
+static const char *const keywords[KW_COUNT] =
+	{";", ":", ",", "(", ")", "{", "}", "[", "]", "==",
+	 "+=", "-=", "*=", "/=", "%=",
+	 "!=", "<=", "<", ">=", ">",
+	 "+", "-", "*", "!", "&", "/", "%", "..", ".",
+	 "=",
+	 "if", "elif", "else", "while", "for", "return", "fn", "as",
+	 "new", "del", "struct",
+	 "int", "i8", "i16", "i32", "i64",
+	 "u8", "u16", "u32", "u64", "float", "f32", "f64", "Type",
+	 "Namespace",
+	 "char", "bool", "true", "false", "nms"};
 
 typedef enum {
 			  NUM_LITERAL_INT,
@@ -850,9 +866,16 @@ typedef struct {
 	struct Statement *stmts;
 } IncludedFile;
 
+enum {
+	  INC_FORCED = 0x01
+};
+
 typedef union {
-	Expression filename; /* before typing */
-	struct Statement *stmts; /* after typing */
+	U8 flags;
+	union {
+		Expression filename; /* before typing */
+		struct Statement *stmts; /* after typing */
+	};
 	IncludedFile *inc_file;
 } Include;
 

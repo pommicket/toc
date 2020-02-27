@@ -8,8 +8,7 @@
 
 /* 
 TODO:
-#include_forced
-better #foreign system- something like f := #foreign fn (int,float, #C int);
+better #foreign system- something like f := #foreign fn (int,float, #C int, #C longlong);
 ---
 constants in structs
 #if

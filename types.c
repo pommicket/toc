@@ -2902,14 +2902,16 @@ static Status types_stmt(Typer *tr, Statement *s) {
 		size_t filename_len = strlen(filename);
 		IncludedFile *inc_f = NULL;
 		if (s->flags & STMT_INC_TO_NMS) {
-			inc_f = str_hash_table_get(&tr->included_files, filename, filename_len);
-			if (inc_f) {
-				tr->nms->body.idents = inc_f->main_nms->body.idents;
-				tr->nms->body.idents.scope = &tr->nms->body;
-				tr->nms->points_to = inc_f->main_nms;
-				s->inc.inc_file = inc_f;
-				s->inc.stmts = inc_f->stmts;
-			    break;
+			if (!(s->inc.flags & INC_FORCED)) {
+				inc_f = str_hash_table_get(&tr->included_files, filename, filename_len);
+				if (inc_f) {
+					tr->nms->body.idents = inc_f->main_nms->body.idents;
+					tr->nms->body.idents.scope = &tr->nms->body;
+					tr->nms->points_to = inc_f->main_nms;
+					s->inc.inc_file = inc_f;
+					s->inc.stmts = inc_f->stmts;
+					break;
+				}
 			}
 			s->inc.inc_file = inc_f = str_hash_table_insert(&tr->included_files, filename, filename_len);
 			inc_f->main_nms = tr->nms;

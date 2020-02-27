@@ -1853,6 +1853,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				case DIRECT_FOREIGN:
 				case DIRECT_EXPORT:
 				case DIRECT_INCLUDE:
+				case DIRECT_FORCE:
 					tokr_err(t, "Unrecognized expression.");
 					return false;
 				case DIRECT_COUNT: assert(0); break;
@@ -2172,6 +2173,11 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 		case DIRECT_INCLUDE: {
 			++t->token;
 			s->kind = STMT_INCLUDE;
+			s->inc.flags = 0;
+			if (token_is_direct(t->token, DIRECT_FORCE)) {
+				s->inc.flags |= INC_FORCED;
+				++t->token;
+			}
 			if (!parse_expr(p, &s->inc.filename, expr_find_end(p, EXPR_CAN_END_WITH_COMMA)))
 				return false;
 			if (token_is_kw(t->token, KW_COMMA)) {

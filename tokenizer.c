@@ -3,23 +3,8 @@
   This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
-static const char *const keywords[KW_COUNT] =
-	{";", ":", ",", "(", ")", "{", "}", "[", "]", "==",
-	 "+=", "-=", "*=", "/=", "%=",
-	 "!=", "<=", "<", ">=", ">",
-	 "+", "-", "*", "!", "&", "/", "%", "..", ".",
-	 "=",
-	 "if", "elif", "else", "while", "for", "return", "fn", "as",
-	 "new", "del", "struct",
-	 "int", "i8", "i16", "i32", "i64",
-	 "u8", "u16", "u32", "u64", "float", "f32", "f64", "Type",
-	 "Namespace",
-	 "char", "bool", "true", "false", "nms"};
 
 static inline const char *kw_to_str(Keyword k) { return keywords[k]; }
-
-static const char *directives[DIRECT_COUNT] =
-	{"C", "sizeof", "alignof", "export", "foreign", "builtin", "include"};
 
 /* Returns KW_COUNT if it's not a keyword */
 /* OPTIM: don't use strncmp so much */
