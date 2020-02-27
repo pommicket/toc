@@ -132,12 +132,6 @@ typedef struct ArrBlock {
 	size_t n; /* number of things in this block so far */
 } ArrBlock;
 
-typedef struct BlockArr {
-	size_t item_sz;
-	int lg_block_sz;
-	ArrBlock *blocks;
-} BlockArr;
-
 /* initialize to 0 */
 typedef struct HashTable {
 	void *data;

@@ -219,7 +219,7 @@ You shouldn't rely on this, though, e.g. by doing
 #define arr_remove_lasta(arr, a) arr_remove_lasta_((void **)(arr), sizeof **(arr), (a))
 #define arr_copya(out, in, a) do { assert(sizeof *(in) == sizeof **(out)); arr_copya_((void **)(out), (in), sizeof **(out), (a)); } while(0)
 
-#ifdef TOC_DEBUG
+#ifdef RUN_TESTS
 static void arr_test(void) {
 	int *foos = NULL;
 	for (int i = 0; i < 10; ++i) {
@@ -356,7 +356,7 @@ static inline void *str_hash_table_get(StrHashTable *t, const char *str, size_t 
 	return slot->data;
 }
 
-#ifdef TOC_DEBUG
+#ifdef RUN_TESTS
 static void str_hash_table_test(void) {
 	StrHashTable t;
 	str_hash_table_create(&t, sizeof(int), NULL);

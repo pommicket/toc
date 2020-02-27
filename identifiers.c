@@ -46,11 +46,6 @@ static size_t ident_str_len(char *s) {
 	return ident_str_len_advance(&s);
 }
 
-static U64 ident_hash(char **s) {
-	char *original = *s;
-	return str_hash(original, ident_str_len_advance(s));
-}
-
 /* are these strings equal, up to the first non-ident character? */
 static bool ident_str_eq_str(const char *s, const char *t) {
 	while (is_ident(*s) && is_ident(*t)) {
@@ -62,21 +57,6 @@ static bool ident_str_eq_str(const char *s, const char *t) {
 
 static inline bool ident_eq_str(Identifier i, const char *s) {
 	return ident_str_eq_str(i->str, s);
-}
-
-
-
-static IdentSlot **ident_slots_insert(IdentSlot **slots, char *s, size_t i) {
-	IdentSlot **slot;
-	size_t nslots = arr_len(slots);
-	while (1) {
-		slot = &slots[i];
-		if (!*slot) break;
-		if (s && ident_eq_str(*slot, s))
-			break;
-		i = (i+1) % nslots;
-	}
-	return slot;
 }
 
 /* moves s to the char after the identifier */
@@ -200,7 +180,7 @@ static inline Block *ident_scope(Identifier i) {
 	return i->idents->scope;
 }
 
-#ifdef TOC_DEBUG
+#ifdef RUN_TESTS
 static void idents_test(void) {
 	Identifiers ids;
 	char b[] = "foo_variable bar";

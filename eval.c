@@ -962,27 +962,6 @@ static Value val_zero(Type *t) {
 	return val;
 }
 
-static Value val_alloc(Allocator *a, Type *t) {
-	Value val;
-	switch (t->kind) {
-	case TYPE_STRUCT:
-		val.struc = allocr_malloc(a, compiler_sizeof(t));
-		break;
-	case TYPE_ARR:
-		val.arr = allocr_calloc(a, t->arr.n, compiler_sizeof(t->arr.of));
-		break;
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsometimes-uninitialized"
-#endif
-	default: break;
-	}
-	return val;
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
-}
-
 static bool val_is_nonnegative(Value *v, Type *t) {
 	switch (t->builtin) {
 	case BUILTIN_BOOL: assert(0); return false;

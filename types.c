@@ -110,7 +110,7 @@ static size_t compiler_alignof(Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_BUILTIN:
-		return compiler_sizeof_builtin(t->builtin);
+		return compiler_alignof_builtin(t->builtin);
 	case TYPE_VOID:
 		return 1;
 	case TYPE_FN:

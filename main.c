@@ -8,7 +8,6 @@
 
 /* 
 TODO:
-compile without Wno-unused-function
 run stuff at compile time without assigning it to a constant
 better #foreign system- something like f := #foreign fn (int,float, #C int);
 ---
