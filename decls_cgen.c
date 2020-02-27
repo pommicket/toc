@@ -200,8 +200,13 @@ static void cgen_decls_stmt(CGenerator *g, Statement *s) {
 			cgen_decls_expr(g, &s->ret.expr);
 		break;
 	case STMT_INCLUDE:
-		arr_foreach(s->inc.stmts, Statement, sub)
-			cgen_decls_stmt(g, sub);
+		if (s->inc.inc_file && (s->inc.inc_file->flags & INC_FILE_CGEND_DECLS)) {
+			/* already generated */
+		} else {
+			if (s->inc.inc_file) s->inc.inc_file->flags |= INC_FILE_CGEND_DECLS;
+			arr_foreach(s->inc.stmts, Statement, sub)
+				cgen_decls_stmt(g, sub);
+		}
 		break;
 	}
 }

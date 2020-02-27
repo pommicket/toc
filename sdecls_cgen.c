@@ -42,6 +42,29 @@ static void cgen_sdecls_block(CGenerator *g, Block *b) {
 	g->block = prev_block;
 }
 
+static char *cgen_nms_prefix_part(CGenerator *g, Namespace *n) {
+    char *s;
+    while (n->points_to) {
+		n = n->points_to;
+	}
+	if (n->associated_ident) {
+		size_t ident_len = n->associated_ident->len;
+		s = malloc(ident_len + 3);
+		memcpy(s, n->associated_ident->str, ident_len);
+		s[ident_len] = '_';
+		s[ident_len+1] = '_';
+		s[ident_len+2] = '\0';
+	} else {
+		s = calloc(CGEN_IDENT_ID_STR_SIZE + 3, 1);
+		cgen_ident_id_to_str(s, ++g->ident_counter);
+		size_t len = strlen(s);
+		s[len] = '_';
+		s[len+1] = '_';
+		s[len+2] = '\0';
+	}
+	return s;
+}
+
 static void cgen_sdecls_expr(CGenerator *g, Expression *e) {
 	switch (e->kind) {
 	case EXPR_CAST:
@@ -54,12 +77,26 @@ static void cgen_sdecls_expr(CGenerator *g, Expression *e) {
 	case EXPR_TYPE:
 		cgen_sdecls_type(g, &e->typeval);
 		break;
-	case EXPR_NMS:
-		e->nms.c.id = 0;
-		break;
+	case EXPR_NMS: {
+		char *prefix_part = cgen_nms_prefix_part(g, &e->nms);
+		size_t prefix_part_len = strlen(prefix_part);
+		char const *prev_prefix = g->nms_prefixes ? *(char const **)arr_last(g->nms_prefixes)
+			: "";
+		size_t prev_prefix_len = strlen(prev_prefix);
+		char *new_prefix = cgen_malloc(g, prev_prefix_len + prefix_part_len + 1);
+		memcpy(new_prefix, prev_prefix, prev_prefix_len);
+		memcpy(new_prefix + prev_prefix_len, prefix_part, prefix_part_len);
+		free(prefix_part);
+		*(char const **)arr_add(&g->nms_prefixes) = new_prefix;
+		new_prefix[prev_prefix_len + prefix_part_len] = 0;
+		e->nms.c.prefix = new_prefix;
+	} break;
 	default: break;
 	}
 	cgen_recurse_subexprs(g, e, cgen_sdecls_expr, cgen_sdecls_block, cgen_sdecls_decl);
+	if (e->kind == EXPR_NMS) {
+		arr_remove_last(&g->nms_prefixes);
+	}
 }
 
 
@@ -101,8 +138,14 @@ static void cgen_sdecls_stmt(CGenerator *g, Statement *s) {
 			cgen_sdecls_expr(g, &s->ret.expr);
 		break;
 	case STMT_INCLUDE:
-		arr_foreach(s->inc.stmts, Statement, sub)
-			cgen_sdecls_stmt(g, sub);
+		
+		if (s->inc.inc_file && (s->inc.inc_file->flags & INC_FILE_CGEND_SDECLS)) {
+			/* already generated */
+		} else {
+			if (s->inc.inc_file) s->inc.inc_file->flags |= INC_FILE_CGEND_SDECLS;
+			arr_foreach(s->inc.stmts, Statement, sub)
+				cgen_sdecls_stmt(g, sub);
+		}
 	    break;
 	}
 }

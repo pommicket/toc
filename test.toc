@@ -1,12 +1,18 @@
 #include "std/io.toc", io;
-#include "std/io.toc", super;
-#include "std/io.toc", great;
+#include "std/io.toc", foo;
+#include "std/io.toc";
 
-main ::= fn() {
-	 io.puti(7);
-	 io.puts("Hello!");
-	 super.puts("hey");
-	 great.puti(1232);
+a ::= nms {
+  b ::= nms {
+  	x := 3;
+  };
+  f ::= fn() { b.x += 1; io.puti(b.x); foo.puti(b.x); puti(b.x);
+	  };
 };
 
-main();
+main ::= fn() {
+	 a.f();
+	 a.f();
+	 a.f();
+	 
+};

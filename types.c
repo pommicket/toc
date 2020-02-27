@@ -2574,9 +2574,15 @@ static Status types_expr(Typer *tr, Expression *e) {
 		t->builtin = BUILTIN_TYPE;
 	} break;
 	case EXPR_NMS: {
+		Namespace *prev_nms = tr->nms;
+		tr->nms = &e->nms;
+		e->nms.points_to = NULL;
 		e->nms.body.flags |= BLOCK_IS_NMS;
-		if (!types_block(tr, &e->nms.body))
+		if (!types_block(tr, &e->nms.body)) {
+			tr->nms = prev_nms;
 			return false;
+		}
+		tr->nms = prev_nms;
 		e->nms.associated_ident = NULL; /* set when we type the declaration */
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_NMS;
@@ -2808,6 +2814,12 @@ static Status types_decl(Typer *tr, Declaration *d) {
 			d->expr.nms.associated_ident = d->idents[0];
 	}
 
+	if (tr->nms && tr->block == &tr->nms->body) {
+		arr_foreach(d->idents, Identifier, ident) {
+			(*ident)->nms = tr->nms;
+		}
+	}
+
 	
  ret:
 	/* pretend we found the type even if we didn't to prevent too many errors */
@@ -2887,9 +2899,25 @@ static Status types_stmt(Typer *tr, Statement *s) {
 		char *filename = eval_expr_as_cstr(tr, &s->inc.filename, "import filename");
 		if (!filename)
 			return false;
+		size_t filename_len = strlen(filename);
+		IncludedFile *inc_f = NULL;
+		if (s->flags & STMT_INC_TO_NMS) {
+			inc_f = str_hash_table_get(&tr->included_files, filename, filename_len);
+			if (inc_f) {
+				tr->nms->body.idents = inc_f->main_nms->body.idents;
+				tr->nms->body.idents.scope = &tr->nms->body;
+				tr->nms->points_to = inc_f->main_nms;
+				s->inc.inc_file = inc_f;
+				s->inc.stmts = inc_f->stmts;
+			    break;
+			}
+			s->inc.inc_file = inc_f = str_hash_table_insert(&tr->included_files, filename, filename_len);
+			inc_f->main_nms = tr->nms;
+		}
 		char *contents = read_file_contents(tr->allocr, filename, s->where);
 		if (!contents)
 			return false;
+
 		Tokenizer tokr;
 		tokr_create(&tokr, tr->err_ctx, tr->allocr);
 		File *file = typer_calloc(tr, 1, sizeof *file);
@@ -2906,11 +2934,15 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			return false;
 		}
 		Statement *stmts_inc = parsed_file.stmts;
+		if (inc_f) {
+			inc_f->stmts = stmts_inc;
+		}
 	    s->inc.stmts = stmts_inc;
 		arr_foreach(stmts_inc, Statement, s_incd) {
 			if (!types_stmt(tr, s_incd))
 				return false;
 		}
+		
 	} break;
 	}
 	s->flags |= STMT_TYPED;
@@ -2921,6 +2953,7 @@ static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *a
 	tr->block = NULL;
 	tr->blocks = NULL;
 	tr->fn = NULL;
+	tr->nms = NULL;
 	tr->evalr = ev;
 	tr->err_ctx = err_ctx;
 	tr->in_decls = NULL;
@@ -2928,6 +2961,7 @@ static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *a
 	tr->allocr = allocr;
 	tr->globals = idents;
 	*(Block **)arr_adda(&tr->blocks, allocr) = NULL;
+	str_hash_table_create(&tr->included_files, sizeof(IncludedFile), tr->allocr);
 }
 
 static Status types_file(Typer *tr, ParsedFile *f) {

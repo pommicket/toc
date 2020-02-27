@@ -1,8 +1,0 @@
-
-	x : arr.Arr(char);
-	arr.arr_add(&x, 'H');
-	arr.arr_add(&x, 'e');
-	arr.arr_add(&x, 'l');
-	arr.arr_add(&x, 'l');
-	arr.arr_add(&x, 'o');
-	arr.arr_add(&x, '!');

@@ -185,6 +185,7 @@ typedef struct IdentSlot {
 		struct Expression *decl_expr;
 	};
 	struct Identifiers *idents;
+	struct Namespace *nms; /* only exists after typing, and only for namespace-level declarations (i.e. not local variables) */
 	SOURCE_LOCATION
 } IdentSlot;
 
@@ -703,8 +704,9 @@ const char *const builtin_val_names[BUILTIN_VAL_COUNT] =
 typedef struct Namespace {
 	Block body;
 	Identifier associated_ident; /* if this is foo ::= nms { ... }, then associated_ident is foo; can be NULL */
+	struct Namespace *points_to; /* if not NULL, this namespace just points to another namespace, because something has been included twice */
 	struct {
-		IdentID id; /* used as prefix if prefix is NULL */
+		char *prefix; /* generated during sdecls_cgen */
 	} c;
 } Namespace;
 
@@ -836,14 +838,29 @@ typedef struct Return {
 } Return;
 
 enum {
-	  STMT_EXPR_NO_SEMICOLON = 0x01,
-	  STMT_TYPED = 0x02
+	  INC_FILE_CGEND_SDECLS = 0x01,
+	  INC_FILE_CGEND_DECLS = 0x02,
+	  INC_FILE_CGEND_DEFS = 0x04,
+	  INC_FILE_CGEND = 0x08
 };
+
+typedef struct {
+	U8 flags;
+	Namespace *main_nms; /* namespace of first inclusion */
+	struct Statement *stmts;
+} IncludedFile;
+
 typedef union {
 	Expression filename; /* before typing */
 	struct Statement *stmts; /* after typing */
+	IncludedFile *inc_file;
 } Include;
 
+enum {
+	  STMT_EXPR_NO_SEMICOLON = 0x01,
+	  STMT_INC_TO_NMS = 0x01,
+	  STMT_TYPED = 0x02
+};
 typedef struct Statement {
 	Location where;
 	StatementKind kind;
@@ -910,6 +927,7 @@ typedef struct Typer {
 	ErrCtx *err_ctx;
 	ParsedFile *parsed_file;
 	Namespace *nms;
+	StrHashTable included_files; /* maps to IncludedFile */
 } Typer;
 
 typedef struct CGenerator {
@@ -924,5 +942,5 @@ typedef struct CGenerator {
 	FnExpr *fn; /* which function are we in? (NULL for none) - not used during decls */
 	Identifier main_ident;
 	Identifiers *globals;
-	char *nms_prefix; /* dynamic (null-terminated) array of characters, the current namespace C prefix (e.g. "foo__bar__") */
+	char const **nms_prefixes; /* dynamic (null-terminated) array of namespace prefixes */
 } CGenerator;

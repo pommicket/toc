@@ -2210,7 +2210,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				idents_create(&body->idents, p->allocr, body);
 				Statement *inc_stmt = parser_arr_add(p, &body->stmts);
 				inc_stmt->kind = STMT_INCLUDE;
-				inc_stmt->flags = 0;
+				inc_stmt->flags = STMT_INC_TO_NMS;
 				inc_stmt->where = s->where;
 				inc_stmt->inc.filename = filename;
 			}
@@ -2599,6 +2599,11 @@ static void fprint_stmt(FILE *out, Statement *s) {
 		}
 		break;
 	}
+}
+
+static void print_stmt(Statement *s) {
+	fprint_stmt(stdout, s);
+	printf("\n");
 }
 
 static void fprint_parsed_file(FILE *out, ParsedFile *f) {

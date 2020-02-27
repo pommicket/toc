@@ -11,8 +11,7 @@ static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Allocator *a
 	g->indent_lvl = 0;
 	g->globals = ids;
 	g->allocr = allocr;
-	g->nms_prefix = NULL;
-	*(char *)arr_adda(&g->nms_prefix, g->allocr) = '\0';
+	g->nms_prefixes = NULL;
 }
 
 static void cgen_stmt(CGenerator *g, Statement *s);
@@ -79,10 +78,7 @@ static void cgen_defs_decl(CGenerator *g, Declaration *d);
 		block_f(g, &e->block);											\
 		break;															\
 	case EXPR_NMS: {													\
-		Namespace *prev = g->nms;										\
-		cgen_nms_enter(g, &e->nms);										\
 		block_f(g, &e->nms.body);										\
-		cgen_nms_exit(g, &e->nms, prev);								\
 	} break;															\
 	case EXPR_IF:														\
 		if (e->if_.cond)												\
@@ -172,6 +168,10 @@ static inline FILE *cgen_writing_to(CGenerator *g) {
 	return g->outc;	/* for now */
 }
 
+static inline void *cgen_malloc(CGenerator *g, size_t sz) {
+	return allocr_malloc(g->allocr, sz);
+}
+
 /* indent iff needed */
 static inline void cgen_indent(CGenerator *g) {
 	if (g->will_indent) {
@@ -211,15 +211,8 @@ static inline void cgen_ident_simple(CGenerator *g, Identifier i) {
 }
 
 static void cgen_ident(CGenerator *g, Identifier i) {
-	
-	if (g->block && (g->block->flags & BLOCK_IS_NMS) && !g->fn) {
-		/* namespace prefix */
-		cgen_write(g, "%s", g->nms_prefix);
-	} else {
-		/* do prefix for references to siblings */
-		if (g->nms && ident_scope(i) == &g->nms->body) {
-			cgen_write(g, "%s", g->nms_prefix);
-		}
+	if (i->nms) {
+		cgen_write(g, "%s", i->nms->c.prefix);
 	}
 	if (i == g->main_ident && i->decl_kind == IDECL_DECL && ident_scope(i) == NULL) {
 		/* don't conflict with C's main! */
@@ -234,44 +227,6 @@ static void cgen_ident(CGenerator *g, Identifier i) {
 /* buffer should be at least CGEN_IDENT_ID_STR_SIZE bytes */
 static inline void cgen_ident_id_to_str(char *buffer, IdentID id) {
 	snprintf(buffer, CGEN_IDENT_ID_STR_SIZE, "_a%lu", (unsigned long)id);
-}
-
-static char *cgen_nms_prefix(CGenerator *g, Namespace *n) {
-    char *s;
-	if (n->associated_ident) {
-		size_t ident_len = n->associated_ident->len;
-		s = malloc(ident_len + 3);
-		memcpy(s, n->associated_ident->str, ident_len);
-		s[ident_len] = '_';
-		s[ident_len+1] = '_';
-		s[ident_len+2] = '\0';
-	} else {
-		s = calloc(CGEN_IDENT_ID_STR_SIZE + 1, 1);
-		if (!n->c.id) n->c.id = ++g->ident_counter;
-		cgen_ident_id_to_str(s, n->c.id);
-		s[strlen(s)] = '_';
-		
-	}
-	return s;
-}
-
-static void cgen_nms_enter(CGenerator *g, Namespace *n) {
-	g->nms = n;
-	char *s = cgen_nms_prefix(g, n);
-	size_t chars_so_far = arr_len(g->nms_prefix) - 1; /* -1 for '\0' byte */
-	size_t new_chars = strlen(s) + 1; /* + 1 for '\0' byte */
-	arr_set_lena(&g->nms_prefix, chars_so_far + new_chars, g->allocr);
-	for (size_t i = 0; i < new_chars; ++i) {
-		g->nms_prefix[i+chars_so_far] = s[i];
-	}
-	free(s);
-}
-
-static void cgen_nms_exit(CGenerator *g, Namespace *n, Namespace *prev) {
-	char *s = cgen_nms_prefix(g, n);
-	arr_set_lena(&g->nms_prefix, arr_len(g->nms_prefix) - strlen(s), g->allocr);
-	g->nms = prev;
-	free(s);
 }
 
 static inline void cgen_writeln(CGenerator *g, const char *fmt, ...) {
@@ -1352,10 +1307,9 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 				cgen_write(g, ")");
 			} else {
 				assert(type_is_builtin(struct_type, BUILTIN_NMS));
-				char *prefix = cgen_nms_prefix(g, e->binary.lhs->val.nms);
+				char *prefix = e->binary.lhs->val.nms->c.prefix;
 				cgen_write(g, "%s", prefix);
 				cgen_ident_simple(g, e->binary.dot.translated_ident);
-				free(prefix);
 			}
 			handled = true;
 		} break;
@@ -1951,8 +1905,13 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 		cgen_ret(g, has_expr ? &s->ret.expr : NULL);
 	} break;
 	case STMT_INCLUDE:
-		arr_foreach(s->inc.stmts, Statement, sub)
-		    cgen_stmt(g, sub);
+		if (s->inc.inc_file && (s->inc.inc_file->flags & INC_FILE_CGEND)){
+			/* already generated */
+		} else {
+			if (s->inc.inc_file) s->inc.inc_file->flags |= INC_FILE_CGEND;
+			arr_foreach(s->inc.stmts, Statement, sub)
+				cgen_stmt(g, sub);
+	    }
 	    break;
 	}
 }
@@ -2010,8 +1969,13 @@ static void cgen_defs_stmt(CGenerator *g, Statement *s) {
 			cgen_defs_expr(g, &s->ret.expr);
 		break;
 	case STMT_INCLUDE:
-		arr_foreach(s->inc.stmts, Statement, sub)
-			cgen_defs_stmt(g, sub);
+		if (s->inc.inc_file && (s->inc.inc_file->flags & INC_FILE_CGEND_DEFS)) {
+			/* already generated */
+		} else {
+		    if (s->inc.inc_file) s->inc.inc_file->flags |= INC_FILE_CGEND_DEFS;
+			arr_foreach(s->inc.stmts, Statement, sub)
+				cgen_defs_stmt(g, sub);
+		}
 		break;
 	}
 }
