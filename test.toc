@@ -1,6 +1,10 @@
-realloc ::= fn() int {
-	 #C("4")
-};
+#include "std/io.toc", io;
+#include "std/io.toc", super;
+#include "std/io.toc", great;
+
 main ::= fn() {
-	 y := realloc();
+	 io.puti(7);
+	 io.puts("Hello!");
+	 super.puts("hey");
+	 great.puti(1232);
 };

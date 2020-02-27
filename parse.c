@@ -2173,10 +2173,51 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 		case DIRECT_INCLUDE: {
 			++t->token;
 			s->kind = STMT_INCLUDE;
-			if (!parse_expr(p, &s->inc.filename, expr_find_end(p, 0)))
+			if (!parse_expr(p, &s->inc.filename, expr_find_end(p, EXPR_CAN_END_WITH_COMMA)))
 				return false;
+			if (token_is_kw(t->token, KW_COMMA)) {
+				Expression filename = s->inc.filename;
+				++t->token;
+				if (t->token->kind != TOKEN_IDENT) {
+					tokr_err(t, "Expected identifier for #include name (after comma).");
+					tokr_skip_semicolon(t);
+					return false;
+				}
+				Identifier ident = parser_ident_insert(p, t->token->ident);
+				++t->token;
+				s->where.end = t->token;
+				/* this isn't actually a STMT_INCLUDE, but a STMT_DECL! */
+				/* replace #include "io.toc", io => io ::= nms { #include "io.toc"; } */
+				s->kind = STMT_DECL;
+				Declaration *d = s->decl = parser_calloc(p, 1, sizeof *d);
+				d->where = s->where;
+				d->flags |= DECL_HAS_EXPR|DECL_IS_CONST;
+				*(Identifier *)parser_arr_add(p, &d->idents) = ident;
+				
+				if (!check_ident_redecl(p, ident)) {
+					tokr_skip_semicolon(t);
+				    return false;
+				}
+				ident->decl_kind = IDECL_DECL;
+				ident->decl = d;
+			
+				Expression *e = &d->expr;
+				e->kind = EXPR_NMS;
+				e->where = s->where;
+				e->nms.associated_ident = ident;
+				Block *body = &e->nms.body;
+				body->flags |= BLOCK_IS_NMS;
+				body->where = s->where;
+				idents_create(&body->idents, p->allocr, body);
+				Statement *inc_stmt = parser_arr_add(p, &body->stmts);
+				inc_stmt->kind = STMT_INCLUDE;
+				inc_stmt->flags = 0;
+				inc_stmt->where = s->where;
+				inc_stmt->inc.filename = filename;
+			}
 			if (!token_is_kw(t->token, KW_SEMICOLON)) {
 				tokr_err(t, "Expected ; after #include directive");
+				tokr_skip_semicolon(t);
 				return false;
 			}
 			++t->token;
@@ -2524,6 +2565,11 @@ static void fprint_decl(FILE *out, Declaration *d) {
 		fprint_val(out, d->val, &d->type);
 		fprintf(out, ")");
 	}
+}
+
+static void print_decl(Declaration *d) {
+	fprint_decl(stdout, d);
+	printf("\n");
 }
 
 static void fprint_stmt(FILE *out, Statement *s) {

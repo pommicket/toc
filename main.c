@@ -8,7 +8,7 @@
 
 /* 
 TODO:
-nice syntax for #including something into a namespace
+compile without Wno-unused-function
 run stuff at compile time without assigning it to a constant
 better #foreign system- something like f := #foreign fn (int,float, #C int);
 ---
