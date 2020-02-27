@@ -1389,7 +1389,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 		*(Expression **)typer_arr_add(tr, &tr->in_exprs) = e;
 		typer_block_enter(tr, &fo->body); /* while this block is being typed, fo->body will be in tr->blocks twice. hopefully that doesn't mess anything up! */
 		if (fo->flags & FOR_IS_RANGE) {
-			/* TODO: allow user-defined numerical types */
 			if (!types_expr(tr, fo->range.from)) goto for_fail;
 			{
 				Type *ft = &fo->range.from->type;

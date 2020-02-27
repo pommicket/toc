@@ -3,10 +3,6 @@
   This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
-#if CHAR_MAX - CHAR_MIN > 255
-#error "Currently only systems with 8-bit characters can compile toc."
-/* TODO: not necessary anymore */
-#endif
 
 /* can this character be used in an identifier? */
 static int is_ident(int c) {

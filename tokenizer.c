@@ -142,7 +142,7 @@ static inline int char_as_hex_digit(char c) {
 
 /* returns -1 if escape sequence is invalid */
 static int tokr_esc_seq(Tokenizer *t) {
-	/* TODO: add more of these incl. \x41, \100 */
+	/* TODO: octal (\032)? */
 	switch (*t->s) {
 	case '\'':
 		tokr_nextchar(t);

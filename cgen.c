@@ -1221,7 +1221,7 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 static void cgen_expr(CGenerator *g, Expression *e) {
 	switch (e->kind) {
 	case EXPR_LITERAL_FLOAT:
-		cgen_write(g, "%.16Lf", (long double)e->floatl); /* TODO(eventually): better precision? */
+		cgen_write(g, "%.16Lf", (long double)e->floatl);
 		break;
 	case EXPR_LITERAL_INT:
 		cgen_write(g, U64_FMT, e->intl);
@@ -1926,11 +1926,11 @@ static void cgen_ret(CGenerator *g, Expression *ret) {
 }
 
 static void cgen_stmt(CGenerator *g, Statement *s) {
-	/*
-	  TODO(eventually): optionally this:
-	  cgen_write(g, "/\* %s:%d *\/", s->where.ctx->filename, s->where.line);
-	  (or even #line directives!) 
-	*/
+
+#ifdef CGEN_EMIT_LINE_NUMBER_COMMENTS
+	/* TODO: add compiler option for this */
+	cgen_write(g, "/* %s:%d */", s->where.ctx->filename, s->where.line);
+#endif
 	switch (s->kind) {
 	case STMT_DECL:
 		cgen_decl(g, s->decl);
@@ -2032,9 +2032,6 @@ static void cgen_file(CGenerator *g, ParsedFile *f) {
 	g->fn = NULL;
 	g->file = f;
 
-	/* 
-	   TODO: don't include stdio.h with posix file descriptors
-	*/
 	cgen_write(g, "#include <stdint.h>\n"
 			   "#include <stddef.h>\n"
 			   "typedef int8_t i8;\n"

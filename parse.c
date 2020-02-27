@@ -1144,7 +1144,6 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 
 
 		Token *start = t->token;
-		/* TODO: consider moving this after ops, so that "if true { 5 } else { 3 } as f32" is possible */
 		if (t->token->kind == TOKEN_KW) switch (t->token->kw) {
 			case KW_FN: {
 				/* this is a function */

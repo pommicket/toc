@@ -141,7 +141,6 @@ int main(int argc, char **argv) {
 	typer_create(&tr, &ev, &err_ctx, &main_allocr, &globals);
     
 	if (!types_file(&tr, &f)) {
-		/* TODO(eventually): fix this if the error occured while exporting something */
 		err_text_important(&err_ctx, "Errors occured while determining types.\n");
 		allocr_free_all(&main_allocr);
 		return EXIT_FAILURE;

@@ -532,7 +532,7 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 	assert(type->flags & TYPE_IS_RESOLVED);
 	switch (type->kind) {
 	case TYPE_PTR: *(void **)set = to->ptr; break;
-	case TYPE_ARR: memcpy(set, to->arr, compiler_sizeof(type)); break; /* TODO: test this */
+	case TYPE_ARR: memcpy(set, to->arr, compiler_sizeof(type)); break;
 	case TYPE_STRUCT: memcpy(set, to->struc, compiler_sizeof(type)); break;
 	case TYPE_FN: *(FnExpr **)set = to->fn; break;
 	case TYPE_TUPLE: *(Value **)set = to->tuple; break;
@@ -1078,7 +1078,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (type_is_builtin(&o->type, BUILTIN_TYPE)) {
 				if (!eval_expr(ev, e->unary.of, &of)) return false;
 				/* "address" of type (pointer to type) */
-				v->type = evalr_malloc(ev, sizeof *v->type); /* TODO: this might be bad in the future; should free this at some point */
+				v->type = evalr_malloc(ev, sizeof *v->type);
 				v->type->flags = 0;
 				v->type->kind = TYPE_PTR;
 				v->type->ptr = of.type;

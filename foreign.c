@@ -275,7 +275,6 @@ static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *fn_type, Val
 		const char *libname = fn->foreign.lib;
 		Library *lib = str_hash_table_get(&ffmgr->libs_loaded, libname, strlen(libname));
 		if (!lib) {
-			/* TODO: IMPORTANT: only open libraries once */
 			void *handle = dlopen(libname, RTLD_LAZY);
 			if (!handle) {
 				err_print(call_where, "Could not open dynamic library: %s.", libname);
