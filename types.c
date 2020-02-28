@@ -370,7 +370,40 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	FnExpr *prev_fn = tr->fn;
 	FnExpr fn_copy = {0};
 	
-		
+#if 0
+	/* TODO */
+	if (!type_resolve(tr, &d->type, d->where)) {
+		success = false;
+		goto ret;
+	}
+	char *name_cstr = eval_expr_as_cstr(tr, d->foreign.name, "foreign name");
+	if (!name_cstr) {
+		success = false;
+		goto ret;
+	}
+	if (d->foreign.lib) {
+		char *lib_cstr = eval_expr_as_cstr(tr, d->foreign.lib, "foreign library name");
+		if (!lib_cstr) {
+			success = false;
+			goto ret;
+		}
+		/* make sure no one tries to use these */
+		d->foreign.name = NULL;
+		d->foreign.lib = NULL;
+			
+		FnExpr *f = d->val.fn = typer_calloc(tr, 1, sizeof *d->expr.fn);
+		f->flags = FN_EXPR_FOREIGN;
+		f->where = d->expr.where = d->where;
+		f->foreign.name = name_cstr;
+		f->foreign.lib = lib_cstr;
+		f->foreign.fn_ptr = NULL;
+			
+		d->flags |= DECL_FOUND_VAL;
+	} else {
+		d->foreign.name_str = name_cstr;
+		}
+#endif
+	
 	/* f has compile time params, but it's not an instance! */
 	bool generic = !(flags & TYPE_OF_FN_IS_INSTANCE) && fn_has_any_const_params(f);
 	if (generic) {
@@ -2710,37 +2743,6 @@ static Status types_decl(Typer *tr, Declaration *d) {
 			}
 		}
 				
-	} else if (d->flags & DECL_FOREIGN) {
-		if (!type_resolve(tr, &d->type, d->where)) {
-			success = false;
-			goto ret;
-		}
-		char *name_cstr = eval_expr_as_cstr(tr, d->foreign.name, "foreign name");
-		if (!name_cstr) {
-			success = false;
-			goto ret;
-		}
-		if (d->foreign.lib) {
-			char *lib_cstr = eval_expr_as_cstr(tr, d->foreign.lib, "foreign library name");
-			if (!lib_cstr) {
-				success = false;
-				goto ret;
-			}
-			/* make sure no one tries to use these */
-			d->foreign.name = NULL;
-			d->foreign.lib = NULL;
-			
-			FnExpr *f = d->val.fn = typer_calloc(tr, 1, sizeof *d->expr.fn);
-			f->flags = FN_EXPR_FOREIGN;
-			f->where = d->expr.where = d->where;
-			f->foreign.name = name_cstr;
-			f->foreign.lib = lib_cstr;
-			f->foreign.fn_ptr = NULL;
-			
-			d->flags |= DECL_FOUND_VAL;
-		} else {
-			d->foreign.name_str = name_cstr;
-		}
 	}
 	
 	for (size_t i = 0; i < arr_len(d->idents); ++i) {

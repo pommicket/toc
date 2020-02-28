@@ -1206,21 +1206,19 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			if (i->decl_kind == IDECL_DECL) {
 				Declaration *d = i->decl;
 				if (d->flags & DECL_IS_CONST) {
-					if (!(d->flags & DECL_FOREIGN) || d->foreign.lib) {
-						int index = decl_ident_index(d, i);
-						Value fn_val = *decl_val_at_index(d, index);
-						FnExpr *fn = fn_val.fn;
-						Expression fn_expr;
+					int index = decl_ident_index(d, i);
+					Value fn_val = *decl_val_at_index(d, index);
+					FnExpr *fn = fn_val.fn;
+					Expression fn_expr;
 					
-						fn_expr.kind = EXPR_FN;
-						fn_expr.fn = allocr_malloc(g->allocr, sizeof *fn_expr.fn);
-						*fn_expr.fn = *fn;
-						fn_expr.flags = EXPR_FOUND_TYPE;
-						fn_expr.type = *decl_type_at_index(d, index);
+					fn_expr.kind = EXPR_FN;
+					fn_expr.fn = allocr_malloc(g->allocr, sizeof *fn_expr.fn);
+					*fn_expr.fn = *fn;
+					fn_expr.flags = EXPR_FOUND_TYPE;
+					fn_expr.type = *decl_type_at_index(d, index);
 					
-						cgen_expr(g, &fn_expr);
-						handled = true;
-					}
+					cgen_expr(g, &fn_expr);
+					handled = true;
 				}
 			}
 		}
@@ -1732,8 +1730,6 @@ static void cgen_val(CGenerator *g, Value v, Type *t, Location where) {
 }
 
 static void cgen_decl(CGenerator *g, Declaration *d) {
-	if (d->flags & DECL_FOREIGN)
-		return; /* already dealt with */
 	if (g->block == NULL && g->fn == NULL)
 		return; /* already dealt with */
 	int has_expr = d->flags & DECL_HAS_EXPR;
@@ -1947,9 +1943,6 @@ static void cgen_defs_expr(CGenerator *g, Expression *e) {
 }
 
 static void cgen_defs_decl(CGenerator *g, Declaration *d) {
-	if (d->flags & DECL_FOREIGN) {
-		return; /* dealt with by decls_cgen */
-	}
 	if (d->flags & DECL_HAS_EXPR) {
 		cgen_defs_expr(g, &d->expr);
 	}

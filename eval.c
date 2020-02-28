@@ -986,19 +986,6 @@ static Status eval_ident(Evaluator *ev, Identifier ident, Value *v, Location whe
 	Declaration *d = NULL;
 	if (is_decl) {
 		d = ident->decl;
-		if (d->flags & DECL_FOREIGN) {
-			if (!(d->flags & DECL_FOUND_VAL)) {
-#if COMPILE_TIME_FOREIGN_FN_SUPPORT
-				err_print(where, "Cannot access foreign declaration at compile time. "
-						  "If you are calling a function, you need to provide the library it's in.");
-#else
-				err_print(where, "Cannot access foreign declaration at compile time.");
-#endif
-				return false;
-			}
-			v->fn = d->val.fn;
-			return true;
-		}
 		if ((d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_TYPE && d->expr.typeval.kind == TYPE_STRUCT) {
 			v->type = allocr_malloc(ev->allocr, sizeof *v->type);
 			v->type->flags = TYPE_IS_RESOLVED;

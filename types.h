@@ -27,15 +27,24 @@ For more information, please refer to <http://unlicense.org/>
 
 typedef long double Floating; /* OPTIM: Switch to double, but make sure floating-point literals are right */
 
+
+#if __STDC_VERSION__ >= 199901
+#define HAVE_LONGLONG 1
+typedef long long longlong;
+#else
+#define HAVE_LONGLONG 0
+typedef long longlong;
+#endif
+
+
 #if __STDC_VERSION__ < 201112
 /* try to find the type with the strictest alignment */
 typedef union {
 	long double floating;
 	void *ptr;
-	#if __STDC_VERSION__ >= 199901
-	long
+	#if HAVE_LONGLONG
+	longlong integer;
 	#endif
-	long integer;
 	void (*fn_ptr)(void);
 } MaxAlign;
 #else
@@ -629,6 +638,29 @@ enum {
 	  FN_EXPR_EXPORT = 0x02 /* set by sdecls_cgen.c */
 };
 
+typedef enum {
+	  CTYPE_NONE = 0x00,
+	  CTYPE_CHAR = 0x01,
+	  CTYPE_SHORT = 0x02,
+	  CTYPE_INT = 0x03,
+	  CTYPE_LONG = 0x04,
+	  CTYPE_LONGLONG = 0x05,
+	  CTYPE_SIGNED_CHAR = 0x06,
+	  CTYPE_UNSIGNED = 0x08,
+	  CTYPE_UNSIGNED_CHAR = CTYPE_UNSIGNED|CTYPE_CHAR,
+	  CTYPE_UNSIGNED_SHORT = CTYPE_UNSIGNED|CTYPE_SHORT,
+	  CTYPE_UNSIGNED_INT = CTYPE_UNSIGNED|CTYPE_INT,
+	  CTYPE_UNSIGNED_LONG = CTYPE_UNSIGNED|CTYPE_LONG,
+	  CTYPE_UNSIGNED_LONGLONG = CTYPE_UNSIGNED|CTYPE_LONGLONG,
+	  CTYPE_PTR = 0x10,
+	  CTYPE_FLOAT = 0x11,
+	  CTYPE_DOUBLE = 0x12
+} CTypeKind;
+typedef struct {
+	CTypeKind kind;
+	char *points_to; /* if kind == CTYPE_PTR, ident string of C type which it points to */
+} CType;
+
 typedef struct FnExpr {
 	struct Declaration *params; /* declarations of the parameters to this function */
 	struct Declaration *ret_decls; /* array of decls, if this has named return values. otherwise, NULL */
@@ -637,6 +669,7 @@ typedef struct FnExpr {
 	union {
 		Block body;
 		struct {
+			CType *ctypes; /* ctypes[i] = CTYPE_NONE if this isn't a ctype, or the specified CType. don't use this as a dynamic array. */
 			const char *name;
 			const char *lib;
 			void (*fn_ptr)();
@@ -742,7 +775,6 @@ typedef struct Expression {
 	} cgen;
 	union {
 		Floating floatl;
-		/* Floating floatl; */
 		U64 intl;
 		StrLiteral strl;
 		bool booll;
@@ -805,8 +837,7 @@ enum {
 	  DECL_FOUND_VAL = 0x0040,
 	  DECL_INFER = 0x0080, /* infer the value (e.g. fn(t::Type=, x:t)) */
 	  DECL_EXPORT = 0x0100,
-	  DECL_FOREIGN = 0x0200,
-	  DECL_IS_PARAM = 0x0400
+	  DECL_IS_PARAM = 0x0200
 };
 
 typedef U16 DeclFlags;

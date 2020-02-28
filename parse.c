@@ -645,11 +645,6 @@ static Status parse_type(Parser *p, Type *type) {
 						err_print(field_decl.where, "Constant struct members are not supported (yet).");
 						goto struct_fail;
 					}
-					if ((field_decl.flags & DECL_FOREIGN) && !(field_decl.flags & DECL_IS_CONST)) {
-						err_print(field_decl.where, "Non-constant struct members cannot be foreign.");
-						goto struct_fail;
-					}
-					
 					if (field_decl.flags & DECL_HAS_EXPR) {
 						err_print(field_decl.where, "struct members cannot have initializers.");
 						goto struct_fail;
@@ -948,11 +943,6 @@ static Status parse_fn_expr(Parser *p, FnExpr *f) {
 		if (!parse_decl_list(p, &f->params, DECL_END_RPAREN_COMMA))
 			return false;
 		arr_foreach(f->params, Declaration, param) {
-			if (param->flags & DECL_FOREIGN) {
-				err_print(param->where, "Parameters cannot be foreign.");
-				success = false;
-				goto ret;
-			}
 			param->flags |= DECL_IS_PARAM;
 		}
 	}
@@ -977,10 +967,6 @@ static Status parse_fn_expr(Parser *p, FnExpr *f) {
 			if (d->flags & DECL_INFER) {
 				err_print(d->where, "Can't infer the value of a named return value!");
 				success = false; goto ret;
-			}
-			if (d->flags & DECL_FOREIGN) {
-				err_print(d->where, "Named return values can't be foreign.");
-			    success = false; goto ret;
 			}
 		}
 		--t->token;	/* move back to { */
@@ -1051,6 +1037,85 @@ static Status check_ident_redecl(Parser *p, Identifier i) {
 			tokr_err(t, "Redeclaration of identifier %s.", s);
 			info_print(ident_decl_location(i), "Previous declaration was here.");
 			free(s);
+			return false;
+		}
+	}
+	return true;
+}
+
+static BuiltinType int_with_size(size_t size) {
+	switch (size) {
+	case 1:	return BUILTIN_I8;
+	case 2:	return BUILTIN_I16;
+	case 4:	return BUILTIN_I32;
+	case 8:	return BUILTIN_I64;
+	}
+	return BUILTIN_F32;
+}
+
+static BuiltinType uint_with_size(size_t size) {
+	switch (size) {
+	case 1: return BUILTIN_U8;
+	case 2: return BUILTIN_U16;
+	case 4: return BUILTIN_U32;
+	case 8: return BUILTIN_U64;
+	}
+	return BUILTIN_F32;
+}
+
+static Status ctype_to_type(Allocator *a, CType *ctype, Type *type, Location where) {
+    memset(type, 0, sizeof *type);
+	type->kind = TYPE_BUILTIN;
+	size_t size = 0;
+	switch (ctype->kind) {
+	case CTYPE_NONE:
+		type->kind = TYPE_UNKNOWN;
+		break;
+	case CTYPE_CHAR:
+		type->builtin = BUILTIN_CHAR;
+		break;
+	case CTYPE_SIGNED_CHAR:
+	case CTYPE_UNSIGNED_CHAR:
+		size = 1;
+		break;
+	case CTYPE_SHORT:
+	case CTYPE_UNSIGNED_SHORT:
+	    size = sizeof(short);
+		break;
+	case CTYPE_INT:
+	case CTYPE_UNSIGNED_INT:
+		size = sizeof(int);
+		break;
+	case CTYPE_LONG:
+	case CTYPE_UNSIGNED_LONG:
+		size = sizeof(long);
+		break;
+	case CTYPE_LONGLONG:
+	case CTYPE_UNSIGNED_LONGLONG:
+#if HAVE_LONGLONG
+		size = sizeof(longlong);
+#else
+		err_print(where, "long long is not supported. Did you compile toc with a pre-C99 compiler?");
+		return false;
+#endif
+		break;
+	case CTYPE_FLOAT:
+		type->builtin = BUILTIN_F32;
+		break;
+	case CTYPE_DOUBLE:
+		type->builtin = BUILTIN_F64;
+		break;
+	case CTYPE_PTR:
+		type->kind = TYPE_PTR;
+		type->ptr = allocr_calloc(a, 1, sizeof *type->ptr);
+		type->ptr->kind = TYPE_UNKNOWN;
+		break;
+	case CTYPE_UNSIGNED: assert(0); break;
+	}
+	if (size != 0) {
+		type->builtin = ((ctype->kind & CTYPE_UNSIGNED) ? uint_with_size : int_with_size)(size);
+		if (type->builtin == BUILTIN_F32) {
+			err_print(where, "This C type is not representable by a toc type, because it is %lu bytes (not 1, 2, 4, or 8).", size);
 			return false;
 		}
 	}
@@ -1680,6 +1745,148 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 		} else {
 		not_an_op:;
 			/* function calls, array accesses, etc. */
+
+			if (t->token->kind == TOKEN_DIRECT) {
+				/* it's a directive */
+				Expression *single_arg = NULL; /* points to an expr if this is a directive with one expression argument */
+			
+				switch (t->token->direct) {
+				case DIRECT_C:
+					e->kind = EXPR_C;
+					single_arg = e->c.code = parser_new_expr(p);
+					break;
+				case DIRECT_BUILTIN:
+					e->kind = EXPR_BUILTIN;
+					single_arg = e->builtin.which.expr = parser_new_expr(p);
+					break;
+				case DIRECT_SIZEOF:
+					e->kind = EXPR_UNARY_OP;
+					e->unary.op = UNARY_DSIZEOF;
+					single_arg = e->unary.of = parser_new_expr(p);
+					break;
+				case DIRECT_ALIGNOF:
+					e->kind = EXPR_UNARY_OP;
+					e->unary.op = UNARY_DALIGNOF;
+					single_arg = e->unary.of = parser_new_expr(p);
+					break;
+				case DIRECT_FOREIGN: {
+					/* foreign function */
+					e->kind = EXPR_FN;
+					e->type.kind = TYPE_FN;
+					FnExpr *fn = e->fn = parser_calloc(p, 1, sizeof *e->fn);
+					fn->flags |= FN_EXPR_FOREIGN;
+					FnType *fn_type = &e->type.fn;
+				    fn_type->constness = NULL;
+					fn_type->types = NULL;
+					++t->token;
+					if (!token_is_kw(t->token, KW_FN)) {
+						tokr_err(t, "Expected fn to follow #foreign.");
+						return false;
+					}
+					++t->token;
+					if (!token_is_kw(t->token, KW_LPAREN)) {
+						tokr_err(t, "Expected ( after #foreign fn");
+					}
+					++t->token;
+					while (!token_is_kw(t->token, KW_RPAREN)) {
+						if (token_is_direct(t->token, DIRECT_C)) {
+							CType ctype = {0};
+							++t->token;
+							if (token_is_kw(t->token, KW_INT)) {
+								ctype.kind = CTYPE_INT;
+								++t->token;
+							} else if (token_is_kw(t->token, KW_AMPERSAND)) {
+								ctype.kind = CTYPE_PTR;
+								++t->token;
+								if (t->token->kind != TOKEN_IDENT) {
+									tokr_err(t, "Expected type to follow &");
+									return false;
+								}
+								ctype.points_to = t->token->ident;
+								++t->token;
+							} else if (t->token->kind == TOKEN_IDENT) {
+								char *id = t->token->ident;
+								CTypeKind kind = 0;
+								if (ident_str_len(id) > 9 && strncmp(id, "unsigned_", 9)) {
+									kind |= CTYPE_UNSIGNED;
+									id += 9;
+								}
+								if (ident_str_eq_str(id, "char"))
+									ctype.kind |= CTYPE_CHAR;
+								else if (ident_str_eq_str(id, "signed_char"))
+									ctype.kind = CTYPE_SIGNED_CHAR;
+								else if (ident_str_eq_str(id, "short"))
+									ctype.kind |= CTYPE_SHORT;
+								else if (ident_str_eq_str(id, "int"))
+									ctype.kind |= CTYPE_INT;
+								else if (ident_str_eq_str(id, "long"))
+									ctype.kind |= CTYPE_LONG;
+								else if (ident_str_eq_str(id, "long_long"))
+									ctype.kind |= CTYPE_CHAR;
+								else if (ident_str_eq_str(id, "float"))
+									ctype.kind = CTYPE_FLOAT;
+								else if (ident_str_eq_str(id, "double"))
+									ctype.kind = CTYPE_DOUBLE;
+								else if (ident_str_eq_str(id, "long_double")) {
+								    tokr_err(t, "long double is not supported for #foreign functions.");
+									return false;
+								} else {
+									tokr_err(t, "Unrecognized C type.");
+									return false;
+								}
+								++t->token;
+							} else {
+								tokr_err(t, "Unrecognized C type.");
+								return false;
+							}
+							*(CType *)parser_arr_add(p, &fn->foreign.ctypes) = ctype;
+							Type *type = parser_arr_add(p, &fn_type->types);
+							if (!ctype_to_type(p->allocr, &ctype, type, token_location(p->file, t->token)))
+								return false;
+						} else {
+							CType *ctype = parser_arr_add(p, &fn->foreign.ctypes);
+							ctype->kind = CTYPE_NONE;
+							Type *type = parser_arr_add(p, &fn_type->types);
+							if (!parse_type(p, type))
+								return false;
+						}
+						if (token_is_kw(t->token, KW_COMMA)) {
+							++t->token;
+						} else if (token_is_kw(t->token, KW_RPAREN)) {
+							++t->token;
+							break;
+						} else {
+							tokr_err(t, "Expected , or ) following #foreign fn type.");
+							return false;
+						}
+					}
+					return true;
+				}
+				case DIRECT_EXPORT:
+				case DIRECT_INCLUDE:
+				case DIRECT_FORCE:
+					tokr_err(t, "Unrecognized expression.");
+					return false;
+				case DIRECT_COUNT: assert(0); break;
+				}
+				if (single_arg) {
+					++t->token;
+					if (!token_is_kw(t->token, KW_LPAREN)) {
+						tokr_err(t, "Expected ( to follow #%s.", directives[t->token->direct]);
+						return false;
+					}
+					++t->token;
+					Token *arg_end = expr_find_end(p, 0);
+					if (!token_is_kw(arg_end, KW_RPAREN)) {
+						err_print(token_location(p->file, arg_end), "Expected ) at end of #%s directive.", directives[t->token->direct]);
+						return false;
+					}
+					if (!parse_expr(p, single_arg, arg_end))
+						return false;
+					++t->token;
+					goto success;
+				}
+			}
 		
 			/* try a function call or array access */
 			Token *token = t->token;
@@ -1827,56 +2034,6 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				}
 			}
 
-			if (t->token->kind == TOKEN_DIRECT) {
-				/* it's a directive */
-				Expression *single_arg = NULL; /* points to an expr if this is a directive with one expression argument */
-			
-				switch (t->token->direct) {
-				case DIRECT_C:
-					e->kind = EXPR_C;
-					single_arg = e->c.code = parser_new_expr(p);
-					break;
-				case DIRECT_BUILTIN:
-					e->kind = EXPR_BUILTIN;
-					single_arg = e->builtin.which.expr = parser_new_expr(p);
-					break;
-				case DIRECT_SIZEOF:
-					e->kind = EXPR_UNARY_OP;
-					e->unary.op = UNARY_DSIZEOF;
-					single_arg = e->unary.of = parser_new_expr(p);
-					break;
-				case DIRECT_ALIGNOF:
-					e->kind = EXPR_UNARY_OP;
-					e->unary.op = UNARY_DALIGNOF;
-					single_arg = e->unary.of = parser_new_expr(p);
-					break;
-				case DIRECT_FOREIGN:
-				case DIRECT_EXPORT:
-				case DIRECT_INCLUDE:
-				case DIRECT_FORCE:
-					tokr_err(t, "Unrecognized expression.");
-					return false;
-				case DIRECT_COUNT: assert(0); break;
-				}
-				if (single_arg) {
-					++t->token;
-					if (!token_is_kw(t->token, KW_LPAREN)) {
-						tokr_err(t, "Expected ( to follow #%s.", directives[t->token->direct]);
-						return false;
-					}
-					++t->token;
-					Token *arg_end = expr_find_end(p, 0);
-					if (!token_is_kw(arg_end, KW_RPAREN)) {
-						err_print(token_location(p->file, arg_end), "Expected ) at end of #%s directive.", directives[t->token->direct]);
-						return false;
-					}
-					if (!parse_expr(p, single_arg, arg_end))
-						return false;
-					++t->token;
-					goto success;
-				}
-			}
-
 			if (token_is_kw(t->token, KW_LBRACE)) {
 				/* it's a block */
 				e->kind = EXPR_BLOCK;
@@ -2012,39 +2169,7 @@ static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 f
 			
 		if (token_is_kw(t->token, KW_EQ)) {
 			++t->token;
-			if (token_is_direct(t->token, DIRECT_FOREIGN)) {
-				if (!(d->flags & DECL_ANNOTATES_TYPE)) {
-					tokr_err(t, "Foreign declaration must have a type.");
-					goto ret_false;
-				}
-				d->flags |= DECL_FOREIGN;
-				/* foreign name */
-				++t->token;
-				d->foreign.name = parser_new_expr(p);
-				if (!parse_expr(p, d->foreign.name, expr_find_end(p, EXPR_CAN_END_WITH_COMMA))) {
-					goto ret_false;
-				}
-				d->foreign.lib = NULL;
-				if (!ends_decl(t->token, ends_with)) {
-					if (!token_is_kw(t->token, KW_COMMA)) {
-						tokr_err(t, "Expected comma, followed by foreign library.");
-						goto ret_false;
-					}
-					++t->token;
-					/* foreign library */
-					d->foreign.lib = parser_new_expr(p);
-					if (!parse_expr(p, d->foreign.lib, expr_find_end(p, 0))) {
-						goto ret_false;
-					}
-				}
-				
-				if (!ends_decl(t->token, ends_with)) {
-					tokr_err(t, "Expected declaration to stop after #foreign, but it continues.");
-					goto ret_false;
-				}
-				++t->token;
-				
-			} else if ((flags & PARSE_DECL_ALLOW_INFER) && ends_decl(t->token, ends_with)) {
+			if ((flags & PARSE_DECL_ALLOW_INFER) && ends_decl(t->token, ends_with)) {
 				/* inferred expression */
 				d->flags |= DECL_INFER;
 				if (!(d->flags & DECL_IS_CONST)) {
@@ -2084,9 +2209,9 @@ static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 f
 		}
 	}
 	
-	if ((d->flags & DECL_IS_CONST) && !(d->flags & (DECL_HAS_EXPR | DECL_FOREIGN)) && !(flags & PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR)) {
+	if ((d->flags & DECL_IS_CONST) && !(d->flags & DECL_HAS_EXPR) && !(flags & PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR)) {
 		--t->token;
-		/* disallowed constant without an expression, e.g. x :: int; */
+		/* disallow constant without an expression, e.g. x :: int; */
 		tokr_err(t, "You must have an expression at the end of this constant declaration.");
 		goto ret_false;
 	}
@@ -2644,14 +2769,8 @@ static bool ident_is_definitely_const(Identifier i) {
 	Declaration *decl = i->decl;
 	if (i->decl_kind != IDECL_DECL || !(decl->flags & DECL_IS_CONST))
 		return false;
-	if (i->decl->flags & DECL_FOREIGN) {
-		if (decl->foreign.lib && COMPILE_TIME_FOREIGN_FN_SUPPORT)
-			return true;
-		else
-			return false;
-	} else {
-		return true;
-	}
+	
+	return true;
 }
 
 

@@ -1,18 +1,6 @@
-#include #force "std/io.toc", io;
-#include #force "std/io.toc", foo;
-#include  #force "std/io.toc";
 
-a ::= nms {
-  b ::= nms {
-  	x := 3;
-  };
-  f ::= fn() { b.x += 1; io.puti(b.x); foo.puti(b.x); puti(b.x);
-	  };
-};
+puts ::= #foreign fn (#C int);
 
 main ::= fn() {
-	 a.f();
-	 a.f();
-	 a.f();
 	 
 };
