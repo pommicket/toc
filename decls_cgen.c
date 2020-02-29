@@ -3,44 +3,6 @@
   This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
-
-/* TODO */
-#if 0
-	if (d->flags & DECL_FOREIGN) {
-		cgen_write(g, "extern ");
-	    if ((d->flags & DECL_IS_CONST) && (d->type.kind == TYPE_FN) && arr_len(d->idents) == 1) {
-			/* foreign function declaration */
-			Type *fn_types = d->type.fn.types;
-			const char *foreign_name = (d->flags & DECL_FOUND_VAL)
-				? d->val.fn->foreign.name
-				: d->foreign.name_str;
-			cgen_type_pre(g, &fn_types[0], d->where);
-			cgen_write(g, " %s", foreign_name);
-			cgen_write(g, "(");
-			arr_foreach(fn_types, Type, t) {
-				if (t == fn_types) continue;
-				if (t != fn_types+1)
-					cgen_write(g, ", ");
-				cgen_type_pre(g, t, d->where);
-				cgen_type_post(g, t, d->where);
-			}
-			cgen_write(g, ")");
-			cgen_type_post(g, &fn_types[0], d->where);
-			cgen_write(g, ";");
-			if (!ident_eq_str(d->idents[0], foreign_name)) {
-				cgen_write(g, "static ");
-				cgen_type_pre(g, &d->type, d->where);
-				cgen_write(g, " const ");
-				cgen_ident(g, d->idents[0]);
-				cgen_type_post(g, &d->type, d->where);
-				cgen_write(g, " = %s;", foreign_name);
-			}
-			cgen_nl(g);
-			if (d->flags & DECL_FOUND_VAL)
-				d->val.fn->c.name = d->idents[0];
-			return;
-
-#endif
 			
 static void cgen_decls_stmt(CGenerator *g, Statement *s);
 static void cgen_decls_block(CGenerator *g, Block *b);
@@ -101,6 +63,36 @@ static void cgen_decls_fn_instances(CGenerator *g, FnExpr *f) {
 }
 
 static void cgen_fn_decl(CGenerator *g, FnExpr *f, Type *t) {
+	if (f->flags & FN_EXPR_FOREIGN) {
+		
+		/* foreign function declaration */
+		cgen_write(g, "extern ");
+		Type *fn_types = t->fn.types;
+		const char *foreign_name = f->foreign.name;
+		cgen_type_pre(g, &fn_types[0], f->where);
+		cgen_write(g, " %s", foreign_name);
+		cgen_write(g, "(");
+		arr_foreach(fn_types, Type, sub) {
+			if (sub == fn_types) continue;
+			if (sub != fn_types+1)
+				cgen_write(g, ", ");
+			cgen_type_pre(g, t, f->where);
+			cgen_type_post(g, t, f->where);
+		}
+		cgen_write(g, ")");
+		cgen_type_post(g, &fn_types[0], f->where);
+		cgen_write(g, ";");
+		if (!f->c.name || !ident_eq_str(f->c.name, foreign_name)) {
+			cgen_write(g, "static ");
+			cgen_type_pre(g, t, f->where);
+			cgen_write(g, " const ");
+			cgen_fn_name(g, f);
+			cgen_type_post(g, t, f->where);
+			cgen_write(g, " = %s;", foreign_name);
+		}
+		cgen_nl(g);
+		return;
+	}
 	FnType *fn_type = &t->fn;
 	if (fn_type->constness) {
 		cgen_decls_fn_instances(g, f);

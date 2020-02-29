@@ -1770,15 +1770,45 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					single_arg = e->unary.of = parser_new_expr(p);
 					break;
 				case DIRECT_FOREIGN: {
-					/* foreign function */
+					++t->token;
+					if (!token_is_kw(t->token, KW_LPAREN)) {
+						tokr_err(t, "Expected ( following #foreign.");
+						return false;
+					}
+					++t->token;
+					
 					e->kind = EXPR_FN;
-					e->type.kind = TYPE_FN;
 					FnExpr *fn = e->fn = parser_calloc(p, 1, sizeof *e->fn);
 					fn->flags |= FN_EXPR_FOREIGN;
-					FnType *fn_type = &e->type.fn;
+					fn->foreign.fn_ptr = 0;
+					Type *fn_t = &fn->foreign.type;
+					fn_t->kind = TYPE_FN;
+					FnType *fn_type = &fn_t->fn;
 				    fn_type->constness = NULL;
 					fn_type->types = NULL;
+					Expression *name = fn->foreign.name_expr = parser_new_expr(p);
+					
+					if (!parse_expr(p, name, expr_find_end(p, EXPR_CAN_END_WITH_COMMA)))
+						return false;
+					if (token_is_kw(t->token, KW_RPAREN)) {
+						fn->foreign.lib_expr = NULL;
+					} else {
+						if (!token_is_kw(t->token, KW_COMMA)) {
+							tokr_err(t, "Expected , to follow #foreign name.");
+							return false;
+						}
+						++t->token;
+						Expression *lib = fn->foreign.lib_expr = parser_new_expr(p);
+						if (!parse_expr(p, lib, expr_find_end(p, 0)))
+							return false;
+						if (!token_is_kw(t->token, KW_RPAREN)) {
+							tokr_err(t, "Expected ) to follow #foreign lib.");
+							return false;
+						}	
+					}
 					++t->token;
+					
+					
 					if (!token_is_kw(t->token, KW_FN)) {
 						tokr_err(t, "Expected fn to follow #foreign.");
 						return false;

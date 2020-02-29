@@ -9,6 +9,7 @@
 /* 
 TODO:
 better #foreign system- something like f := #foreign fn (int,float, #C int, #C longlong);
+make err_print and tokr_err return Status
 ---
 constants in structs
 #if

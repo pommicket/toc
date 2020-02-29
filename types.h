@@ -662,16 +662,25 @@ typedef struct {
 } CType;
 
 typedef struct FnExpr {
-	struct Declaration *params; /* declarations of the parameters to this function */
-	struct Declaration *ret_decls; /* array of decls, if this has named return values. otherwise, NULL */
 	Location where;
-	Type ret_type;	
 	union {
-		Block body;
 		struct {
+			struct Declaration *params; /* declarations of the parameters to this function */
+			struct Declaration *ret_decls; /* array of decls, if this has named return values. otherwise, NULL */
+			Type ret_type;	
+			Block body;
+		};
+		struct {
+			Type type; /* type of this function */
 			CType *ctypes; /* ctypes[i] = CTYPE_NONE if this isn't a ctype, or the specified CType. don't use this as a dynamic array. */
-			const char *name;
-			const char *lib;
+			union {
+				const char *name;
+				struct Expression *name_expr; /* before typing */
+			};
+			union {
+				const char *lib;
+				struct Expression *lib_expr;
+			};
 			void (*fn_ptr)();
 		} foreign;
 	};

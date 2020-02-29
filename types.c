@@ -354,12 +354,57 @@ static bool type_is_compileonly(Type *t) {
 	return false;
 }
 
+/* returns NULL if an error occured */
+static char *eval_expr_as_cstr(Typer *tr, Expression *e, const char *what_is_this) {
+	Value e_val;
+	if (!types_expr(tr, e))
+		return NULL;
+	if (!type_is_slicechar(&e->type)) {
+		char *got = type_to_str(&e->type);
+		err_print(e->where, "Expected []char for %s, but got %s.", what_is_this, got);
+		free(got);
+		return NULL;
+	}
+	if (!eval_expr(tr->evalr, e, &e_val))
+		return NULL;
+	Slice e_slice = e_val.slice;
+	char *str = typer_malloc(tr, (size_t)e_slice.n + 1);
+	str[e_slice.n] = 0;
+	memcpy(str, e_slice.data, (size_t)e_slice.n);
+	return str;
+}
+
 enum {
 	  /* is f an instance? (changes behaviour a bit) */
 	  TYPE_OF_FN_IS_INSTANCE = 0x01
 };
 
-static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
+static Status type_of_fn(Typer *tr, Expression *f_expr, U16 flags) {
+	assert(f_expr->kind == EXPR_FN);
+	FnExpr *f = f_expr->fn;
+	Type *t = &f_expr->type;
+
+
+	if (f->flags & FN_EXPR_FOREIGN) {
+		/* we've already mostly determined the type in parse_expr */
+		if (!type_resolve(tr, &f->foreign.type, f_expr->where))
+			return false;
+		*t = f->foreign.type;
+		char *name_cstr = eval_expr_as_cstr(tr, f->foreign.name_expr, "foreign name");
+		if (!name_cstr)
+			return false;
+		f->foreign.name = name_cstr;
+		if (f->foreign.lib_expr) {
+			char *lib_cstr = eval_expr_as_cstr(tr, f->foreign.lib_expr, "foreign library name");
+			if (!lib_cstr)
+				return false;
+			f->foreign.lib = lib_cstr;
+		} else {
+			f->foreign.lib = NULL;
+		}
+		return true;
+	}
+
 	t->kind = TYPE_FN;
 	t->fn.types = NULL;
 	t->fn.constness = NULL; /* OPTIM: constness doesn't need to be a dynamic array */
@@ -369,40 +414,6 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	size_t param_idx;
 	FnExpr *prev_fn = tr->fn;
 	FnExpr fn_copy = {0};
-	
-#if 0
-	/* TODO */
-	if (!type_resolve(tr, &d->type, d->where)) {
-		success = false;
-		goto ret;
-	}
-	char *name_cstr = eval_expr_as_cstr(tr, d->foreign.name, "foreign name");
-	if (!name_cstr) {
-		success = false;
-		goto ret;
-	}
-	if (d->foreign.lib) {
-		char *lib_cstr = eval_expr_as_cstr(tr, d->foreign.lib, "foreign library name");
-		if (!lib_cstr) {
-			success = false;
-			goto ret;
-		}
-		/* make sure no one tries to use these */
-		d->foreign.name = NULL;
-		d->foreign.lib = NULL;
-			
-		FnExpr *f = d->val.fn = typer_calloc(tr, 1, sizeof *d->expr.fn);
-		f->flags = FN_EXPR_FOREIGN;
-		f->where = d->expr.where = d->where;
-		f->foreign.name = name_cstr;
-		f->foreign.lib = lib_cstr;
-		f->foreign.fn_ptr = NULL;
-			
-		d->flags |= DECL_FOUND_VAL;
-	} else {
-		d->foreign.name_str = name_cstr;
-		}
-#endif
 	
 	/* f has compile time params, but it's not an instance! */
 	bool generic = !(flags & TYPE_OF_FN_IS_INSTANCE) && fn_has_any_const_params(f);
@@ -639,7 +650,8 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 		} else {
 			if ((d->flags & DECL_HAS_EXPR) && (d->expr.kind == EXPR_FN)) {
 				/* allow using a function before declaring it */
-				if (!type_of_fn(tr, d->expr.fn, t, 0)) return false;
+				if (!type_of_fn(tr, &d->expr, 0)) return false;
+				*t = d->expr.type;
 				return true;
 			} else {
 				if (where.start <= d->where.end) {
@@ -978,9 +990,9 @@ static bool arg_is_const(Expression *arg, Constness constness) {
 }
 
 
-/* MUST be called after type_of_fn. */
 /* pass NULL for instance if this isn't an instance */
 static Status types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
+	if (f->flags & FN_EXPR_FOREIGN) return true;
 	FnExpr *prev_fn = tr->fn;
 	bool success = true;
 	Expression *ret_expr;
@@ -1348,26 +1360,6 @@ static void get_builtin_val_type(Allocator *a, BuiltinVal val, Type *t) {
 	}
 }
 
-/* returns NULL if an error occured */
-static char *eval_expr_as_cstr(Typer *tr, Expression *e, const char *what_is_this) {
-	Value e_val;
-	if (!types_expr(tr, e))
-		return NULL;
-	if (!type_is_slicechar(&e->type)) {
-		char *got = type_to_str(&e->type);
-		err_print(e->where, "Expected []char for %s, but got %s.", what_is_this, got);
-		free(got);
-		return NULL;
-	}
-	if (!eval_expr(tr->evalr, e, &e_val))
-		return NULL;
-	Slice e_slice = e_val.slice;
-	char *str = typer_malloc(tr, (size_t)e_slice.n + 1);
-	str[e_slice.n] = 0;
-	memcpy(str, e_slice.data, (size_t)e_slice.n);
-	return str;
-}
-
 
 static Status types_expr(Typer *tr, Expression *e) {
 	if (e->flags & EXPR_FOUND_TYPE) return true;
@@ -1378,7 +1370,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 	e->flags |= EXPR_FOUND_TYPE; /* even if failed, pretend we found the type */
 	switch (e->kind) {
 	case EXPR_FN: {
-		if (!type_of_fn(tr, e->fn, &e->type, 0)) {
+		if (!type_of_fn(tr, e, 0)) {
 			return false;
 		}
 		if (fn_has_any_const_params(e->fn)) {
@@ -2039,8 +2031,11 @@ static Status types_expr(Typer *tr, Expression *e) {
 				}
 			}
 			/* type params, return declarations, etc */
-			if (!type_of_fn(tr, fn_copy, &f->type, TYPE_OF_FN_IS_INSTANCE))
+			FnExpr *prev = f->fn;
+			f->fn = fn_copy;
+			if (!type_of_fn(tr, f, TYPE_OF_FN_IS_INSTANCE))
 				return false;
+			f->fn = prev;
 			
 			/* deal with default arguments */
 			i = 0;

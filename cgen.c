@@ -406,7 +406,9 @@ static inline void cgen_fn_instance_number(CGenerator *g, U64 instance) {
 
 /* should we generate this function? (or is it just meant for compile time) */
 static bool cgen_should_gen_fn(FnExpr *f) {
-	if (f->ret_decls) {
+	if (f->flags & FN_EXPR_FOREIGN)
+		return true;
+	else if (f->ret_decls) {
 		arr_foreach(f->ret_decls, Declaration, decl)
 			if (type_is_compileonly(&decl->type))
 				return false;
@@ -499,6 +501,8 @@ static inline void cgen_arg(CGenerator *g, Expression *arg) {
 
 /* unless f has const/semi-const args, instance and which_are_const can be set to 0 */
 static void cgen_fn_header(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_const) {
+	assert(!(f->flags & FN_EXPR_FOREIGN));
+	
 	bool out_param = cgen_uses_ptr(&f->ret_type);
 	assert(cgen_should_gen_fn(f));
 	if (!(f->flags & FN_EXPR_EXPORT))
@@ -1562,6 +1566,8 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 
 /* pass 0 for instance and NULL for compile_time_args if there are no compile time arguments. */
 static void cgen_fn(CGenerator *g, FnExpr *f, U64 instance, Value *compile_time_args) {
+	if (f->flags & FN_EXPR_FOREIGN)
+		return; /* handled by decls_cgen */
 	/* see also cgen_defs_expr */
 	FnExpr *prev_fn = g->fn;
 	U64 which_are_const = compile_time_args ? compile_time_args->u64 : 0;

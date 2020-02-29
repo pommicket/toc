@@ -1,6 +1,6 @@
 
-puts ::= #foreign fn (#C int);
+puts ::= #foreign("puts", "libc.so.6") fn (#C int);
 
 main ::= fn() {
-	 
+	 puts("Hello!");
 };
