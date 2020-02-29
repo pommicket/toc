@@ -1,6 +1,9 @@
 
-puts ::= #foreign("puts", "libc.so.6") fn (#C int);
+putchar ::= #foreign("putchar", "libc.so.6") fn (#C int) #C int;
+
 
 main ::= fn() {
-	 puts("Hello!");
+	 putchar(97);
+	 putchar('\n' as i32);
 };
+main();

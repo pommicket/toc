@@ -273,6 +273,11 @@ static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *fn_type, Val
 	if (!fn_ptr) {
 		assert(fn->flags & FN_EXPR_FOREIGN);
 		const char *libname = fn->foreign.lib;
+		if (!libname) {
+			err_print(call_where, "Attempt to call function at compile time which does not have an associated library.");
+			info_print(fn->where, "Function was declared here.");
+			return false;
+		}
 		Library *lib = str_hash_table_get(&ffmgr->libs_loaded, libname, strlen(libname));
 		if (!lib) {
 			void *handle = dlopen(libname, RTLD_LAZY);

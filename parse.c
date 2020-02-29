@@ -1122,6 +1122,68 @@ static Status ctype_to_type(Allocator *a, CType *ctype, Type *type, Location whe
 	return true;
 }
 
+static Status parse_c_type(Parser *p, CType *ctype, Type *type) {
+	Tokenizer *t = p->tokr;
+	if (token_is_direct(t->token, DIRECT_C)) {
+		++t->token;
+		ctype->kind = CTYPE_NONE;
+		if (token_is_kw(t->token, KW_INT)) {
+			ctype->kind = CTYPE_INT;
+			++t->token;
+		} else if (token_is_kw(t->token, KW_AMPERSAND)) {
+			ctype->kind = CTYPE_PTR;
+			++t->token;
+			if (t->token->kind != TOKEN_IDENT) {
+				tokr_err(t, "Expected type to follow &");
+				return false;
+			}
+			ctype->points_to = t->token->ident;
+			++t->token;
+		} else if (t->token->kind == TOKEN_IDENT) {
+			char *id = t->token->ident;
+			CTypeKind kind = 0;
+			if (ident_str_len(id) > 9 && strncmp(id, "unsigned_", 9)) {
+				kind |= CTYPE_UNSIGNED;
+				id += 9;
+			}
+			if (ident_str_eq_str(id, "char"))
+				ctype->kind |= CTYPE_CHAR;
+			else if (ident_str_eq_str(id, "signed_char"))
+				ctype->kind = CTYPE_SIGNED_CHAR;
+			else if (ident_str_eq_str(id, "short"))
+				ctype->kind |= CTYPE_SHORT;
+			else if (ident_str_eq_str(id, "int"))
+				ctype->kind |= CTYPE_INT;
+			else if (ident_str_eq_str(id, "long"))
+				ctype->kind |= CTYPE_LONG;
+			else if (ident_str_eq_str(id, "long_long"))
+				ctype->kind |= CTYPE_CHAR;
+			else if (ident_str_eq_str(id, "float"))
+				ctype->kind = CTYPE_FLOAT;
+			else if (ident_str_eq_str(id, "double"))
+				ctype->kind = CTYPE_DOUBLE;
+			else if (ident_str_eq_str(id, "long_double")) {
+				tokr_err(t, "long double is not supported for #foreign functions.");
+				return false;
+			} else {
+				tokr_err(t, "Unrecognized C type.");
+				return false;
+			}
+			++t->token;
+		} else {
+			tokr_err(t, "Unrecognized C type.");
+			return false;
+		}
+		if (!ctype_to_type(p->allocr, ctype, type, token_location(p->file, t->token)))
+			return false;
+	} else {
+		ctype->kind = CTYPE_NONE;
+		if (!parse_type(p, type))
+			return false;
+	}
+	return true;
+}
+
 static Status parse_expr(Parser *p, Expression *e, Token *end) {
 	Tokenizer *t = p->tokr;
 
@@ -1770,22 +1832,26 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					single_arg = e->unary.of = parser_new_expr(p);
 					break;
 				case DIRECT_FOREIGN: {
+					
+					e->kind = EXPR_FN;
+					FnExpr *fn = e->fn = parser_calloc(p, 1, sizeof *e->fn);
+					fn->flags |= FN_EXPR_FOREIGN;
+					fn->foreign.fn_ptr = 0;
+					fn->where.start = t->token;
+					fn->where.file = p->file;
 					++t->token;
 					if (!token_is_kw(t->token, KW_LPAREN)) {
 						tokr_err(t, "Expected ( following #foreign.");
 						return false;
 					}
 					++t->token;
-					
-					e->kind = EXPR_FN;
-					FnExpr *fn = e->fn = parser_calloc(p, 1, sizeof *e->fn);
-					fn->flags |= FN_EXPR_FOREIGN;
-					fn->foreign.fn_ptr = 0;
 					Type *fn_t = &fn->foreign.type;
 					fn_t->kind = TYPE_FN;
 					FnType *fn_type = &fn_t->fn;
 				    fn_type->constness = NULL;
 					fn_type->types = NULL;
+					Type *ret_type = parser_arr_add(p, &fn_type->types);
+					CType *ret_ctype = parser_arr_add(p, &fn->foreign.ctypes);
 					Expression *name = fn->foreign.name_expr = parser_new_expr(p);
 					
 					if (!parse_expr(p, name, expr_find_end(p, EXPR_CAN_END_WITH_COMMA)))
@@ -1819,66 +1885,10 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					}
 					++t->token;
 					while (!token_is_kw(t->token, KW_RPAREN)) {
-						if (token_is_direct(t->token, DIRECT_C)) {
-							CType ctype = {0};
-							++t->token;
-							if (token_is_kw(t->token, KW_INT)) {
-								ctype.kind = CTYPE_INT;
-								++t->token;
-							} else if (token_is_kw(t->token, KW_AMPERSAND)) {
-								ctype.kind = CTYPE_PTR;
-								++t->token;
-								if (t->token->kind != TOKEN_IDENT) {
-									tokr_err(t, "Expected type to follow &");
-									return false;
-								}
-								ctype.points_to = t->token->ident;
-								++t->token;
-							} else if (t->token->kind == TOKEN_IDENT) {
-								char *id = t->token->ident;
-								CTypeKind kind = 0;
-								if (ident_str_len(id) > 9 && strncmp(id, "unsigned_", 9)) {
-									kind |= CTYPE_UNSIGNED;
-									id += 9;
-								}
-								if (ident_str_eq_str(id, "char"))
-									ctype.kind |= CTYPE_CHAR;
-								else if (ident_str_eq_str(id, "signed_char"))
-									ctype.kind = CTYPE_SIGNED_CHAR;
-								else if (ident_str_eq_str(id, "short"))
-									ctype.kind |= CTYPE_SHORT;
-								else if (ident_str_eq_str(id, "int"))
-									ctype.kind |= CTYPE_INT;
-								else if (ident_str_eq_str(id, "long"))
-									ctype.kind |= CTYPE_LONG;
-								else if (ident_str_eq_str(id, "long_long"))
-									ctype.kind |= CTYPE_CHAR;
-								else if (ident_str_eq_str(id, "float"))
-									ctype.kind = CTYPE_FLOAT;
-								else if (ident_str_eq_str(id, "double"))
-									ctype.kind = CTYPE_DOUBLE;
-								else if (ident_str_eq_str(id, "long_double")) {
-								    tokr_err(t, "long double is not supported for #foreign functions.");
-									return false;
-								} else {
-									tokr_err(t, "Unrecognized C type.");
-									return false;
-								}
-								++t->token;
-							} else {
-								tokr_err(t, "Unrecognized C type.");
-								return false;
-							}
-							*(CType *)parser_arr_add(p, &fn->foreign.ctypes) = ctype;
-							Type *type = parser_arr_add(p, &fn_type->types);
-							if (!ctype_to_type(p->allocr, &ctype, type, token_location(p->file, t->token)))
-								return false;
-						} else {
-							CType *ctype = parser_arr_add(p, &fn->foreign.ctypes);
-							ctype->kind = CTYPE_NONE;
-							Type *type = parser_arr_add(p, &fn_type->types);
-							if (!parse_type(p, type))
-								return false;
+						Type *type = parser_arr_add(p, &fn_type->types);
+						CType *ctype = parser_arr_add(p, &fn->foreign.ctypes);
+						if (!parse_c_type(p, ctype, type)) {
+							return false;
 						}
 						if (token_is_kw(t->token, KW_COMMA)) {
 							++t->token;
@@ -1890,6 +1900,17 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 							return false;
 						}
 					}
+					if (t->token == end) {
+						/* void */
+						ret_ctype->kind = CTYPE_NONE;
+						ret_type->kind = TYPE_VOID;
+						ret_type->flags = 0;
+						ret_type->was_expr = NULL;
+					} else {
+						if (!parse_c_type(p, ret_ctype, ret_type))
+							return false;
+					}
+					fn->where.end = t->token;
 					return true;
 				}
 				case DIRECT_EXPORT:

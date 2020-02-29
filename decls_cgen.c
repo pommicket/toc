@@ -76,8 +76,8 @@ static void cgen_fn_decl(CGenerator *g, FnExpr *f, Type *t) {
 			if (sub == fn_types) continue;
 			if (sub != fn_types+1)
 				cgen_write(g, ", ");
-			cgen_type_pre(g, t, f->where);
-			cgen_type_post(g, t, f->where);
+			cgen_type_pre(g, sub, f->where);
+			cgen_type_post(g, sub, f->where);
 		}
 		cgen_write(g, ")");
 		cgen_type_post(g, &fn_types[0], f->where);

@@ -1832,7 +1832,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		arr_set_lena(&arg_exprs, nparams, tr->allocr);
 
 		I16 *order = NULL;
-		if (fn_decl) {
+		if (fn_decl && !(fn_decl->flags & FN_EXPR_FOREIGN)) {
 			if (!call_arg_param_order(fn_decl, &f->type, c->args, e->where, &order)) {
 				free(order);
 				return false;
