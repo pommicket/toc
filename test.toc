@@ -1,9 +1,7 @@
-
-putchar ::= #foreign("putchar", "libc.so.6") fn (#C int) #C int;
-
+#include "std/io.toc", io;
 
 main ::= fn() {
-	 putchar(97);
-	 putchar('\n' as i32);
+	 io.puts("Hello!");
+	 io.puti(17);
 };
 main();

@@ -1,20 +1,13 @@
-voidptr ::= &u8;
-
-getstdout ::= fn() voidptr {
-	#builtin("stdout")
-};
-
-
-fwrite :: fn(voidptr, u64, u64, voidptr) u64 = #foreign "fwrite", "libc.so.6";
-fputc :: fn(i32, voidptr) i32 = #foreign "fputc", "libc.so.6";
+fwrite ::= #foreign("fwrite", "libc.so.6") fn (#C &"void const", #C size_t, #C size_t, &u8) #C size_t;
+fputc ::= #foreign("fputc", "libc.so.6") fn (#C int, &u8) #C int;
 
 writes ::= fn(x : []char) {
-	 fwrite(&x[0] as voidptr, 1, x.len as u64, getstdout());
+	 fwrite(&x[0], 1, x.len as u64, #builtin("stdout"));
 };
 
 puts ::= fn(x : []char) {
 	 writes(x);
-	 fputc('\n' as i32, getstdout());
+	 fputc('\n' as i32, #builtin("stdout"));
 };
 
 hw ::= fn() int {

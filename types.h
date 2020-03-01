@@ -654,7 +654,8 @@ typedef enum {
 	  CTYPE_UNSIGNED_LONGLONG = CTYPE_UNSIGNED|CTYPE_LONGLONG,
 	  CTYPE_PTR = 0x10,
 	  CTYPE_FLOAT = 0x11,
-	  CTYPE_DOUBLE = 0x12
+	  CTYPE_DOUBLE = 0x12,
+	  CTYPE_SIZE_T = 0x13
 } CTypeKind;
 typedef struct {
 	CTypeKind kind;

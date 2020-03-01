@@ -62,6 +62,48 @@ static void cgen_decls_fn_instances(CGenerator *g, FnExpr *f) {
 	}
 }
 
+static void cgen_ctype(CGenerator *g, CType *c) {
+	if (c->kind & CTYPE_UNSIGNED) {
+		c->kind &= (CTypeKind)~(CTypeKind)CTYPE_UNSIGNED;
+		cgen_write(g, "unsigned ");
+	}
+	switch (c->kind) {
+	case CTYPE_CHAR:
+		cgen_write(g, "char");
+		break;
+	case CTYPE_SIGNED_CHAR:
+		cgen_write(g, "signed char");
+		break;
+	case CTYPE_SHORT:
+		cgen_write(g, "short");
+		break;
+	case CTYPE_INT:
+		cgen_write(g, "int");
+		break;
+	case CTYPE_LONG:
+		cgen_write(g, "long");
+		break;
+	case CTYPE_LONGLONG:
+		cgen_write(g, "long long");
+		break;
+	case CTYPE_PTR:
+		cgen_write(g, "%s *", c->points_to);
+		break;
+	case CTYPE_FLOAT:
+		cgen_write(g, "float");
+		break;
+	case CTYPE_DOUBLE:
+		cgen_write(g, "double");
+		break;
+	case CTYPE_SIZE_T:
+		cgen_write(g, "size_t");
+		break;
+	default:
+		assert(0);
+		break;
+	}
+}
+
 static void cgen_fn_decl(CGenerator *g, FnExpr *f, Type *t) {
 	if (f->flags & FN_EXPR_FOREIGN) {
 		
@@ -69,18 +111,30 @@ static void cgen_fn_decl(CGenerator *g, FnExpr *f, Type *t) {
 		cgen_write(g, "extern ");
 		Type *fn_types = t->fn.types;
 		const char *foreign_name = f->foreign.name;
-		cgen_type_pre(g, &fn_types[0], f->where);
+		CType *ctypes = f->foreign.ctypes;
+		if (ctypes[0].kind == CTYPE_NONE) {
+			cgen_type_pre(g, &fn_types[0], f->where);
+		} else {
+			cgen_ctype(g, &ctypes[0]);
+		}
 		cgen_write(g, " %s", foreign_name);
 		cgen_write(g, "(");
-		arr_foreach(fn_types, Type, sub) {
-			if (sub == fn_types) continue;
-			if (sub != fn_types+1)
+		
+		for (size_t i = 1; i < arr_len(fn_types); ++i) {
+			if (i > 1)
 				cgen_write(g, ", ");
-			cgen_type_pre(g, sub, f->where);
-			cgen_type_post(g, sub, f->where);
+			CType *csub = &ctypes[i];
+			if (csub->kind == CTYPE_NONE) {
+				Type *sub = &fn_types[i];
+				cgen_type_pre(g, sub, f->where);
+				cgen_type_post(g, sub, f->where);
+			} else {
+				cgen_ctype(g, csub);
+			}
 		}
 		cgen_write(g, ")");
-		cgen_type_post(g, &fn_types[0], f->where);
+		if (ctypes[0].kind == CTYPE_NONE)
+			cgen_type_post(g, &fn_types[0], f->where);
 		cgen_write(g, ";");
 		if (!f->c.name || !ident_eq_str(f->c.name, foreign_name)) {
 			cgen_write(g, "static ");

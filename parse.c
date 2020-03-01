@@ -1090,6 +1090,9 @@ static Status ctype_to_type(Allocator *a, CType *ctype, Type *type, Location whe
 	case CTYPE_UNSIGNED_LONG:
 		size = sizeof(long);
 		break;
+	case CTYPE_SIZE_T:
+		size = sizeof(size_t);
+		break;
 	case CTYPE_LONGLONG:
 	case CTYPE_UNSIGNED_LONGLONG:
 #if HAVE_LONGLONG
@@ -1113,7 +1116,7 @@ static Status ctype_to_type(Allocator *a, CType *ctype, Type *type, Location whe
 	case CTYPE_UNSIGNED: assert(0); break;
 	}
 	if (size != 0) {
-		type->builtin = ((ctype->kind & CTYPE_UNSIGNED) ? uint_with_size : int_with_size)(size);
+		type->builtin = (((ctype->kind & CTYPE_UNSIGNED) || ctype->kind == CTYPE_SIZE_T) ? uint_with_size : int_with_size)(size);
 		if (type->builtin == BUILTIN_F32) {
 			err_print(where, "This C type is not representable by a toc type, because it is %lu bytes (not 1, 2, 4, or 8).", size);
 			return false;
@@ -1130,38 +1133,50 @@ static Status parse_c_type(Parser *p, CType *ctype, Type *type) {
 		if (token_is_kw(t->token, KW_INT)) {
 			ctype->kind = CTYPE_INT;
 			++t->token;
+		} else if (token_is_kw(t->token, KW_FLOAT)) {
+			ctype->kind = CTYPE_FLOAT;
+			++t->token;
+		} else if (token_is_kw(t->token, KW_CHAR)) {
+			ctype->kind = CTYPE_CHAR;
+			++t->token;
 		} else if (token_is_kw(t->token, KW_AMPERSAND)) {
 			ctype->kind = CTYPE_PTR;
 			++t->token;
-			if (t->token->kind != TOKEN_IDENT) {
+			if (t->token->kind == TOKEN_IDENT) {
+				size_t n = ident_str_len(t->token->ident);
+				ctype->points_to = parser_malloc(p, n+1);
+				memcpy(ctype->points_to, t->token->ident, n);
+				ctype->points_to[n] = 0;
+			} else if (t->token->kind == TOKEN_LITERAL_STR) {
+				size_t n = t->token->str.len;
+				ctype->points_to = parser_malloc(p, n+1);
+				memcpy(ctype->points_to, t->token->str.str, n);
+				ctype->points_to[n] = 0;
+			} else {
 				tokr_err(t, "Expected type to follow &");
 				return false;
 			}
-			ctype->points_to = t->token->ident;
+			
 			++t->token;
 		} else if (t->token->kind == TOKEN_IDENT) {
 			char *id = t->token->ident;
-			CTypeKind kind = 0;
-			if (ident_str_len(id) > 9 && strncmp(id, "unsigned_", 9)) {
-				kind |= CTYPE_UNSIGNED;
+			ctype->kind = 0;
+			if (ident_str_len(id) > 9 && strncmp(id, "unsigned_", 9) == 0) {
+				ctype->kind |= CTYPE_UNSIGNED;
 				id += 9;
 			}
-			if (ident_str_eq_str(id, "char"))
-				ctype->kind |= CTYPE_CHAR;
-			else if (ident_str_eq_str(id, "signed_char"))
+			if (ident_str_eq_str(id, "signed_char"))
 				ctype->kind = CTYPE_SIGNED_CHAR;
 			else if (ident_str_eq_str(id, "short"))
 				ctype->kind |= CTYPE_SHORT;
-			else if (ident_str_eq_str(id, "int"))
-				ctype->kind |= CTYPE_INT;
 			else if (ident_str_eq_str(id, "long"))
 				ctype->kind |= CTYPE_LONG;
 			else if (ident_str_eq_str(id, "long_long"))
-				ctype->kind |= CTYPE_CHAR;
-			else if (ident_str_eq_str(id, "float"))
-				ctype->kind = CTYPE_FLOAT;
+				ctype->kind |= CTYPE_LONGLONG;
 			else if (ident_str_eq_str(id, "double"))
 				ctype->kind = CTYPE_DOUBLE;
+			else if (ident_str_eq_str(id, "size_t"))
+				ctype->kind = CTYPE_SIZE_T;
 			else if (ident_str_eq_str(id, "long_double")) {
 				tokr_err(t, "long double is not supported for #foreign functions.");
 				return false;
@@ -1174,6 +1189,7 @@ static Status parse_c_type(Parser *p, CType *ctype, Type *type) {
 			tokr_err(t, "Unrecognized C type.");
 			return false;
 		}
+		assert(ctype->kind != CTYPE_NONE && ctype->kind != CTYPE_UNSIGNED);
 		if (!ctype_to_type(p->allocr, ctype, type, token_location(p->file, t->token)))
 			return false;
 	} else {
@@ -1882,6 +1898,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					++t->token;
 					if (!token_is_kw(t->token, KW_LPAREN)) {
 						tokr_err(t, "Expected ( after #foreign fn");
+						return false;
 					}
 					++t->token;
 					while (!token_is_kw(t->token, KW_RPAREN)) {

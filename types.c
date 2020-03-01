@@ -379,15 +379,11 @@ enum {
 	  TYPE_OF_FN_IS_INSTANCE = 0x01
 };
 
-static Status type_of_fn(Typer *tr, Expression *f_expr, U16 flags) {
-	assert(f_expr->kind == EXPR_FN);
-	FnExpr *f = f_expr->fn;
-	Type *t = &f_expr->type;
-
+static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 
 	if (f->flags & FN_EXPR_FOREIGN) {
 		/* we've already mostly determined the type in parse_expr */
-		if (!type_resolve(tr, &f->foreign.type, f_expr->where))
+		if (!type_resolve(tr, &f->foreign.type, f->where))
 			return false;
 		*t = f->foreign.type;
 		char *name_cstr = eval_expr_as_cstr(tr, f->foreign.name_expr, "foreign name");
@@ -650,7 +646,7 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 		} else {
 			if ((d->flags & DECL_HAS_EXPR) && (d->expr.kind == EXPR_FN)) {
 				/* allow using a function before declaring it */
-				if (!type_of_fn(tr, &d->expr, 0)) return false;
+				if (!type_of_fn(tr, d->expr.fn, &d->expr.type, 0)) return false;
 				*t = d->expr.type;
 				return true;
 			} else {
@@ -1370,7 +1366,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 	e->flags |= EXPR_FOUND_TYPE; /* even if failed, pretend we found the type */
 	switch (e->kind) {
 	case EXPR_FN: {
-		if (!type_of_fn(tr, e, 0)) {
+		if (!type_of_fn(tr, e->fn, &e->type, 0)) {
 			return false;
 		}
 		if (fn_has_any_const_params(e->fn)) {
@@ -2031,11 +2027,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 				}
 			}
 			/* type params, return declarations, etc */
-			FnExpr *prev = f->fn;
-			f->fn = fn_copy;
-			if (!type_of_fn(tr, f, TYPE_OF_FN_IS_INSTANCE))
+			if (!type_of_fn(tr, fn_copy, &f->type, TYPE_OF_FN_IS_INSTANCE))
 				return false;
-			f->fn = prev;
 			
 			/* deal with default arguments */
 			i = 0;
@@ -2107,7 +2100,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 			}
 		}
 		free(order);
-			
 		*t = *ret_type;
 	} break;
 	case EXPR_BLOCK: {

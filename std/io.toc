@@ -17,12 +17,12 @@ get_utype_with_size ::= fn(size :: i64) Type {
 c_int ::= get_type_with_size(#builtin("sizeof int"));
 c_size_t ::= get_utype_with_size(#builtin("sizeof size_t"));
 
-c_putchar :: fn(c_int) c_int = #foreign "putchar", "libc.so.6";
+c_putchar ::= #foreign("putchar", "libc.so.6") fn(#C int) #C int;
 toc_putchar ::= fn(x: char) {
 		c_putchar(x as c_int);
 };
 
-c_fwrite :: fn(&u8, c_size_t, c_size_t, &u8) = #foreign "fwrite", "libc.so.6";
+c_fwrite ::= #foreign("fwrite", "libc.so.6") fn(&u8, #C size_t, #C size_t, &u8) #C size_t;
 
 stdout_fwrite ::= fn(data: &u8, size: u64, nmemb: u64) {
 	c_fwrite(data, size as c_size_t, nmemb as c_size_t, #builtin("stdout"));
