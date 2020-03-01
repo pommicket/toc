@@ -1,5 +1,6 @@
 #include "std/io.toc", io;
 
+
 main ::= fn() {
 	 io.puts("Hello!");
 	 io.puti(17);

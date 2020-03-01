@@ -136,13 +136,30 @@ static void cgen_fn_decl(CGenerator *g, FnExpr *f, Type *t) {
 		if (ctypes[0].kind == CTYPE_NONE)
 			cgen_type_post(g, &fn_types[0], f->where);
 		cgen_write(g, ";");
-		if (!f->c.name || !ident_eq_str(f->c.name, foreign_name)) {
+		if (!f->c.name || !ident_eq_str(f->c.name, foreign_name) || g->nms != NULL) {
 			cgen_write(g, "static ");
-			cgen_type_pre(g, t, f->where);
-			cgen_write(g, " const ");
+			if (ctypes[0].kind == CTYPE_NONE) {
+				cgen_type_pre(g, &fn_types[0], f->where);
+			} else {
+				cgen_ctype(g, &ctypes[0]);
+			}
+			
+			cgen_write(g, " const (*");
 			cgen_fn_name(g, f);
-			cgen_type_post(g, t, f->where);
-			cgen_write(g, " = %s;", foreign_name);
+			cgen_write(g, ")(");
+			for (size_t i = 1; i < arr_len(fn_types); ++i) {
+				if (i > 1)
+					cgen_write(g, ", ");
+				CType *csub = &ctypes[i];
+				if (csub->kind == CTYPE_NONE) {
+					Type *sub = &fn_types[i];
+					cgen_type_pre(g, sub, f->where);
+					cgen_type_post(g, sub, f->where);
+				} else {
+					cgen_ctype(g, csub);
+				}
+			}
+			cgen_write(g, ") = %s;", foreign_name);
 		}
 		cgen_nl(g);
 		return;

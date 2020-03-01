@@ -2845,8 +2845,10 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			}
 		}
 		if (tr->block == NULL) {
-			if (!eval_stmt(tr->evalr, s))
-				return false;
+			if (s->expr.kind != EXPR_C) {
+				if (!eval_stmt(tr->evalr, s))
+					return false;
+			}
 		}
 		break;
 	case STMT_DECL:

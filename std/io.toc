@@ -1,31 +1,14 @@
-get_type_with_size ::= fn(size :: i64) Type {
-	if size == 1 { i8 }
-	elif size == 2 { i16 }
-	elif size == 4 { i32 }
-	elif size == 8 { i64 }
-	else { f32 }
-};
+#C("#include <stdio.h>\n");
 
-get_utype_with_size ::= fn(size :: i64) Type {
-	if size == 1 { u8 }
-	elif size == 2 { u16 }
-	elif size == 4 { u32 }
-	elif size == 8 { u64 }
-	else { f32 }
-};
-
-c_int ::= get_type_with_size(#builtin("sizeof int"));
-c_size_t ::= get_utype_with_size(#builtin("sizeof size_t"));
-
-c_putchar ::= #foreign("putchar", "libc.so.6") fn(#C int) #C int;
+putchar ::= #foreign("putchar", "libc.so.6") fn(#C int) #C int;
 toc_putchar ::= fn(x: char) {
-		c_putchar(x as c_int);
+	putchar(x as #C int);
 };
 
-c_fwrite ::= #foreign("fwrite", "libc.so.6") fn(&u8, #C size_t, #C size_t, &u8) #C size_t;
+fwrite ::= #foreign("fwrite", "libc.so.6") fn(#C &"void", #C size_t, #C size_t, #C &"void") #C size_t;
 
 stdout_fwrite ::= fn(data: &u8, size: u64, nmemb: u64) {
-	c_fwrite(data, size as c_size_t, nmemb as c_size_t, #builtin("stdout"));
+	fwrite(data, size as #C size_t, nmemb as #C size_t, #builtin("stdout"));
 };
 
 puts ::= fn(x: []char) {

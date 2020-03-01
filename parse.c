@@ -1714,8 +1714,15 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				if (!parse_expr(p, casted, lowest_precedence_op))
 					return false;
 				t->token = lowest_precedence_op + 1;
-				if (!parse_type(p, &e->cast.type))
-					return false;
+				if (token_is_direct(t->token, DIRECT_C)) {
+					/* cast to #C type */
+					CType unused;
+					if (!parse_c_type(p, &unused, &e->cast.type))
+						return false;
+				} else {
+					if (!parse_type(p, &e->cast.type))
+						return false;
+				}
 				if (t->token != end) {
 					tokr_err(t, "Cast expression continues after type");
 					return false;
@@ -1940,7 +1947,8 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				if (single_arg) {
 					++t->token;
 					if (!token_is_kw(t->token, KW_LPAREN)) {
-						tokr_err(t, "Expected ( to follow #%s.", directives[t->token->direct]);
+						printf("%d\n",t->token->direct);
+						tokr_err(t, "Expected ( to follow #%s.", directives[t->token[-1].direct]);
 						return false;
 					}
 					++t->token;

@@ -78,7 +78,10 @@ static void cgen_defs_decl(CGenerator *g, Declaration *d);
 		block_f(g, &e->block);											\
 		break;															\
 	case EXPR_NMS: {													\
+		Namespace *prev = g->nms;										\
+		g->nms = &e->nms;												\
 		block_f(g, &e->nms.body);										\
+		g->nms = prev;													\
 	} break;															\
 	case EXPR_IF:														\
 		if (e->if_.cond)												\
@@ -1896,10 +1899,11 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 		cgen_decl(g, s->decl);
 		break;
 	case STMT_EXPR:
-		if (g->block != NULL && !type_is_compileonly(&s->expr.type)) {
+		if ((g->block != NULL || s->expr.kind == EXPR_C) && !type_is_compileonly(&s->expr.type)) {
 		    cgen_expr_pre(g, &s->expr);
 			cgen_expr(g, &s->expr);
-			cgen_writeln(g, ";");
+			if (s->expr.kind != EXPR_C)
+				cgen_writeln(g, ";");
 		}
 		break;
 	case STMT_RET: {
