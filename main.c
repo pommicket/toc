@@ -8,14 +8,17 @@
 
 /* 
 TODO:
-constants in structs
 #if
 variadic fns
 #foreign variadic fns
 #returns_code (function/struct body is a block, to be evaluated at compile time, which returns the actual statements -- you can use this for implementation of printf)
-switch to / add as an alternative: libffi
-
+break
+continue
+switch
+enums
+macros
 ---
+switch to / add as an alternative: libffi
 X ::= newtype(int); or something
 don't allow while {3; 5} or for 0..10 { 3; 5 } (once break is added)
 do we need was_expr? (now that, presumably, we have struct arguments)
@@ -79,12 +82,17 @@ int main(int argc, char **argv) {
 	err_ctx.color_enabled = true;
 	
 	for (int i = 1; i < argc; ++i) {
-		if (i > 1 && strs_equal(argv[i-1], "-o")) {
-			out_filename = argv[i];
-		} else if ((i == 1 || argv[i-1][0] != '-') && argv[i][0] != '-') {
+		if ((i == 1 || argv[i-1][0] != '-') && argv[i][0] != '-') {
 			in_filename = argv[i];
 		} else if (strs_equal(argv[i], "-no-color")) {
 			err_ctx.color_enabled = false;
+		} else if (strs_equal(argv[i], "-o")) {
+			if (i == argc-1) {
+				fprintf(stderr, "-o cannot be the last argument to toc.\n");
+				return EXIT_FAILURE;
+			}
+			out_filename = argv[i+1];
+			++i;
 		} else {
 			fprintf(stderr, "Unrecognized option: %s.\n", argv[i]);
 			return EXIT_FAILURE;

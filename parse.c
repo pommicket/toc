@@ -9,7 +9,8 @@ enum {
 	  PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR = 0x01,
 	  PARSE_DECL_ALLOW_SEMI_CONST = 0x02,
 	  PARSE_DECL_ALLOW_INFER = 0x04,
-	  PARSE_DECL_ALLOW_EXPORT = 0x08
+	  PARSE_DECL_ALLOW_EXPORT = 0x08,
+	  PARSE_DECL_DONT_SET_IDECLS = 0x10
 };
 static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_t flags);
 static Status parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end);
@@ -597,6 +598,7 @@ static Status parse_type(Parser *p, Type *type) {
 			struc->c.id = 0;
 			struc->fields = NULL;
 			struc->params = NULL;
+			struc->constants = NULL;
 			struc->where = parser_mk_loc(p);
 			struc->where.start = t->token;
 			memset(&struc->scope, 0, sizeof struc->scope);
@@ -637,26 +639,33 @@ static Status parse_type(Parser *p, Type *type) {
 			{
 				while (!token_is_kw(t->token, KW_RBRACE)) {
 					Declaration field_decl;
-					if (!parse_decl(p, &field_decl, DECL_END_SEMICOLON, 0)) {
+					if (!parse_decl(p, &field_decl, DECL_END_SEMICOLON, PARSE_DECL_DONT_SET_IDECLS)) {
 						goto struct_fail;
 					}
 					if (field_decl.flags & DECL_IS_CONST) {
-						/* TODO */
-						err_print(field_decl.where, "Constant struct members are not supported (yet).");
-						goto struct_fail;
+						Declaration *d = parser_arr_add(p, &struc->constants);
+						*d = field_decl;
+					} else {
+						if (field_decl.flags & DECL_HAS_EXPR) {
+							err_print(field_decl.where, "struct members cannot have initializers.");
+							goto struct_fail;
+						}
+						long idx = 0;
+						arr_foreach(field_decl.idents, Identifier, fident) {
+							Type *ftype = field_decl.type.kind == TYPE_TUPLE ? &field_decl.type.tuple[idx] : &field_decl.type;
+							Field *f = parser_arr_add(p, &struc->fields);
+							f->name = *fident;
+							f->where = field_decl.where;
+							f->type = *ftype;
+							++idx;
+						}
 					}
-					if (field_decl.flags & DECL_HAS_EXPR) {
-						err_print(field_decl.where, "struct members cannot have initializers.");
-						goto struct_fail;
-					}
-					long idx = 0;
-					arr_foreach(field_decl.idents, Identifier, fident) {
-						Type *ftype = field_decl.type.kind == TYPE_TUPLE ? &field_decl.type.tuple[idx] : &field_decl.type;
-						Field *f = parser_arr_add(p, &struc->fields);
-						f->name = *fident;
-						f->where = field_decl.where;
-						f->type = *ftype;
-						++idx;
+				}
+				arr_foreach(struc->constants, Declaration, c) {
+					arr_foreach(c->idents, Identifier, ip) {
+						Identifier i = *ip;
+						i->decl = c;
+						i->decl_kind = IDECL_DECL;
 					}
 				}
 				++t->token;
@@ -2181,7 +2190,7 @@ static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 f
 			goto ret_false;
 		}
 		*ident = parser_ident_insert(p, t->token->ident);
-		if (!ident_eq_str(*ident, "_")) {
+		if (!(flags & PARSE_DECL_DONT_SET_IDECLS) && !ident_eq_str(*ident, "_")) {
 			Identifier i = *ident;
 			if (!check_ident_redecl(p, i))
 				goto ret_false;

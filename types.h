@@ -501,9 +501,10 @@ enum {
 };
 typedef struct StructDef {
 	Field *fields;
+    struct Declaration *constants;
 	Location where;
 	U8 flags;
-	Block scope; /* to make sure that parameters live somewhere. fields are not kept here. */
+	Block scope; /* to make sure that parameters and constants live somewhere. fields are not kept here. */
 	union {
 		HashTable instances;
 		struct {
@@ -830,6 +831,7 @@ typedef struct Expression {
 		Value val;
 	};
 } Expression;
+
 
 typedef struct Argument {
 	Location where;

@@ -100,6 +100,13 @@ static void copy_struct(Copier *c, StructDef *out, StructDef *in) {
 	for (size_t i = 0; i < nparams; ++i) {
 		copy_decl(c, &out->params[i], &in->params[i]);
 	}
+	out->constants = NULL;
+	size_t nconstants = arr_len(in->constants);
+	arr_set_lena(&out->constants, nconstants, c->allocr);
+	for (size_t i = 0; i < nconstants; ++i) {
+		copy_decl(c, &out->constants[i], &in->constants[i]);
+	}
+	
 	c->block = prev;
 }
 

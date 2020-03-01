@@ -1,8 +1,15 @@
 #include "std/io.toc", io;
 
+Foo ::= struct(n::=12) {
+	x ::= (n as float)*2.3;
+};
 
 main ::= fn() {
-	 io.puts("Hello!");
-	 io.puti(17);
+	 f : Foo();
+	 io.puti(f.n);
+	 io.puti(f.x as int);
+	 g : Foo(3);
+	 io.puti(g.n);
+	 io.puti(g.x as int);
 };
 main();

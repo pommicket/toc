@@ -81,7 +81,7 @@ static Status struct_find_offsets(StructDef *s) {
 		}
 		s->flags |= STRUCT_DEF_FINDING_OFFSETS;
 		size_t bytes = 0;
-		size_t total_align = 0;
+		size_t total_align = 1;
 		arr_foreach(s->fields, Field, f) {
 			size_t size = compiler_sizeof(&f->type);
 			if (size == SIZE_MAX) {
@@ -764,6 +764,12 @@ static Status type_resolve(Typer *tr, Type *t, Location where) {
 			typer_block_enter(tr, &t->struc->scope);
 			arr_foreach(t->struc->fields, Field, f) {
 				if (!type_resolve(tr, &f->type, where)) {
+					typer_block_exit(tr);
+					return false;
+				}
+			}
+			arr_foreach(t->struc->constants, Declaration, c) {
+				if (!types_decl(tr, c)) {
 					typer_block_exit(tr);
 					return false;
 				}
@@ -2480,6 +2486,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					}
 				}
 				if (!is_field) {
+#if 0
 					Declaration *param = NULL;
 				    int ident_idx;
 					arr_foreach(struct_type->struc->params, Declaration, p) {
@@ -2499,10 +2506,22 @@ static Status types_expr(Typer *tr, Expression *e) {
 						err_print(e->where, "%s is not a member of structure %s.", member, struc);
 						return false;
 					}
-					/* replace with parameter value */
+#endif
+					Identifier i = ident_translate(rhs->ident, &struct_type->struc->scope.idents);
+					if (!i || i->decl_kind == IDECL_NONE) {
+						char *member = ident_to_str(rhs->ident);
+						char *struc_s = type_to_str(struct_type);
+						err_print(e->where, "%s is not a member of structure %s.", member, struc_s);
+						free(member);
+						free(struc_s);
+						return false;
+					}
+					assert((i->decl_kind == IDECL_DECL) && (i->decl->flags & DECL_IS_CONST));
+					/* replace with decl value */
+					int ident_idx = decl_ident_index(i->decl, i);
 					e->kind = EXPR_VAL;
-					e->val = *decl_val_at_index(param, ident_idx);
-					*t = *decl_type_at_index(param, ident_idx);
+					e->val = *decl_val_at_index(i->decl, ident_idx);
+					*t = *decl_type_at_index(i->decl, ident_idx);
 					break;
 				}
 			} else if (struct_type->kind == TYPE_SLICE || struct_type->kind == TYPE_ARR) {
