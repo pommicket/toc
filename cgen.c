@@ -75,26 +75,28 @@ static void cgen_defs_decl(CGenerator *g, Declaration *d);
 			f(g, arg);													\
 		break;															\
 	case EXPR_BLOCK:													\
-		block_f(g, &e->block);											\
+		block_f(g, e->block);											\
 		break;															\
 	case EXPR_NMS: {													\
 		Namespace *prev = g->nms;										\
-		g->nms = &e->nms;												\
-		block_f(g, &e->nms.body);										\
+		g->nms = e->nms;												\
+		block_f(g, &e->nms->body);										\
 		g->nms = prev;													\
 	} break;															\
-	case EXPR_IF:														\
-		if (e->if_.cond)												\
-			f(g, e->if_.cond);											\
-		block_f(g, &e->if_.body);										\
-		if (e->if_.next_elif)											\
-			f(g, e->if_.next_elif);										\
-		break;															\
-	case EXPR_WHILE:													\
-		if (e->while_.cond)												\
-			f(g, e->while_.cond);										\
-		block_f(g, &e->while_.body);									\
-		break;															\
+	case EXPR_IF: {														\
+		IfExpr *i = e->if_;												\
+		if (i->cond)													\
+			f(g, i->cond);												\
+		block_f(g, &i->body);											\
+		if (i->next_elif)												\
+			f(g, i->next_elif);											\
+	} break;															\
+	case EXPR_WHILE: {													\
+		WhileExpr *w = e->while_;										\
+		if (w->cond)													\
+			f(g, w->cond);												\
+		block_f(g, &w->body);											\
+	} break;															\
 	case EXPR_FOR: {													\
 		ForExpr *fo = e->for_;											\
 		if (fo->flags & FOR_IS_RANGE) {									\
@@ -787,7 +789,7 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 	
 	switch (e->kind) {
 	case EXPR_IF: {
-		IfExpr *curr = &e->if_;
+		IfExpr *curr = e->if_;
 		e->cgen.id = id;
 		while (1) {
 			if (curr->cond) {
@@ -798,12 +800,12 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 			cgen_block(g, &curr->body, ret_name, 0);
 			if (curr->next_elif) {
 				cgen_write(g, " else ");
-				curr = &curr->next_elif->if_;
+				curr = curr->next_elif->if_;
 			} else break;
 		}
 	} break;
 	case EXPR_WHILE: {
-		WhileExpr *w = &e->while_;
+		WhileExpr *w = e->while_;
 		e->cgen.id = id;
 		cgen_write(g, "while (");
 		if (w->cond) {
@@ -989,7 +991,7 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 	} break;
 	case EXPR_BLOCK:
 		e->cgen.id = id;
-		cgen_block(g, &e->block, ret_name, 0);
+		cgen_block(g, e->block, ret_name, 0);
 		break;
 	case EXPR_CALL: {
 		cgen_expr_pre(g, e->call.fn);

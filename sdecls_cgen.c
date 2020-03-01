@@ -78,7 +78,7 @@ static void cgen_sdecls_expr(CGenerator *g, Expression *e) {
 		cgen_sdecls_type(g, &e->typeval);
 		break;
 	case EXPR_NMS: {
-		char *prefix_part = cgen_nms_prefix_part(g, &e->nms);
+		char *prefix_part = cgen_nms_prefix_part(g, e->nms);
 		size_t prefix_part_len = strlen(prefix_part);
 		char const *prev_prefix = g->nms_prefixes ? *(char const **)arr_last(g->nms_prefixes)
 			: "";
@@ -89,7 +89,7 @@ static void cgen_sdecls_expr(CGenerator *g, Expression *e) {
 		free(prefix_part);
 		*(char const **)arr_add(&g->nms_prefixes) = new_prefix;
 		new_prefix[prev_prefix_len + prefix_part_len] = 0;
-		e->nms.c.prefix = new_prefix;
+		e->nms->c.prefix = new_prefix;
 	} break;
 	default: break;
 	}

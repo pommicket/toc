@@ -763,7 +763,7 @@ const char *const builtin_val_names[BUILTIN_VAL_COUNT] =
 
 typedef struct Namespace {
 	Block body;
-	Identifier associated_ident; /* if this is foo ::= nms { ... }, then associated_ident is foo; can be NULL */
+	Identifier associated_ident; /* if this is foo ::= nms { ... }, then associated_ident is foo; can be NULL. used by cgen. only non-null if the namespace isn't in a non-namespace block */
 	struct Namespace *points_to; /* if not NULL, this namespace just points to another namespace, because something has been included twice */
 	struct {
 		char *prefix; /* generated during sdecls_cgen */
@@ -815,17 +815,17 @@ typedef struct Expression {
 		} builtin;
 		Identifier ident;
 		NewExpr new;
-		Namespace nms;
+		Namespace *nms;
 		struct {
 			Type type;
 		} del;
-		IfExpr if_;
-		WhileExpr while_;
+		IfExpr *if_;
+		WhileExpr *while_;
 		ForExpr *for_;
 		FnExpr *fn;
 		CastExpr cast;
 		SliceExpr slice;
-		Block block;
+		Block *block;
 		struct Expression *tuple; /* dynamic array, even after typing */
 		Type typeval;
 		Value val;

@@ -1,15 +1,10 @@
 #include "std/io.toc", io;
 
-Foo ::= struct(n::=12) {
-	x ::= (n as float)*2.3;
-};
 
 main ::= fn() {
-	 f : Foo();
-	 io.puti(f.n);
-	 io.puti(f.x as int);
-	 g : Foo(3);
-	 io.puti(g.n);
-	 io.puti(g.x as int);
+	 if 3 > 5 {
+	 
+	 } elif 45 > 32 {
+	 } else {
+	 }
 };
-main();

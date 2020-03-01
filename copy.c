@@ -228,8 +228,9 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		out->binary.rhs = copy_expr_(c, in->binary.rhs);
 		break;
 	case EXPR_IF: {
-		IfExpr *iin = &in->if_;
-		IfExpr *iout = &out->if_;
+		IfExpr *iin = in->if_;
+		IfExpr *iout = out->if_ = allocr_malloc(a, sizeof *iout);
+		*iout = *iin;
 		if (iin->cond)
 			iout->cond = copy_expr_(c, iin->cond);
 		if (iin->next_elif)
@@ -237,8 +238,9 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		copy_block(c, &iout->body, &iin->body, 0);
 	} break;
 	case EXPR_WHILE: {
-		WhileExpr *win = &in->while_;
-		WhileExpr *wout = &out->while_;
+		WhileExpr *win = in->while_;
+		WhileExpr *wout = out->while_ = allocr_malloc(a, sizeof *wout);
+		*wout = *win;
 		if (win->cond)
 			wout->cond = copy_expr_(c, win->cond);
 		copy_block(c, &wout->body, &win->body, 0);
@@ -308,7 +310,7 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		}
 	} break;
 	case EXPR_BLOCK:
-		copy_block(c, &out->block, &in->block, 0);
+		copy_block(c, out->block = allocr_malloc(a, sizeof *out->block), in->block, 0);
 		break;
 	case EXPR_TUPLE: {
 		size_t nexprs = arr_len(in->tuple);
@@ -339,7 +341,9 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		copy_val(a, &out->val, &in->val, &in->type);
 		break;
 	case EXPR_NMS:
-		copy_block(c, &out->nms.body, &in->nms.body, 0);
+		out->nms = allocr_malloc(a, sizeof *out->nms);
+		*out->nms = *in->nms;
+		copy_block(c, &out->nms->body, &in->nms->body, 0);
 		break;
 	}
 }

@@ -1312,7 +1312,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				goto success;
 			}
 			case KW_NMS: {
-				Namespace *n = &e->nms;
+				Namespace *n = e->nms = parser_malloc(p, sizeof *n);
 				e->kind = EXPR_NMS;
 				++t->token;
 				if (!parse_block(p, &n->body, 0))
@@ -1320,7 +1320,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
  				goto success;
 			}
 			case KW_IF: {
-				IfExpr *i = &e->if_;
+				IfExpr *i = e->if_ = parser_malloc(p, sizeof *i);
 				e->kind = EXPR_IF;
 				++t->token;
 				Token *cond_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE);
@@ -1351,7 +1351,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					next->where = parser_mk_loc(p);
 					next->where.start = t->token;
 					curr->next_elif = next;
-					IfExpr *nexti = &next->if_;
+					IfExpr *nexti = next->if_ = parser_malloc(p, sizeof *nexti);
 					if (is_else) {
 						++t->token;
 						nexti->cond = NULL;
@@ -1379,7 +1379,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			}
 			case KW_WHILE: {
 				e->kind = EXPR_WHILE;
-				WhileExpr *w = &e->while_;
+				WhileExpr *w = e->while_ = parser_malloc(p, sizeof *w);
 				++t->token;
 				if (token_is_kw(t->token, KW_LBRACE)) {
 					/* infinite loop */
@@ -2122,7 +2122,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			if (token_is_kw(t->token, KW_LBRACE)) {
 				/* it's a block */
 				e->kind = EXPR_BLOCK;
-				if (!parse_block(p, &e->block, 0)) return false;
+				if (!parse_block(p, e->block = parser_malloc(p, sizeof *e->block), 0)) return false;
 				if (t->token != end) {
 					tokr_err(t, "Expression continues after end of block."); /* TODO: improve this err message */
 					return false;
@@ -2418,9 +2418,10 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			
 				Expression *e = &d->expr;
 				e->kind = EXPR_NMS;
+				e->nms = parser_calloc(p, 1, sizeof *e->nms);
 				e->where = s->where;
-				e->nms.associated_ident = ident;
-				Block *body = &e->nms.body;
+				e->nms->associated_ident = ident;
+				Block *body = &e->nms->body;
 				body->flags |= BLOCK_IS_NMS;
 				body->where = s->where;
 				idents_create(&body->idents, p->allocr, body);
@@ -2639,22 +2640,24 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprintf(out, "new ");
 		fprint_type(out, &e->new.type);
 		break;
-	case EXPR_IF:
-		if (e->if_.cond) {
+	case EXPR_IF: {
+		IfExpr *i = e->if_;
+		if (i->cond) {
 			fprintf(out, "(else)? if ");
-			fprint_expr(out, e->if_.cond);
+			fprint_expr(out, i->cond);
 		} else {
 			fprintf(out, "else");
 		}
-		fprint_block(out, &e->if_.body);
-		if (e->if_.next_elif)
-			fprint_expr(out, e->if_.next_elif);
-		break;
-	case EXPR_WHILE:
+		fprint_block(out, &i->body);
+		if (i->next_elif)
+			fprint_expr(out, i->next_elif);
+	} break;
+	case EXPR_WHILE: {
+		WhileExpr *w = e->while_;
 		fprintf(out, "while ");
-		if (e->while_.cond) fprint_expr(out, e->while_.cond);
-		fprint_block(out, &e->while_.body);
-		break;
+		if (w->cond) fprint_expr(out, w->cond);
+		fprint_block(out, &w->body);
+	} break;
 	case EXPR_FOR: {
 		ForExpr *fo = e->for_;
 		fprintf(out, "for ");
@@ -2701,7 +2704,7 @@ static void fprint_expr(FILE *out, Expression *e) {
 		}
 		break;
 	case EXPR_BLOCK:
-		fprint_block(out, &e->block);
+		fprint_block(out, e->block);
 		break;
 	case EXPR_TUPLE:
 		fprintf(out, "(");
@@ -2741,7 +2744,7 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprint_val(out, e->val, &e->type);
 		break;
 	case EXPR_NMS:
-		fprint_nms(out, &e->nms);
+		fprint_nms(out, e->nms);
 		break;
 	}
 	if (found_type) {

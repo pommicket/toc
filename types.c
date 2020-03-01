@@ -561,7 +561,7 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 		print_block_location(tr->block);
 		printf("But the identifier's scope is:\n");
 		print_block_location(i->idents->scope);
-		abort();
+	    abort();
 	}
 #else
 	assert(i->idents->scope == tr->block);
@@ -1594,7 +1594,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		}
 		break;
 	case EXPR_IF: {
-		IfExpr *i = &e->if_;
+		IfExpr *i = e->if_;
 		IfExpr *curr = i;
 		Type *curr_type = t;
 		bool has_else = false;
@@ -1620,7 +1620,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				has_else = true;
 			}
 			if (curr->next_elif) {
-				IfExpr *nexti = &curr->next_elif->if_;
+				IfExpr *nexti = curr->next_elif->if_;
 				Type *next_type = &curr->next_elif->type;
 				curr->next_elif->flags |= EXPR_FOUND_TYPE;
 				if (!types_block(tr, &nexti->body)) {
@@ -1654,7 +1654,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		}
 	} break;
 	case EXPR_WHILE: {
-		WhileExpr *w = &e->while_;
+		WhileExpr *w = e->while_;
 		bool ret = true;
 		if (w->cond && !types_expr(tr, w->cond))
 			ret = false;
@@ -2109,7 +2109,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		*t = *ret_type;
 	} break;
 	case EXPR_BLOCK: {
-		Block *b = &e->block;
+		Block *b = e->block;
 		if (!types_block(tr, b))
 			return false;
 		if (b->ret_expr) {
@@ -2614,15 +2614,15 @@ static Status types_expr(Typer *tr, Expression *e) {
 	} break;
 	case EXPR_NMS: {
 		Namespace *prev_nms = tr->nms;
-		tr->nms = &e->nms;
-		e->nms.points_to = NULL;
-		e->nms.body.flags |= BLOCK_IS_NMS;
-		if (!types_block(tr, &e->nms.body)) {
+		Namespace *n = tr->nms = e->nms;
+	    n->points_to = NULL;
+		n->body.flags |= BLOCK_IS_NMS;
+		if (!types_block(tr, &n->body)) {
 			tr->nms = prev_nms;
 			return false;
 		}
 		tr->nms = prev_nms;
-		e->nms.associated_ident = NULL; /* set when we type the declaration */
+	    n->associated_ident = NULL; /* set when we type the declaration which contains this namespace */
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_NMS;
 	} break;
@@ -2819,7 +2819,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 			}
 		}
 		if (is_at_top_level)
-			d->expr.nms.associated_ident = d->idents[0];
+			d->expr.nms->associated_ident = d->idents[0];
 	}
 
 	if (tr->nms && tr->block == &tr->nms->body) {

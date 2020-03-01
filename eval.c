@@ -1187,7 +1187,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		}
 		break;
 	case EXPR_IF: {
-		IfExpr *i = &e->if_;
+		IfExpr *i = e->if_;
 		if (i->cond) {
 			Value cond;
 			if (!eval_expr(ev, i->cond, &cond)) return false;
@@ -1202,7 +1202,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	} break;
 	case EXPR_WHILE: {
 		Value cond;
-		WhileExpr *w = &e->while_;
+		WhileExpr *w = e->while_;
 		while (1) {
 			if (w->cond) {
 				if (!eval_expr(ev, w->cond, &cond)) return false;
@@ -1322,7 +1322,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		free(for_valp);
 	} break;
 	case EXPR_BLOCK:
-		if (!eval_block(ev, &e->block, v)) return false;
+		if (!eval_block(ev, e->block, v)) return false;
 		break;
 	case EXPR_LITERAL_BOOL:
 		v->boolv = e->booll;
@@ -1529,7 +1529,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		v->type = &e->typeval;
 		break;
 	case EXPR_NMS:
-		v->nms = &e->nms;
+		v->nms = e->nms;
 		break;
 	case EXPR_VAL:
 		*v = e->val;
