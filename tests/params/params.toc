@@ -11,7 +11,7 @@ puti ::= fn(x: int) {
 extern int printf(const char *fmt, ...);
 #endif
 ");
-	 #C("printf(\"%ld\\n\", x)");
+	 #C("printf(\"%ld\\n\", x);");
 };
 
 

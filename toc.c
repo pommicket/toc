@@ -124,7 +124,6 @@ static inline bool type_is_slicechar(Type *t) {
 #include "allocator.c"
 #include "misc.c"
 #include "data_structures.c"
-#include "location.c"
 #include "err.c"
 static size_t compiler_alignof(Type *t);
 static size_t compiler_sizeof(Type *t);

@@ -144,7 +144,7 @@ static void cgen_fn_decl(CGenerator *g, FnExpr *f, Type *t) {
 				cgen_ctype(g, &ctypes[0]);
 			}
 			
-			cgen_write(g, " const (*");
+			cgen_write(g, " (* const ");
 			cgen_fn_name(g, f);
 			cgen_write(g, ")(");
 			for (size_t i = 1; i < arr_len(fn_types); ++i) {

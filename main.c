@@ -8,13 +8,11 @@
 
 /* 
 TODO:
-as #C int
-make err_print and tokr_err return Status
----
 constants in structs
 #if
-#returns_code (function/struct body is a block, to be evaluated at compile time, which returns the actual statements -- you can use this for implementation of printf)
 variadic fns
+#foreign variadic fns
+#returns_code (function/struct body is a block, to be evaluated at compile time, which returns the actual statements -- you can use this for implementation of printf)
 switch to / add as an alternative: libffi
 
 ---
@@ -73,27 +71,37 @@ int main(int argc, char **argv) {
 	test_all();
 #endif
 
-	const char *in_filename;
-	if (argc < 2) {
+	const char *in_filename = NULL;
+	const char *out_filename = "out.c";
+
+	ErrCtx err_ctx = {0};
+	err_ctx.enabled = true;
+	err_ctx.color_enabled = true;
+	
+	for (int i = 1; i < argc; ++i) {
+		if (i > 1 && strs_equal(argv[i-1], "-o")) {
+			out_filename = argv[i];
+		} else if ((i == 1 || argv[i-1][0] != '-') && argv[i][0] != '-') {
+			in_filename = argv[i];
+		} else if (strs_equal(argv[i], "-no-color")) {
+			err_ctx.color_enabled = false;
+		} else {
+			fprintf(stderr, "Unrecognized option: %s.\n", argv[i]);
+			return EXIT_FAILURE;
+		}
+	}
+	
+	if (!in_filename) {
 #ifdef TOC_DEBUG
 		in_filename = "test.toc";
 #else
 		fprintf(stderr, "Please specify an input file.\n");
 		return EXIT_FAILURE;
 #endif
-	} else {
-		in_filename = argv[1];
 	}
-	const char *out_filename = "out.c";
-	for (int i = 2; i < argc-1; ++i) {
-		if (strs_equal(argv[i], "-o"))
-			out_filename = argv[i+1];
-	}
+	
 	Allocator main_allocr;
 	allocr_create(&main_allocr);
-	ErrCtx err_ctx = {0};
-	err_ctx.enabled = true;
-	err_ctx.color_enabled = true;
 
 	File file = {0};
 	file.filename = in_filename;

@@ -688,7 +688,7 @@ static Status eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr, void
 	if (struct_type->kind == TYPE_STRUCT) {
 		Value struc;
 		if (!eval_expr(ev, dot_expr->binary.lhs, &struc))
-			return NULL;
+			return false;
 		void *struc_data;
 		if (is_ptr) {
 			struc_data = struc.ptr;

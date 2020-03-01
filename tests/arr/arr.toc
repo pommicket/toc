@@ -4,14 +4,14 @@ puti ::= fn(x: int) {
 extern int printf(const char *fmt, ...);
 #endif
 ");
-	 #C("printf(\"%ld\\n\", (long)x)");
+	 #C("printf(\"%ld\\n\", (long)x);");
 };
 putf ::= fn(x: float) {
 	 #C("#ifndef __TINYC__
 extern int printf(const char *fmt, ...);
 #endif
 ");
-	 #C("printf(\"%f\\n\", (double)x)");
+	 #C("printf(\"%f\\n\", (double)x);");
 };
 
 // it would be nice if Arr.data.len == Arr.len (: but this will require some C code...
