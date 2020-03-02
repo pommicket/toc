@@ -21,10 +21,10 @@ static void cgen_decls_type(CGenerator *g, Type *type) {
 			cgen_nl(g);
 			++g->indent_lvl;
 			arr_foreach(sdef->fields, Field, f) {
-				cgen_type_pre(g, &f->type, sdef->where);
+				cgen_type_pre(g, &f->type);
 				cgen_write(g, " ");
 				cgen_ident_simple(g, f->name);
-				cgen_type_post(g, &f->type, sdef->where);
+				cgen_type_post(g, &f->type);
 				cgen_write(g, ";");
 				cgen_nl(g);
 			}
@@ -113,7 +113,7 @@ static void cgen_fn_decl(CGenerator *g, FnExpr *f, Type *t) {
 		const char *foreign_name = f->foreign.name;
 		CType *ctypes = f->foreign.ctypes;
 		if (ctypes[0].kind == CTYPE_NONE) {
-			cgen_type_pre(g, &fn_types[0], f->where);
+			cgen_type_pre(g, &fn_types[0]);
 		} else {
 			cgen_ctype(g, &ctypes[0]);
 		}
@@ -126,20 +126,20 @@ static void cgen_fn_decl(CGenerator *g, FnExpr *f, Type *t) {
 			CType *csub = &ctypes[i];
 			if (csub->kind == CTYPE_NONE) {
 				Type *sub = &fn_types[i];
-				cgen_type_pre(g, sub, f->where);
-				cgen_type_post(g, sub, f->where);
+				cgen_type_pre(g, sub);
+				cgen_type_post(g, sub);
 			} else {
 				cgen_ctype(g, csub);
 			}
 		}
 		cgen_write(g, ")");
 		if (ctypes[0].kind == CTYPE_NONE)
-			cgen_type_post(g, &fn_types[0], f->where);
+			cgen_type_post(g, &fn_types[0]);
 		cgen_write(g, ";");
 		if (!f->c.name || !ident_eq_str(f->c.name, foreign_name) || g->nms != NULL) {
 			cgen_write(g, "static ");
 			if (ctypes[0].kind == CTYPE_NONE) {
-				cgen_type_pre(g, &fn_types[0], f->where);
+				cgen_type_pre(g, &fn_types[0]);
 			} else {
 				cgen_ctype(g, &ctypes[0]);
 			}
@@ -153,8 +153,8 @@ static void cgen_fn_decl(CGenerator *g, FnExpr *f, Type *t) {
 				CType *csub = &ctypes[i];
 				if (csub->kind == CTYPE_NONE) {
 					Type *sub = &fn_types[i];
-					cgen_type_pre(g, sub, f->where);
-					cgen_type_post(g, sub, f->where);
+					cgen_type_pre(g, sub);
+					cgen_type_post(g, sub);
 				} else {
 					cgen_ctype(g, csub);
 				}
@@ -225,14 +225,14 @@ static void cgen_decls_decl(CGenerator *g, Declaration *d) {
 				if (!type_is_compileonly(type)) {
 					if (!(d->flags & DECL_EXPORT))
 						cgen_write(g, "static ");
-					cgen_type_pre(g, type, d->where);
+					cgen_type_pre(g, type);
 					cgen_write(g, " ");
 					cgen_ident(g, ident);
-					cgen_type_post(g, type, d->where);
+					cgen_type_post(g, type);
 					if (d->flags & DECL_HAS_EXPR) {
 						Value *val = decl_val_at_index(d, i);
 						cgen_write(g, " = ");
-						cgen_val(g, *val, type, d->where);
+						cgen_val(g, *val, type);
 					} else {
 						cgen_write(g, " = ");
 						cgen_zero_value(g, type);
