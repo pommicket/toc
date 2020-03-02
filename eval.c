@@ -26,20 +26,20 @@ static inline void *evalr_calloc(Evaluator *ev, size_t n, size_t bytes) {
 	return allocr_calloc(ev->allocr, n, bytes);
 }
 
-static bool builtin_truthiness(Value *v, BuiltinType b) {
+static bool builtin_truthiness(Value v, BuiltinType b) {
 	switch (b) {
-	case BUILTIN_I8: return v->i8 != 0;
-	case BUILTIN_I16: return v->i16 != 0;
-	case BUILTIN_I32: return v->i32 != 0;
-	case BUILTIN_I64: return v->i64 != 0;
-	case BUILTIN_U8: return v->u8 != 0;
-	case BUILTIN_U16: return v->u16 != 0;
-	case BUILTIN_U32: return v->u32 != 0;
-	case BUILTIN_U64: return v->u64 != 0;
-	case BUILTIN_F32: return v->f32 != 0;
-	case BUILTIN_F64: return v->f64 != 0;
-	case BUILTIN_BOOL: return v->boolv;
-	case BUILTIN_CHAR: return v->charv != 0;
+	case BUILTIN_I8: return v.i8 != 0;
+	case BUILTIN_I16: return v.i16 != 0;
+	case BUILTIN_I32: return v.i32 != 0;
+	case BUILTIN_I64: return v.i64 != 0;
+	case BUILTIN_U8: return v.u8 != 0;
+	case BUILTIN_U16: return v.u16 != 0;
+	case BUILTIN_U32: return v.u32 != 0;
+	case BUILTIN_U64: return v.u64 != 0;
+	case BUILTIN_F32: return v.f32 != 0;
+	case BUILTIN_F64: return v.f64 != 0;
+	case BUILTIN_BOOL: return v.boolv;
+	case BUILTIN_CHAR: return v.charv != 0;
 	case BUILTIN_TYPE:
 	case BUILTIN_NMS:
 		break;
@@ -47,16 +47,16 @@ static bool builtin_truthiness(Value *v, BuiltinType b) {
 	assert(0); return false;
 }
 
-static bool val_truthiness(Value *v, Type *t) {
+static bool val_truthiness(Value v, Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_VOID: return false;
 	case TYPE_UNKNOWN: assert(0); return false;
 	case TYPE_BUILTIN: return builtin_truthiness(v, t->builtin);
-	case TYPE_PTR: return v->ptr != NULL;
-	case TYPE_FN: return v->fn != NULL;
+	case TYPE_PTR: return v.ptr != NULL;
+	case TYPE_FN: return v.fn != NULL;
 	case TYPE_ARR: return t->arr.n > 0;
-	case TYPE_SLICE: return v->slice.n > 0;
+	case TYPE_SLICE: return v.slice.n > 0;
 	case TYPE_TUPLE:
 	case TYPE_STRUCT:
 	case TYPE_EXPR:
@@ -349,7 +349,7 @@ static void val_builtin_cast(Value *vin, BuiltinType from, Value *vout, BuiltinT
 		builtin_float_casts(f32, F32);
 		builtin_float_casts(f64, F64);
 
-	case BUILTIN_BOOL: vout->boolv = builtin_truthiness(vin, from); break;
+	case BUILTIN_BOOL: vout->boolv = builtin_truthiness(*vin, from); break;
 	case BUILTIN_CHAR:
 		switch (to) {
 			builtin_casts_to_int(charv);
@@ -374,7 +374,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 	assert(to->flags & TYPE_IS_RESOLVED);
 	
 	if (to->kind == TYPE_BUILTIN && to->builtin == BUILTIN_BOOL) {
-		vout->boolv = val_truthiness(vin, from);
+		vout->boolv = val_truthiness(*vin, from);
 		return;
 	}
 	
@@ -1083,7 +1083,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			eval_unary_op_nums_only(-);
 		} break;
 		case UNARY_NOT:
-			v->boolv = !val_truthiness(v, &e->unary.of->type);
+			v->boolv = !val_truthiness(*v, &e->unary.of->type);
 			break;
 		case UNARY_DEL:
 			if (of_type->kind == TYPE_PTR)
@@ -1191,7 +1191,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		if (i->cond) {
 			Value cond;
 			if (!eval_expr(ev, i->cond, &cond)) return false;
-			if (val_truthiness(&cond, &i->cond->type)) {
+			if (val_truthiness(cond, &i->cond->type)) {
 				if (!eval_block(ev, &i->body, v)) return false;
 			} else if (i->next_elif) {
 				if (!eval_expr(ev, i->next_elif, v)) return false;
@@ -1207,7 +1207,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (w->cond) {
 				if (!eval_expr(ev, w->cond, &cond)) return false;
 				Type *cond_type = &w->cond->type;
-				if (!val_truthiness(&cond, cond_type))
+				if (!val_truthiness(cond, cond_type))
 					break;
 			}
 			if (!eval_block(ev, &w->body, v)) return false;

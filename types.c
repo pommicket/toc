@@ -1624,6 +1624,41 @@ static Status types_expr(Typer *tr, Expression *e) {
 	case EXPR_IF: {
 		IfExpr *i = e->if_;
 		IfExpr *curr = i;
+		if (curr->flags & IF_STATIC) {
+			while (1) {
+				Expression *cond = curr->cond;
+				Expression *next = curr->next_elif;
+				Value v;
+				if (cond) {
+					if (!types_expr(tr, cond))
+						return false;
+					if (!types_block(tr, &curr->body))
+						return false;
+					if (!eval_expr(tr->evalr, cond, &v))
+						return false;
+				}
+				if (!cond || val_truthiness(v, &cond->type)) {
+					Block *true_block = typer_malloc(tr, sizeof *true_block);
+					*true_block = curr->body;
+					e->kind = EXPR_BLOCK;
+					e->block = true_block;
+					break;
+				}
+				if (!next) break;
+				curr = next->if_;
+			}
+			if (e->kind == EXPR_IF) {
+				/* all conds were false */
+				e->kind = EXPR_BLOCK;
+				e->block = typer_calloc(tr, 1, sizeof *e->block);
+				e->block->where = e->where;
+				idents_create(&e->block->idents, tr->allocr, e->block);
+			}
+			/* re-type */
+			if (!types_expr(tr, e))
+				return false;
+			return true;
+		}
 		Type *curr_type = t;
 		bool has_else = false;
 		if (!types_block(tr, &curr->body))

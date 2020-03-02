@@ -8,7 +8,6 @@
 
 /* 
 TODO:
-fix x ::= fn_that_returns_array(); fn_that_takes_array(x);
 #if
 variadic fns
 #foreign variadic fns

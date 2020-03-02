@@ -242,11 +242,12 @@ typedef enum {
 			  DIRECT_BUILTIN,
 			  DIRECT_INCLUDE,
 			  DIRECT_FORCE,
+			  DIRECT_IF,
 			  DIRECT_COUNT
 } Directive;
 
 static const char *directives[DIRECT_COUNT] =
-	{"C", "sizeof", "alignof", "export", "foreign", "builtin", "include", "force"};
+	{"C", "sizeof", "alignof", "export", "foreign", "builtin", "include", "force", "if"};
 
 typedef enum {
 			  KW_SEMICOLON,
@@ -594,7 +595,12 @@ typedef struct CallExpr {
 	struct Instance *instance; /* NULL = ordinary function, no compile time args */
 } CallExpr;
 
+enum {
+	  IF_STATIC = 0x01
+};
+
 typedef struct IfExpr {
+	U8 flags;
 	struct Expression *cond; /* NULL = this is an else */
 	struct Expression *next_elif; /* next elif/else of this statement */
 	Block body;

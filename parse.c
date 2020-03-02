@@ -1304,6 +1304,9 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 
 
 		Token *start = t->token;
+		if (token_is_direct(t->token, DIRECT_IF)) {
+			goto if_expr;
+		}
 		if (t->token->kind == TOKEN_KW) switch (t->token->kw) {
 			case KW_FN: {
 				/* this is a function */
@@ -1327,8 +1330,13 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					return false;
  				goto success;
 			}
-			case KW_IF: {
+			case KW_IF:
+			if_expr: {
 				IfExpr *i = e->if_ = parser_malloc(p, sizeof *i);
+				i->flags = 0;
+				if (t->token->kind == TOKEN_DIRECT) {
+					i->flags |= IF_STATIC;
+				}
 				e->kind = EXPR_IF;
 				++t->token;
 				Token *cond_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE);
@@ -1360,6 +1368,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					next->where.start = t->token;
 					curr->next_elif = next;
 					IfExpr *nexti = next->if_ = parser_malloc(p, sizeof *nexti);
+					nexti->flags = 0;
 					if (is_else) {
 						++t->token;
 						nexti->cond = NULL;
@@ -1853,6 +1862,9 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				Expression *single_arg = NULL; /* points to an expr if this is a directive with one expression argument */
 			
 				switch (t->token->direct) {
+				case DIRECT_IF:
+					assert(0); /* handled above */
+					break;
 				case DIRECT_C:
 					e->kind = EXPR_C;
 					single_arg = e->c.code = parser_new_expr(p);
