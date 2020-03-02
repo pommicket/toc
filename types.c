@@ -1363,6 +1363,35 @@ static void get_builtin_val_type(Allocator *a, BuiltinVal val, Type *t) {
 }
 
 
+/* gets a struct's constant or parameter, and puts it into e->val.  */
+static Status get_struct_constant(StructDef *struc, Identifier member, Expression *e) {	
+	Identifier i = ident_translate(member, &struc->scope.idents);
+	if (!i || i->decl_kind == IDECL_NONE) {
+		char *member_s = ident_to_str(member);
+		char *struc_s = struc->name ? ident_to_str(struc->name) : "anonymous struct";
+		err_print(e->where, "%s is not a member of structure %s.", member_s, struc_s);
+		info_print(struc->where, "struct was declared here.");
+		free(member_s);
+		if (struc->name) free(struc_s);
+		return false;
+	}
+	assert((i->decl_kind == IDECL_DECL) && (i->decl->flags & DECL_IS_CONST));
+	if (i->decl->flags & DECL_FOUND_VAL) {
+		/* replace with decl value */
+		int ident_idx = decl_ident_index(i->decl, i);
+		e->kind = EXPR_VAL;
+		e->flags = EXPR_FOUND_TYPE;
+		e->val = *decl_val_at_index(i->decl, ident_idx);
+		e->type = *decl_type_at_index(i->decl, ident_idx);
+		return true;
+	} else {
+		char *member_s = ident_to_str(member);
+		char *struc_s = struc->name ? ident_to_str(struc->name) : "anonymous struct";
+		err_print(e->where, "Cannot get value %s from struct %s. Are you missing parameters to this struct?", member_s, struc_s);
+		return false;
+	}
+}
+
 static Status types_expr(Typer *tr, Expression *e) {
 	if (e->flags & EXPR_FOUND_TYPE) return true;
 	Type *t = &e->type;
@@ -2476,7 +2505,25 @@ static Status types_expr(Typer *tr, Expression *e) {
 						  expr_kind_to_str(rhs->kind));
 				return false;
 			}
-			if (struct_type->kind == TYPE_STRUCT) {
+			if (type_is_builtin(struct_type, BUILTIN_TYPE)) {
+				/* accessing struct constant/parameter with a Type */
+				Value lval = {0};
+				if (!eval_expr(tr->evalr, lhs, &lval))
+					return false;
+				lhs->kind = EXPR_VAL;
+				lhs->flags = EXPR_FOUND_TYPE;
+				lhs->val = lval;
+			    Type *struc = lhs->val.type;
+				if (struc->kind != TYPE_STRUCT) {
+					char *s = type_to_str(struc);
+					err_print(lhs->where, "Cannot access member from non-struct type (%s).", s);
+					free(s);
+					return false;
+				}
+				if (!get_struct_constant(struc->struc, rhs->ident, e))
+					return false;
+				break;
+			} else if (struct_type->kind == TYPE_STRUCT) {
 				bool is_field = false;
 				arr_foreach(struct_type->struc->fields, Field, f) {
 					if (ident_eq(f->name, rhs->ident)) {
@@ -2486,42 +2533,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 					}
 				}
 				if (!is_field) {
-#if 0
-					Declaration *param = NULL;
-				    int ident_idx;
-					arr_foreach(struct_type->struc->params, Declaration, p) {
-						ident_idx = 0;
-						arr_foreach(p->idents, Identifier, ident) {
-							if (ident_eq(*ident, rhs->ident)) {
-								param = p;
-								goto dblbreak_dot;
-							}	
-							++ident_idx;
-						}
-					}
-				dblbreak_dot:
-					if (!param) {
-						char *member = ident_to_str(rhs->ident);
-						char *struc = type_to_str(struct_type);
-						err_print(e->where, "%s is not a member of structure %s.", member, struc);
+					if (!get_struct_constant(struct_type->struc, rhs->ident, e))
 						return false;
-					}
-#endif
-					Identifier i = ident_translate(rhs->ident, &struct_type->struc->scope.idents);
-					if (!i || i->decl_kind == IDECL_NONE) {
-						char *member = ident_to_str(rhs->ident);
-						char *struc_s = type_to_str(struct_type);
-						err_print(e->where, "%s is not a member of structure %s.", member, struc_s);
-						free(member);
-						free(struc_s);
-						return false;
-					}
-					assert((i->decl_kind == IDECL_DECL) && (i->decl->flags & DECL_IS_CONST));
-					/* replace with decl value */
-					int ident_idx = decl_ident_index(i->decl, i);
-					e->kind = EXPR_VAL;
-					e->val = *decl_val_at_index(i->decl, ident_idx);
-					*t = *decl_type_at_index(i->decl, ident_idx);
 					break;
 				}
 			} else if (struct_type->kind == TYPE_SLICE || struct_type->kind == TYPE_ARR) {

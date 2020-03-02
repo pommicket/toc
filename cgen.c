@@ -1133,6 +1133,7 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 		if (e->new.n) cgen_expr_pre(g, e->new.n);
 		break;
 	case EXPR_VAL:
+		/* TODO: don't make a variable for this if it's not needed */
 		if (type_is_compileonly(&e->type))
 			break;
 		cgen_val_pre(g, e->val, &e->type, e->where);

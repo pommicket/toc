@@ -1,10 +1,16 @@
 #include "std/io.toc", io;
 
+Foo ::= struct (n ::= 12) {
+	x ::= n;
+};
+
+Bar ::= struct {
+	a ::= -1243.3;
+};
 
 main ::= fn() {
-	 if 3 > 5 {
-	 
-	 } elif 45 > 32 {
-	 } else {
-	 }
+
+	 io.puti(Foo(3).x);
+	 io.puti(Foo().n);
+	 io.puti(Bar.a as int);
 };
