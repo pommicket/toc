@@ -172,31 +172,44 @@ static Type *copy_type_(Copier *c, Type *in) {
 	return out;
 }
 
+static inline void *copier_malloc(Copier *c, size_t n) {
+	return allocr_malloc(c->allocr, n);
+}
+
 static void copy_fn_expr(Copier *c, FnExpr *fout, FnExpr *fin, bool copy_body) {
 	*fout = *fin;
-	Block *prev;
-	if (copy_body) {
-		prev = c->block;
-		c->block = &fout->body;
-		idents_create(&fout->body.idents, c->allocr, &fout->body);
-	}
-	size_t i;
-	size_t nparam_decls = arr_len(fin->params);
-	fout->params = NULL;
-	arr_set_lena(&fout->params, nparam_decls, c->allocr);
-	for (i = 0; i < nparam_decls; ++i)
-		copy_decl(c, fout->params + i, fin->params + i);
-	size_t nret_decls = arr_len(fin->ret_decls);
-	if (fin->ret_decls) {
-		fout->ret_decls = NULL;
-		arr_set_lena(&fout->ret_decls, nret_decls, c->allocr);
-		for (i = 0; i < nret_decls; ++i)
-			copy_decl(c, fout->ret_decls + i, fin->ret_decls + i);
-	}
-	copy_type(c, &fout->ret_type, &fin->ret_type);
-	if (copy_body) {
-		copy_block(c, &fout->body, &fin->body, COPY_BLOCK_DONT_CREATE_IDENTS);
-		c->block = prev;
+	if (fin->flags & FN_EXPR_FOREIGN) {
+		copy_expr(c, fout->foreign.name_expr = copier_malloc(c, sizeof *fin->foreign.name_expr), fin->foreign.name_expr);
+		copy_expr(c, fout->foreign.lib_expr = copier_malloc(c, sizeof *fin->foreign.lib_expr), fin->foreign.lib_expr);
+		copy_type(c, &fout->foreign.type, &fin->foreign.type);
+		size_t nctypes = arr_len(fin->foreign.type.fn.types);
+		fout->foreign.ctypes = copier_malloc(c, nctypes * sizeof(CType));
+	    memcpy(fout->foreign.ctypes, fin->foreign.ctypes, nctypes * sizeof(CType));
+	} else {
+		Block *prev;
+		if (copy_body) {
+			prev = c->block;
+			c->block = &fout->body;
+			idents_create(&fout->body.idents, c->allocr, &fout->body);
+		}
+		size_t i;
+		size_t nparam_decls = arr_len(fin->params);
+		fout->params = NULL;
+		arr_set_lena(&fout->params, nparam_decls, c->allocr);
+		for (i = 0; i < nparam_decls; ++i)
+			copy_decl(c, fout->params + i, fin->params + i);
+		size_t nret_decls = arr_len(fin->ret_decls);
+		if (fin->ret_decls) {
+			fout->ret_decls = NULL;
+			arr_set_lena(&fout->ret_decls, nret_decls, c->allocr);
+			for (i = 0; i < nret_decls; ++i)
+				copy_decl(c, fout->ret_decls + i, fin->ret_decls + i);
+		}
+		copy_type(c, &fout->ret_type, &fin->ret_type);
+		if (copy_body) {
+			copy_block(c, &fout->body, &fin->body, COPY_BLOCK_DONT_CREATE_IDENTS);
+			c->block = prev;
+		}
 	}
 }
 
@@ -335,7 +348,7 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 			sout->to = copy_expr_(c, sin->to);
 	} break;
 	case EXPR_TYPE:
-		copy_type(c, &out->typeval, &in->typeval);
+		copy_type(c, out->typeval = copier_malloc(c, sizeof *out->typeval), in->typeval);
 		break;
 	case EXPR_VAL:
 		copy_val(a, &out->val, &in->val, &in->type);

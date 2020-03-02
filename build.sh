@@ -29,6 +29,8 @@ fi
 DEBUG_FLAGS="-O0 $WARNINGS -std=c11 -DTOC_DEBUG"
 if [ "$CC" = "gcc" ]; then
 	DEBUG_FLAGS="$DEBUG_FLAGS -no-pie -gdwarf-2 -pipe"
+elif [ "$CC" = "clang" ]; then
+	DEBUG_FLAGS="$DEBUG_FLAGS -no-pie -gdwarf-2 -pipe"
 fi
 RELEASE_FLAGS="-O3 -s -DNDEBUG $WARNINGS -std=c11"
 

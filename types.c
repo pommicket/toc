@@ -508,7 +508,6 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 			f->ret_type.flags = TYPE_IS_RESOLVED;
 			f->ret_type.was_expr = NULL;
 			f->ret_type.tuple = NULL;
-			f->ret_type.where = f->ret_decls[0].where;
 			arr_foreach(f->ret_decls, Declaration, d) {
 				arr_foreach(d->idents, Identifier, i) {
 					*(Type *)arr_add(&f->ret_type.tuple) = d->type;
@@ -517,7 +516,7 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 		}
 	}
 	if (!generic) {
-		if (!type_resolve(tr, &f->ret_type, f->ret_type.where)) {
+		if (!type_resolve(tr, &f->ret_type, f->where)) {
 			success = false;
 			goto ret;
 		}
@@ -1725,7 +1724,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 		if (expr_is_definitely_const(f) || type_is_builtin(&f->type, BUILTIN_TYPE)) {
 			Value val;
 			
-			
 			if (!eval_expr(tr->evalr, f, &val))
 				return false;
 			if (type_is_builtin(&f->type, BUILTIN_TYPE)) {
@@ -1841,10 +1839,10 @@ static Status types_expr(Typer *tr, Expression *e) {
 				
 				/* expression is actually a type */
 				e->kind = EXPR_TYPE;
-				memset(&e->typeval, 0, sizeof e->typeval);
-				e->typeval.kind = TYPE_STRUCT;
-				e->typeval.flags = TYPE_IS_RESOLVED;
-				e->typeval.struc = &inst->struc;
+				e->typeval = typer_calloc(tr, 1, sizeof *e->typeval);
+				e->typeval->kind = TYPE_STRUCT;
+				e->typeval->flags = TYPE_IS_RESOLVED;
+				e->typeval->struc = &inst->struc;
 			    t->kind = TYPE_BUILTIN;
 				t->builtin = BUILTIN_TYPE;
 				arr_clear(&arg_types);
@@ -2025,16 +2023,17 @@ static Status types_expr(Typer *tr, Expression *e) {
 							}
 							return false;
 						}
-					
+						Value val_copy;
 						Type *type = &expr->type;
+						copy_val(tr->allocr, &val_copy, arg_val, type);
+							
 						*(Type *)typer_arr_add(tr, &table_index_type.tuple) = *type;
-				
+						
 						arg_exprs[i].kind = EXPR_VAL;
 						arg_exprs[i].flags = EXPR_FOUND_TYPE;
-						copy_val(tr->allocr, &arg_exprs[i].val, arg_val, type);
-						arg_exprs[i].val = *arg_val;
-						copy_val(tr->allocr, &param_decl->val, arg_val, type);
+						arg_exprs[i].val = val_copy;
 						param_decl->flags |= DECL_FOUND_VAL;
+						copy_val(tr->allocr, &param_decl->val, &val_copy, type);
 						if (!(param_decl->flags & DECL_ANNOTATES_TYPE)) {
 							param_decl->type = *type;
 						}
@@ -2510,6 +2509,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				Value lval = {0};
 				if (!eval_expr(tr->evalr, lhs, &lval))
 					return false;
+				
 				lhs->kind = EXPR_VAL;
 				lhs->flags = EXPR_FOUND_TYPE;
 				lhs->val = lval;
@@ -2613,7 +2613,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		break;
 	}
 	case EXPR_TYPE: {
-		Type *tval = &e->typeval;
+		Type *tval = e->typeval;
 		if (tval->kind == TYPE_STRUCT && tval->struc->params) {
 			/* don't try to resolve this */
 			t->kind = TYPE_BUILTIN;
@@ -2706,8 +2706,8 @@ static Status types_decl(Typer *tr, Declaration *d) {
 
 	if ((d->flags & DECL_HAS_EXPR)
 		&& d->expr.kind == EXPR_TYPE
-		&& d->expr.typeval.kind == TYPE_STRUCT) {
-		d->expr.typeval.struc->name = d->idents[0];
+		&& d->expr.typeval->kind == TYPE_STRUCT) {
+		d->expr.typeval->struc->name = d->idents[0];
 	}
 	
 	if (d->flags & DECL_INFER) {

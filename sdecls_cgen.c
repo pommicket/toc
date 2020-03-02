@@ -75,7 +75,7 @@ static void cgen_sdecls_expr(CGenerator *g, Expression *e) {
 		e->fn->c.id = ++g->ident_counter;
 		break;
 	case EXPR_TYPE:
-		cgen_sdecls_type(g, &e->typeval);
+		cgen_sdecls_type(g, e->typeval);
 		break;
 	case EXPR_NMS: {
 		char *prefix_part = cgen_nms_prefix_part(g, e->nms);
@@ -107,8 +107,9 @@ static void cgen_sdecls_decl(CGenerator *g, Declaration *d) {
 	}
 	for (int idx = 0; idx < (int)arr_len(d->idents); ++idx) {
 		Type *type = decl_type_at_index(d, idx);
-		Value *val = decl_val_at_index(d, idx);
-		if (type_is_builtin(type, BUILTIN_TYPE)) {
+
+		if (type_is_builtin(type, BUILTIN_TYPE) && !(d->flags & DECL_IS_PARAM)) {
+			Value *val = decl_val_at_index(d, idx);
 		    cgen_sdecls_type(g, val->type);
 		}
 	}

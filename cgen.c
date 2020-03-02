@@ -35,14 +35,16 @@ static void cgen_defs_block(CGenerator *g, Block *b);
 static void cgen_defs_decl(CGenerator *g, Declaration *d);
 
 #define cgen_recurse_subexprs_fn_simple(fn, decl_f, block_f)	\
-	FnExpr *prev_fn = g->f##n;									\
-	g->f##n = fn;												\
-	arr_foreach(fn->params, Declaration, param)					\
-	    decl_f(g, param);										\
-	arr_foreach(fn->ret_decls, Declaration, r)					\
-		decl_f(g, r);											\
-	block_f(g, &fn->body);										\
-	g->f##n = prev_fn;										
+	if (!(fn->flags & FN_EXPR_FOREIGN)) {						\
+		FnExpr *prev_fn = g->f##n;								\
+		g->f##n = fn;											\
+		arr_foreach(fn->params, Declaration, param)				\
+			decl_f(g, param);									\
+		arr_foreach(fn->ret_decls, Declaration, r)				\
+			decl_f(g, r);										\
+		block_f(g, &fn->body);									\
+		g->f##n = prev_fn;										\
+	}
 
 /* calls f on every sub-expression of e, block_f on every sub-block, and decl_f on every sub-declaration. */
 #define cgen_recurse_subexprs(g, e, f, block_f, decl_f)					\

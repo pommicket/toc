@@ -32,7 +32,7 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identi
 		break;
 	case EXPR_CALL: {
 		
-		if (to->kind == EXPR_TYPE && to->typeval.kind == TYPE_STRUCT) {
+		if (to->kind == EXPR_TYPE && to->typeval->kind == TYPE_STRUCT) {
 			/* maybe it's a parameterized struct? */
 			/* it might not be possible that it's not, but might as well keep that possibility around. */
 			Value fn_val = {0};
@@ -52,7 +52,7 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identi
 					free(order);
 					return false;
 				}
-				Declaration *params = to->typeval.struc->params;
+				Declaration *params = to->typeval->struc->params;
 				int arg_idx = 0;
 				arr_foreach(params, Declaration, param) {
 					int ident_idx = 0;
@@ -96,7 +96,7 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identi
 		}
 		if (to->kind != EXPR_CALL) {
 			if (to->kind == EXPR_TYPE) {
-				to = to->typeval.was_expr;
+				to = to->typeval->was_expr;
 			}
 			if (!to || to->kind != EXPR_CALL)
 				return true; /* give up */
@@ -208,7 +208,8 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 		Expression *to_expr = to->was_expr;
 		Expression e = {0};
 		e.kind = EXPR_TYPE;
-		e.typeval = *to;
+		e.typeval = allocr_malloc(tr->allocr, sizeof *e.typeval);
+		*e.typeval = *to;
 		e.flags = EXPR_FOUND_TYPE;
 		Type *type = &e.type;
 		type->flags = TYPE_IS_RESOLVED;

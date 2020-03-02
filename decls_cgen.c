@@ -184,7 +184,7 @@ static void cgen_decls_expr(CGenerator *g, Expression *e) {
 		cgen_fn_decl(g, e->fn, &e->type);
 	} break;
 	case EXPR_TYPE: {
-		Type *type = &e->typeval;
+		Type *type = e->typeval;
 		cgen_decls_type(g, type);
 	} break;
 	case EXPR_CAST:

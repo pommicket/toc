@@ -445,7 +445,6 @@ enum {
 };
 typedef U8 TypeFlags;
 typedef struct Type {
-	Location where;
 	struct Expression *was_expr; /* if non-NULL, indicates that this type used to be an expression (TYPE_EXPR) */
 	TypeKind kind;
 	TypeFlags flags;
@@ -827,7 +826,7 @@ typedef struct Expression {
 		SliceExpr slice;
 		Block *block;
 		struct Expression *tuple; /* dynamic array, even after typing */
-		Type typeval;
+		Type *typeval;
 		Value val;
 	};
 } Expression;

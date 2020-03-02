@@ -986,11 +986,11 @@ static Status eval_ident(Evaluator *ev, Identifier ident, Value *v, Location whe
 	Declaration *d = NULL;
 	if (is_decl) {
 		d = ident->decl;
-		if ((d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_TYPE && d->expr.typeval.kind == TYPE_STRUCT) {
+		if ((d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_TYPE && d->expr.typeval->kind == TYPE_STRUCT) {
 			v->type = allocr_malloc(ev->allocr, sizeof *v->type);
 			v->type->flags = TYPE_IS_RESOLVED;
 			v->type->kind = TYPE_STRUCT;
-			v->type->struc = d->expr.typeval.struc;
+			v->type->struc = d->expr.typeval->struc;
 			return true;
 		} else {
 			if (!types_decl(ev->typer, d)) return false;
@@ -1526,7 +1526,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		}
 	} break;
 	case EXPR_TYPE:
-		v->type = &e->typeval;
+		v->type = e->typeval;
 		break;
 	case EXPR_NMS:
 		v->nms = e->nms;
