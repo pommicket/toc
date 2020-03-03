@@ -486,7 +486,6 @@ static inline void cgen_arg_pre(CGenerator *g, Expression *arg) {
 	if (arg->type.kind == TYPE_ARR) {
 		/* create copy of array */
 		IdentID copy = ++g->ident_counter;
-		arg->cgen.id = copy;
 		cgen_type_pre(g, &arg->type);
 		char s[CGEN_IDENT_ID_STR_SIZE];
 		cgen_ident_id_to_str(s, copy);
@@ -495,6 +494,7 @@ static inline void cgen_arg_pre(CGenerator *g, Expression *arg) {
 		cgen_type_post(g, &arg->type);
 		cgen_write(g, "; ");
 		cgen_set(g, NULL, s, arg, NULL);
+		arg->cgen.id = copy;
 	}
 }
 

@@ -1,5 +1,3 @@
-#include "io.toc", io;
-
 arr_sum ::= fn(n::=, t::=, a:[n]t) t {
 	total := 0 as t;
 	for x := a {
@@ -15,13 +13,5 @@ mk_arr ::= fn(x:int, y:int, z:int) a:[3]int {
 };
 
 main ::= fn() {
-	 x ::= 3;
-	 #if x > 2 {
-	 	 io.puts("Hello!");
-	 } else {
-	 	foo("yes");
-	 }
-	 io.puti(arr_sum(mk_arr(5,89,22)));
-	 io.puti(arr_sum(mk_arr(1,2,3)));
-	 io.puti(arr_sum(mk_arr(z=0, 0, 0)));
+	 arr_sum(mk_arr(1,2,3));
 };

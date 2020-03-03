@@ -405,14 +405,14 @@ static Token *expr_find_end(Parser *p, ExprEndFlags flags)  {
 		}
 		if (token->kind == TOKEN_EOF) {
 			if (brace_level > 0) {
-				tokr_err(t, "Opening brace { was never closed."); /* FEATURE: Find out where this is */
+				tokr_err(t, "Opening brace { was never closed."); /* TODO: Find out where this is */
 			} else if (paren_level > 0) {
 				tokr_err(t, "Opening parenthesis ( was never closed.");
 			} else if (square_level > 0) {
 				tokr_err(t, "Opening square bracket [ was never closed.");
 			} else {
 				tokr_err(t, "Could not find end of expression (did you forget a semicolon?).");
-				/* FEATURE: improve err message */
+				/* TODO: ? improve err message */
 			}
 			t->token = token; /* don't try to continue */
 			return NULL;
