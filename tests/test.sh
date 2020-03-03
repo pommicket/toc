@@ -1,4 +1,14 @@
 #!/bin/bash
+
+tests='bf
+arr
+arr2
+arr3
+foreign
+params
+nms
+misc'
+
 STARTPWD=$(pwd)
 cd $(pwd)/$(dirname $0)
 TOC=../toc
@@ -31,12 +41,8 @@ do_tests() {
 		fi
 	done
 }
+for x in $tests; do
+	do_tests "$x"
+done
 
-do_tests bf
-do_tests arr
-do_tests arr2
-do_tests arr3
-do_tests foreign
-do_tests params
-do_tests nms
 rm got a.out out.c
