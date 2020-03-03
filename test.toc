@@ -1,17 +1,34 @@
-arr_sum ::= fn(n::=, t::=, a:[n]t) t {
+/*
+#include "std/io.toc", io;
+#include "std/arr.toc", arr;
+
+arr_sum ::= fn(n::=, t::=, a:arr.Arr(t)) t {
 	total := 0 as t;
-	for x := a {
+	for x := a.data {
 		total += x;
 	}
 	total
 };
 
-mk_arr ::= fn(x:int, y:int, z:int) a:[3]int {
-	a[0] = x;
-	a[1] = y;
-	a[2] = z;
+mk_arr ::= fn(x:int, y:int, z:int) a:arr.Arr(int) {
+	arr.add(&a, x);
+	arr.add(&a, y);
+	arr.add(&a, z);
 };
 
 main ::= fn() {
-	 arr_sum(mk_arr(1,2,3));
+	 a := mk_arr(1,2,3);
+	 io.puti(arr.len(a));
+	 io.puti(arr_sum(a));
+};
+*/
+
+foo ::= fn(x::int) Type {
+	struct {
+		   a: [x]int;
+	}
+};
+
+main ::= fn() {
+	 f: foo(5);
 };

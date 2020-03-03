@@ -1,20 +1,29 @@
-Arr ::= fn (t :: Type) Type {
-	struct {
-		   data : []t;
-		   cap : int;
+// this could be made quite a bit faster with realloc
+
+Arr ::= struct (t :: Type) {
+	data : []t;
+	cap : int;
+};
+
+resv ::= fn(t ::=, a : &Arr(t), n: int) {
+	if a.cap >= n {
+		return;
 	}
+	new_data := new(t, a.cap);
+	new_data.len = a.data.len;
+	for x, i := &new_data {
+		*x = a.data[i];
+	}
+	a.data = new_data;
+	a.cap = n;
 };
-arr_add ::= fn(t ::=, a : &Arr(t), x : t) {
-		if a.data.len >= a.cap {
-		   a.cap = a.cap * 2 + 2;
-		   new_data := new(t, a.cap);
-		   new_data.len = a.data.len;
-		   for i := 0..a.data.len-1 {
-		   		new_data[i] = a.data[i];
-		   }
-		   a.data = new_data;
-		}
-		a.data.len += 1;
-		a.data[a.data.len-1] = x;
+
+add ::= fn(t ::=, a : &Arr(t), x : t) {
+	if a.data.len >= a.cap {
+		resv(&a, a.cap * 2 + 2);
+	}
+	a.data.len += 1;
+	a.data[a.data.len-1] = x;
 };
-arr_len ::= fn(t ::=, a : Arr(t)) int { a.data.len };
+
+len ::= fn(t ::=, a : Arr(t)) int { a.data.len };

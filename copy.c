@@ -420,9 +420,9 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 
 static void copy_block(Copier *c, Block *out, Block *in, U8 flags) {
 	assert(!(in->flags & BLOCK_FINDING_TYPES));
-	
 	Identifiers out_idents = out->idents;
 	*out = *in;
+	out->parent = c->block;
 	if (flags & COPY_BLOCK_DONT_CREATE_IDENTS)
 		out->idents = out_idents; /* reset Identifiers */
 	size_t nstmts = arr_len(in->stmts);

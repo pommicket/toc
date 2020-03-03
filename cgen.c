@@ -1219,6 +1219,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 					Value fn_val = *decl_val_at_index(d, index);
 					FnExpr *fn = fn_val.fn;
 					Expression fn_expr;
+					/* TODO: is this all really necessary? */
 					
 					fn_expr.kind = EXPR_FN;
 					fn_expr.fn = allocr_malloc(g->allocr, sizeof *fn_expr.fn);

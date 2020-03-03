@@ -567,14 +567,12 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 #endif
 #endif
 	if (i->decl_kind == IDECL_NONE) {
-		long nblocks = (long)arr_len(tr->blocks);
-		long idx;
-		for (idx = nblocks - 1; idx >= 0; --idx) {
-			Block *b = tr->blocks[idx];
+		Block *b = tr->block;
+		bool undeclared = false;
+		while (1) {
 			/* OPTIM: only hash once */
-		    Identifier translated = ident_translate(i, b ? &b->idents : tr->globals);
-			if (!translated) continue;
-			if (translated->decl_kind != IDECL_NONE) {
+			Identifier translated = ident_translate(i, b ? &b->idents : tr->globals);
+			if (translated && translated->decl_kind != IDECL_NONE) {
 				/* printf("translated %s from\n", ident_to_str(i)); */
 				/* print_block_location(i->idents->scope); */
 				/* printf(" to \n"); */
@@ -583,8 +581,14 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 				i = *ident = translated;
 				break;
 			}
+			if (b) {
+				b = b->parent;
+			} else {
+				undeclared = true;
+				break;
+			}
 		}
-		if (idx == -1) {
+		if (undeclared) {
 			char *s = ident_to_str(i);
 			err_print(where, "Undeclared identifier: %s", s);
 			free(s);
@@ -1649,6 +1653,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				e->kind = EXPR_BLOCK;
 				e->block = typer_calloc(tr, 1, sizeof *e->block);
 				e->block->where = e->where;
+				e->block->parent = tr->block;
 				idents_create(&e->block->idents, tr->allocr, e->block);
 			}
 			goto expr_block;
@@ -1858,7 +1863,10 @@ static Status types_expr(Typer *tr, Expression *e) {
 					struct_t.kind = TYPE_STRUCT;
 					struct_t.struc = &inst->struc;
 					*(Location *)arr_add(&err_ctx->instance_stack) = e->where;
+					Block *prev_block = tr->block;
+					tr->block = &inst->struc.scope;
 					bool success = type_resolve(tr, &struct_t, e->where); /* resolve the struct */
+					tr->block = prev_block;
 				    arr_remove_last(&err_ctx->instance_stack);
 					if (!success) return false;
 						
@@ -2062,6 +2070,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 						arg_exprs[i].flags = EXPR_FOUND_TYPE;
 						arg_exprs[i].val = val_copy;
 						param_decl->flags |= DECL_FOUND_VAL;
+						printf("%p\n",param_decl);
 						copy_val(tr->allocr, &param_decl->val, &val_copy, type);
 						if (!(param_decl->flags & DECL_ANNOTATES_TYPE)) {
 							param_decl->type = *type;
@@ -2156,7 +2165,10 @@ static Status types_expr(Typer *tr, Expression *e) {
 				/* if anything happens, make sure we let the user know that this happened while generating a fn */
 				ErrCtx *err_ctx = e->where.file->ctx;
 				*(Location *)typer_arr_add(tr, &err_ctx->instance_stack) = e->where;
+				Block *prev_block = tr->block;
+				tr->block = fn_copy->body.parent;
 				bool success = types_fn(tr, c->instance->fn, &f->type, c->instance);
+				tr->block = prev_block;
 				arr_remove_lasta(&err_ctx->instance_stack, tr->allocr);
 				if (!success) return false;
 				arr_cleara(&table_index_type.tuple, tr->allocr);

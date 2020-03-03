@@ -612,6 +612,7 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 			memset(&struc->scope, 0, sizeof struc->scope);
 			idents_create(&struc->scope.idents, p->allocr, &struc->scope);
 		    memset(&struc->instances, 0, sizeof struc->instances);
+			struc->scope.parent = p->block;
 			
 			Block *prev_block = p->block;
 			p->block = &struc->scope;
@@ -852,6 +853,8 @@ static Status parse_block(Parser *p, Block *b, U8 flags) {
 	Block *prev_block = p->block;
 	b->flags = 0;
 	b->ret_expr = NULL;
+	assert(p->block != b);
+	b->parent = p->block;
 	p->block = b;
 	if (!(flags & PARSE_BLOCK_DONT_CREATE_IDENTS))
 		idents_create(&b->idents, p->allocr, p->block);
@@ -952,6 +955,7 @@ static Status parse_fn_expr(Parser *p, FnExpr *f) {
 	bool success = true;
 	Block *prev_block = p->block;
 	/* enter block so that parameters' scope will be the function body */
+	f->body.parent = p->block;
 	p->block = &f->body;
 	idents_create(&f->body.idents, p->allocr, &f->body);
 	if (token_is_kw(t->token, KW_RPAREN)) {
@@ -996,6 +1000,7 @@ static Status parse_fn_expr(Parser *p, FnExpr *f) {
 			goto ret;
 		}
 	}
+	p->block = prev_block; /* be nice to parse_block */
 	if (!parse_block(p, &f->body, PARSE_BLOCK_DONT_CREATE_IDENTS))
 		success = false;
  ret:
@@ -1426,6 +1431,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				fo->value = NULL;
 				fo->index = NULL;
 				Block *prev_block = p->block;
+				fo->body.parent = p->block;
 				p->block = &fo->body;
 				idents_create(&p->block->idents, p->allocr, p->block);
 				++t->token;
@@ -1522,9 +1528,9 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				    goto for_fail;
 				}
 				e->where.end = t->token; /* temporarily set end so that redeclaration errors aren't messed up */
+				p->block = prev_block;
 				if (!parse_block(p, &fo->body, PARSE_BLOCK_DONT_CREATE_IDENTS))
 				    goto for_fail;
-				p->block = prev_block;
 				goto success;
 				for_fail:
 				p->block = prev_block;
@@ -2445,6 +2451,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				Block *body = &e->nms->body;
 				body->flags |= BLOCK_IS_NMS;
 				body->where = s->where;
+				body->parent = p->block;
 				idents_create(&body->idents, p->allocr, body);
 				Statement *inc_stmt = parser_arr_add(p, &body->stmts);
 				inc_stmt->kind = STMT_INCLUDE;

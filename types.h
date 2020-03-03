@@ -490,6 +490,7 @@ typedef struct Block {
 	Identifiers idents;
 	struct Statement *stmts;
 	struct Expression *ret_expr; /* the return expression of this block, e.g. {foo(); 3} => 3  NULL for no expression. */
+	struct Block *parent;
 } Block;
 
 enum {
