@@ -1632,14 +1632,11 @@ static Status types_expr(Typer *tr, Expression *e) {
 				if (cond) {
 					if (!types_expr(tr, cond))
 						return false;
-					if (!types_block(tr, &curr->body))
-						return false;
 					if (!eval_expr(tr->evalr, cond, &v))
 						return false;
 				}
 				if (!cond || val_truthiness(v, &cond->type)) {
-					Block *true_block = typer_malloc(tr, sizeof *true_block);
-					*true_block = curr->body;
+					Block *true_block = &curr->body;
 					e->kind = EXPR_BLOCK;
 					e->block = true_block;
 					break;
@@ -1654,10 +1651,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				e->block->where = e->where;
 				idents_create(&e->block->idents, tr->allocr, e->block);
 			}
-			/* re-type */
-			if (!types_expr(tr, e))
-				return false;
-			return true;
+			goto expr_block;
 		}
 		Type *curr_type = t;
 		bool has_else = false;
@@ -2171,6 +2165,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		free(order);
 		*t = *ret_type;
 	} break;
+	expr_block:
 	case EXPR_BLOCK: {
 		Block *b = e->block;
 		if (!types_block(tr, b))

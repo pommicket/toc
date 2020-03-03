@@ -1,9 +1,12 @@
 #include "std/io.toc", io;
 
 main ::= fn() {
-	 #if 3 > 5 {
-	 	 io.puts("3 > 5");
-	 } else {
-	   	 io.puts("5 >= 3");
+	 #if 0 {
+	 	 io.puts("hi");
+	 } elif 0 {
+	   	 io.put();
+	 } elif 0 {
+	 	 io.puts("Hi");
 	 }
+	 io.puts("hey");
 };

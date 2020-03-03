@@ -93,7 +93,9 @@ static void cgen_sdecls_expr(CGenerator *g, Expression *e) {
 	} break;
 	default: break;
 	}
-	cgen_recurse_subexprs(g, e, cgen_sdecls_expr, cgen_sdecls_block, cgen_sdecls_decl);
+	if (e->kind != EXPR_IDENT) {
+		cgen_recurse_subexprs(g, e, cgen_sdecls_expr, cgen_sdecls_block, cgen_sdecls_decl);
+	}
 	if (e->kind == EXPR_NMS) {
 		arr_remove_last(&g->nms_prefixes);
 	}
