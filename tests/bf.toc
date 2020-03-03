@@ -1,10 +1,11 @@
-getstdin ::= fn() []char {
-#C("extern void *stdin; extern char *fgets(char *buf, size_t sz, void *f);");
+readfile ::= fn(filename: []char) []char {
+#C("extern void *fopen(char *name, char const *mode); extern char *fgets(char *buf, size_t sz, void *f);");
+		 fp : &u8 = #C("fopen(&(((char *)filename.data)[0]), \"r\")");
 		 contents : []char;
 		 contents_sz : int;
 		 contents_len : int;
 		 buffer : [1024]char;
-		 while #C("fgets(buffer, 1024, stdin)") {
+		 while #C("fgets(buffer, 1024, fp)") {
 		 	   buffer_len : int;
 			   while buffer[buffer_len] {
 			   		 buffer_len = buffer_len + 1;
@@ -39,9 +40,9 @@ extern int printf(const char *fmt, ...);
 	 #C("printf(\"%ld\\n\", x);");
 };
 
-main ::= fn() {
+runfile ::= fn(filename: []char) {
 	 #C("extern int putchar(int c);");
-	 code := getstdin();
+	 code := readfile(filename);
 	 tape_sz := 3;
 	 tape := new(int, tape_sz);
 	 ptr := tape_sz / 2;
@@ -111,4 +112,9 @@ main ::= fn() {
 	 }
 	 del(tape);
 	 del(code);
+};
+
+main ::= fn() {
+	 runfile("bf_hw0");
+	 runfile("bf_hw1");
 };

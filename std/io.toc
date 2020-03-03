@@ -1,5 +1,3 @@
-#C("#include <stdio.h>\n");
-
 putchar ::= #foreign("putchar", "libc.so.6") fn(#C int) #C int;
 toc_putchar ::= fn(x: char) {
 	putchar(x as #C int);

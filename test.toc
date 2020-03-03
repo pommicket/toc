@@ -1,12 +1,6 @@
 #include "std/io.toc", io;
 
 main ::= fn() {
-	 #if 0 {
-	 	 io.puts("hi");
-	 } elif 0 {
-	   	 io.put();
-	 } elif 0 {
-	 	 io.puts("Hi");
-	 }
-	 io.puts("hey");
+	 foo := new(int, 20);
+	 p := &foo[12];
 };
