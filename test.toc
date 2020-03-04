@@ -1,8 +1,7 @@
-/*
 #include "std/io.toc", io;
 #include "std/arr.toc", arr;
 
-arr_sum ::= fn(n::=, t::=, a:arr.Arr(t)) t {
+arr_sum ::= fn(t::=, a:arr.Arr(t)) t {
 	total := 0 as t;
 	for x := a.data {
 		total += x;
@@ -20,13 +19,4 @@ main ::= fn() {
 	 a := mk_arr(1,2,3);
 	 io.puti(arr.len(a));
 	 io.puti(arr_sum(a));
-};
-*/
-
-a ::= nms {
-  x: int;
-};
-
-main ::= fn() {
-	 a.x;
 };

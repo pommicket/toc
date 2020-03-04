@@ -20,7 +20,7 @@ resv ::= fn(t ::=, a : &Arr(t), n: int) {
 
 add ::= fn(t ::=, a : &Arr(t), x : t) {
 	if a.data.len >= a.cap {
-		resv(&a, a.cap * 2 + 2);
+		resv(a, a.cap * 2 + 2);
 	}
 	a.data.len += 1;
 	a.data[a.data.len-1] = x;

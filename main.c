@@ -8,6 +8,7 @@
 
 /* 
 TODO:
+make sure a,b::=, works
 variadic fns
 #foreign variadic fns
 #returns_code (function/struct body is a block, to be evaluated at compile time, which returns the actual statements -- you can use this for implementation of printf)

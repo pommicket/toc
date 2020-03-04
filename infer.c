@@ -31,7 +31,6 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identi
 		}
 		break;
 	case EXPR_CALL: {
-		
 		if (to->kind == EXPR_TYPE && to->typeval->kind == TYPE_STRUCT) {
 			/* maybe it's a parameterized struct? */
 			/* it might not be possible that it's not, but might as well keep that possibility around. */
@@ -98,8 +97,9 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identi
 			if (to->kind == EXPR_TYPE) {
 				to = to->typeval->was_expr;
 			}
-			if (!to || to->kind != EXPR_CALL)
-				return true; /* give up */
+			if (!to || to->kind != EXPR_CALL) {
+				return true;
+			}
 		}
 		
 		Argument *m_args = match->call.args;
@@ -152,21 +152,30 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identi
 	return true;
 }
 
-/* if match is not the same kind of type as to, returns true */
-static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents, Value *vals, Type *types) {
+/* wheres points to a Location, with more locations wheres_stride bytes apart */
+static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents, Value *vals, Type *types, Location where) {
 	assert(to->flags & TYPE_IS_RESOLVED);
 	assert(!(match->flags & TYPE_IS_RESOLVED));
+	if (match->kind != TYPE_UNKNOWN && match->kind != TYPE_EXPR && to->kind != TYPE_UNKNOWN) {
+		if (match->kind != to->kind) {
+			if (to->kind != TYPE_TUPLE) {
+				char *m = type_to_str(match), *t = type_to_str(to);
+				err_print(where, "Wrong argument type. Expected %s, but got %s.", m, t);
+				free(m); free(t);
+				return false;
+			}
+		}
+	}
 	switch (match->kind) {
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 	case TYPE_BUILTIN:
 		break; /* nothing we can do here */
 	case TYPE_TUPLE: {
-		if (to->kind != TYPE_TUPLE) return true;
 		if (arr_len(match->tuple) != arr_len(to->tuple)) return true;
 		Type *b = to->tuple;
 		arr_foreach(match->tuple, Type, a) {
-			if (!infer_from_type(tr, a, b, idents, vals, types))
+			if (!infer_from_type(tr, a, b, idents, vals, types, where))
 				return false;
 			++b;
 		}
@@ -179,18 +188,18 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 		if (arr_len(match->fn.types) != arr_len(to->fn.types)) return true;
 		size_t i, len = arr_len(match->fn.types);
 		for (i = 0; i < len; ++i) {
-			if (!infer_from_type(tr, &match->fn.types[i], &to->fn.types[i], idents, vals, types))
+			if (!infer_from_type(tr, &match->fn.types[i], &to->fn.types[i], idents, vals, types, where))
 				return false;
 		}
 	} break;
 	case TYPE_PTR:
 		if (to->kind != TYPE_PTR) return true;
-		if (!infer_from_type(tr, match->ptr, to->ptr, idents, vals, types))
+		if (!infer_from_type(tr, match->ptr, to->ptr, idents, vals, types, where))
 			return false;
 		break;
 	case TYPE_SLICE:
 		if (to->kind != TYPE_SLICE) return true;
-		if (!infer_from_type(tr, match->slice, to->slice, idents, vals, types))
+		if (!infer_from_type(tr, match->slice, to->slice, idents, vals, types, where))
 			return false;
 		break;
 	case TYPE_STRUCT: {
@@ -200,7 +209,7 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 		size_t i, len = arr_len(fields_m);
 		if (len != arr_len(fields_t)) return true;
 		for (i = 0; i < len; ++i) {
-			if (!infer_from_type(tr, &fields_m[i].type, &fields_t[i].type, idents, vals, types))
+			if (!infer_from_type(tr, &fields_m[i].type, &fields_t[i].type, idents, vals, types, where))
 				return false;
 		}
 	} break;
@@ -211,6 +220,7 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 		e.typeval = allocr_malloc(tr->allocr, sizeof *e.typeval);
 		*e.typeval = *to;
 		e.flags = EXPR_FOUND_TYPE;
+		e.where = where;
 		Type *type = &e.type;
 		type->flags = TYPE_IS_RESOLVED;
 		type->kind = TYPE_BUILTIN;
@@ -233,7 +243,7 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 		n_type->flags = TYPE_IS_RESOLVED;
 		if (!infer_from_expr(tr, match->arr.n_expr, &to_n_expr, idents, vals, types))
 			return false;
-		if (!infer_from_type(tr, match->arr.of, to->arr.of, idents, vals, types))
+		if (!infer_from_type(tr, match->arr.of, to->arr.of, idents, vals, types, where))
 			return false;
 	} break;
 	}
@@ -246,7 +256,7 @@ idents is a dyn array of distinct identifiers
 find the value of each ident by matching match[i] to to[i], i = 0..arr_len(match)-1
 all the types in match must be unresolved, and all the types in to must be resolved
 */
-static bool infer_ident_vals(Typer *tr, Type **match, Type **to, Identifier *idents, Value *vals, Type *types) {
+static bool infer_ident_vals(Typer *tr, Type **match, Type **to, Identifier *idents, Value *vals, Type *types, Location *wheres) {
 	size_t ntypes = arr_len(match);
 	size_t i;
 	size_t nidents = arr_len(idents);
@@ -254,12 +264,15 @@ static bool infer_ident_vals(Typer *tr, Type **match, Type **to, Identifier *ide
 	Type *t = types;
 			
 	for (i = 0; i < nidents; ++i) {
+		memset(t, 0, sizeof *t);
+		t->flags |= TYPE_IS_RESOLVED;
 		t->kind = TYPE_UNKNOWN;
 		++t;
 	}
 	
 	for (i = 0; i < ntypes; ++i) {
-		if (!infer_from_type(tr, *match, *to, idents, vals, types))
+		Location where = wheres[i];
+		if (!infer_from_type(tr, *match, *to, idents, vals, types, where))
 			return false;
 		++match, ++to;
 	}

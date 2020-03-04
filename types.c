@@ -1912,6 +1912,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 						if (param->flags & DECL_HAS_EXPR) {
 							assert(param->expr.kind == EXPR_VAL); /* evaluated in type_of_fn */
 							arg_exprs[i].kind = EXPR_VAL;
+							arg_exprs[i].where = param->where;
 							arg_exprs[i].flags = param->expr.flags;
 							arg_exprs[i].type = param->type;
 							arg_exprs[i].val = param->expr.val;
@@ -1966,21 +1967,23 @@ static Status types_expr(Typer *tr, Expression *e) {
 			Type **arg_types = NULL;
 			Type **decl_types = NULL;
 			Identifier *inferred_idents = NULL;
+			Location *arg_wheres = NULL;
 
 			arr_foreach(fn->params, Declaration, param) {
 				arr_foreach(param->idents, Identifier, ident) {
 					if (param->flags & DECL_INFER) {
-						*(Identifier *)typer_arr_add(tr, &inferred_idents) = *ident;
+						*(Identifier *)arr_add(&inferred_idents) = *ident;
 					} else if ((param->flags & DECL_ANNOTATES_TYPE)
 							   && !(param->flags & DECL_HAS_EXPR)) {
-						
 						if (param->type.kind == TYPE_TUPLE)
 							err_print(param->where, "Parameters cannot have tuple types.");
 						
-						Type **p = typer_arr_add(tr, &decl_types);
+						Type **p = arr_add(&decl_types);
 						*p = &param->type;
-						Type **q = typer_arr_add(tr, &arg_types);
+						Type **q = arr_add(&arg_types);
 						*q = &arg_exprs[i].type;
+						Location *l = arr_add(&arg_wheres);
+						*l = arg_exprs[i].where;
 					}
 					++i;
 				}
@@ -1990,11 +1993,17 @@ static Status types_expr(Typer *tr, Expression *e) {
 			if (ninferred_idents) {
 				Value *inferred_vals = err_malloc(ninferred_idents * sizeof *inferred_vals);
 				Type *inferred_types = err_malloc(ninferred_idents * sizeof *inferred_types);
-				
-				if (!infer_ident_vals(tr, decl_types, arg_types, inferred_idents, inferred_vals, inferred_types))
+				Block *prev = tr->block;
+				tr->block = &fn->body;
+				if (!infer_ident_vals(tr, decl_types, arg_types, inferred_idents, inferred_vals, inferred_types, arg_wheres)) {
+					tr->block = prev;
 					return false;
-
-				arr_cleara(&inferred_idents, tr->allocr);
+				}
+				tr->block = prev;
+				
+				arr_clear(&inferred_idents);
+				arr_clear(&arg_types);
+				arr_clear(&decl_types);
 				
 				{
 					Type *type = inferred_types;
@@ -2009,7 +2018,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 							}
 							err_print(decl->where, "Could not infer value of declaration.");
 							info_print(e->where, "While processing this call");
-							return false;
+						    return false;
 						}
 						++type;
 					}
@@ -2149,7 +2158,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 				*got = *expected;
 			}
 		}
-		
 		if (fn_type->constness) {
 			bool instance_already_exists;
 			c->instance = instance_table_adda(tr->allocr, &original_fn->instances, table_index, &table_index_type, &instance_already_exists);
@@ -2847,7 +2855,8 @@ static Status types_decl(Typer *tr, Declaration *d) {
 			goto ret;
 		}
 	} else if (d->type.kind == TYPE_UNKNOWN) {
-		err_print(d->where, "Can't determine type of declaration.");
+		if (!d->where.file->ctx->have_errored) /* don't do an error if we haven't already done one, because it might be because of that */
+			err_print(d->where, "Can't determine type of declaration.");
 		success = false;
 		goto ret;
 	}

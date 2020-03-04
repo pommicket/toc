@@ -397,8 +397,8 @@ typedef struct Tokenizer {
 
 
 typedef enum {
-			  TYPE_VOID,
 			  TYPE_UNKNOWN,
+			  TYPE_VOID,
 			  TYPE_BUILTIN,
 			  TYPE_FN,
 			  TYPE_TUPLE,
