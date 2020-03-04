@@ -148,7 +148,6 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identi
 	return true;
 }
 
-/* wheres points to a Location, with more locations wheres_stride bytes apart */
 static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents, Value *vals, Type *types, Location where) {
 	assert(to->flags & TYPE_IS_RESOLVED);
 	assert(!(match->flags & TYPE_IS_RESOLVED));

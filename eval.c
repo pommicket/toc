@@ -584,6 +584,10 @@ static Status eval_val_ptr_at_index(Location where, Value *arr, U64 i, Type *arr
 			err_print(where, "Slice out of bounds (%lu, slice size = %lu)\n", (unsigned long)i, (unsigned long)slice_sz);
 			return false;
 		}
+		if (!arr->slice.data) {
+			err_print(where, "Indexing null slice.");
+			return false;
+		}
 		*ptr = (char *)arr->slice.data + compiler_sizeof(arr_type->slice) * i;
 		if (type) *type = arr_type->slice;
 	} break;

@@ -1,22 +1,19 @@
 #include "std/io.toc", io;
-#include "std/arr.toc", arr;
 
-arr_sum ::= fn(t::=, a:arr.Arr(t)) t {
+arr_sum ::= fn(t,n::=, a:[n]t) t {
 	total := 0 as t;
-	for x := a.data {
+	for x := a {
 		total += x;
 	}
 	total
 };
 
-mk_arr ::= fn(x:int, y:int, z:int) a:arr.Arr(int) {
-	arr.add(&a, x);
-	arr.add(&a, y);
-	arr.add(&a, z);
-};
-
 main ::= fn() {
-	 a := mk_arr(1,2,3);
-	 io.puti(arr.len(a));
-	 io.puti(arr_sum(a));
+	 a : [3]int;
+	 a[0] = 1;
+	 a[1] = 1;
+	 a[2] = 1;
+	 
+	 io.puti(arr_sum(a));	 
 };
+main();

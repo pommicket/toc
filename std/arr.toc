@@ -9,13 +9,13 @@ resv ::= fn(t ::=, a : &Arr(t), n: int) {
 	if a.cap >= n {
 		return;
 	}
+	a.cap = n;
 	new_data := new(t, a.cap);
 	new_data.len = a.data.len;
 	for x, i := &new_data {
 		*x = a.data[i];
 	}
 	a.data = new_data;
-	a.cap = n;
 };
 
 add ::= fn(t ::=, a : &Arr(t), x : t) {
