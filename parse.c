@@ -680,6 +680,7 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 				++t->token;
 				struc->where.end = t->token;
 			}
+			struc->scope.where = struc->where;
 			p->block = prev_block;
 			break;
 			

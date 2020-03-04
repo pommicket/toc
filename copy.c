@@ -85,6 +85,7 @@ static void copy_struct(Copier *c, StructDef *out, StructDef *in) {
 	idents_create(&out->scope.idents, c->allocr, &out->scope);
 	
 	Block *prev = c->block;
+	copy_block(c, &out->scope, &in->scope, 0);
 	c->block = &out->scope;
 
 	arr_set_lena(&out->fields, nfields, c->allocr);
@@ -106,7 +107,6 @@ static void copy_struct(Copier *c, StructDef *out, StructDef *in) {
 	for (size_t i = 0; i < nconstants; ++i) {
 		copy_decl(c, &out->constants[i], &in->constants[i]);
 	}
-	
 	c->block = prev;
 }
 
@@ -207,8 +207,8 @@ static void copy_fn_expr(Copier *c, FnExpr *fout, FnExpr *fin, bool copy_body) {
 		}
 		copy_type(c, &fout->ret_type, &fin->ret_type);
 		if (copy_body) {
-			copy_block(c, &fout->body, &fin->body, COPY_BLOCK_DONT_CREATE_IDENTS);
 			c->block = prev;
+			copy_block(c, &fout->body, &fin->body, copy_body ? COPY_BLOCK_DONT_CREATE_IDENTS : 0);
 		}
 	}
 }
@@ -385,6 +385,7 @@ static void copy_decl(Copier *c, Declaration *out, Declaration *in) {
 		out->idents[i] = in->idents[i];
 		assert(c->block);
 		copier_ident_translate(c, &out->idents[i]);
+		
 		out->idents[i]->decl_kind = IDECL_DECL;
 	    out->idents[i]->decl = out;
 	}
@@ -418,6 +419,7 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 	}
 }
 
+/* COPY_BLOCK_DONT_CREATE_IDENTS is for copy_fn_expr */
 static void copy_block(Copier *c, Block *out, Block *in, U8 flags) {
 	assert(!(in->flags & BLOCK_FINDING_TYPES));
 	Identifiers out_idents = out->idents;

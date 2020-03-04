@@ -24,11 +24,11 @@ main ::= fn() {
 */
 
 foo ::= fn(x::int) Type {
-	struct {
-		   a: [x]int;
+	struct (t :: Type) {
+		   a: [x]t;
 	}
 };
 
 main ::= fn() {
-	 f: foo(5);
+	 f: foo(5)(int);
 };

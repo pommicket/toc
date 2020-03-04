@@ -566,36 +566,34 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 	assert(i->idents->scope == tr->block);
 #endif
 #endif
-	if (i->decl_kind == IDECL_NONE) {
-		Block *b = tr->block;
-		bool undeclared = false;
-		while (1) {
-			/* OPTIM: only hash once */
-			Identifier translated = ident_translate(i, b ? &b->idents : tr->globals);
-			if (translated && translated->decl_kind != IDECL_NONE) {
-				/* printf("translated %s from\n", ident_to_str(i)); */
-				/* print_block_location(i->idents->scope); */
-				/* printf(" to \n"); */
-				/* print_block_location(translated->idents->scope); */
-				
-				i = *ident = translated;
-				break;
-			}
-			if (b) {
-				b = b->parent;
-			} else {
-				undeclared = true;
-				break;
-			}
+	Block *b = tr->block;
+	bool undeclared = false;
+	while (1) {
+		/* OPTIM: only hash once */
+		Identifier translated = ident_translate(i, b ? &b->idents : tr->globals);
+		if (translated && translated->decl_kind != IDECL_NONE) {
+#if 0
+			printf("translated %s from\n", ident_to_str(i));
+			print_block_location(i->idents->scope);
+			printf(" to \n");
+			print_block_location(translated->idents->scope);
+#endif			
+			i = *ident = translated;
+			break;
 		}
-		if (undeclared) {
-			char *s = ident_to_str(i);
-			err_print(where, "Undeclared identifier: %s", s);
-			free(s);
-			return false;
+		if (b) {
+			b = b->parent;
+		} else {
+			undeclared = true;
+			break;
 		}
 	}
-	
+	if (undeclared) {
+		char *s = ident_to_str(i);
+		err_print(where, "Undeclared identifier: %s", s);
+		free(s);
+		return false;
+	}
 	switch (i->decl_kind) {
 	case IDECL_DECL: {
 		Declaration *d = i->decl;
@@ -661,7 +659,7 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 				} else {
 					/* let's type the declaration, and redo this (for evaling future functions) */
 					if (!types_decl(tr, d)) return false;
-					return type_of_ident(tr, where, ident, t);
+				    return type_of_ident(tr, where, ident, t);
 				}
 				return false;
 			}
@@ -1736,7 +1734,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 		CallExpr *c = &e->call;
 		c->instance = NULL;
 		Expression *f = c->fn;
-		Copier cop = {0};
 		FnExpr *fn_decl = NULL;
 		if (!types_expr(tr, f)) return false;
 		arr_foreach(c->args, Argument, arg) {
@@ -1771,7 +1768,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					info_print(base->struc->where, "struct was declared here.");
 					return false;
 				}
-			    cop = copier_create(tr->allocr, tr->block);
+			    Copier cop = copier_create(tr->allocr, base->struc->scope.parent);
 				HashTable *table = &base->struc->instances;
 				StructDef struc;
 				copy_struct(&cop, &struc, base->struc);
@@ -1941,7 +1938,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 		Type table_index_type = {0};
 		Value table_index = {0};
 		FnExpr *fn_copy = NULL;
-		cop = copier_create(tr->allocr, tr->block);
 		if (fn_type->constness) {
 			/* evaluate compile-time arguments + add an instance */
 			
@@ -1955,6 +1951,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 			/* fn is the instance, original_fn is not */
 			original_fn = fn;
 			fn_copy = typer_malloc(tr, sizeof *fn_copy);
+			Copier cop = copier_create(tr->allocr, fn->body.parent);
 			copy_fn_expr(&cop, fn_copy, fn, true);
 			fn = fn_copy;
 			/* keep track of the declaration */
@@ -2070,7 +2067,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 						arg_exprs[i].flags = EXPR_FOUND_TYPE;
 						arg_exprs[i].val = val_copy;
 						param_decl->flags |= DECL_FOUND_VAL;
-						printf("%p\n",param_decl);
 						copy_val(tr->allocr, &param_decl->val, &val_copy, type);
 						if (!(param_decl->flags & DECL_ANNOTATES_TYPE)) {
 							param_decl->type = *type;
@@ -2099,7 +2095,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				}
 			}
 			/* type params, return declarations, etc */
-			if (!type_of_fn(tr, fn_copy, &f->type, TYPE_OF_FN_IS_INSTANCE))
+			if (!type_of_fn(tr, fn, &f->type, TYPE_OF_FN_IS_INSTANCE))
 				return false;
 			
 			/* deal with default arguments */
