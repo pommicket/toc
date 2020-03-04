@@ -289,8 +289,8 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		} else {
 			fout->of = copy_expr_(c, fin->of);
 		}
-		copy_block(c, &fout->body, &fin->body, COPY_BLOCK_DONT_CREATE_IDENTS);
 		c->block = prev;
+		copy_block(c, &fout->body, &fin->body, COPY_BLOCK_DONT_CREATE_IDENTS);
 	} break;
 	case EXPR_FN:
 		copy_fn_expr(c, out->fn = allocr_malloc(a, sizeof *out->fn), in->fn, true);
