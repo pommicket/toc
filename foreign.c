@@ -142,6 +142,9 @@ static bool arg_list_start(av_alist *arg_list, void (*fn)(), Value *return_val, 
 		case BUILTIN_NMS:
 			av_start_ptr(*arg_list, fn, Namespace *, &return_val->nms);
 			break;
+		case BUILTIN_VARARGS:
+			assert(0);
+			break;
 		}
 		break;
 	case TYPE_STRUCT: {
@@ -187,7 +190,7 @@ static bool arg_list_start(av_alist *arg_list, void (*fn)(), Value *return_val, 
 	return true;
 }
 
-static bool arg_list_add(av_alist *arg_list, Value *val, Type *type, Location where) {
+static bool arg_list_add(av_alist *arg_list, Value val, Type *type, Location where) {
 	switch (type->kind) {
 	case TYPE_VOID:
 	case TYPE_TUPLE:
@@ -199,63 +202,68 @@ static bool arg_list_add(av_alist *arg_list, Value *val, Type *type, Location wh
 		return false;
 	}
 	case TYPE_PTR:
-		av_ptr(*arg_list, void *, val->ptr);
+		av_ptr(*arg_list, void *, val.ptr);
 		break;
 	case TYPE_FN:
 		warn_print(where, "Passing toc function pointer to foreign function. This will not work if the function expects a C-style function pointer.");
-		av_ptr(*arg_list, FnExpr *, val->fn);
+		av_ptr(*arg_list, FnExpr *, val.fn);
 		break;
 	case TYPE_BUILTIN:
 		switch (type->builtin) {
 		case BUILTIN_I8:
-			toc_av_add(127)(*arg_list, val->i8);
+			toc_av_add(127)(*arg_list, val.i8);
 			break;
 		case BUILTIN_U8:
-			toc_av_add(255)(*arg_list, val->u8);
+			toc_av_add(255)(*arg_list, val.u8);
 			break;
 		case BUILTIN_I16:
-			toc_av_add(32767)(*arg_list, val->i16);
+			toc_av_add(32767)(*arg_list, val.i16);
 			break;
 		case BUILTIN_U16:
-			toc_av_add(65535)(*arg_list, val->u16);
+			toc_av_add(65535)(*arg_list, val.u16);
 			break;
 		case BUILTIN_I32:
-			toc_av_add(2147483647)(*arg_list, val->i32);
+			toc_av_add(2147483647)(*arg_list, val.i32);
 			break;
 		case BUILTIN_U32:
-			toc_av_add(4294967295)(*arg_list, val->u32);
+			toc_av_add(4294967295)(*arg_list, val.u32);
 			break;
 		case BUILTIN_I64:
-			toc_av_add(9223372036854775807)(*arg_list, val->i64);
+			toc_av_add(9223372036854775807)(*arg_list, val.i64);
 			break;
 		case BUILTIN_U64:
-			toc_av_add(18446744073709551615)(*arg_list, val->u64);
+			toc_av_add(18446744073709551615)(*arg_list, val.u64);
 			break;
 		case BUILTIN_CHAR:
-			av_char(*arg_list, val->charv);
+			av_char(*arg_list, val.charv);
 			break;
 		case BUILTIN_BOOL:
-			av_uchar(*arg_list, val->boolv);
+			av_uchar(*arg_list, val.boolv);
 			break;
 		case BUILTIN_F32:
-			toc_av_f32(*arg_list, val->f32);
+			toc_av_f32(*arg_list, val.f32);
 			break;
 		case BUILTIN_F64:
-			toc_av_f64(*arg_list, val->f64);
+			toc_av_f64(*arg_list, val.f64);
 			break;
 		case BUILTIN_TYPE:
-			av_ptr(*arg_list, Type *, val->type);
+			av_ptr(*arg_list, Type *, val.type);
 			break;
 		case BUILTIN_NMS:
-			av_ptr(*arg_list, Namespace *, val->nms);
+			av_ptr(*arg_list, Namespace *, val.nms);
+			break;
+		case BUILTIN_VARARGS:
+			arr_foreach(val.varargs, VarArg, arg) {
+			    arg_list_add(arg_list, arg->val, arg->type, where);
+			}
 			break;
 		}
 		break;
 	case TYPE_SLICE:
-		av_struct(*arg_list, Slice, val->slice);
+		av_struct(*arg_list, Slice, val.slice);
 		break;
 	case TYPE_STRUCT:
-		_av_struct(*arg_list, compiler_sizeof(type), compiler_alignof(type), val->struc);
+		_av_struct(*arg_list, compiler_sizeof(type), compiler_alignof(type), val.struc);
 		break;
 	case TYPE_EXPR:
 		assert(0);
@@ -310,7 +318,7 @@ static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *fn_type, Val
 		return false;
 	size_t nparams = arr_len(fn_type->fn.types)-1;
 	for (size_t i = 0; i < nparams; ++i) {
-		if (!arg_list_add(&arg_list, &args[i], &fn_type->fn.types[i+1], call_where))
+		if (!arg_list_add(&arg_list, args[i], &fn_type->fn.types[i+1], call_where))
 			return false;
 	}
 	av_call(arg_list);

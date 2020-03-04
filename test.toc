@@ -1,11 +1,7 @@
 #include "std/io.toc", io;
 
-arr_sum ::= fn(t,n::=, a:[n]t) t {
-	total := 0 as t;
-	for x := a {
-		total += x;
-	}
-	total
+foo ::= fn(x: ..) {
+	
 };
 
 main ::= fn() {
@@ -13,7 +9,5 @@ main ::= fn() {
 	 a[0] = 1;
 	 a[1] = 1;
 	 a[2] = 1;
-	 
-	 io.puti(arr_sum(a));	 
 };
 main();

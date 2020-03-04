@@ -175,7 +175,14 @@ typedef union Value {
 	Slice slice;
 	struct Type *type;
 	struct Namespace *nms;
+	struct VarArg *varargs; /* dynamic array */
 } Value;
+
+typedef struct VarArg {
+	struct Type *type;
+	Value val;
+} VarArg;
+
 
 typedef enum {
 			  IDECL_NONE,
@@ -425,6 +432,7 @@ typedef enum {
 			  BUILTIN_CHAR,
 			  BUILTIN_BOOL,
 			  BUILTIN_TYPE,
+			  BUILTIN_VARARGS,
 			  BUILTIN_NMS
 } BuiltinType;
 

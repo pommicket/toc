@@ -303,6 +303,7 @@ static void cgen_type_pre(CGenerator *g, Type *t) {
 		case BUILTIN_F64: cgen_write(g, "f64"); break;
 		case BUILTIN_NMS:
 		case BUILTIN_TYPE:
+		case BUILTIN_VARARGS:
 			assert(0); break;
 		} break;
 	case TYPE_PTR:
@@ -1725,6 +1726,7 @@ static void cgen_val_ptr(CGenerator *g, void *v, Type *t) {
 		case BUILTIN_BOOL: cgen_write(g, "%s", *(bool *)v ? "true" : "false"); break;
 		case BUILTIN_TYPE:
 		case BUILTIN_NMS:
+		case BUILTIN_VARARGS:
 			assert(0);
 			break;
 		}

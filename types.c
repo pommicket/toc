@@ -46,6 +46,7 @@ static size_t compiler_sizeof_builtin(BuiltinType b) {
 	case BUILTIN_BOOL: return sizeof(bool);
 	case BUILTIN_TYPE: return sizeof(Type *);
 	case BUILTIN_NMS: return sizeof(Namespace *);
+	case BUILTIN_VARARGS: return sizeof(VarArg *);
 	}
 	assert(0);
 	return 0;
@@ -66,6 +67,7 @@ static size_t compiler_alignof_builtin(BuiltinType b) {
 	case BUILTIN_BOOL: return toc_alignof(bool);
 	case BUILTIN_TYPE: return toc_alignof(Type *);
 	case BUILTIN_NMS: return toc_alignof(Namespace *);
+	case BUILTIN_VARARGS: return toc_alignof(VarArg *);
 	}
 	assert(0);
 	return 0;
@@ -863,6 +865,7 @@ static bool type_can_be_truthy(Type *t) {
 		case BUILTIN_F64:
 		case BUILTIN_CHAR:
 		case BUILTIN_BOOL:
+		case BUILTIN_VARARGS:
 			return true;
 		}
 	case TYPE_EXPR:
@@ -917,6 +920,7 @@ static CastStatus type_cast_status(Type *from, Type *to) {
 					return CAST_STATUS_NONE;
 				case BUILTIN_TYPE:
 				case BUILTIN_NMS:
+				case BUILTIN_VARARGS:
 					return CAST_STATUS_ERR;
 				}
 				assert(0);
@@ -948,6 +952,7 @@ static CastStatus type_cast_status(Type *from, Type *to) {
 			case BUILTIN_CHAR:
 			case BUILTIN_TYPE:
 			case BUILTIN_NMS:
+			case BUILTIN_VARARGS:
 				return CAST_STATUS_ERR;
 			}
 			assert(0);
@@ -960,6 +965,7 @@ static CastStatus type_cast_status(Type *from, Type *to) {
 			return type_can_be_truthy(to) ? CAST_STATUS_NONE : CAST_STATUS_ERR;
 		case BUILTIN_TYPE:
 		case BUILTIN_NMS:
+		case BUILTIN_VARARGS:
 			return CAST_STATUS_ERR;
 		}
 		break;
@@ -2858,9 +2864,15 @@ static Status types_decl(Typer *tr, Declaration *d) {
 			success = false;
 			goto ret;
 		}
-	} else if (d->type.kind == TYPE_UNKNOWN) {
+	}
+	if (d->type.kind == TYPE_UNKNOWN) {
 		if (!d->where.file->ctx->have_errored) /* don't do an error if we haven't already done one, because it might be because of that */
 			err_print(d->where, "Can't determine type of declaration.");
+		success = false;
+		goto ret;
+	}
+	if (type_is_builtin(&d->type, BUILTIN_VARARGS) && !(d->flags & DECL_IS_PARAM)) {
+		err_print(d->where, "Only parameters can be varargs.");
 		success = false;
 		goto ret;
 	}

@@ -12,9 +12,8 @@ enum {
 	  PARSE_DECL_ALLOW_EXPORT = 0x08,
 	  PARSE_DECL_DONT_SET_IDECLS = 0x10
 };
-static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, uint16_t flags);
+static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 flags);
 static Status parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end);
-
 static bool is_decl(Tokenizer *t);
 static inline bool ends_decl(Token *t, DeclEndKind ends_with);
 
@@ -157,6 +156,7 @@ static int kw_to_builtin_type(Keyword kw) {
 	case KW_CHAR: return BUILTIN_CHAR;
 	case KW_TYPE: return BUILTIN_TYPE;
 	case KW_NAMESPACE: return BUILTIN_NMS;
+	case KW_DOTDOT: return BUILTIN_VARARGS;
 	default: return -1;
 	}
 	return -1;
@@ -178,6 +178,7 @@ static Keyword builtin_type_to_kw(BuiltinType t) {
 	case BUILTIN_CHAR: return KW_CHAR;
 	case BUILTIN_TYPE: return KW_TYPE;
 	case BUILTIN_NMS: return KW_NAMESPACE;
+	case BUILTIN_VARARGS: return KW_DOTDOT;
 	}
 	assert(0);
 	return KW_COUNT;
@@ -544,6 +545,10 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 					err_print(slice_where, "You cannot have a slice of tuples.");
 					return false;
 				}
+				if (type_is_builtin(type->slice, BUILTIN_VARARGS)) {
+					err_print(slice_where, "You cannot have a slice of varargs.");
+					return false;
+				}
 				break;
 			}
 			Token *end = expr_find_end(p, 0);
@@ -555,6 +560,10 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 			if (!parse_type(p, type->arr.of, &of_where)) return false;
 			if (type->arr.of->kind == TYPE_TUPLE) {
 				err_print(of_where, "You cannot have an array of tuples.");
+				return false;
+			}
+			if (type_is_builtin(type->arr.of, BUILTIN_VARARGS)) {
+				err_print(of_where, "You cannot have an array of varargs.");
 				return false;
 			}
 		} break;
@@ -569,6 +578,10 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 				if (!parse_type(p, child, &child_where)) return false;
 				if (child->kind == TYPE_TUPLE) {
 					err_print(child_where, "Tuples cannot contain tuples.");
+					return false;
+				}
+				if (type_is_builtin(child, BUILTIN_VARARGS)) {
+					err_print(child_where, "Tuples cannot contain varargs.");
 					return false;
 				}
 				if (token_is_kw(t->token, KW_GT)) { /* we're done with the tuple */
@@ -593,6 +606,10 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 			if (!parse_type(p, type->ptr, &ptr_where)) return false;
 			if (type->ptr->kind == TYPE_TUPLE) {
 				err_print(ptr_where, "You cannot have a pointer to a tuple.");
+				return false;
+			}
+			if (type_is_builtin(type->ptr, BUILTIN_VARARGS)) {
+				err_print(ptr_where, "You cannot have a pointer to varargs.");
 				return false;
 			}
 		} break;
@@ -819,6 +836,8 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 					++t->token;
 				}
 			} break;
+			case KW_DOTDOT:
+				return true;
 			case KW_AMPERSAND:
 				++t->token; /* continue; see if next thing is definitely a type */
 				goto continu;

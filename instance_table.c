@@ -140,6 +140,14 @@ static U64 val_ptr_hash(void *v, Type *t) {
 		case BUILTIN_F64: return f64_hash(*(F64 *)v);
 		case BUILTIN_CHAR: return (U64)*(char *)v;
 		case BUILTIN_BOOL: return (U64)*(bool *)v;
+		case BUILTIN_VARARGS: {
+			U64 hash = 1;
+			VarArg *vals = *(VarArg **)v;
+			arr_foreach(vals, VarArg, varg) {
+				hash = hash * 0x92738fd828cb68e1 + val_hash(varg->val, varg->type);
+			}
+			return hash;
+		}
 		case BUILTIN_TYPE:
 			return type_hash(*(Type **)v);
 		case BUILTIN_NMS:
@@ -216,6 +224,19 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 		case BUILTIN_F64: return *(F64 *)u == *(F64 *)v;
 		case BUILTIN_BOOL: return *(bool *)u == *(bool *)v;
 		case BUILTIN_CHAR: return *(char *)u == *(char *)v;
+		case BUILTIN_VARARGS: {
+		    VarArg *us = *(VarArg **)u, *vs = *(VarArg **)v;
+			size_t n = arr_len(us);
+			if (arr_len(vs) != n)
+				return false;
+			for (size_t i = 0; i < n; ++i) {
+				if (!type_eq(us[i].type, vs[i].type))
+					return false;
+				if (!val_eq(vs[i].val, us[i].val, us[i].type))
+					return false;
+			}
+			return true;
+		}	
 		case BUILTIN_TYPE:
 		    return type_eq(*(Type **)u, *(Type **)v);
 		case BUILTIN_NMS:

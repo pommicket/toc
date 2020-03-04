@@ -40,6 +40,7 @@ static bool builtin_truthiness(Value v, BuiltinType b) {
 	case BUILTIN_F64: return v.f64 != 0;
 	case BUILTIN_BOOL: return v.boolv;
 	case BUILTIN_CHAR: return v.charv != 0;
+	case BUILTIN_VARARGS: return arr_len(v.varargs) != 0;
 	case BUILTIN_TYPE:
 	case BUILTIN_NMS:
 		break;
@@ -179,6 +180,13 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		case BUILTIN_F64: fprintf(f, F64_FMT, *(F64 *)p); break;
 		case BUILTIN_CHAR: fprint_char_literal(f, *(char *)p); break;
 		case BUILTIN_BOOL: fprintf(f, "%s", *(bool *)p ? "true" : "false"); break;
+		case BUILTIN_VARARGS:
+			fprintf(f, "...(");
+			arr_foreach(*(VarArg **)p, VarArg, varg) {
+				fprint_val(f, varg->val, varg->type);
+			}
+			fprintf(f, ")");
+			break;
 		case BUILTIN_TYPE:
 			fprint_type(f, *(Type **)p);
 			break;
@@ -318,7 +326,9 @@ static inline void val_free_ptr(Value *v, Type *t) {
 	case BUILTIN_CHAR: vout->charv = (char)vin->low; break;	\
 	case BUILTIN_BOOL: vout->boolv = vin->low != 0; break;	\
 	case BUILTIN_NMS:										\
-	case BUILTIN_TYPE: assert(0); break;					\
+	case BUILTIN_TYPE:										\
+	case BUILTIN_VARARGS:									\
+		assert(0); break;									\
 	} break
 
 #define builtin_float_casts(low, up)							\
@@ -329,6 +339,7 @@ static inline void val_free_ptr(Value *v, Type *t) {
 	case BUILTIN_CHAR:											\
 	case BUILTIN_TYPE:											\
 	case BUILTIN_NMS:											\
+	case BUILTIN_VARARGS:										\
 		assert(0); break;										\
 	} break
 	
@@ -359,11 +370,13 @@ static void val_builtin_cast(Value *vin, BuiltinType from, Value *vout, BuiltinT
 		case BUILTIN_BOOL:
 		case BUILTIN_TYPE:
 		case BUILTIN_NMS:
+		case BUILTIN_VARARGS:
 			assert(0); break;
 		}
 		break;
 	case BUILTIN_TYPE:
 	case BUILTIN_NMS:
+	case BUILTIN_VARARGS:
 		assert(0);
 		break;
 	}
@@ -440,6 +453,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 			case BUILTIN_F64:
 			case BUILTIN_TYPE:
 			case BUILTIN_NMS:
+			case BUILTIN_VARARGS:
 				assert(0); break;
 			}
 			break;
@@ -515,6 +529,9 @@ static void eval_deref(Value *v, void *ptr, Type *type) {
 		case BUILTIN_TYPE:
 			v->type = *(Type **)ptr;
 			break;
+		case BUILTIN_VARARGS:
+			assert(0);
+			break;
 		}
 		break;
 	case TYPE_SLICE:
@@ -553,6 +570,9 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 		case BUILTIN_NMS: *(Namespace **)set = to->nms; break;
 		case BUILTIN_TYPE:
 			*(Type **)set = to->type;
+			break;
+		case BUILTIN_VARARGS:
+			assert(0);
 			break;
 		}
 		break;
