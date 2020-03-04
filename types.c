@@ -521,6 +521,10 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 			goto ret;
 		}
 		if (type_is_compileonly(&f->ret_type)) {
+			if (type_is_builtin(&f->ret_type, BUILTIN_NMS)) {
+				err_print(f->where, "Functions cannot return namespaces.");
+				return false;
+			}
 			/* 
 			   a function which returns a compile-only type but has non-constant parameters is weird...
 			   but might be useful, so let's warn
@@ -2523,9 +2527,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 				if (!eval_expr(tr->evalr, rhs, &member_name)) return false;
 				e->binary.op = BINARY_DOT;
 				e->binary.rhs->kind = EXPR_IDENT;
-				Identifier ident = e->binary.rhs->ident = e->binary.dot.translated_ident =
-					ident_get_with_len(&nms->body.idents, member_name.slice.data, (size_t)member_name.slice.n);
-				if (!type_of_ident(tr, rhs->where, &ident, t)) {
+			    e->binary.rhs->ident = ident_get_with_len(&nms->body.idents, member_name.slice.data, (size_t)member_name.slice.n);
+				if (!type_of_ident(tr, rhs->where, &e->binary.rhs->ident, t)) {
 					return false;
 				}
 			} break;
@@ -2595,17 +2598,13 @@ static Status types_expr(Typer *tr, Expression *e) {
 				Namespace *nms = nms_val.nms;
 				lhs->kind = EXPR_VAL;
 				lhs->val.nms = nms;
-				Identifier translated = ident_translate(rhs->ident, &nms->body.idents);
-				if (!translated) {
-					char *s = ident_to_str(rhs->ident);
-					err_print(rhs->where, "%s is not a member of this namespace.", s);
+				Block *prev = tr->block;
+				/* briefly pretend we are in the namespace */
+				tr->block = &nms->body;
+				if (!type_of_ident(tr, rhs->where, &rhs->ident, t)) {
 					return false;
 				}
-				assert(translated->decl_kind != IDECL_NONE);
-				if (!type_of_ident(tr, rhs->where, &translated, t)) {
-					return false;
-				}
-				e->binary.dot.translated_ident = translated;
+				tr->block = prev;
 			} else {
 				char *s = type_to_str(lhs_type);
 				err_print(e->where, "Operator . applied to type %s, which is not a structure or pointer to structure.", s);

@@ -1317,7 +1317,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 				assert(type_is_builtin(struct_type, BUILTIN_NMS));
 				char *prefix = e->binary.lhs->val.nms->c.prefix;
 				cgen_write(g, "%s", prefix);
-				cgen_ident_simple(g, e->binary.dot.translated_ident);
+				cgen_ident_simple(g, e->binary.rhs->ident);
 			}
 			handled = true;
 		} break;

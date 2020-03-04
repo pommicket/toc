@@ -806,7 +806,6 @@ typedef struct Expression {
 			struct Expression *rhs;
 			union {
 				Field *field; /* for struct. */
-				Identifier translated_ident; /* for nms. */
 			} dot;
 		} binary;
 		CallExpr call;

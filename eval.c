@@ -703,9 +703,9 @@ static Status eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr, void
 	    *p = (char *)struc_data + dot_expr->binary.dot.field->offset;
 	} else {
 		void *ptr;
+		Identifier ident = dot_expr->binary.rhs->ident;
 		assert(type_is_builtin(struct_type, BUILTIN_NMS));
-		Identifier translated = dot_expr->binary.dot.translated_ident;
-	    if (!eval_address_of_ident(translated, dot_expr->where, &dot_expr->type, &ptr))
+	    if (!eval_address_of_ident(ident, dot_expr->where, &dot_expr->type, &ptr))
 			return false;
 		*p = ptr;
 	}

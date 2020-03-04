@@ -17,6 +17,7 @@ switch
 enums
 typeof
 macros
+unions
 ---
 switch to / add as an alternative: libffi
 X ::= newtype(int); or something
