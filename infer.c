@@ -31,50 +31,46 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identi
 		}
 		break;
 	case EXPR_CALL: {
-		if (to->kind == EXPR_TYPE && to->typeval->kind == TYPE_STRUCT) {
-			/* maybe it's a parameterized struct? */
-			/* it might not be possible that it's not, but might as well keep that possibility around. */
-			Value fn_val = {0};
-			if (!types_expr(tr, match->call.fn)) {
+		if (!types_expr(tr, match->call.fn))
+			return false;
+	    if (type_is_builtin(&match->call.fn->type, BUILTIN_TYPE)) {
+	    	/* it's a parameterized struct */
+			Value fn_val;
+			if (!eval_expr(tr->evalr, to, &fn_val))
+				return false;
+			if (!type_is_builtin(&to->type, BUILTIN_TYPE) || fn_val.type->kind != TYPE_STRUCT) {
+				err_print(to->where, "Wrong argument type. Expected this to be a struct, but it's not.");
+				info_print(match->where, "Parameter was declared here.");
 				return false;
 			}
-			if (type_is_builtin(&match->call.fn->type, BUILTIN_TYPE)) {
-				/* it's a parameterized struct */
-				if (!eval_expr(tr->evalr, match->call.fn, &fn_val)) {
-					return false;
-				}
-				
-				assert(fn_val.type->kind == TYPE_STRUCT);
-
-				I16 *order;
-				if (!parameterized_struct_arg_order(fn_val.type->struc, match->call.args, &order, match->where)) {
-					free(order);
-					return false;
-				}
-				Declaration *params = to->typeval->struc->params;
-				int arg_idx = 0;
-				arr_foreach(params, Declaration, param) {
-					int ident_idx = 0;
-					arr_foreach(param->idents, Identifier, i) {
-						if (order[arg_idx] != -1) {
-							Expression *arg = &match->call.args[order[arg_idx]].val;
-							Value val = *decl_val_at_index(param, ident_idx);
-							Expression val_expr = {0};
-							val_expr.kind = EXPR_VAL;
-							val_expr.val = val;
-							val_expr.type = *decl_type_at_index(param, ident_idx);
-							val_expr.flags = EXPR_FOUND_TYPE;
-							if (!infer_from_expr(tr, arg, &val_expr, idents, vals, types)) {
-								free(order);
-								return false;
-							}
-						}
-						++arg_idx;
-						++ident_idx;
-					}
-				}
+			I16 *order;
+			if (!parameterized_struct_arg_order(fn_val.type->struc, match->call.args, &order, match->where)) {
 				free(order);
+				return false;
 			}
+			Declaration *params = to->typeval->struc->params;
+			int arg_idx = 0;
+			arr_foreach(params, Declaration, param) {
+				int ident_idx = 0;
+				arr_foreach(param->idents, Identifier, i) {
+					if (order[arg_idx] != -1) {
+						Expression *arg = &match->call.args[order[arg_idx]].val;
+						Value val = *decl_val_at_index(param, ident_idx);
+						Expression val_expr = {0};
+						val_expr.kind = EXPR_VAL;
+						val_expr.val = val;
+						val_expr.type = *decl_type_at_index(param, ident_idx);
+						val_expr.flags = EXPR_FOUND_TYPE;
+						if (!infer_from_expr(tr, arg, &val_expr, idents, vals, types)) {
+							free(order);
+							return false;
+						}
+					}
+					++arg_idx;
+					++ident_idx;
+				}
+			}
+			free(order);
 		}
 		
 		while (to->kind == EXPR_IDENT) {

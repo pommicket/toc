@@ -661,6 +661,10 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 					info_print(d->where, "%s will be declared here.", s);
 					free(s);
 				} else {
+					if (d->flags & DECL_INFER) {
+						err_print(where, "Use of identifier before it has been inferred. You are trying to do stuff with inference which toc doesn't support.");
+						return false;
+					}
 					/* let's type the declaration, and redo this (for evaling future functions) */
 					if (!types_decl(tr, d)) return false;
 				    return type_of_ident(tr, where, ident, t);
@@ -2018,7 +2022,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 							}
 							err_print(decl->where, "Could not infer value of declaration.");
 							info_print(e->where, "While processing this call");
-						    return false;
+							return false;
 						}
 						++type;
 					}
