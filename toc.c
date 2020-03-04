@@ -12,8 +12,7 @@
    (lexing)
 
    toc tries to continue even after the first error. 
-   It will not continue during cgen, but it will during tokenization,
-   parsing, and typing. If one stage fails, the following ones do not
+   If one stage fails, the following ones do not
    start.
 
    toc's memory management works using an allocator which never frees anything.
