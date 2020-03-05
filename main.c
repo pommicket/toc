@@ -34,7 +34,10 @@ consider- should #sizeof always take a Type? it would be more verbose, but we mi
 #include "toc.c"
 
 
-#if defined TOC_DEBUG && defined __linux__ && defined __GNU_LIBRARY__
+#if defined TOC_DEBUG && defined __GNU_LIBRARY__
+#define BACKTRACE
+#endif
+#ifdef BACKTRACE
 #include <signal.h>
 #include <execinfo.h>
 #include <unistd.h>
@@ -67,7 +70,7 @@ static void signal_handler(int num) {
 #endif
 
 int main(int argc, char **argv) {
-#ifdef TOC_DEBUG
+#ifdef BACKTRACE
 	signal(SIGABRT, signal_handler);
 	signal(SIGSEGV, signal_handler);
 #endif
