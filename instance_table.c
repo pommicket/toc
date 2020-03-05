@@ -330,8 +330,8 @@ static Instance *instance_table_adda(Allocator *a, HashTable *h, Value v, Type *
 		}
 		h->data = new_data;
 		h->occupied = new_occupied;
-		allocr_free(a, old_occupied, h->cap * sizeof *old_occupied);
-		allocr_free(a, old_data, h->cap * sizeof *old_data);
+		allocr_free(a, old_occupied, (size_t)h->cap * sizeof *old_occupied);
+		allocr_free(a, old_data, (size_t)h->cap * sizeof *old_data);
 		h->cap = new_cap;
 	}
 	Instance **data = h->data;

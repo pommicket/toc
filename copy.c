@@ -46,7 +46,7 @@ static void copy_val(Allocator *a, Value *out, Value *in, Type *t) {
 		*out = *in;
 		break;
 	case TYPE_ARR: {
-		size_t bytes = t->arr.n * compiler_sizeof(t->arr.of);
+		size_t bytes = (size_t)t->arr.n * compiler_sizeof(t->arr.of);
 		out->arr = allocr_malloc(a, bytes);
 		memcpy(out->arr, in->arr, bytes);
 	} break;
