@@ -8,7 +8,9 @@
 
 /* 
 TODO:
+why aren't we computing table_index at the end?
 variadic fns
+make sure you can't have a variadic function pointer
 #foreign variadic fns
 where
 #returns_code (function/struct body is a block, to be evaluated at compile time, which returns the actual statements -- you can use this for implementation of printf)

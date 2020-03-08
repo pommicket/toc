@@ -1,6 +1,7 @@
 #include "std/io.toc", io;
 
-foo ::= fn(x: ..) {
+foo ::= fn(x: ..) int {
+	3
 };
 
 main ::= fn() {

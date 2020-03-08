@@ -2187,21 +2187,25 @@ static Status types_expr(Typer *tr, Expression *e) {
 			ret_type = f->type.fn.types;
 			param_types = ret_type + 1;
 		}
+
+		bool has_varargs = fn_decl && (fn_decl->flags & FN_EXPR_HAS_VARARGS);
 		
 		/* check types of arguments */
 		for (size_t p = 0; p < nparams; ++p) {
-			Expression *arg = &arg_exprs[p];
-			Type *expected = &param_types[p];
-			Type *got = &arg->type;
-			if (!type_eq(expected, got)) {
-				char *estr = type_to_str(expected);
-				char *gstr = type_to_str(got);
-				err_print(arg->where, "Expected type %s as argument to function, but got %s.", estr, gstr);
-				return false;
-			}
-			if (got->flags & TYPE_IS_FLEXIBLE) {
-				/* "cast" */
-				*got = *expected;
+			if (p != nparams-1 || !has_varargs) {
+				Expression *arg = &arg_exprs[p];
+				Type *expected = &param_types[p];
+				Type *got = &arg->type;
+				if (!type_eq(expected, got)) {
+					char *estr = type_to_str(expected);
+					char *gstr = type_to_str(got);
+					err_print(arg->where, "Expected type %s as argument to function, but got %s.", estr, gstr);
+					return false;
+				}
+				if (got->flags & TYPE_IS_FLEXIBLE) {
+					/* "cast" */
+					*got = *expected;
+				}
 			}
 		}
 		if (fn_type->constness) {
