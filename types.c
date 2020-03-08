@@ -425,7 +425,7 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	bool generic = !(flags & TYPE_OF_FN_IS_INSTANCE) && fn_has_any_const_params(f);
 	if (generic) {
 		Copier cop = copier_create(tr->allocr, &f->body);
-		copy_fn_expr(&cop, &fn_copy, f, false);
+		copy_fn_expr(&cop, &fn_copy, f, COPY_FN_EXPR_DONT_COPY_BODY);
 		f = &fn_copy;
 	}
 	size_t idx = 0;
@@ -2009,7 +2009,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 			original_fn = fn;
 			fn_copy = typer_malloc(tr, sizeof *fn_copy);
 			Copier cop = copier_create(tr->allocr, fn->body.parent);
-			copy_fn_expr(&cop, fn_copy, fn, true);
+			copy_fn_expr(&cop, fn_copy, fn, has_varargs ? COPY_FN_EXPR_DONT_COPY_HEADER : 0);
 		}
 
 		if (fn_type->constness) {

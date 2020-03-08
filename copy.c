@@ -176,8 +176,16 @@ static inline void *copier_malloc(Copier *c, size_t n) {
 	return allocr_malloc(c->allocr, n);
 }
 
-static void copy_fn_expr(Copier *c, FnExpr *fout, FnExpr *fin, bool copy_body) {
+enum {
+	  COPY_FN_EXPR_DONT_COPY_HEADER = 0x01,
+	  COPY_FN_EXPR_DONT_COPY_BODY = 0x02
+};
+
+static void copy_fn_expr(Copier *c, FnExpr *fout, FnExpr *fin, U8 flags) {
 	*fout = *fin;
+	bool copy_body = (flags & COPY_FN_EXPR_DONT_COPY_BODY) == 0;
+	bool copy_header = (flags & COPY_FN_EXPR_DONT_COPY_HEADER) == 0;
+	
 	if (fin->flags & FN_EXPR_FOREIGN) {
 		copy_expr(c, fout->foreign.name_expr = copier_malloc(c, sizeof *fin->foreign.name_expr), fin->foreign.name_expr);
 		copy_expr(c, fout->foreign.lib_expr = copier_malloc(c, sizeof *fin->foreign.lib_expr), fin->foreign.lib_expr);
@@ -192,23 +200,25 @@ static void copy_fn_expr(Copier *c, FnExpr *fout, FnExpr *fin, bool copy_body) {
 			c->block = &fout->body;
 			idents_create(&fout->body.idents, c->allocr, &fout->body);
 		}
-		size_t i;
-		size_t nparam_decls = arr_len(fin->params);
-		fout->params = NULL;
-		arr_set_lena(&fout->params, nparam_decls, c->allocr);
-		for (i = 0; i < nparam_decls; ++i)
-			copy_decl(c, fout->params + i, fin->params + i);
-		size_t nret_decls = arr_len(fin->ret_decls);
-		if (fin->ret_decls) {
-			fout->ret_decls = NULL;
-			arr_set_lena(&fout->ret_decls, nret_decls, c->allocr);
-			for (i = 0; i < nret_decls; ++i)
-				copy_decl(c, fout->ret_decls + i, fin->ret_decls + i);
-		}
-		copy_type(c, &fout->ret_type, &fin->ret_type);
-		if (copy_body) {
-			c->block = prev;
-			copy_block(c, &fout->body, &fin->body, copy_body ? COPY_BLOCK_DONT_CREATE_IDENTS : 0);
+		if (copy_header) {
+			size_t i;
+			size_t nparam_decls = arr_len(fin->params);
+			fout->params = NULL;
+			arr_set_lena(&fout->params, nparam_decls, c->allocr);
+			for (i = 0; i < nparam_decls; ++i)
+				copy_decl(c, fout->params + i, fin->params + i);
+			size_t nret_decls = arr_len(fin->ret_decls);
+			if (fin->ret_decls) {
+				fout->ret_decls = NULL;
+				arr_set_lena(&fout->ret_decls, nret_decls, c->allocr);
+				for (i = 0; i < nret_decls; ++i)
+					copy_decl(c, fout->ret_decls + i, fin->ret_decls + i);
+			}
+			copy_type(c, &fout->ret_type, &fin->ret_type);
+			if (copy_body) {
+				c->block = prev;
+				copy_block(c, &fout->body, &fin->body, copy_body ? COPY_BLOCK_DONT_CREATE_IDENTS : 0);
+			}
 		}
 	}
 }
@@ -293,7 +303,7 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		copy_block(c, &fout->body, &fin->body, COPY_BLOCK_DONT_CREATE_IDENTS);
 	} break;
 	case EXPR_FN:
-		copy_fn_expr(c, out->fn = allocr_malloc(a, sizeof *out->fn), in->fn, true);
+		copy_fn_expr(c, out->fn = allocr_malloc(a, sizeof *out->fn), in->fn, 0);
 		break;
 	case EXPR_CAST: {
 		CastExpr *cin = &in->cast;

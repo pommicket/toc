@@ -9,6 +9,7 @@
 /* 
 TODO:
 variadic fns
+const varargs
 make sure you can't have a variadic function pointer
 #foreign variadic fns
 where
