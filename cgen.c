@@ -209,7 +209,7 @@ static inline char *cgen_ident_to_str(Identifier i) {
 }
 
 static inline void cgen_ident_id(CGenerator *g, IdentID id) {
-	cgen_write(g, "_a%lu", (unsigned long)id);
+	cgen_write(g, "a%lu_", (unsigned long)id);
 }
 /* used for fields */
 static inline void cgen_ident_simple(CGenerator *g, Identifier i) {
@@ -223,7 +223,7 @@ static void cgen_ident(CGenerator *g, Identifier i) {
 	}
 	if (i == g->main_ident && i->decl_kind == IDECL_DECL && ident_scope(i) == NULL) {
 		/* don't conflict with C's main! */
-		cgen_write(g, "_main");
+		cgen_write(g, "main_");
 	} else {
 	    cgen_ident_simple(g, i);
 	}
@@ -233,7 +233,7 @@ static void cgen_ident(CGenerator *g, Identifier i) {
 #define CGEN_IDENT_ID_STR_SIZE 32
 /* buffer should be at least CGEN_IDENT_ID_STR_SIZE bytes */
 static inline void cgen_ident_id_to_str(char *buffer, IdentID id) {
-	snprintf(buffer, CGEN_IDENT_ID_STR_SIZE, "_a%lu", (unsigned long)id);
+	snprintf(buffer, CGEN_IDENT_ID_STR_SIZE, "a%lu_", (unsigned long)id);
 }
 
 static inline void cgen_writeln(CGenerator *g, const char *fmt, ...) {
@@ -323,7 +323,7 @@ static void cgen_type_pre(CGenerator *g, Type *t) {
 		cgen_write(g, " (*");
 		break;
 	case TYPE_SLICE:
-		cgen_write(g, "_slice");
+		cgen_write(g, "slice_");
 		break;
 	case TYPE_VOID: cgen_write(g, "void"); break;
 	case TYPE_STRUCT:
@@ -466,14 +466,14 @@ static void cgen_fn_args(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_c
 				if (any_params || i > 0)
 					cgen_write(g, ", ");
 				cgen_type_pre(g, x);
-				cgen_write(g, "(*_ret%lu)", (unsigned long)i);
+				cgen_write(g, "(*ret__%lu)", (unsigned long)i);
 				cgen_type_post(g, x);
 			}
 		} else {
 			if (any_params)
 				cgen_write(g, ", ");
 			cgen_type_pre(g, &f->ret_type);
-			cgen_write(g, " (*_ret)");
+			cgen_write(g, " (*ret__)");
 			cgen_type_post(g, &f->ret_type);
 		}
 	}
@@ -698,7 +698,7 @@ static void cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 				else
 					cgen_ident(g, idents[i]);
 			} else {
-				cgen_write(g, "&(_%s%d)", prefix, i);
+				cgen_write(g, "&(%s%d_)", prefix, i);
 			}
 		}
 		arr_clear(&underscore_ids);
@@ -1086,14 +1086,14 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 		cgen_expr_pre(g, s->of);
 		if (s->from) cgen_expr_pre(g, s->from);
 		if (s->to) cgen_expr_pre(g, s->to);
-		cgen_write(g, "_slice ");
+		cgen_write(g, "slice_ ");
 		cgen_ident_id(g, s_id);
-		cgen_write(g, "; { _slice of__ = ");
+		cgen_write(g, "; { slice_ of__ = ");
 		if (s->of->type.kind == TYPE_SLICE) {
 			cgen_expr(g, s->of);
 		} else {
 			assert(s->of->type.kind == TYPE_ARR);
-			cgen_write(g, "_mkslice(");
+			cgen_write(g, "mkslice_(");
 			cgen_expr(g, s->of);
 			cgen_write(g, ", " U64_FMT, s->of->type.arr.n);
 			cgen_write(g, ")");
@@ -1193,7 +1193,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		break;
 	case EXPR_LITERAL_STR: {
 		char *p = e->strl.str;
-		cgen_write(g, "_mkslice(\"");
+		cgen_write(g, "mkslice_(\"");
 		for (size_t i = 0; i < e->strl.len; ++i, ++p) {
 			if (isprint(*p) && *p != '"')
 				cgen_write(g, "%c", *p);
@@ -1344,7 +1344,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		case UNARY_NOT:
 			s = "!"; break;
 		case UNARY_DEL:
-			cgen_write(g, "_free(");
+			cgen_write(g, "free_(");
 			cgen_expr(g, e->unary.of);
 			if (of_type->kind == TYPE_SLICE)
 				cgen_write(g, ".data");
@@ -1381,7 +1381,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 	} break;
 	case EXPR_NEW: {
 		if (e->new.n) {
-			cgen_write(g, "_mkslice(_ecalloc(");
+			cgen_write(g, "mkslice_(ecalloc_(");
 			cgen_expr(g, e->new.n);
 			cgen_write(g, ", (i64)sizeof(");
 			cgen_type_pre(g, &e->new.type);
@@ -1394,7 +1394,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			cgen_write(g, "((");
 			cgen_type_pre(g, &e->type);
 			cgen_type_post(g, &e->type);
-			cgen_write(g, ")_ecalloc(1, sizeof(");
+			cgen_write(g, ")ecalloc_(1, sizeof(");
 			cgen_type_pre(g, t);
 			cgen_type_post(g, t);
 			cgen_write(g, ")))");
@@ -1804,10 +1804,10 @@ static void cgen_decl(CGenerator *g, Declaration *d) {
 					cgen_write(g, "{");
 					cgen_nl(g);
 					cgen_type_pre(g, &d->type);
-					cgen_write(g, " _expr");
+					cgen_write(g, " expr_");
 				    cgen_type_post(g, &d->type);
 					cgen_write(g, "; ");
-					cgen_set(g, NULL, "_expr", &d->expr, NULL);
+					cgen_set(g, NULL, "expr_", &d->expr, NULL);
 				
 					arr_foreach(d->idents, Identifier, i) {
 						Expression e;
@@ -1815,7 +1815,7 @@ static void cgen_decl(CGenerator *g, Declaration *d) {
 						e.kind = EXPR_IDENT;
 						e.type = d->type;
 						e.ident = *i;
-						cgen_set(g, &e, NULL, NULL, "_expr");
+						cgen_set(g, &e, NULL, NULL, "expr_");
 					}
 					cgen_write(g, "}");
 				} else {
@@ -1855,7 +1855,7 @@ static void cgen_ret(CGenerator *g, Expression *ret) {
 					++idx;
 				}
 			}
-		    cgen_set_tuple(g, NULL, NULL, "*_ret", &ret_expr);
+		    cgen_set_tuple(g, NULL, NULL, "*ret__", &ret_expr);
 			arr_clear(&ret_expr.tuple);
 		} else if (cgen_uses_ptr(&f->ret_type)) {
 			Expression ret_expr = {0};
@@ -1863,7 +1863,7 @@ static void cgen_ret(CGenerator *g, Expression *ret) {
 			ret_expr.type = f->ret_type;
 			ret_expr.kind = EXPR_IDENT;
 			ret_expr.ident = f->ret_decls[0].idents[0];
-			cgen_set(g, NULL, "*_ret", &ret_expr, NULL);
+			cgen_set(g, NULL, "*ret__", &ret_expr, NULL);
 			cgen_writeln(g, ";");
 			cgen_writeln(g, "return;");
 		} else {
@@ -1881,9 +1881,9 @@ static void cgen_ret(CGenerator *g, Expression *ret) {
 		cgen_write(g, "return");
 	} else if (cgen_uses_ptr(&f->ret_type)) {
 		if (f->ret_type.kind == TYPE_TUPLE) {
-			cgen_set_tuple(g, NULL, NULL, "*_ret", ret);
+			cgen_set_tuple(g, NULL, NULL, "*ret__", ret);
 		} else {
-		    cgen_set(g, NULL, "*_ret", ret, NULL);
+		    cgen_set(g, NULL, "*ret__", ret, NULL);
 		}
 		cgen_write(g, " return");
 	} else {
@@ -2021,17 +2021,17 @@ static void cgen_file(CGenerator *g, ParsedFile *f) {
 			   "typedef float f32;\n"
 			   "typedef double f64;\n"
 			   "typedef u8 bool;\n"
-			   "typedef struct { void *data; i64 n; } _slice;\n"
+			   "typedef struct { void *data; i64 n; } slice_;\n"
 			   "#define false ((bool)0)\n"
 			   "#define true ((bool)1)\n"
-			   "static _slice _mkslice(void *data, i64 n) { _slice ret; ret.data = data; ret.n = n; return ret; }\n"
-			   "static void _free(void *data) { extern void free(void *data); free(data); }\n" /* don't introduce free to global namespace */
-			   "static void *_ecalloc(size_t n, size_t sz) { extern void *calloc(size_t n, size_t size); extern void abort(void); extern int printf(const char *fmt, ...); void *ret = calloc(n, sz); if (n && sz && !ret) { printf(\"Out of memory.\\n\"); abort(); } return ret; }\n\n\n");
+			   "static slice_ mkslice_(void *data, i64 n) { slice_ ret; ret.data = data; ret.n = n; return ret; }\n"
+			   "static void free_(void *data) { extern void free(void *data); free(data); }\n" /* don't introduce free to global namespace */
+			   "static void *ecalloc_(size_t n, size_t sz) { extern void *calloc(size_t n, size_t size); extern void abort(void); extern int printf(const char *fmt, ...); void *ret = calloc(n, sz); if (n && sz && !ret) { printf(\"Out of memory.\\n\"); abort(); } return ret; }\n\n\n");
 
 	cgen_sdecls_file(g, f);
 	cgen_decls_file(g, f);
 	cgen_write(g, "/* code */\n");
-	cgen_write(g, "int main() {\n\t_main();\n\treturn 0;\n}\n\n");
+	cgen_write(g, "int main() {\n\tmain_();\n\treturn 0;\n}\n\n");
 	arr_foreach(f->stmts, Statement, s) {
 		cgen_defs_stmt(g, s);
 	}
