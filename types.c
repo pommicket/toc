@@ -270,6 +270,14 @@ static Status expr_must_lval(Expression *e) {
 				char *istr = ident_to_str(i);
 				err_print(e->where, "Use of constant %s as a non-constant expression.", istr);
 				info_print(d->where, "%s was declared here.", istr);
+				free(istr);
+				return false;
+			}
+			if (type_is_builtin(&d->type, BUILTIN_VARARGS)) {
+				char *istr = ident_to_str(i);
+				err_print(e->where, "varargs cannot be set or pointed to.");
+				info_print(d->where, "%s was declared here.", istr);
+				free(istr);
 				return false;
 			}
 
@@ -434,6 +442,15 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 				success = false;
 				goto ret;
 			}
+
+			if (type_is_builtin(&param->type, BUILTIN_VARARGS)) {
+				if (param_idx != nparams-1 || arr_len(param->idents) > 1) {
+					err_print(param->where, "varargs must be the last parameter to a function.");
+					success = false;
+					goto ret;
+				}
+				f->flags |= FN_EXPR_HAS_VARARGS;
+			}
 			
 			if (param->type.kind == TYPE_TUPLE) {
 				err_print(param->where, "Functions can't have tuple parameters.");
@@ -522,10 +539,16 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 			success = false;
 			goto ret;
 		}
+		if (type_is_builtin(&f->ret_type, BUILTIN_VARARGS)) {
+			err_print(f->where, "Functions cannot return varargs.");
+		    success = false;
+			goto ret;
+		}
 		if (type_is_compileonly(&f->ret_type)) {
 			if (type_is_builtin(&f->ret_type, BUILTIN_NMS)) {
 				err_print(f->where, "Functions cannot return namespaces.");
-				return false;
+				success = false;
+				goto ret;
 			}
 			/* 
 			   a function which returns a compile-only type but has non-constant parameters is weird...
@@ -1076,7 +1099,7 @@ static Status call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Lo
 	assert(fn_type->flags & TYPE_IS_RESOLVED);
 	size_t nparams = arr_len(fn_type->fn.types)-1;
 	size_t nargs = arr_len(args);
-	if (nargs > nparams) {
+	if (nargs > nparams && !(fn->flags & FN_EXPR_HAS_VARARGS)) {
 		err_print(where, "Expected at most %lu argument%s to function, but got %lu.",
 				  nparams, plural_suffix(nparams), nargs);
 		return false;
@@ -1119,6 +1142,11 @@ static Status call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Lo
 			arr_foreach(fn->params, Declaration, pa) {
 				arr_foreach(pa->idents, Identifier, id) {
 					if (ident_eq_str(*id, arg->name)) {
+						if (type_is_builtin(&pa->type, BUILTIN_VARARGS)) {
+							err_print(arg->where, "varargs arguments cannot be named.");
+							return false;
+						}
+						param = pa;
 						found = true;
 						break;
 					}
@@ -1155,21 +1183,29 @@ static Status call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Lo
 			param_idx = p;
 		}
 
-		if (param_idx != -1) {
-			if (order[param_idx] != -1) {
-				err_print(arg->where, "Parameter #%d set twice.", param_idx+1);
-				info_print(args[order[param_idx]].where, "Parameter was previously set here.");
+		if (type_is_builtin(&param->type, BUILTIN_VARARGS)) {
+			if (param_idx < (int)nparams && order[param_idx] == -1) {
+				order[param_idx] = arg_idx;
 			}
-			order[param_idx] = arg_idx;
+		} else {
+			if (param_idx != -1) {
+				if (order[param_idx] != -1) {
+					err_print(arg->where, "Parameter #%d set twice.", param_idx+1);
+					info_print(args[order[param_idx]].where, "Parameter was previously set here.");
+				}
+				order[param_idx] = arg_idx;
+			}
 		}
 
 		if (!named) {
 			/* sequential order of parameters */
 			++p;
-			++ident_idx;
-			if (ident_idx == arr_len(param->idents)) {
-				++param;
-				ident_idx = 0;
+			if (!type_is_builtin(&param->type, BUILTIN_VARARGS)) {
+				++ident_idx;
+				if (ident_idx == arr_len(param->idents)) {
+					++param;
+					ident_idx = 0;
+				}
 			}
 		}
 	}

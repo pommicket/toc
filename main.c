@@ -8,7 +8,6 @@
 
 /* 
 TODO:
-are we using the val stack for struct params? we probably need to, in case a struct calls a function which returns a type which uses that struct.
 variadic fns
 #foreign variadic fns
 where
