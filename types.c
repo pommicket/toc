@@ -1135,6 +1135,7 @@ static Status call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Lo
 		++arg_idx;
 		bool named = arg->name != NULL;
 		int param_idx = -1;
+		Declaration *this_param;
 		if (named) {
 			/* named argument */
 			int index = 0;
@@ -1146,7 +1147,7 @@ static Status call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Lo
 							err_print(arg->where, "varargs arguments cannot be named.");
 							return false;
 						}
-						param = pa;
+						this_param = pa;
 						found = true;
 						break;
 					}
@@ -1175,6 +1176,7 @@ static Status call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Lo
 					ident_idx = 0;
 				}
 			}
+			this_param = param;
 			if (param > (Declaration *)arr_last(fn->params)) {
 				err_print(arg->where, "Too many arguments to function!");
 				info_print(fn->where, "Declaration is here.");
@@ -1183,7 +1185,7 @@ static Status call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Lo
 			param_idx = p;
 		}
 
-		if (type_is_builtin(&param->type, BUILTIN_VARARGS)) {
+		if (type_is_builtin(&this_param->type, BUILTIN_VARARGS)) {
 			if (param_idx < (int)nparams && order[param_idx] == -1) {
 				order[param_idx] = arg_idx;
 			}
@@ -1986,8 +1988,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 		FnType *fn_type = &f->type.fn;
 		c->arg_exprs = arg_exprs;
 		FnExpr *original_fn = NULL;
-		Type table_index_type = {0};
-		Value table_index = {0};
 		FnExpr *fn_copy = NULL;
 		if (fn_type->constness) {
 			/* evaluate compile-time arguments + add an instance */
@@ -2089,63 +2089,29 @@ static Status types_expr(Typer *tr, Expression *e) {
 			
 
 
-			table_index_type.flags = TYPE_IS_RESOLVED;
-			table_index_type.kind = TYPE_TUPLE;
-			table_index_type.tuple = NULL;
-			Type *u64t = typer_arr_add(tr, &table_index_type.tuple);
-			u64t->was_expr = NULL;
-			u64t->flags = TYPE_IS_RESOLVED;
-			u64t->kind = TYPE_BUILTIN;
-			u64t->builtin = BUILTIN_U64;
-			table_index.tuple = NULL;
-			/* we need to keep table_index's memory around because instance_table_add makes a copy of it to compare against. */
-			Value *which_are_const_val = typer_arr_add(tr, &table_index.tuple);
-			U64 *which_are_const = &which_are_const_val->u64;
-			*which_are_const = 0;
-			int semi_const_index = 0;
 			/* eval compile time arguments */
 			for (i = 0; i < nparams; ++i) {
 				bool should_be_evald = arg_is_const(&arg_exprs[i], fn_type->constness[i]);
 				if (should_be_evald) {
 					if (!order || order[i] != -1) {
 						Expression *expr = &arg_exprs[i];
-						Value *arg_val = typer_arr_add(tr, &table_index.tuple);
-						if (!eval_expr(tr->evalr, expr, arg_val)) {
+						Value arg_val = {0};
+						if (!eval_expr(tr->evalr, expr, &arg_val)) {
 							if (tr->evalr->enabled) {
 								info_print(arg_exprs[i].where, "(error occured while trying to evaluate compile-time argument, argument #%lu)", 1+(unsigned long)i);
 							}
 							return false;
 						}
-						Value val_copy;
 						Type *type = &expr->type;
-						copy_val(tr->allocr, &val_copy, arg_val, type);
-							
-						*(Type *)typer_arr_add(tr, &table_index_type.tuple) = *type;
-						
 						arg_exprs[i].kind = EXPR_VAL;
 						arg_exprs[i].flags = EXPR_FOUND_TYPE;
-						arg_exprs[i].val = val_copy;
+						arg_exprs[i].val = arg_val;
 						param_decl->flags |= DECL_FOUND_VAL;
-						copy_val(tr->allocr, &param_decl->val, &val_copy, type);
+						copy_val(tr->allocr, &param_decl->val, &arg_val, type);
 						if (!(param_decl->flags & DECL_ANNOTATES_TYPE)) {
 							param_decl->type = *type;
 						}
-					} else {
-						/* leave gap for this (default argument) */
-						typer_arr_add(tr, &table_index.tuple);
-						typer_arr_add(tr, &table_index_type.tuple);
 					}
-				}
-				
-				if (fn_type->constness[i] == CONSTNESS_SEMI) {
-					if (semi_const_index >= 64) {
-						err_print(f->where, "You can't have more than 64 semi-constant arguments to a function at the moment (sorry).");
-						return false;
-					}
-					*which_are_const |= ((U64)1) << semi_const_index;
-				}
-				if (fn_type->constness[i] == CONSTNESS_SEMI) {
-					++semi_const_index;
 				}
 				++ident_idx;
 				if (ident_idx >= arr_len(param_decl->idents)) {
@@ -2165,19 +2131,14 @@ static Status types_expr(Typer *tr, Expression *e) {
 						if (param->flags & DECL_INFER) {
 							arg_exprs[i].kind = EXPR_VAL;
 							arg_exprs[i].flags = EXPR_FOUND_TYPE;
-							arg_exprs[i].type = table_index_type.tuple[i+1] = param_types[i] = param->type;
-							arg_exprs[i].val = table_index.tuple[i+1] = param->val;
-							++i;
-							continue;
+							arg_exprs[i].type = param_types[i] = param->type;
+							arg_exprs[i].val = param->val;
+						} else {
+							assert(param->flags & DECL_HAS_EXPR);
+							assert(param->expr.kind == EXPR_VAL); /* this was done by type_of_fn */
+							arg_exprs[i] = param->expr;
+							copy_val(tr->allocr, &arg_exprs[i].val, &param->expr.val, &param->expr.type);
 						}
-						assert(param->flags & DECL_HAS_EXPR);
-						assert(param->expr.kind == EXPR_VAL); /* this was done by type_of_fn */
-						arg_exprs[i] = param->expr;
-						/* make sure value is copied */
-						copy_val(tr->allocr, &arg_exprs[i].val, &param->expr.val, &param->expr.type);
-						Value *arg_val = &table_index.tuple[i+1];
-						copy_val(tr->allocr, arg_val, &param->expr.val, &param->expr.type);
-						table_index_type.tuple[i+1] = param->expr.type;
 					}
 					++i;
 				}
@@ -2209,6 +2170,43 @@ static Status types_expr(Typer *tr, Expression *e) {
 			}
 		}
 		if (fn_type->constness) {
+			Type table_index_type = {0};
+			Value table_index = {0};
+			
+			/* NOTE: we need to keep table_index's memory around because instance_table_add keeps it to compare against. */
+			table_index_type.flags = TYPE_IS_RESOLVED;
+			table_index_type.kind = TYPE_TUPLE;
+			table_index_type.tuple = NULL;
+			Type *u64t = typer_arr_add(tr, &table_index_type.tuple);
+			u64t->was_expr = NULL;
+			u64t->flags = TYPE_IS_RESOLVED;
+			u64t->kind = TYPE_BUILTIN;
+			u64t->builtin = BUILTIN_U64;
+			table_index.tuple = NULL;
+			Value *which_are_const_val = typer_arr_add(tr, &table_index.tuple);
+			U64 *which_are_const = &which_are_const_val->u64;
+			*which_are_const = 0;
+			int semi_const_index = 0;
+			for (size_t i = 0; i < nparams; ++i) {
+				Expression *arg = &arg_exprs[i];
+				if (arg_is_const(arg, fn_type->constness[i])) {
+					assert(arg->kind == EXPR_VAL);
+					if (fn_type->constness[i] == CONSTNESS_SEMI) {
+						if (semi_const_index >= 64) {
+							err_print(f->where, "You can't have more than 64 semi-constant arguments to a function at the moment (sorry).");
+							return false;
+						}
+						*which_are_const |= ((U64)1) << semi_const_index;
+						++semi_const_index;
+					}
+					Value *v = typer_arr_add(tr, &table_index.tuple);
+					Type *type = typer_arr_add(tr, &table_index_type.tuple);
+					*type = arg->type;
+					copy_val(tr->allocr, v, &arg->val, type);
+				}
+			}
+				
+				
 			bool instance_already_exists;
 			c->instance = instance_table_adda(tr->allocr, &original_fn->instances, table_index, &table_index_type, &instance_already_exists);
 			if (instance_already_exists) {

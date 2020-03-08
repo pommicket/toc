@@ -1,10 +1,10 @@
-#include "std/io.toc", io;
-
-foo ::= fn(x: ..) int {
-	3
-};
-
 main ::= fn() {
-	 io.puti(foo(3,4,5));
+	mk_arr(z=0, 0, 0);
+	 
+	mk_arr ::= fn(x:int, y:int, z:int) a:[3]int {
+		a[0] = x;
+		a[1] = y;
+		a[2] = z;
+	};
+
 };
-main();

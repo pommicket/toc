@@ -8,7 +8,6 @@
 
 /* 
 TODO:
-why aren't we computing table_index at the end?
 variadic fns
 make sure you can't have a variadic function pointer
 #foreign variadic fns
