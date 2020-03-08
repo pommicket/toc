@@ -1,10 +1,9 @@
-main ::= fn() {
-	mk_arr(z=0, 0, 0);
-	 
-	mk_arr ::= fn(x:int, y:int, z:int) a:[3]int {
-		a[0] = x;
-		a[1] = y;
-		a[2] = z;
-	};
-
+f ::= fn(x: ..) int {
+  3
 };
+
+main ::= fn() {
+	 f(1,2,3);
+};
+
+main();

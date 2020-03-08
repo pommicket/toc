@@ -308,7 +308,7 @@ static bool val_eq(Value u, Value v, Type *t) {
 */
 /* OPTIM: store instances in a block array (remember that the pointers need to stay valid!) */
 static Instance *instance_table_adda(Allocator *a, HashTable *h, Value v, Type *t,
-									 bool *already_exists) {
+									 bool *already_exists) {	
 	if (h->n * 2 >= h->cap) {
 		U64 new_cap = h->cap * 2 + 3;
 		Instance **new_data = allocr_malloc(a, (size_t)new_cap * sizeof *new_data);

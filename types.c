@@ -1445,6 +1445,10 @@ static Status get_struct_constant(StructDef *struc, Identifier member, Expressio
 	}
 }
 
+static bool fn_type_has_varargs(FnType *f) {
+	return type_is_builtin(arr_last(f->types), BUILTIN_VARARGS);
+}
+
 static Status types_expr(Typer *tr, Expression *e) {
 	if (e->flags & EXPR_FOUND_TYPE) return true;
 	Type *t = &e->type;
@@ -1803,8 +1807,9 @@ static Status types_expr(Typer *tr, Expression *e) {
 			err_print(e->where, "Calling non-function (type %s).", type);
 			return false;
 		}
+		bool has_varargs = fn_type_has_varargs(&f->type.fn);
 		
-		if (expr_is_definitely_const(f) || type_is_builtin(&f->type, BUILTIN_TYPE)) {
+		if (expr_is_definitely_const(f) || type_is_builtin(&f->type, BUILTIN_TYPE) || has_varargs) {
 			Value val;
 			
 			if (!eval_expr(tr->evalr, f, &val))
@@ -1989,7 +1994,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 		c->arg_exprs = arg_exprs;
 		FnExpr *original_fn = NULL;
 		FnExpr *fn_copy = NULL;
-		if (fn_type->constness) {
+		
+		if (fn_type->constness || has_varargs) {
 			/* evaluate compile-time arguments + add an instance */
 			
 			
@@ -2004,7 +2010,10 @@ static Status types_expr(Typer *tr, Expression *e) {
 			fn_copy = typer_malloc(tr, sizeof *fn_copy);
 			Copier cop = copier_create(tr->allocr, fn->body.parent);
 			copy_fn_expr(&cop, fn_copy, fn, true);
-			fn = fn_copy;
+		}
+
+		if (fn_type->constness) {
+			FnExpr *fn = fn_copy;
 			/* keep track of the declaration */
 			Declaration *param_decl = fn->params;
 			size_t ident_idx = 0;
@@ -2149,7 +2158,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 			param_types = ret_type + 1;
 		}
 
-		bool has_varargs = fn_decl && (fn_decl->flags & FN_EXPR_HAS_VARARGS);
 		
 		/* check types of arguments */
 		for (size_t p = 0; p < nparams; ++p) {
@@ -2169,7 +2177,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				}
 			}
 		}
-		if (fn_type->constness) {
+		if (fn_type->constness || has_varargs) {
 			Type table_index_type = {0};
 			Value table_index = {0};
 			
@@ -2189,7 +2197,21 @@ static Status types_expr(Typer *tr, Expression *e) {
 			int semi_const_index = 0;
 			for (size_t i = 0; i < nparams; ++i) {
 				Expression *arg = &arg_exprs[i];
-				if (arg_is_const(arg, fn_type->constness[i])) {
+				bool is_const = fn_type->constness && arg_is_const(arg, fn_type->constness[i]);
+				bool is_vararg = has_varargs && i == nparams-1;
+				if (is_vararg) {
+					if (is_const) {
+						/* TODO */
+					} else {
+						Value *v = typer_arr_add(tr, &table_index.tuple);
+						Type *type = typer_arr_add(tr, &table_index_type.tuple);
+						memset(type, 0, sizeof *type);
+						type->kind = TYPE_BUILTIN;
+						type->flags = TYPE_IS_RESOLVED;
+						type->builtin = BUILTIN_TYPE;
+						v->type = &arg->type;
+					}
+				} else if (is_const) {
 					assert(arg->kind == EXPR_VAL);
 					if (fn_type->constness[i] == CONSTNESS_SEMI) {
 						if (semi_const_index >= 64) {
