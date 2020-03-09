@@ -121,7 +121,7 @@ static void cgen_defs_decl(CGenerator *g, Declaration *d);
 		break;															\
 	case EXPR_FN: {														\
 		FnExpr *fn = e->fn;												\
-		if (e->type.fn.constness) {										\
+		if (fn->instances.data) {										\
 			Instance **data = fn->instances.data;						\
 			for (U64 i = 0; i < fn->instances.cap; ++i) {				\
 				if (fn->instances.occupied[i]) {						\
@@ -436,20 +436,32 @@ static void cgen_full_fn_name(CGenerator *g, FnExpr *f, U64 instance) {
 static void cgen_fn_args(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_const) {
 	(void)instance; /* not needed atm */
 	bool out_param = cgen_uses_ptr(&f->ret_type);
-	bool any_params = false;
 	cgen_write(g, "(");
 	int semi_const_idx = 0;
-	bool any_args = false;
+	bool any_params = false;
 	arr_foreach(f->params, Declaration, d) {
-		if (!(d->flags & DECL_IS_CONST) && !((d->flags & DECL_SEMI_CONST)
-											 && (which_are_const & (((U64)1) << semi_const_idx++)))) {
-			long idx = 0;
-			arr_foreach(d->idents, Identifier, i) {
-				if (any_args) 
+		if (d->flags & DECL_IS_CONST) continue;
+		if (type_is_builtin(&d->type, BUILTIN_VARARGS)) {
+			int idx = 0;
+			arr_foreach(d->val.varargs, VarArg, varg) {
+				if (any_params) 
 					cgen_write(g, ", ");
-				any_args = true;
-				Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx++] : &d->type;
 				any_params = true;
+				cgen_type_pre(g, varg->type);
+				cgen_write(g, " ");
+				cgen_ident_simple(g, d->idents[0]);
+				cgen_write(g, "%d_", idx);
+				cgen_type_post(g, varg->type);
+				++idx;
+			}
+		} else if ((d->flags & DECL_SEMI_CONST)
+				   && (which_are_const & (((U64)1) << semi_const_idx++))) {
+		    int idx = 0;
+			arr_foreach(d->idents, Identifier, i) {
+				if (any_params) 
+					cgen_write(g, ", ");
+				any_params = true;
+				Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx++] : &d->type;
 				cgen_type_pre(g, type);
 				cgen_write(g, " ");
 				cgen_ident_simple(g, *i);
@@ -458,7 +470,6 @@ static void cgen_fn_args(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_c
 		}
 	}
 	if (out_param) {
-		any_args = true;
 		if (f->ret_type.kind == TYPE_TUPLE) {
 			/* multiple return variables */
 			for (size_t i = 0; i < arr_len(f->ret_type.tuple); ++i) {
@@ -476,8 +487,9 @@ static void cgen_fn_args(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_c
 			cgen_write(g, " (*ret__)");
 			cgen_type_post(g, &f->ret_type);
 		}
+		any_params = true;
 	}
-	if (!any_args)
+	if (!any_params)
 		cgen_write(g, "void");
 	cgen_write(g, ")");
 }
@@ -1927,15 +1939,9 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 	}
 }
 
-static void cgen_defs_fn(CGenerator *g, FnExpr *f, Type *t) {
-	FnType *fn_type = &t->fn;
-	bool any_const = false;
-	if (fn_type->constness) {
-		for (size_t i = 0; i < arr_len(fn_type->types)-1; ++i) {
-			if (fn_type->constness[i] == CONSTNESS_YES)
-				any_const = true;
-		}
-		HashTable *instances = &f->instances;
+static void cgen_defs_fn(CGenerator *g, FnExpr *f) {
+	HashTable *instances = &f->instances;
+	if (instances->data) {
 		/* generate each instance */
 		Instance **is = instances->data;
 		for (U64 i = 0; i < instances->cap; ++i) {
@@ -1944,15 +1950,14 @@ static void cgen_defs_fn(CGenerator *g, FnExpr *f, Type *t) {
 				cgen_fn(g, is[i]->fn, is[i]->c.id, is[i]->val.tuple);
 			}
 		}
-	}
-	if (!any_const) {
+	} else {
 		cgen_fn(g, f, 0, NULL);
 	}
 }
 
 static void cgen_defs_expr(CGenerator *g, Expression *e) {
 	if (e->kind == EXPR_FN) {
-	    cgen_defs_fn(g, e->fn, &e->type);
+	    cgen_defs_fn(g, e->fn);
 	}
 	cgen_recurse_subexprs(g, e, cgen_defs_expr, cgen_defs_block, cgen_defs_decl);
 }

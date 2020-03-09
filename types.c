@@ -1958,9 +1958,10 @@ static Status types_expr(Typer *tr, Expression *e) {
 			}
 		}
 		
+		size_t nvarargs;
 		if (has_varargs) {
 			assert(fn_decl);
-			size_t nvarargs = nargs - (size_t)order[nparams-1];
+			nvarargs = nargs - (size_t)order[nparams-1];
 			narg_exprs = nparams-1 + nvarargs;
 		} else {
 			narg_exprs = nparams;
@@ -1995,8 +1996,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 				/* deal with varargs (put them at the end of arg_exprs) */
 				int idx = order[nparams-1];
 				assert(idx >= 0);
-				Declaration *param = arr_last(fn_decl->params);
-				param->expr.tuple = NULL;
 				for (; idx < (int)nargs; ++idx) {
 					arg_exprs[idx+(int)nparams-1] = args[idx].val;
 				}
@@ -2207,7 +2206,10 @@ static Status types_expr(Typer *tr, Expression *e) {
 				}
 			}
 		}
+
+		
 		if (fn_type->constness || has_varargs) {
+			
 			Type table_index_type = {0};
 			Value table_index = {0};
 			
@@ -2293,6 +2295,25 @@ static Status types_expr(Typer *tr, Expression *e) {
 				arr_remove_lasta(&err_ctx->instance_stack, tr->allocr);
 				if (!success) return false;
 				arr_cleara(&table_index_type.tuple, tr->allocr);
+
+				if (has_varargs) {
+					/* set value of varargs param decl */
+					VarArg *varargs = NULL;
+					arr_set_lena(&varargs, nvarargs, tr->allocr);
+					Declaration *varargs_param = arr_last(fn_copy->params);
+					varargs_param->val.varargs = varargs;
+
+					for (int i = 0; i < (int)nvarargs; ++i) {
+						Expression *arg = &arg_exprs[i+order[nparams-1]];
+						VarArg *vararg = &varargs[i];
+						
+						if (varargs_param->flags & DECL_IS_CONST)
+							vararg->val = arg->val;
+						vararg->type = &arg->type;
+							
+					}
+				
+				}
 			}
 		}
 		free(order);

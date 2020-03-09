@@ -10,6 +10,8 @@
 TODO:
 variadic fns
 const varargs
+don't allow default varargs
+don't allow semiconst varargs
 make sure you can't have a variadic function pointer
 #foreign variadic fns
 where

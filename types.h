@@ -704,6 +704,7 @@ typedef struct FnExpr {
 	HashTable instances; /* for fns with constant parameters. the key is a tuple where
 							the first element is a u64 value whose ith bit (1<<i) is 1
 							if the ith semi-constant parameter is constant.
+							cgen relies on this being here even for foreign fns.
 						 */
 	struct {
 		/* if name = NULL, this is an anonymous function, and id will be the ID of the fn. */
