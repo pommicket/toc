@@ -164,7 +164,7 @@ static void cgen_fn_decl(CGenerator *g, FnExpr *f, Type *t) {
 		cgen_nl(g);
 		return;
 	}
-	if (f->instances.data) {
+	if (fn_has_instances(f)) {
 		cgen_decls_fn_instances(g, f);
 	} else {
 		cgen_single_fn_decl(g, f, 0, 0);

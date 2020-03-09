@@ -69,16 +69,16 @@ static bool val_truthiness(Value v, Type *t) {
 
 
 
-static I64 val_to_i64(Value *v, BuiltinType v_type) {
+static I64 val_to_i64(Value v, BuiltinType v_type) {
 	switch (v_type) {
-	case BUILTIN_I8: return (I64)v->i8;
-	case BUILTIN_I16: return (I64)v->i16;
-	case BUILTIN_I32: return (I64)v->i32;
-	case BUILTIN_I64: return (I64)v->i64;
-	case BUILTIN_U8: return (I64)v->u8;
-	case BUILTIN_U16: return (I64)v->u16;
-	case BUILTIN_U32: return (I64)v->u32;
-	case BUILTIN_U64: return (I64)v->u64;
+	case BUILTIN_I8: return (I64)v.i8;
+	case BUILTIN_I16: return (I64)v.i16;
+	case BUILTIN_I32: return (I64)v.i32;
+	case BUILTIN_I64: return (I64)v.i64;
+	case BUILTIN_U8: return (I64)v.u8;
+	case BUILTIN_U16: return (I64)v.u16;
+	case BUILTIN_U32: return (I64)v.u32;
+	case BUILTIN_U64: return (I64)v.u64;
 	default: break;
 	}
 	assert(0);
@@ -87,8 +87,8 @@ static I64 val_to_i64(Value *v, BuiltinType v_type) {
 
 
 
-static U64 val_to_u64(Value *v, BuiltinType v_type) {
-	if (v_type == BUILTIN_U64) return v->u64;
+static U64 val_to_u64(Value v, BuiltinType v_type) {
+	if (v_type == BUILTIN_U64) return v.u64;
 	return (U64)val_to_i64(v, v_type);
 }
 
@@ -628,7 +628,7 @@ static Status eval_expr_ptr_at_index(Evaluator *ev, Expression *e, void **ptr, T
 	if (rtype->builtin == BUILTIN_U64) {
 		i = index.u64;
 	} else {
-		I64 signed_index = val_to_i64(&index, rtype->builtin);
+		I64 signed_index = val_to_i64(index, rtype->builtin);
 		if (signed_index < 0) {
 			err_print(e->where, "Array or slice out of bounds (index = %ld)\n", (long)signed_index);
 			return false;
@@ -936,7 +936,7 @@ static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value 
 	switch (op) {
 	case BINARY_ADD:
 		if (lhs_type->kind == TYPE_PTR) {
-			out->ptr = (char *)lhs.ptr + val_to_i64(&rhs, rhs_type->builtin)
+			out->ptr = (char *)lhs.ptr + val_to_i64(rhs, rhs_type->builtin)
 				* (I64)compiler_sizeof(lhs_type->ptr);
 		} else {
 			eval_binary_op_nums_only(+);
@@ -944,7 +944,7 @@ static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value 
 		break;
 	case BINARY_SUB:
 		if (lhs_type->kind == TYPE_PTR) {
-			out->ptr = (char *)lhs.ptr - val_to_i64(&rhs, rhs_type->builtin)
+			out->ptr = (char *)lhs.ptr - val_to_i64(rhs, rhs_type->builtin)
 				* (I64)compiler_sizeof(lhs_type->ptr);
 		} else {
 			eval_binary_op_nums_only(-);
@@ -987,12 +987,12 @@ static Value val_zero(Type *t) {
 	return val;
 }
 
-static bool val_is_nonnegative(Value *v, Type *t) {
+static bool val_is_nonnegative(Value v, Type *t) {
 	switch (t->builtin) {
 	case BUILTIN_BOOL: assert(0); return false;
-	case BUILTIN_CHAR: return v->charv >= 0;
-	case BUILTIN_F32: return v->f32 >= 0;
-	case BUILTIN_F64: return v->f64 >= 0;
+	case BUILTIN_CHAR: return v.charv >= 0;
+	case BUILTIN_F32: return v.f32 >= 0;
+	case BUILTIN_F64: return v.f64 >= 0;
 	default: break;
 	}
 	if (!type_builtin_is_signed(t->builtin))
@@ -1271,7 +1271,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (fo->range.stepval)
 				stepval = *fo->range.stepval;
 			Value x = from;
-			bool step_is_negative = fo->range.stepval && !val_is_nonnegative(&stepval, &fo->type);
+			bool step_is_negative = fo->range.stepval && !val_is_nonnegative(stepval, &fo->type);
 			if (index_val) index_val->i64 = 0;
 			while (1) {
 				if (fo->range.to) {
@@ -1391,7 +1391,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			Value n;
 			if (!eval_expr(ev, e->new.n, &n))
 				return false;
-			U64 n64 = val_to_u64(&n, e->new.n->type.builtin);
+			U64 n64 = val_to_u64(n, e->new.n->type.builtin);
 			v->slice.data = err_calloc(n64, compiler_sizeof(&e->new.type));
 			v->slice.n = (I64)n64;
 		} else {
@@ -1521,7 +1521,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (!eval_expr(ev, s->from, &fromv))
 				return false;
 			assert(s->from->type.kind == TYPE_BUILTIN);
-			from = val_to_u64(&fromv, s->from->type.builtin);
+			from = val_to_u64(fromv, s->from->type.builtin);
 		} else {
 			from = 0;
 		}
@@ -1530,7 +1530,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (!eval_expr(ev, s->to, &tov))
 				return false;
 			assert(s->to->type.kind == TYPE_BUILTIN);
-			to = val_to_u64(&tov, s->to->type.builtin);
+			to = val_to_u64(tov, s->to->type.builtin);
 		} else {
 			to = n;
 		}

@@ -121,7 +121,7 @@ static void cgen_defs_decl(CGenerator *g, Declaration *d);
 		break;															\
 	case EXPR_FN: {														\
 		FnExpr *fn = e->fn;												\
-		if (fn->instances.data) {										\
+		if (fn_has_instances(fn)) {										\
 			Instance **data = fn->instances.data;						\
 			for (U64 i = 0; i < fn->instances.cap; ++i) {				\
 				if (fn->instances.occupied[i]) {						\
@@ -248,6 +248,12 @@ static inline void cgen_writeln(CGenerator *g, const char *fmt, ...) {
 /* should this declaration be a direct function declaration C? (as opposed to using a function pointer or not being a function) */
 static bool cgen_fn_is_direct(CGenerator *g, Declaration *d) {
 	return (g->block == NULL || (g->block->flags & BLOCK_IS_NMS)) && (d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_FN && arr_len(d->idents) == 1;
+}
+
+static bool fn_has_instances(FnExpr *f) {
+	if (fn_has_any_const_params(f)) return true;
+	if (!arr_len(f->params)) return false;
+	return type_is_builtin(&((Declaration *)arr_last(f->params))->type, BUILTIN_VARARGS);
 }
 
 static bool cgen_uses_ptr(Type *t) {
@@ -901,7 +907,7 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 				else
 					cgen_write(g, "val_");
 				bool positive_step
-					= fo->range.stepval == NULL || val_is_nonnegative(fo->range.stepval, &fo->type);
+					= fo->range.stepval == NULL || val_is_nonnegative(*fo->range.stepval, &fo->type);
 				cgen_write(g, " %c= to_", positive_step ? '<' : '>');
 			} else {
 				if (fo->index)
@@ -1011,11 +1017,13 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 		cgen_expr_pre(g, e->call.fn);
 	    size_t i = 0;
 		Constness *constness = e->call.fn->type.fn.constness;
+		size_t nparams = arr_len(e->call.fn->type.fn.types)-1;
 		arr_foreach(e->call.arg_exprs, Expression, arg) {
 			if (!constness || !arg_is_const(arg, constness[i])) {
 				cgen_arg_pre(g, arg);
 			}
-			++i;
+			if (i < nparams-1)
+				++i;
 		}
 		if (e->type.kind == TYPE_TUPLE) {
 			Type *t = &e->type;
@@ -1198,6 +1206,7 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 }
 
 static void cgen_expr(CGenerator *g, Expression *e) {
+	assert(e->flags & EXPR_FOUND_TYPE);
 	switch (e->kind) {
 	case EXPR_LITERAL_FLOAT:
 		cgen_write(g, "%.16Lf", (long double)e->floatl);
@@ -1611,8 +1620,8 @@ static void cgen_fn(CGenerator *g, FnExpr *f, U64 instance, Value *compile_time_
 					Type *type = param->type.kind == TYPE_TUPLE ? &param->type.tuple[i]
 						: &param->type;
 					Value arg = compile_time_args[carg_idx];
-					if (type_is_builtin(type, BUILTIN_TYPE)) {
-						/* don't need to do anything; we'll just use the type's id */
+					if (type_is_builtin(type, BUILTIN_TYPE) || type_is_builtin(type, BUILTIN_VARARGS)) {
+						/* don't need to do anything */
 					} else {
 						cgen_val_pre(g, arg, type);
 						cgen_type_pre(g, type);
@@ -1942,8 +1951,8 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 }
 
 static void cgen_defs_fn(CGenerator *g, FnExpr *f) {
-	HashTable *instances = &f->instances;
-	if (instances->data) {
+	if (fn_has_instances(f)) {
+		HashTable *instances = &f->instances;
 		/* generate each instance */
 		Instance **is = instances->data;
 		for (U64 i = 0; i < instances->cap; ++i) {

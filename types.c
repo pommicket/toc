@@ -755,14 +755,14 @@ static Status type_resolve(Typer *tr, Type *t, Location where) {
 
 		U64 size;
 		if (type_builtin_is_signed(n_expr->type.builtin)) {
-			I64 ssize = val_to_i64(&val, n_expr->type.builtin);
+			I64 ssize = val_to_i64(val, n_expr->type.builtin);
 			if (ssize < 0) {
 				err_print(t->arr.n_expr->where, "Negative array length (" I64_FMT ")", ssize);
 				return false;
 			}
 			size = (U64)ssize;
 		} else {
-			size = val_to_u64(&val, n_expr->type.builtin);
+			size = val_to_u64(val, n_expr->type.builtin);
 		}
 		t->arr.n = (U64)size;
 		if (!type_resolve(tr, t->arr.of, where))
@@ -1935,6 +1935,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				goto ret;
 			}
 			fn_decl = val.fn;
+			if (has_varargs) fn_decl->flags |= FN_EXPR_HAS_VARARGS;
 			
 		}
 		
@@ -2028,7 +2029,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 			original_fn = fn;
 			fn_copy = typer_malloc(tr, sizeof *fn_copy);
 			Copier cop = copier_create(tr->allocr, fn->body.parent);
-			copy_fn_expr(&cop, fn_copy, fn, has_varargs ? COPY_FN_EXPR_DONT_COPY_HEADER : 0);
+			copy_fn_expr(&cop, fn_copy, fn, 0);
 		}
 
 		if (fn_type->constness) {
@@ -2121,10 +2122,19 @@ static Status types_expr(Typer *tr, Expression *e) {
 			for (i = 0; i < nparams; ++i) {
 				bool should_be_evald = arg_is_const(&arg_exprs[i], fn_type->constness[i]);
 				if (i == nparams-1 && has_varargs) {
-					param_decl->val.varargs = NULL;
-					
-					if (should_be_evald) {
-						/* TODO */
+					/* set value of varargs param decl */
+					VarArg *varargs = NULL;
+					arr_set_lena(&varargs, nvarargs, tr->allocr);
+					Declaration *varargs_param = arr_last(fn_copy->params);
+					varargs_param->val.varargs = varargs;
+
+					for (int v = 0; v < (int)nvarargs; ++v) {
+						Expression *arg = &arg_exprs[v+order[nparams-1]];
+						VarArg *vararg = &varargs[v];
+						
+						if (varargs_param->flags & DECL_IS_CONST)
+							vararg->val = arg->val;
+						vararg->type = &arg->type;
 					}
 				} else if (should_be_evald) {
 					if (!order || order[i] != -1) {
@@ -2291,25 +2301,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 				arr_remove_lasta(&err_ctx->instance_stack, tr->allocr);
 				if (!success) return false;
 				arr_cleara(&table_index_type.tuple, tr->allocr);
-
-				if (has_varargs) {
-					/* set value of varargs param decl */
-					VarArg *varargs = NULL;
-					arr_set_lena(&varargs, nvarargs, tr->allocr);
-					Declaration *varargs_param = arr_last(fn_copy->params);
-					varargs_param->val.varargs = varargs;
-
-					for (int i = 0; i < (int)nvarargs; ++i) {
-						Expression *arg = &arg_exprs[i+order[nparams-1]];
-						VarArg *vararg = &varargs[i];
-						
-						if (varargs_param->flags & DECL_IS_CONST)
-							vararg->val = arg->val;
-						vararg->type = &arg->type;
-							
-					}
-				
-				}
 			}
 		}
 		free(order);
@@ -2592,7 +2583,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 			break;
 		}
 		case BINARY_AT_INDEX:
-			if ((lhs_type->kind == TYPE_ARR || lhs_type->kind == TYPE_SLICE) &&
+			if ((lhs_type->kind == TYPE_ARR || lhs_type->kind == TYPE_SLICE || type_is_builtin(lhs_type, BUILTIN_VARARGS)) &&
 				(rhs_type->kind != TYPE_BUILTIN || !type_builtin_is_numerical(rhs_type->builtin))) {
 				err_print(e->where, "The index of an array must be a builtin numerical type.");
 				return false;
@@ -2642,34 +2633,63 @@ static Status types_expr(Typer *tr, Expression *e) {
 			} break;
 			case TYPE_BUILTIN:
 				if (lhs_type->builtin == BUILTIN_NMS) {
-					if (!type_is_slicechar(rhs_type)) 
+					/* allow accessing namespace members with a string */
+					if (!type_is_slicechar(rhs_type)) {
+						char *s = type_to_str(rhs_type);
+						err_print(e->where, "Expected a string for namsepace member access with [], but got type %s.", s);
+						return false;
+					}
+
+					Value nms_val;
+					if (!eval_expr(tr->evalr, lhs, &nms_val))
+						return false;
+					Namespace *nms = nms_val.nms;
+					lhs->kind = EXPR_VAL;
+					lhs->val.nms = nms;
+				
+					Value member_name;
+					if (!eval_expr(tr->evalr, rhs, &member_name)) return false;
+					e->binary.op = BINARY_DOT;
+					e->binary.rhs->kind = EXPR_IDENT;
+					e->binary.rhs->ident = ident_get_with_len(&nms->body.idents, member_name.slice.data, (size_t)member_name.slice.n);
+					if (!type_of_ident(tr, rhs->where, &e->binary.rhs->ident, t)) {
+						return false;
+					}
+					break;
+				} else if (lhs_type->builtin == BUILTIN_VARARGS) {
+					assert(lhs->kind == EXPR_IDENT);
+					assert(lhs->ident->decl_kind == IDECL_DECL);
+					Declaration *decl = lhs->ident->decl;
+					assert(decl->flags & DECL_IS_PARAM);
+					Value index_val;
+					if (!eval_expr(tr->evalr, rhs, &index_val))
+						return false;
+					/* NOTE: rhs->type was checked above */
+					I64 i = val_to_i64(index_val, rhs->type.builtin);
+					VarArg *varargs = decl->val.varargs;
+					if (i < 0 || i >= (I64)arr_len(varargs)) {
+						err_print(e->where, "Index out of bounds for varargs access (index = " I64_FMT ", length = %lu).", i, (unsigned long)arr_len(varargs));
+						return 0;
+					}
+					if (decl->flags & DECL_IS_CONST) {
+						/* replace with value */
+						VarArg *vararg = &varargs[i];
+						e->kind = EXPR_VAL;
+						e->type = *vararg->type;
+						copy_val(tr->allocr, &e->val, &vararg->val, &e->type);
+						
+					} else {
+						/* TODO */
+					}
 					break;
 				}
 				/* fallthrough */
 			default: {
-				/* allow accessing namespace members with a string */
-				if (!type_is_slicechar(rhs_type)) {
-					char *s = type_to_str(rhs_type);
-					err_print(e->where, "Expected a string for namsepace member access with [], but got type %s.", s);
-					return false;
-				}
-
-				Value nms_val;
-				if (!eval_expr(tr->evalr, lhs, &nms_val))
-					return false;
-				Namespace *nms = nms_val.nms;
-				lhs->kind = EXPR_VAL;
-				lhs->val.nms = nms;
-				
-				Value member_name;
-				if (!eval_expr(tr->evalr, rhs, &member_name)) return false;
-				e->binary.op = BINARY_DOT;
-				e->binary.rhs->kind = EXPR_IDENT;
-			    e->binary.rhs->ident = ident_get_with_len(&nms->body.idents, member_name.slice.data, (size_t)member_name.slice.n);
-				if (!type_of_ident(tr, rhs->where, &e->binary.rhs->ident, t)) {
-					return false;
-				}
-			} break;
+				char *s = type_to_str(lhs_type);
+				err_print(e->where, "Cannot subscript type %s", s);
+				free(s);
+				return false;
+			}
 			}
 			break;
 		case BINARY_DOT: {
