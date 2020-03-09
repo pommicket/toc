@@ -1949,16 +1949,30 @@ static Status types_expr(Typer *tr, Expression *e) {
 		size_t nparams = arr_len(f->type.fn.types) - 1;
 		size_t nargs = arr_len(c->args);
 		Expression *arg_exprs = NULL;
-		arr_set_lena(&arg_exprs, nparams, tr->allocr);
-
+		size_t narg_exprs = 0;
 		I16 *order = NULL;
 		if (fn_decl && !(fn_decl->flags & FN_EXPR_FOREIGN)) {
 			if (!call_arg_param_order(fn_decl, &f->type, c->args, e->where, &order)) {
 				free(order);
 				return false;
 			}
+		}
+		
+		if (has_varargs) {
+			assert(fn_decl);
+			size_t nvarargs = nargs - (size_t)order[nparams-1];
+			narg_exprs = nparams-1 + nvarargs;
+		} else {
+			narg_exprs = nparams;
+		}
+
+		arg_exprs = NULL;
+		arr_set_lena(&arg_exprs, narg_exprs, tr->allocr);
+		
+		if (fn_decl && !(fn_decl->flags & FN_EXPR_FOREIGN)) {
 			size_t i = 0;
 			arr_foreach(fn_decl->params, Declaration, param) {
+				if (type_is_builtin(&param->type, BUILTIN_VARARGS)) continue;
 				arr_foreach(param->idents, Identifier, ident) { 
 					I16 arg_idx = order[i];
 					if (arg_idx == -1) {
@@ -1975,6 +1989,16 @@ static Status types_expr(Typer *tr, Expression *e) {
 						arg_exprs[i] = args[arg_idx].val;
 					}
 					++i;
+				}
+			}
+			if (has_varargs) {
+				/* deal with varargs (put them at the end of arg_exprs) */
+				int idx = order[nparams-1];
+				assert(idx >= 0);
+				Declaration *param = arr_last(fn_decl->params);
+				param->expr.tuple = NULL;
+				for (; idx < (int)nargs; ++idx) {
+					arg_exprs[idx+(int)nparams-1] = args[idx].val;
 				}
 			}
 		} else {
@@ -2101,7 +2125,13 @@ static Status types_expr(Typer *tr, Expression *e) {
 			/* eval compile time arguments */
 			for (i = 0; i < nparams; ++i) {
 				bool should_be_evald = arg_is_const(&arg_exprs[i], fn_type->constness[i]);
-				if (should_be_evald) {
+				if (i == nparams-1 && has_varargs) {
+					param_decl->val.varargs = NULL;
+					
+					if (should_be_evald) {
+						/* TODO */
+					}
+				} else if (should_be_evald) {
 					if (!order || order[i] != -1) {
 						Expression *expr = &arg_exprs[i];
 						Value arg_val = {0};
@@ -2201,8 +2231,21 @@ static Status types_expr(Typer *tr, Expression *e) {
 				bool is_vararg = has_varargs && i == nparams-1;
 				if (is_vararg) {
 					if (is_const) {
-						/* TODO */
+						/* add type */
+						Value *v = typer_arr_add(tr, &table_index.tuple);
+						Type *type = typer_arr_add(tr, &table_index_type.tuple);
+						memset(type, 0, sizeof *type);
+						type->kind = TYPE_BUILTIN;
+						type->flags = TYPE_IS_RESOLVED;
+						type->builtin = BUILTIN_TYPE;
+						v->type = &arg->type;
+						/* add value */
+						v = typer_arr_add(tr, &table_index.tuple);
+						type = typer_arr_add(tr, &table_index_type.tuple);
+						*type = arg->type;
+						*v = arg->val;
 					} else {
+						/* just add type */
 						Value *v = typer_arr_add(tr, &table_index.tuple);
 						Type *type = typer_arr_add(tr, &table_index_type.tuple);
 						memset(type, 0, sizeof *type);
