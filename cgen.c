@@ -433,7 +433,7 @@ static void cgen_full_fn_name(CGenerator *g, FnExpr *f, U64 instance) {
 	}
 }
 
-static void cgen_fn_args(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_const) {
+static void cgen_fn_params(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_const) {
 	(void)instance; /* not needed atm */
 	bool out_param = cgen_uses_ptr(&f->ret_type);
 	cgen_write(g, "(");
@@ -456,6 +456,8 @@ static void cgen_fn_args(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_c
 			}
 		} else if ((d->flags & DECL_SEMI_CONST)
 				   && (which_are_const & (((U64)1) << semi_const_idx++))) {
+			/* semi constant argument is constant */
+		} else {
 		    int idx = 0;
 			arr_foreach(d->idents, Identifier, i) {
 				if (any_params) 
@@ -534,7 +536,7 @@ static void cgen_fn_header(CGenerator *g, FnExpr *f, U64 instance, U64 which_are
 		cgen_write(g, " ");
 	}
 	cgen_full_fn_name(g, f, instance);	
-    cgen_fn_args(g, f, instance, which_are_const);
+    cgen_fn_params(g, f, instance, which_are_const);
 	if (!out_param) {
 		cgen_type_post(g, &f->ret_type);
 	}

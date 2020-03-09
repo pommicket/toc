@@ -489,12 +489,7 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 		}
 		for (size_t i = 0; i < arr_len(param->idents); ++i) {
 			Type *param_type = typer_arr_add(tr, &t->fn.types);
-			if (!generic) {
-				*param_type = param->type;
-			} else {
-				param_type->flags = 0;
-				param_type->kind = TYPE_UNKNOWN;
-			}
+			*param_type = param->type;
 			if (has_constant_params) {
 				Constness constn;
 				if (param->flags & DECL_IS_CONST) {
@@ -1807,7 +1802,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 			err_print(e->where, "Calling non-function (type %s).", type);
 			return false;
 		}
-		bool has_varargs = fn_type_has_varargs(&f->type.fn);
+		bool has_varargs = f->type.kind == TYPE_FN && fn_type_has_varargs(&f->type.fn);
 		
 		if (expr_is_definitely_const(f) || type_is_builtin(&f->type, BUILTIN_TYPE) || has_varargs) {
 			Value val;
@@ -1958,7 +1953,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 			}
 		}
 		
-		size_t nvarargs;
+		size_t nvarargs = 0;
 		if (has_varargs) {
 			assert(fn_decl);
 			nvarargs = nargs - (size_t)order[nparams-1];
@@ -1972,8 +1967,9 @@ static Status types_expr(Typer *tr, Expression *e) {
 		
 		if (fn_decl && !(fn_decl->flags & FN_EXPR_FOREIGN)) {
 			size_t i = 0;
+			Declaration *last_param = arr_last(fn_decl->params);
 			arr_foreach(fn_decl->params, Declaration, param) {
-				if (type_is_builtin(&param->type, BUILTIN_VARARGS)) continue;
+				if (has_varargs && param == last_param) continue;
 				arr_foreach(param->idents, Identifier, ident) { 
 					I16 arg_idx = order[i];
 					if (arg_idx == -1) {
