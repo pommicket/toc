@@ -1022,7 +1022,7 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 			if (!constness || !arg_is_const(arg, constness[i])) {
 				cgen_arg_pre(g, arg);
 			}
-			if (i < nparams-1)
+			if (i < nparams-1) /* necessary for varargs */
 				++i;
 		}
 		if (e->type.kind == TYPE_TUPLE) {
@@ -1444,7 +1444,8 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			}
 			cgen_write(g, "(");
 			bool first_arg = true;
-			int i = 0;
+		    size_t i = 0;
+			size_t nparams = arr_len(fn_type->types)-1;
 			arr_foreach(e->call.arg_exprs, Expression, arg) {
 				if (!fn_type->constness || !arg_is_const(arg, fn_type->constness[i])) {
 					if (!first_arg)
@@ -1452,7 +1453,8 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 					first_arg = false;
 					cgen_arg(g, arg);
 				}
-				++i;
+				if (i < nparams-1)
+					++i;
 			}
 			cgen_write(g, "))");
 		}

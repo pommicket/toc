@@ -13,11 +13,14 @@ const varargs
 varargs only exist in decls. not a type of its own
 don't allow default varargs
 don't allow semiconst varargs
+don't allow struct varargs
 make sure you can't have a variadic function pointer
 make sure varargs works with inference
 #foreign variadic fns
+EXPR_VALs don't always need temp variables
 where
 #returns_code (function/struct body is a block, to be evaluated at compile time, which returns the actual statements -- you can use this for implementation of printf)
+	- struct varargs
 break
 continue
 switch
