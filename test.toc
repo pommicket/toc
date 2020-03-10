@@ -1,11 +1,16 @@
 #include "std/io.toc";
 
 f ::= fn(x :: ..) int {
-  x[0] + x[1]
+  total := 0;
+  for a := x {
+  	  total += a;
+  }
+  total
 };
 
 main ::= fn() {
-	puti(f(1,2));
-};
+	 puti(f(1,2,3));
+	 puti(f(1,2,3,4,5,6));
+	 puti(f(1,2,3,4));
 
-main();
+};

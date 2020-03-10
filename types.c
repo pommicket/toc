@@ -1582,6 +1582,74 @@ static Status types_expr(Typer *tr, Expression *e) {
 			case TYPE_ARR:
 				iter_type = iter_type->arr.of;
 				break;
+			case TYPE_BUILTIN:
+				switch (iter_type->builtin) {
+				case BUILTIN_VARARGS: {
+					arr_remove_lasta(&tr->in_exprs, tr->allocr);
+					/* create one block, containing a block for each vararg */
+					/* e.g. for x := varargs { total += x; } => { { x := varargs[0]; total += x; } { x := varargs[0]; total += x; } } */
+					assert(fo->of->kind == EXPR_IDENT);
+					Identifier ident = fo->of->ident;
+					assert(ident->decl_kind == IDECL_DECL);
+					Declaration *idecl = ident->decl;
+					VarArg *varargs = idecl->val.varargs;
+					size_t nvarargs = arr_len(varargs);
+					/* create surrounding block */
+					e->kind = EXPR_BLOCK;
+					Block *b = e->block = typer_calloc(tr, 1, sizeof *e->block);
+					idents_create(&b->idents, tr->allocr, b);
+					b->stmts = NULL;
+					b->parent = tr->block;
+					b->where = e->where;
+					arr_set_lena(&b->stmts, nvarargs, tr->allocr);
+					Statement *stmt = b->stmts;
+					size_t nstmts = arr_len(fo->body.stmts);
+					bool has_val = fo->value != NULL;
+					for (size_t i = 0; i < nvarargs; ++i, ++stmt) {
+						/* create sub-block #i */
+						memset(stmt, 0, sizeof *stmt);
+						stmt->kind = STMT_EXPR;
+						stmt->expr.kind = EXPR_BLOCK;
+						Block *sub = stmt->expr.block = typer_calloc(tr, 1, sizeof *sub);
+						sub->parent = b;
+						idents_create(&sub->idents, tr->allocr, sub);
+						sub->stmts = NULL;
+						sub->where = e->where;
+						size_t total_nstmts = nstmts + has_val;
+						arr_set_lena(&sub->stmts, total_nstmts, tr->allocr);
+						Copier copier = copier_create(tr->allocr, sub);
+						if (has_val) {
+							sub->stmts[0].flags = 0;
+							sub->stmts[0].kind = STMT_DECL;
+							sub->stmts[0].where = e->where;
+							/* declare value */
+							Declaration *decl = sub->stmts[0].decl = typer_calloc(tr, 1, sizeof *decl);
+							*(Identifier *)arr_adda(&decl->idents, tr->allocr) = fo->value;
+							fo->value->decl_kind = IDECL_DECL;
+							fo->value->decl = decl;
+							decl->flags |= DECL_HAS_EXPR;
+							decl->expr.kind = EXPR_BINARY_OP;
+							decl->expr.binary.op = BINARY_AT_INDEX;
+							decl->expr.binary.lhs = fo->of;
+							Expression *index = decl->expr.binary.rhs = typer_calloc(tr, 1, sizeof *decl->expr.binary.rhs);
+							index->kind = EXPR_LITERAL_INT;
+							index->intl = (U64)i;
+						}
+						size_t start = has_val;
+						for (size_t s = start; s < total_nstmts; ++s) {
+							copy_stmt(&copier, &sub->stmts[s], &fo->body.stmts[s-start]);
+						}
+					}
+					e->flags &= (ExprFlags)~(ExprFlags)EXPR_FOUND_TYPE;
+					/* type this new big block */
+					if (!types_expr(tr, e))
+						return false;
+					assert(e->block->stmts[0].expr.flags & EXPR_FOUND_TYPE);
+					return true;
+				}
+				default: break;
+				}
+				/* fallthrough */
 			default: {
 				char *s = type_to_str(&fo->of->type);
 				err_print(e->where, "Cannot iterate over non-array non-slice type %s.", s);
