@@ -420,9 +420,13 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	size_t param_idx;
 	FnExpr *prev_fn = tr->fn;
 	FnExpr fn_copy = {0};
-	
-	/* f has compile time params, but it's not an instance! */
-	bool generic = !(flags & TYPE_OF_FN_IS_INSTANCE) && fn_has_any_const_params(f);
+
+	Declaration *last_param = arr_last(f->params);
+	bool has_varargs = last_param && (last_param->flags & DECL_ANNOTATES_TYPE) && type_is_builtin(&last_param->type, BUILTIN_VARARGS);
+	if (has_varargs)
+		f->flags |= FN_EXPR_HAS_VARARGS;
+	/* f has compile time params/varargs, but it's not an instance! */
+	bool generic = !(flags & TYPE_OF_FN_IS_INSTANCE) && (fn_has_any_const_params(f) || has_varargs);
 	if (generic) {
 		Copier cop = copier_create(tr->allocr, &f->body);
 		copy_fn_expr(&cop, &fn_copy, f, COPY_FN_EXPR_DONT_COPY_BODY);
@@ -449,7 +453,6 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 					success = false;
 					goto ret;
 				}
-				f->flags |= FN_EXPR_HAS_VARARGS;
 			}
 			
 			if (param->type.kind == TYPE_TUPLE) {
@@ -1456,7 +1459,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		if (!type_of_fn(tr, e->fn, &e->type, 0)) {
 			return false;
 		}
-		if (fn_has_any_const_params(e->fn)) {
+		if (fn_has_any_const_params(e->fn) || fn_type_has_varargs(&e->type.fn)) {
 			HashTable z = {0};
 			e->fn->instances = z;
 		} else {
@@ -2014,9 +2017,9 @@ static Status types_expr(Typer *tr, Expression *e) {
 		c->arg_exprs = arg_exprs;
 		FnExpr *original_fn = NULL;
 		FnExpr *fn_copy = NULL;
-		
+
 		if (fn_type->constness || has_varargs) {
-			/* evaluate compile-time arguments + add an instance */
+			/* eval function, create copy */
 			
 			
 			/* the function had better be a compile time constant if it has constant params */
@@ -2030,6 +2033,22 @@ static Status types_expr(Typer *tr, Expression *e) {
 			fn_copy = typer_malloc(tr, sizeof *fn_copy);
 			Copier cop = copier_create(tr->allocr, fn->body.parent);
 			copy_fn_expr(&cop, fn_copy, fn, 0);
+
+			if (has_varargs) {
+				/* set value of varargs param decl */
+				VarArg *varargs = NULL;
+				arr_set_lena(&varargs, nvarargs, tr->allocr);
+				Declaration *varargs_param = arr_last(fn_copy->params);
+				varargs_param->val.varargs = varargs;
+				for (int v = 0; v < (int)nvarargs; ++v) {
+					Expression *arg = &arg_exprs[v+order[nparams-1]];
+					VarArg *vararg = &varargs[v];
+						
+					if (varargs_param->flags & DECL_IS_CONST)
+						vararg->val = arg->val;
+					vararg->type = &arg->type;
+				}
+			}
 		}
 
 		if (fn_type->constness) {
@@ -2117,25 +2136,11 @@ static Status types_expr(Typer *tr, Expression *e) {
 			}
 			
 
-
 			/* eval compile time arguments */
 			for (i = 0; i < nparams; ++i) {
 				bool should_be_evald = arg_is_const(&arg_exprs[i], fn_type->constness[i]);
 				if (i == nparams-1 && has_varargs) {
-					/* set value of varargs param decl */
-					VarArg *varargs = NULL;
-					arr_set_lena(&varargs, nvarargs, tr->allocr);
-					Declaration *varargs_param = arr_last(fn_copy->params);
-					varargs_param->val.varargs = varargs;
-
-					for (int v = 0; v < (int)nvarargs; ++v) {
-						Expression *arg = &arg_exprs[v+order[nparams-1]];
-						VarArg *vararg = &varargs[v];
-						
-						if (varargs_param->flags & DECL_IS_CONST)
-							vararg->val = arg->val;
-						vararg->type = &arg->type;
-					}
+					/* handled above */
 				} else if (should_be_evald) {
 					if (!order || order[i] != -1) {
 						Expression *expr = &arg_exprs[i];
@@ -2163,30 +2168,33 @@ static Status types_expr(Typer *tr, Expression *e) {
 					++param_decl;
 				}
 			}
+		}
+		if (fn_type->constness || has_varargs) {
 			/* type params, return declarations, etc */
-			if (!type_of_fn(tr, fn, &f->type, TYPE_OF_FN_IS_INSTANCE))
+			if (!type_of_fn(tr, fn_copy, &f->type, TYPE_OF_FN_IS_INSTANCE))
 				return false;
-			
-			/* deal with default arguments */
-			i = 0;
-			arr_foreach(fn->params, Declaration, param) {
-				arr_foreach(param->idents, Identifier, ident) {
-					if (order && order[i] == -1) {
-						if (param->flags & DECL_INFER) {
-							arg_exprs[i].kind = EXPR_VAL;
-							arg_exprs[i].flags = EXPR_FOUND_TYPE;
-							arg_exprs[i].type = param_types[i] = param->type;
-							arg_exprs[i].val = param->val;
-						} else {
-							assert(param->flags & DECL_HAS_EXPR);
-							assert(param->expr.kind == EXPR_VAL); /* this was done by type_of_fn */
-							arg_exprs[i] = param->expr;
-							copy_val(tr->allocr, &arg_exprs[i].val, &param->expr.val, &param->expr.type);
+
+			if (fn_type->constness) {
+				/* deal with default arguments */
+				size_t i = 0;
+				arr_foreach(fn_copy->params, Declaration, param) {
+					arr_foreach(param->idents, Identifier, ident) {
+						if (order && order[i] == -1) {
+							if (param->flags & DECL_INFER) {
+								arg_exprs[i].kind = EXPR_VAL;
+								arg_exprs[i].flags = EXPR_FOUND_TYPE;
+								arg_exprs[i].type = param_types[i] = param->type;
+								arg_exprs[i].val = param->val;
+							} else {
+								assert(param->flags & DECL_HAS_EXPR);
+								assert(param->expr.kind == EXPR_VAL); /* this was done by type_of_fn */
+								arg_exprs[i] = param->expr;
+								copy_val(tr->allocr, &arg_exprs[i].val, &param->expr.val, &param->expr.type);
+							}
 						}
-					}
-					++i;
+						++i;
+					}	
 				}
-				
 			}
 			
 			ret_type = f->type.fn.types;
@@ -2671,15 +2679,18 @@ static Status types_expr(Typer *tr, Expression *e) {
 						err_print(e->where, "Index out of bounds for varargs access (index = " I64_FMT ", length = %lu).", i, (unsigned long)arr_len(varargs));
 						return 0;
 					}
+					VarArg *vararg = &varargs[i];
 					if (decl->flags & DECL_IS_CONST) {
 						/* replace with value */
-						VarArg *vararg = &varargs[i];
 						e->kind = EXPR_VAL;
 						e->type = *vararg->type;
 						copy_val(tr->allocr, &e->val, &vararg->val, &e->type);
-						
 					} else {
-						/* TODO */
+						/* just use vararg's type */
+						rhs->kind = EXPR_VAL;
+						rhs->val.i64 = i;
+						rhs->type.builtin = BUILTIN_I64;
+						*t = *vararg->type;
 					}
 					break;
 				}

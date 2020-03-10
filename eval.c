@@ -668,8 +668,10 @@ static Value *ident_val(Identifier i) {
 				else
 					return valp;
 			} else {
+				if (!(decl->flags & DECL_FOUND_VAL)) {
+					return NULL;
+				}
 				/* struct parameter */
-				assert(decl->flags & DECL_FOUND_VAL);
 				if (arr_len(decl->idents) > 1)
 					return &decl->val.tuple[idx];
 				else

@@ -1262,6 +1262,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 	} break;
 	case EXPR_BINARY_OP: {
 		const char *s = "";
+		Expression *lhs = e->binary.lhs, *rhs = e->binary.rhs;
 		bool handled = false;
 		switch (e->binary.op) {
 		case BINARY_SUB:
@@ -1275,7 +1276,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		case BINARY_MOD:
 			s = "%"; break;
 		case BINARY_SET: 
-			cgen_set(g, e->binary.lhs, NULL, e->binary.rhs, NULL);
+			cgen_set(g, lhs, NULL, rhs, NULL);
 			handled = true;
 			break;
 		case BINARY_GT:
@@ -1300,13 +1301,14 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			s = "/="; break;
 		case BINARY_SET_MOD:
 			s = "%="; break;
-		case BINARY_AT_INDEX:
+		case BINARY_AT_INDEX: {
+			Type *lhs_type = &lhs->type;
 			cgen_write(g, "(");
-			switch (e->binary.lhs->type.kind) {
+			switch (lhs_type->kind) {
 			case TYPE_ARR:
-				cgen_expr(g, e->binary.lhs);
+				cgen_expr(g, lhs);
 				cgen_write(g, "[");
-				cgen_expr(g, e->binary.rhs);
+				cgen_expr(g, rhs);
 				cgen_write(g, "]");
 				break;
 			case TYPE_SLICE:
@@ -1315,10 +1317,20 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 				cgen_write(g, "(*)");
 				cgen_type_post(g, &e->type);
 				cgen_write(g, ")(");
-				cgen_expr(g, e->binary.lhs);
+				cgen_expr(g, lhs);
 				cgen_write(g, ".data))[");
-				cgen_expr(g, e->binary.rhs);
+				cgen_expr(g, rhs);
 				cgen_write(g, "]");
+				break;
+			case TYPE_BUILTIN:
+			    if (lhs_type->builtin == BUILTIN_VARARGS) {
+					assert(lhs->kind == EXPR_IDENT);
+					assert(rhs->kind == EXPR_VAL);
+					assert(type_is_builtin(&rhs->type, BUILTIN_I64));
+					I64 i = rhs->val.i64;
+					cgen_ident(g, lhs->ident);
+					cgen_write(g, I64_FMT "_", i);
+				} else assert(0);
 				break;
 			default:
 				assert(0);
@@ -1326,31 +1338,31 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			}
 			cgen_write(g, ")");
 			handled = true;
-			break;
+		} break;
 		case BINARY_DOT: {
-			Type *struct_type = &e->binary.lhs->type;
+			Type *struct_type = &lhs->type;
 			if (struct_type->kind == TYPE_PTR) struct_type = struct_type->ptr;
 			if (struct_type->kind == TYPE_STRUCT) {
 				cgen_write(g, "(");
-				cgen_expr(g, e->binary.lhs);
-				bool is_ptr = e->binary.lhs->type.kind == TYPE_PTR;
+				cgen_expr(g, lhs);
+				bool is_ptr = lhs->type.kind == TYPE_PTR;
 				cgen_write(g, is_ptr ? "->" :".");
 				cgen_ident_simple(g, e->binary.dot.field->name);
 				cgen_write(g, ")");
 			} else {
 				assert(type_is_builtin(struct_type, BUILTIN_NMS));
-				char *prefix = e->binary.lhs->val.nms->c.prefix;
+				char *prefix = lhs->val.nms->c.prefix;
 				cgen_write(g, "%s", prefix);
-				cgen_ident_simple(g, e->binary.rhs->ident);
+				cgen_ident_simple(g, rhs->ident);
 			}
 			handled = true;
 		} break;
 		}
 		if (handled) break;
 		cgen_write(g, "(");
-		cgen_expr(g, e->binary.lhs);
+		cgen_expr(g, lhs);
 		cgen_write(g, "%s", s);
-		cgen_expr(g, e->binary.rhs);
+		cgen_expr(g, rhs);
 		cgen_write(g, ")");
 	} break;
 	case EXPR_UNARY_OP: {

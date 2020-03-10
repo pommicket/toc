@@ -888,7 +888,7 @@ typedef struct Declaration {
 			};
 		} foreign;
 	};
-	Value val; /* only for constant decls and non-constant globals. */
+	Value val; /* only for constant decls, non-constant globals, and varargs. */
 
 	/* for eval, for non-constant local decls: */
 	/* the pointers to values need to be fixed, which is why this isn't just Value *.  */
