@@ -1646,7 +1646,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 					/* type this new big block */
 					if (!types_expr(tr, e))
 						return false;
-					assert(e->block->stmts[0].expr.flags & EXPR_FOUND_TYPE);
 					return true;
 				}
 				default: break;
