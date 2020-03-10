@@ -1624,6 +1624,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 							sub->stmts[0].where = e->where;
 							/* declare value */
 							Declaration *decl = sub->stmts[0].decl = typer_calloc(tr, 1, sizeof *decl);
+							decl->where = fo->of->where;
 							*(Identifier *)arr_adda(&decl->idents, tr->allocr) = fo->value;
 							fo->value->decl_kind = IDECL_DECL;
 							fo->value->decl = decl;
@@ -1634,6 +1635,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 							Expression *index = decl->expr.binary.rhs = typer_calloc(tr, 1, sizeof *decl->expr.binary.rhs);
 							index->kind = EXPR_LITERAL_INT;
 							index->intl = (U64)i;
+							index->where = fo->of->where;
 						}
 						size_t start = has_val;
 						for (size_t s = start; s < total_nstmts; ++s) {
