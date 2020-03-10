@@ -1,9 +1,11 @@
 #include "std/io.toc";
 
-f ::= fn(x : ..) int {
+f ::= fn(x :: ..) int {
   x[0] + x[1]
 };
 
 main ::= fn() {
 	puti(f(1,2));
 };
+
+main();

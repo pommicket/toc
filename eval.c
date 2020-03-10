@@ -267,6 +267,9 @@ static void *val_ptr_to_free(Value *v, Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_BUILTIN:
+		if (t->builtin == BUILTIN_VARARGS)
+			return v->varargs ? arr_hdr(v->varargs) : NULL;
+		return NULL;
 	case TYPE_FN:
 	case TYPE_PTR:
 	case TYPE_SLICE:
@@ -592,7 +595,7 @@ static Status eval_val_ptr_at_index(Location where, Value *arr, U64 i, Type *arr
 	case TYPE_ARR: {
 		U64 arr_sz = (U64)arr_type->arr.n;
 		if (i >= arr_sz) {
-			err_print(where, "Array out of bounds (%lu, array size = %lu)\n", (unsigned long)i, (unsigned long)arr_sz);
+			err_print(where, "Array out of bounds (index = %lu, array size = %lu)\n", (unsigned long)i, (unsigned long)arr_sz);
 			return false;
 		}
 		*ptr = (char *)arr->arr + compiler_sizeof(arr_type->arr.of) * i;
@@ -601,7 +604,7 @@ static Status eval_val_ptr_at_index(Location where, Value *arr, U64 i, Type *arr
 	case TYPE_SLICE: {
 		U64 slice_sz = (U64)arr->slice.n;
 		if (i >= slice_sz) {
-			err_print(where, "Slice out of bounds (%lu, slice size = %lu)\n", (unsigned long)i, (unsigned long)slice_sz);
+			err_print(where, "Slice out of bounds (index = %lu, slice size = %lu)\n", (unsigned long)i, (unsigned long)slice_sz);
 			return false;
 		}
 		if (!arr->slice.data) {
@@ -611,6 +614,18 @@ static Status eval_val_ptr_at_index(Location where, Value *arr, U64 i, Type *arr
 		*ptr = (char *)arr->slice.data + compiler_sizeof(arr_type->slice) * i;
 		if (type) *type = arr_type->slice;
 	} break;
+	case TYPE_BUILTIN:
+		if (arr_type->builtin == BUILTIN_VARARGS) {
+			if (i >= (U64)arr_len(arr->varargs)) {
+				err_print(where, "Varargs out of bounds (index = %lu, varargs size = %lu)\n", (unsigned long)i, (unsigned long)arr_len(arr->varargs));
+				return false;
+			}
+			VarArg *vararg = &arr->varargs[i];
+			*ptr = &vararg->val;
+			*type = vararg->type;
+			break;
+		}
+		/* fallthrough */
 	default: assert(0); break;
 	}
 	return true;
@@ -1411,8 +1426,8 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			}
 			fn = fnv.fn;
 		}
+		size_t nargs = arr_len(e->call.arg_exprs);
 		if (fn->flags & FN_EXPR_FOREIGN) {
-			size_t nargs = arr_len(e->call.arg_exprs);
 			Value *args = err_malloc(nargs * sizeof *args);
 			for (size_t i = 0; i < nargs; ++i) {
 				if (!eval_expr(ev, &e->call.arg_exprs[i], &args[i]))
@@ -1427,22 +1442,34 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		
 		/* set parameter values */
 		Declaration *params = fn->params;
-		long arg = 0;
+		Expression *arg = e->call.arg_exprs;
 		arr_foreach(params, Declaration, p) {
 			int idx = 0;
 			Value *pval = decl_add_val(p);
 			--arr_hdr(p->val_stack)->len;
 			bool multiple_idents = arr_len(p->idents) > 1;
 			bool is_tuple = p->type.kind == TYPE_TUPLE;
-			arr_foreach(p->idents, Identifier, i) {
-				Value arg_val;
-				if (!eval_expr(ev, &e->call.arg_exprs[arg], &arg_val))
-					return false;
-				Type *type = is_tuple ? &p->type.tuple[idx] : &p->type;
-				Value *ival = multiple_idents ? &pval->tuple[idx] : pval;
-				copy_val(NULL, ival, &arg_val, type);
-				++arg;
-				++idx;
+			if (type_is_builtin(&p->type, BUILTIN_VARARGS)) {
+				Expression *args_end = arg + nargs;
+				/* set varargs */
+				pval->varargs = NULL;
+				for (; arg != args_end; ++arg) {
+					VarArg *varg = arr_add(&pval->varargs);
+					if (!eval_expr(ev, arg, &varg->val))
+						return false;
+					varg->type = &arg->type;
+				}
+			} else {
+				arr_foreach(p->idents, Identifier, i) {
+					Value arg_val;
+					if (!eval_expr(ev, arg, &arg_val))
+						return false;
+					Type *type = is_tuple ? &p->type.tuple[idx] : &p->type;
+					Value *ival = multiple_idents ? &pval->tuple[idx] : pval;
+					copy_val(NULL, ival, &arg_val, type);
+					++arg;
+					++idx;
+				}
 			}
 			++arr_hdr(p->val_stack)->len;
 		}
