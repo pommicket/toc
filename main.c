@@ -8,7 +8,6 @@
 
 /* 
 TODO:
-passing varargs variable to varargs function
 make sure varargs works with inference
 #foreign variadic fns
 EXPR_VALs don't always need temp variables

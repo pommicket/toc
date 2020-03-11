@@ -1,19 +1,19 @@
 #include "std/io.toc";
 
-g ::= fn(x : ..) int {
+g ::= fn(modulator: int, x : ..) int {
   total := 0;
   for e, i := x {
-  	  total += i * (e as int);
+  	  total += modulator * i * (e as int);
   }
   total
 };
 
 f ::= fn(x : ..) int {
-  g(x)
+  g(2, x)
 };
 
 main ::= fn() {
-	 puti(g(5));
+	 puti(f(5));
 	 
 	 puti(f(5,6));
 	 

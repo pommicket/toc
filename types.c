@@ -2100,8 +2100,54 @@ static Status types_expr(Typer *tr, Expression *e) {
 				/* deal with varargs (put them at the end of arg_exprs) */
 				int idx = order[nparams-1];
 				assert(idx >= 0);
+				Expression *arg_out = &arg_exprs[(int)nparams-1];
 				for (; idx < (int)nargs; ++idx) {
-					arg_exprs[idx+(int)nparams-1] = args[idx].val;
+				    Expression *arg = &args[idx].val;
+					if (type_is_builtin(&arg->type, BUILTIN_VARARGS)) {
+						/* add each vararg separately */
+						assert(arg->kind == EXPR_IDENT);
+						Identifier ident = arg->ident;
+						assert(ident->decl_kind == IDECL_DECL);
+						Declaration *decl = ident->decl;
+						VarArg *varargs_here = decl->val.varargs;
+						size_t nvarargs_here = arr_len(varargs_here);
+						/* not just += nvarargs-1 to handle nvarargs_here == 0 */
+						narg_exprs += nvarargs_here;
+						--narg_exprs;
+						nvarargs += nvarargs_here;
+						--nvarargs;
+						
+						long arg_out_idx = arg_out - arg_exprs; /* save and restore arg_out to prevent realloc from causing problems */
+						/* add more room (or if nvarargs_here == 0, remove room) for more varargs */
+						arr_set_lena(&arg_exprs, narg_exprs, tr->allocr);
+						arg_out = arg_exprs + arg_out_idx;
+						for (i = 0; i < nvarargs_here; ++i) {
+							VarArg *vararg = &varargs_here[i];
+							Expression *out = arg_out++;
+							/* construct varargs_here[i] */
+							out->flags = EXPR_FOUND_TYPE;
+							out->type = *vararg->type;
+							out->where = arg->where;
+							out->kind = EXPR_BINARY_OP;
+							out->binary.op = BINARY_AT_INDEX;
+							Expression *lhs = out->binary.lhs = typer_malloc(tr, sizeof *out->binary.lhs);
+							lhs->kind = EXPR_IDENT;
+							lhs->flags = EXPR_FOUND_TYPE;
+							lhs->type = decl->type;
+							lhs->ident = ident;
+							lhs->where = arg->where;
+							Expression *rhs = out->binary.rhs = typer_malloc(tr, sizeof *out->binary.lhs);
+							rhs->kind = EXPR_VAL;
+							rhs->flags = EXPR_FOUND_TYPE;
+							rhs->type.kind = TYPE_BUILTIN;
+							rhs->type.builtin = BUILTIN_I64;
+							rhs->type.flags = TYPE_IS_RESOLVED;
+							rhs->val.i64 = (I64)i;
+							rhs->where = arg->where;
+						}
+					} else {
+						*arg_out++ = *arg;
+					}
 				}
 			}
 		} else {
