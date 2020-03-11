@@ -1450,7 +1450,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			bool multiple_idents = arr_len(p->idents) > 1;
 			bool is_tuple = p->type.kind == TYPE_TUPLE;
 			if (type_is_builtin(&p->type, BUILTIN_VARARGS)) {
-				Expression *args_end = arg + nargs;
+				Expression *args_end = e->call.arg_exprs + nargs;
 				/* set varargs */
 				pval->varargs = NULL;
 				for (; arg != args_end; ++arg) {
