@@ -8,7 +8,6 @@
 
 /* 
 TODO:
-indices in varargs for loops
 don't allow default varargs
 don't allow semiconst varargs
 don't allow struct varargs (yet)

@@ -1607,6 +1607,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					Statement *stmt = b->stmts;
 					size_t nstmts = arr_len(fo->body.stmts);
 					bool has_val = fo->value != NULL;
+					bool has_index = fo->index != NULL;
 					for (size_t i = 0; i < nvarargs; ++i, ++stmt) {
 						/* create sub-block #i */
 						memset(stmt, 0, sizeof *stmt);
@@ -1617,17 +1618,18 @@ static Status types_expr(Typer *tr, Expression *e) {
 						idents_create(&sub->idents, tr->allocr, sub);
 						sub->stmts = NULL;
 						sub->where = e->where;
-						size_t total_nstmts = nstmts + has_val;
+						size_t total_nstmts = nstmts + has_val + has_index;
 						arr_set_lena(&sub->stmts, total_nstmts, tr->allocr);
 						Copier copier = copier_create(tr->allocr, sub);
 						if (has_val) {
 							/* TODO(eventually): don't put a decl in each block, just put one at the start */
-							sub->stmts[0].flags = 0;
-							sub->stmts[0].kind = STMT_DECL;
-							sub->stmts[0].where = e->where;
+							Statement *s = &sub->stmts[0];
+							s->flags = 0;
+						    s->kind = STMT_DECL;
+						    s->where = e->where;
 
 							/* declare value */
-							Declaration *decl = sub->stmts[0].decl = typer_calloc(tr, 1, sizeof *decl);
+							Declaration *decl = s->decl = typer_calloc(tr, 1, sizeof *decl);
 							decl->where = fo->of->where;
 							Identifier ident = ident_translate_forced(fo->value, &sub->idents);
 							*(Identifier *)arr_adda(&decl->idents, tr->allocr) = ident;
@@ -1638,12 +1640,35 @@ static Status types_expr(Typer *tr, Expression *e) {
 							decl->expr.kind = EXPR_BINARY_OP;
 							decl->expr.binary.op = BINARY_AT_INDEX;
 							decl->expr.binary.lhs = fo->of;
+							decl->expr.where = fo->of->where;
 							Expression *index = decl->expr.binary.rhs = typer_calloc(tr, 1, sizeof *decl->expr.binary.rhs);
 							index->kind = EXPR_LITERAL_INT;
 							index->intl = (U64)i;
 							index->where = fo->of->where;
 						}
-						size_t start = has_val;
+						if (has_index) {
+							/* TODO(eventually): don't put a decl in each block, just put one at the start */
+							Statement *s = &sub->stmts[has_val];
+							s->flags = 0;
+						    s->kind = STMT_DECL;
+						    s->where = e->where;
+
+							/* declare value */
+							Declaration *decl = s->decl = typer_calloc(tr, 1, sizeof *decl);
+							decl->where = fo->of->where;
+							Identifier ident = ident_translate_forced(fo->index, &sub->idents);
+							*(Identifier *)arr_adda(&decl->idents, tr->allocr) = ident;
+							ident->decl_kind = IDECL_DECL;
+							ident->decl = decl;
+							
+							decl->flags |= DECL_HAS_EXPR;
+							decl->expr.kind = EXPR_LITERAL_INT;
+							decl->expr.intl = (U64)i;
+							decl->expr.where = fo->of->where;
+						}
+						
+						
+						size_t start = total_nstmts - nstmts;
 						for (size_t s = start; s < total_nstmts; ++s) {
 							copy_stmt(&copier, &sub->stmts[s], &fo->body.stmts[s-start]);
 						}

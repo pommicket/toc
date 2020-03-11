@@ -2,18 +2,22 @@
 
 f ::= fn(x :: ..) int {
   total := 0;
-  for a := x {
-  	  total += a as int;
+  for _, i := x {
+  	  total += i * (x[0] as int);
   }
   total
 };
 
 
 main ::= fn() {
+	 puti(f(5));
+	 
+	 puti(f(5,6));
+	 
 	 puti(f(1,2,3));
-	 puti(f(1,2,3,4));
-	 puti(f(1,2,3,5,6));
-	 puti(f(1,2,3,1,2));
+	 
+	 puti(f(1,1,1,1));
+	 
 };
 
 main();
