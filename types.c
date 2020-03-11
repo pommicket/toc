@@ -303,6 +303,10 @@ static Status expr_must_lval(Expression *e) {
 		case BINARY_AT_INDEX:
 			if (!expr_must_lval(e->binary.lhs))
 				return false;
+			if (type_is_builtin(&e->binary.lhs->type, BUILTIN_VARARGS)) {
+				err_print(e->where, "Cannot set or take address of vararg.");
+				return false;
+			}
 			return true;
 		case BINARY_DOT: return true;
 		default: break;

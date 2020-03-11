@@ -2200,7 +2200,10 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 	}
  success:
 	e->where.end = t->token;
-	assert(t->token == end);
+	if (t->token != end) {
+		tokr_err(t, "Did not expect this stuff after expression. Did you forget a semicolon?");
+		return false;
+	}
 
 	if (e->kind == EXPR_FN) {
 		e->fn->where = e->where;

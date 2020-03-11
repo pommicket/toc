@@ -1,19 +1,19 @@
 #include "std/io.toc";
 
-s ::= struct(x::..) {
-};
-
-f ::= fn(x : ..) int {
+g ::= fn(x : ..) int {
   total := 0;
-  for _, i := x {
-  	  total += i * (x[0] as int);
+  for e, i := x {
+  	  total += i * (e as int);
   }
   total
 };
 
+f ::= fn(x : ..) int {
+  g(x)
+};
 
 main ::= fn() {
-	 puti(f(5));
+	 puti(g(5));
 	 
 	 puti(f(5,6));
 	 
