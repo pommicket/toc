@@ -1,5 +1,8 @@
 #include "std/io.toc";
 
+s ::= struct(x::..) {
+};
+
 f ::= fn(x : ..) int {
   total := 0;
   for _, i := x {

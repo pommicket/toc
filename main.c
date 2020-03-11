@@ -8,8 +8,6 @@
 
 /* 
 TODO:
-don't allow semiconst varargs
-don't allow struct varargs (yet)
 make sure varargs[i] isn't an lvalue
 make sure you can't have a variadic function pointer
 make sure varargs works with inference

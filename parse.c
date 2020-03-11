@@ -649,6 +649,11 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 						err_print(param->where, "Struct parameters must be constant.");
 						goto struct_fail;
 					}
+					if ((param->flags & DECL_ANNOTATES_TYPE) && type_is_builtin(&param->type, BUILTIN_VARARGS)) {
+						/* TODO(eventually) */
+						err_print(param->where, "structs cannot have varargs parameters (yet).");
+						goto struct_fail;
+					}
 					if (param->flags & DECL_INFER) {
 						/* TODO(eventually) */
 						err_print(param->where, "Struct parameters cannot be inferred (yet).");
@@ -2286,6 +2291,10 @@ static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 f
 				d->type.was_expr = NULL;
 				d->type.builtin = BUILTIN_VARARGS;
 				is_varargs = true;
+				if (d->flags & DECL_SEMI_CONST) {
+					tokr_err(t, "Semi-constant varargs are not allowed. Sorry!");
+				    goto ret_false;
+				}
 				++t->token;
 			} else {
 				Type type;
