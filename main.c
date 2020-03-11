@@ -8,7 +8,6 @@
 
 /* 
 TODO:
-make sure varargs works with inference
 #foreign variadic fns
 EXPR_VALs don't always need temp variables
 where

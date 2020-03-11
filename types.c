@@ -1217,7 +1217,7 @@ static Status call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Lo
 	arr_foreach(fn->params, Declaration, decl) {
 		arr_foreach(decl->idents, Identifier, ident) {
 			if (order[param_idx] == -1) {
-				if (type_is_builtin(&decl->type, BUILTIN_VARARGS)) {
+				if ((decl->flags & DECL_ANNOTATES_TYPE) && type_is_builtin(&decl->type, BUILTIN_VARARGS)) {
 					order[param_idx] = (I16)nargs;
 				} else if (!(decl->flags & DECL_HAS_EXPR) && !(decl->flags & DECL_INFER)) {
 					char *s = ident_to_str(*ident);
@@ -2220,10 +2220,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 					if (param->flags & DECL_INFER) {
 						*(Identifier *)arr_add(&inferred_idents) = *ident;
 					} else if ((param->flags & DECL_ANNOTATES_TYPE)
-							   && !(param->flags & DECL_HAS_EXPR)) {
-						if (param->type.kind == TYPE_TUPLE)
-							err_print(param->where, "Parameters cannot have tuple types.");
-						
+							   && !type_is_builtin(&param->type, BUILTIN_VARARGS)) {
+						/* add to stuff infer can use */
 						Type **p = arr_add(&decl_types);
 						*p = &param->type;
 						Type **q = arr_add(&arg_types);

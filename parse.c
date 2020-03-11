@@ -545,10 +545,6 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 					err_print(slice_where, "You cannot have a slice of tuples.");
 					return false;
 				}
-				if (type_is_builtin(type->slice, BUILTIN_VARARGS)) {
-					err_print(slice_where, "You cannot have a slice of varargs.");
-					return false;
-				}
 				break;
 			}
 			Token *end = expr_find_end(p, 0);
@@ -560,10 +556,6 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 			if (!parse_type(p, type->arr.of, &of_where)) return false;
 			if (type->arr.of->kind == TYPE_TUPLE) {
 				err_print(of_where, "You cannot have an array of tuples.");
-				return false;
-			}
-			if (type_is_builtin(type->arr.of, BUILTIN_VARARGS)) {
-				err_print(of_where, "You cannot have an array of varargs.");
 				return false;
 			}
 		} break;
@@ -606,10 +598,6 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 			if (!parse_type(p, type->ptr, &ptr_where)) return false;
 			if (type->ptr->kind == TYPE_TUPLE) {
 				err_print(ptr_where, "You cannot have a pointer to a tuple.");
-				return false;
-			}
-			if (type_is_builtin(type->ptr, BUILTIN_VARARGS)) {
-				err_print(ptr_where, "You cannot have a pointer to varargs.");
 				return false;
 			}
 		} break;
