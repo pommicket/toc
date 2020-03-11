@@ -156,7 +156,7 @@ static int kw_to_builtin_type(Keyword kw) {
 	case KW_CHAR: return BUILTIN_CHAR;
 	case KW_TYPE: return BUILTIN_TYPE;
 	case KW_NAMESPACE: return BUILTIN_NMS;
-	case KW_DOTDOT: return BUILTIN_VARARGS;
+	/* don't allow .. => varargs because it's not a normal type */
 	default: return -1;
 	}
 	return -1;
@@ -2278,15 +2278,23 @@ static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 f
 		bool annotates_type = !token_is_kw(t->token, KW_EQ) && !token_is_kw(t->token, KW_COMMA);
 		if (annotates_type) {
 			d->flags |= DECL_ANNOTATES_TYPE;
-			Type type;
-			Location type_where;
-			if (!parse_type(p, &type, &type_where)) {
-				goto ret_false;
-			}
-			d->type = type;
-			if (type.kind == TYPE_TUPLE && arr_len(d->type.tuple) != arr_len(d->idents)) {
-				err_print(type_where, "Expected to have %lu things declared in declaration, but got %lu.", (unsigned long)arr_len(d->type.tuple), (unsigned long)arr_len(d->idents));
-				goto ret_false;
+			if (token_is_kw(t->token, KW_DOTDOT)) {
+				d->type.kind = TYPE_BUILTIN;
+				d->type.flags = 0;
+				d->type.was_expr = NULL;
+				d->type.builtin = BUILTIN_VARARGS;
+				++t->token;
+			} else {
+				Type type;
+				Location type_where;
+				if (!parse_type(p, &type, &type_where)) {
+					goto ret_false;
+				}
+				d->type = type;
+				if (type.kind == TYPE_TUPLE && arr_len(d->type.tuple) != arr_len(d->idents)) {
+					err_print(type_where, "Expected to have %lu things declared in declaration, but got %lu.", (unsigned long)arr_len(d->type.tuple), (unsigned long)arr_len(d->idents));
+					goto ret_false;
+				}
 			}
 		}
 	}

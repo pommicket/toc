@@ -8,11 +8,11 @@
 
 /* 
 TODO:
-test for v := v (where v is a varargs param)
-varargs only exist in decls. not a type of its own
+indices in varargs for loops
 don't allow default varargs
 don't allow semiconst varargs
-don't allow struct varargs
+don't allow struct varargs (yet)
+make sure varargs[i] isn't an lvalue
 make sure you can't have a variadic function pointer
 make sure varargs works with inference
 #foreign variadic fns
@@ -25,6 +25,7 @@ continue
 switch
 enums
 typeof
+	- make sure you can't do typeof(something_that_is_varargs)
 unions
 ---
 switch to / add as an alternative: libffi
