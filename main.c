@@ -8,8 +8,7 @@
 
 /* 
 TODO:
-variadic fns
-const varargs
+fix compile time non-const varargs
 varargs only exist in decls. not a type of its own
 don't allow default varargs
 don't allow semiconst varargs

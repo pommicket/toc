@@ -318,6 +318,7 @@ static Instance *instance_table_adda(Allocator *a, HashTable *h, Value v, Type *
 		for (U64 i = 0; i < h->cap; ++i) {
 			/* re-hash */
 			if (old_occupied[i]) {
+				/* OPTIM: keep hashes around */
 				U64 index = val_hash(old_data[i]->val, t) % new_cap;
 				while (new_occupied[index]) {
 					++index;

@@ -1619,6 +1619,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 						arr_set_lena(&sub->stmts, total_nstmts, tr->allocr);
 						Copier copier = copier_create(tr->allocr, sub);
 						if (has_val) {
+							/* TODO: don't put a decl in each block, just put one at the start */
 							sub->stmts[0].flags = 0;
 							sub->stmts[0].kind = STMT_DECL;
 							sub->stmts[0].where = e->where;
@@ -2314,30 +2315,26 @@ static Status types_expr(Typer *tr, Expression *e) {
 				Expression *arg = &arg_exprs[i];
 				bool is_const = fn_type->constness && arg_is_const(arg, fn_type->constness[i]);
 				bool is_vararg = has_varargs && i == nparams-1;
+				Copier cop = copier_create(tr->allocr, tr->block);
 				if (is_vararg) {
-					if (is_const) {
-						/* add type */
-						Value *v = typer_arr_add(tr, &table_index.tuple);
-						Type *type = typer_arr_add(tr, &table_index_type.tuple);
-						memset(type, 0, sizeof *type);
-						type->kind = TYPE_BUILTIN;
-						type->flags = TYPE_IS_RESOLVED;
-						type->builtin = BUILTIN_TYPE;
-						v->type = &arg->type;
-						/* add value */
-						v = typer_arr_add(tr, &table_index.tuple);
-						type = typer_arr_add(tr, &table_index_type.tuple);
-						*type = arg->type;
-						*v = arg->val;
-					} else {
-						/* just add type */
-						Value *v = typer_arr_add(tr, &table_index.tuple);
-						Type *type = typer_arr_add(tr, &table_index_type.tuple);
-						memset(type, 0, sizeof *type);
-						type->kind = TYPE_BUILTIN;
-						type->flags = TYPE_IS_RESOLVED;
-						type->builtin = BUILTIN_TYPE;
-						v->type = &arg->type;
+					/* create one additional table index member for varargs */
+					Value *varargs_val = typer_arr_add(tr, &table_index.tuple);
+					Type *varargs_type = typer_arr_add(tr, &table_index_type.tuple);
+					memset(varargs_type, 0, sizeof *varargs_type);
+					varargs_type->flags = TYPE_IS_RESOLVED;
+					varargs_type->kind = TYPE_BUILTIN;
+					varargs_type->builtin = BUILTIN_VARARGS;
+					varargs_val->varargs = NULL;
+					for (; i < narg_exprs; ++i) {
+						arg = &arg_exprs[i];
+						VarArg *varg = typer_arr_add(tr, &varargs_val->varargs);
+						varg->type = copy_type_(&cop, &arg->type);
+						if (is_const) {
+							copy_val(tr->allocr, &varg->val, &arg->val, varg->type);
+						} else {
+							/* use zero value everywhere */
+							varg->val = val_zero(varg->type);
+						}
 					}
 				} else if (is_const) {
 					assert(arg->kind == EXPR_VAL);
@@ -2351,12 +2348,10 @@ static Status types_expr(Typer *tr, Expression *e) {
 					}
 					Value *v = typer_arr_add(tr, &table_index.tuple);
 					Type *type = typer_arr_add(tr, &table_index_type.tuple);
-					*type = arg->type;
+					copy_type(&cop, type, &arg->type);
 					copy_val(tr->allocr, v, &arg->val, type);
 				}
 			}
-				
-				
 			bool instance_already_exists;
 			c->instance = instance_table_adda(tr->allocr, &original_fn->instances, table_index, &table_index_type, &instance_already_exists);
 			if (instance_already_exists) {
@@ -2377,8 +2372,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 				tr->block = prev_block;
 				arr_remove_lasta(&err_ctx->instance_stack, tr->allocr);
 				if (!success) return false;
-				arr_cleara(&table_index_type.tuple, tr->allocr);
 			}
+			
 		}
 		free(order);
 		*t = *ret_type;
