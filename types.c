@@ -1585,13 +1585,15 @@ static Status types_expr(Typer *tr, Expression *e) {
 			case TYPE_BUILTIN:
 				switch (iter_type->builtin) {
 				case BUILTIN_VARARGS: {
+					/* exit for body */
+					typer_block_exit(tr);
 					arr_remove_lasta(&tr->in_exprs, tr->allocr);
 					/* create one block, containing a block for each vararg */
 					/* e.g. for x := varargs { total += x; } => { { x := varargs[0]; total += x; } { x := varargs[0]; total += x; } } */
 					assert(fo->of->kind == EXPR_IDENT);
-					Identifier ident = fo->of->ident;
-					assert(ident->decl_kind == IDECL_DECL);
-					Declaration *idecl = ident->decl;
+					Identifier varargs_ident = fo->of->ident;
+					assert(varargs_ident->decl_kind == IDECL_DECL);
+					Declaration *idecl = varargs_ident->decl;
 					VarArg *varargs = idecl->val.varargs;
 					size_t nvarargs = arr_len(varargs);
 					/* create surrounding block */
@@ -1619,16 +1621,19 @@ static Status types_expr(Typer *tr, Expression *e) {
 						arr_set_lena(&sub->stmts, total_nstmts, tr->allocr);
 						Copier copier = copier_create(tr->allocr, sub);
 						if (has_val) {
-							/* TODO: don't put a decl in each block, just put one at the start */
+							/* TODO(eventually): don't put a decl in each block, just put one at the start */
 							sub->stmts[0].flags = 0;
 							sub->stmts[0].kind = STMT_DECL;
 							sub->stmts[0].where = e->where;
+
 							/* declare value */
 							Declaration *decl = sub->stmts[0].decl = typer_calloc(tr, 1, sizeof *decl);
 							decl->where = fo->of->where;
-							*(Identifier *)arr_adda(&decl->idents, tr->allocr) = fo->value;
-							fo->value->decl_kind = IDECL_DECL;
-							fo->value->decl = decl;
+							Identifier ident = ident_translate_forced(fo->value, &sub->idents);
+							*(Identifier *)arr_adda(&decl->idents, tr->allocr) = ident;
+							ident->decl_kind = IDECL_DECL;
+							ident->decl = decl;
+							
 							decl->flags |= DECL_HAS_EXPR;
 							decl->expr.kind = EXPR_BINARY_OP;
 							decl->expr.binary.op = BINARY_AT_INDEX;
@@ -3154,6 +3159,7 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			}
 		}
 		if (tr->block == NULL) {
+			/* evaluate expression statements at global scope */
 			if (s->expr.kind != EXPR_C) {
 				if (!eval_stmt(tr->evalr, s))
 					return false;
@@ -3274,5 +3280,6 @@ static Status types_file(Typer *tr, ParsedFile *f) {
 			ret = false;
 		}
 	}
+	assert(tr->block == NULL);
 	return ret;
 }

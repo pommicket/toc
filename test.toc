@@ -1,6 +1,6 @@
 #include "std/io.toc";
 
-f ::= fn(x : ..) int {
+f ::= fn(x :: ..) int {
   total := 0;
   for a := x {
   	  total += a as int;
@@ -8,13 +8,12 @@ f ::= fn(x : ..) int {
   total
 };
 
+
 main ::= fn() {
 	 puti(f(1,2,3));
-	 puti(f(1,2,3,4,5,6));
 	 puti(f(1,2,3,4));
-	 puti(f(1,7,3));
-	 puti(f(1,2,4,4,5,6));
-	 puti(f(1,2,-7.3,4.656));
-
-	 puti(f(7.3,4.656));
+	 puti(f(1,2,3,5,6));
+	 puti(f(1,2,3,1,2));
 };
+
+main();

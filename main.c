@@ -8,7 +8,7 @@
 
 /* 
 TODO:
-fix compile time non-const varargs
+test for v := v (where v is a varargs param)
 varargs only exist in decls. not a type of its own
 don't allow default varargs
 don't allow semiconst varargs
@@ -25,7 +25,6 @@ continue
 switch
 enums
 typeof
-macros
 unions
 ---
 switch to / add as an alternative: libffi
@@ -36,6 +35,8 @@ allow omission of trailing ; in foo ::= fn() {...} or foo ::= nms {...} or foo :
 consider- should #sizeof always take a Type? it would be more verbose, but we might not actually need
 	#sizeof that much, given that we have new.
 	it probably should, because #sizeof(x[0]) can't be evaluated at compile time if x is not a constant
+---
+macros
 */
 
 
