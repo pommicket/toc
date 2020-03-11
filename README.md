@@ -91,6 +91,6 @@ Here are the major versions of `toc`.
 
 ### Report a bug
 
-If you find a bug, you can report it through [GitHub's issue tracker](https://github.com/pommicket/toc/issues), or by emailing pommicket@pommicket.com.
+If you find a bug, you can report it through [GitHub's issue tracker](https://github.com/pommicket/toc/issues), or by emailing pommicket at pommicket dot com.
 
 Just send me the `toc` source code which results in the bug, and I'll try to fix it. 

@@ -1466,7 +1466,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 						return false;
 					Type *type = is_tuple ? &p->type.tuple[idx] : &p->type;
 					Value *ival = multiple_idents ? &pval->tuple[idx] : pval;
-					copy_val(NULL, ival, &arg_val, type);
+					copy_val(NULL, ival, arg_val, type);
 					++arg;
 					++idx;
 				}
@@ -1516,7 +1516,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 						return false;
 					Value *element = arr_add(&tuple);
 					Type *type = decl_type_at_index(d, i);
-					copy_val(NULL, element, &this_one, type);
+					copy_val(NULL, element, this_one, type);
 					++i;
 				}
 			}
@@ -1622,11 +1622,11 @@ static Status eval_decl(Evaluator *ev, Declaration *d) {
 			Type *type = decl_type_at_index(d, index);
 			if (!is_const) {
 				if (has_expr) {
-					Value *v = is_tuple ? &val.tuple[index] : &val;
+					Value v = is_tuple ? val.tuple[index] : val;
 					if (need_to_copy) {
 						copy_val(NULL, ival, v, type);
 					} else {
-						*ival = *v;
+						*ival = v;
 					}
 				} else {
 					*ival = val_zero(type);
@@ -1654,7 +1654,7 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 		Value r;
 		if (!eval_expr(ev, &stmt->ret.expr, &r))
 			return false;
-		copy_val(NULL, &ev->ret_val, &r, &stmt->ret.expr.type);
+		copy_val(NULL, &ev->ret_val, r, &stmt->ret.expr.type);
 	} break;
 	case STMT_INCLUDE:
 		arr_foreach(stmt->inc.stmts, Statement, sub)
@@ -1695,7 +1695,7 @@ static Status eval_block(Evaluator *ev, Block *b, Value *v) {
 		}
 		if (!type_is_builtin(&b->ret_expr->type, BUILTIN_TYPE)) {
 			/* make a copy so that r's data isn't freed when we exit the block */
-			copy_val(NULL, v, &r, &b->ret_expr->type);
+			copy_val(NULL, v, r, &b->ret_expr->type);
 			if (b->ret_expr->kind == EXPR_TUPLE)
 				free(r.tuple);
 		} else {

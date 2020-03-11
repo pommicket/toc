@@ -24,7 +24,7 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identi
 					return false;
 				Copier c = copier_create(tr->allocr, tr->block);
 				Value new_val;
-				copy_val_full(&c, &new_val, &vals[idx], &to->type);
+				copy_val_full(&c, &new_val, vals[idx], &to->type);
 				vals[idx] = new_val;
 				break;
 			}

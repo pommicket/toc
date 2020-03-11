@@ -97,8 +97,6 @@ static void print_block_location(Block *b);
 
 
 /* misc */
-#define STRINGIFY2(x) #x
-#define STRINGIFY(x) STRINGIFY2(x)
 #define join3(a,b) a##b
 #define join2(a,b) join3(a,b)
 #define join(a,b) join2(a,b)

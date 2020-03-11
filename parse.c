@@ -2224,6 +2224,8 @@ static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 f
 	d->flags = 0;
 	d->val_stack = NULL;
 	
+	bool is_varargs = false;
+	
 	if ((flags & PARSE_DECL_ALLOW_EXPORT) && token_is_direct(t->token, DIRECT_EXPORT)) {
 		d->flags |= DECL_EXPORT;
 		++t->token;
@@ -2283,6 +2285,7 @@ static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 f
 				d->type.flags = 0;
 				d->type.was_expr = NULL;
 				d->type.builtin = BUILTIN_VARARGS;
+				is_varargs = true;
 				++t->token;
 			} else {
 				Type type;
@@ -2316,6 +2319,10 @@ static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 f
 					tokr_err(t, "Inferred parameters must be constant.");
 					goto ret_false;
 				}
+				if (is_varargs) {
+					tokr_err(t, "Varargs cannot be inferred.");
+					goto ret_false;
+				}
 				++t->token;
 			} else {
 				d->flags |= DECL_HAS_EXPR;
@@ -2324,6 +2331,10 @@ static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 f
 					expr_flags |= EXPR_CAN_END_WITH_COMMA;
 				if (ends_with == DECL_END_LBRACE_COMMA)
 					expr_flags |= EXPR_CAN_END_WITH_LBRACE | EXPR_CAN_END_WITH_COMMA;
+				if (is_varargs) {
+					tokr_err(t, "Default varargs are not allowed.");
+					goto ret_false;
+				}
 				Token *end = expr_find_end(p, expr_flags);
 				if (!end || !ends_decl(end, ends_with)) {
 					if (end) t->token = end;

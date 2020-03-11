@@ -107,13 +107,6 @@ static void *allocr_realloc(Allocator *a, void *data, size_t old_size, size_t ne
 	return ret;
 }
 
-static char *allocr_strdup(Allocator *a, char const *s) {
-	size_t len = strlen(s);
-	char *ret = allocr_malloc(a, len);
-	memcpy(ret, s, len);
-    return ret;
-}
-
 static void allocr_free_all(Allocator *a) {
 	for (Page *page = a->first; page;) {
 		Page *next = page->next;

@@ -34,31 +34,43 @@ static Copier copier_create(Allocator *a, Block *b) {
 	return c;
 }
 
-static void copy_val(Allocator *a, Value *out, Value *in, Type *t) {
+static void copy_val(Allocator *a, Value *out, Value in, Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_BUILTIN:
+		if (t->builtin == BUILTIN_VARARGS) {
+			size_t n = arr_len(in.varargs);
+			out->varargs = NULL;
+			arr_set_lena(&out->varargs, n, a);
+			for (size_t i = 0; i < n; ++i) {
+				Copier c = copier_create(a, NULL); /* since the type is resolved, it doesn't matter that the block is wrong */
+				out->varargs[i].type = copy_type_(&c, in.varargs[i].type);
+				out->varargs[i].val = in.varargs[i].val;
+			}
+			break;
+		}
+		/* fallthrough */
 	case TYPE_FN:
 	case TYPE_PTR:
 	case TYPE_SLICE:
 	case TYPE_VOID:
 	case TYPE_UNKNOWN:
-		*out = *in;
+		*out = in;
 		break;
 	case TYPE_ARR: {
 		size_t bytes = (size_t)t->arr.n * compiler_sizeof(t->arr.of);
 		out->arr = allocr_malloc(a, bytes);
-		memcpy(out->arr, in->arr, bytes);
+		memcpy(out->arr, in.arr, bytes);
 	} break;
 	case TYPE_TUPLE: {
 		size_t bytes = arr_len(t->tuple) * sizeof(*out->tuple);
 		out->tuple = allocr_malloc(a, bytes);
-		memcpy(out->tuple, in->tuple, bytes);
+		memcpy(out->tuple, in.tuple, bytes);
 	} break;
 	case TYPE_STRUCT: {
 		size_t bytes = compiler_sizeof(t);
 		out->struc = allocr_malloc(a, bytes);
-		memcpy(out->struc, in->struc, bytes);
+		memcpy(out->struc, in.struc, bytes);
 	} break;
 	case TYPE_EXPR:
 		assert(0);
@@ -66,10 +78,10 @@ static void copy_val(Allocator *a, Value *out, Value *in, Type *t) {
 	}
 }
 
-static void copy_val_full(Copier *c, Value *out, Value *in, Type *t) {
+static void copy_val_full(Copier *c, Value *out, Value in, Type *t) {
 	if (type_is_builtin(t, BUILTIN_TYPE)) {
 		Type *new_type = allocr_malloc(c->allocr, sizeof *new_type);
-		copy_type(c, new_type, in->type);
+		copy_type(c, new_type, in.type);
 		out->type = new_type;
 	} else {
 		copy_val(c->allocr, out, in, t);
@@ -361,7 +373,7 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		copy_type(c, out->typeval = copier_malloc(c, sizeof *out->typeval), in->typeval);
 		break;
 	case EXPR_VAL:
-		copy_val(a, &out->val, &in->val, &in->type);
+		copy_val(a, &out->val, in->val, &in->type);
 		break;
 	case EXPR_NMS:
 		out->nms = allocr_malloc(a, sizeof *out->nms);
@@ -384,7 +396,7 @@ static void copy_decl(Copier *c, Declaration *out, Declaration *in) {
 	if (in->flags & DECL_HAS_EXPR)
 		copy_expr(c, &out->expr, &in->expr);
 	if (in->flags & DECL_FOUND_VAL) {
-		copy_val(c->allocr, &out->val, &in->val, &in->type);
+		copy_val(c->allocr, &out->val, in->val, &in->type);
 	}
 	if (in->flags & DECL_ANNOTATES_TYPE)
 		copy_type(c, &out->type, &in->type);

@@ -2256,7 +2256,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 						arg_exprs[i].flags = EXPR_FOUND_TYPE;
 						arg_exprs[i].val = arg_val;
 						param_decl->flags |= DECL_FOUND_VAL;
-						copy_val(tr->allocr, &param_decl->val, &arg_val, type);
+						copy_val(tr->allocr, &param_decl->val, arg_val, type);
 						if (!(param_decl->flags & DECL_ANNOTATES_TYPE)) {
 							param_decl->type = *type;
 						}
@@ -2289,7 +2289,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 								assert(param->flags & DECL_HAS_EXPR);
 								assert(param->expr.kind == EXPR_VAL); /* this was done by type_of_fn */
 								arg_exprs[i] = param->expr;
-								copy_val(tr->allocr, &arg_exprs[i].val, &param->expr.val, &param->expr.type);
+								copy_val(tr->allocr, &arg_exprs[i].val, param->expr.val, &param->expr.type);
 							}
 						}
 						++i;
@@ -2360,7 +2360,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 						VarArg *varg = typer_arr_add(tr, &varargs_val->varargs);
 						varg->type = copy_type_(&cop, &arg->type);
 						if (is_const) {
-							copy_val(tr->allocr, &varg->val, &arg->val, varg->type);
+							copy_val(tr->allocr, &varg->val, arg->val, varg->type);
 						} else {
 							/* use zero value everywhere */
 							varg->val = val_zero(varg->type);
@@ -2379,7 +2379,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					Value *v = typer_arr_add(tr, &table_index.tuple);
 					Type *type = typer_arr_add(tr, &table_index_type.tuple);
 					copy_type(&cop, type, &arg->type);
-					copy_val(tr->allocr, v, &arg->val, type);
+					copy_val(tr->allocr, v, arg->val, type);
 				}
 			}
 			bool instance_already_exists;
@@ -2778,7 +2778,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 						/* replace with value */
 						e->kind = EXPR_VAL;
 						e->type = *vararg->type;
-						copy_val(tr->allocr, &e->val, &vararg->val, &e->type);
+						copy_val(tr->allocr, &e->val, vararg->val, &e->type);
 					} else {
 						/* just use vararg's type */
 						rhs->kind = EXPR_VAL;
@@ -3057,7 +3057,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 					success = false;
 					goto ret;
 				}
-				copy_val(tr->allocr, &d->val, &val, &d->type);
+				copy_val(tr->allocr, &d->val, val, &d->type);
 				d->flags |= DECL_FOUND_VAL;
 			}
 		}

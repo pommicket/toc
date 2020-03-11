@@ -1,6 +1,6 @@
 #include "std/io.toc";
 
-f ::= fn(x :: ..) int {
+f ::= fn(x : ..) int {
   total := 0;
   for _, i := x {
   	  total += i * (x[0] as int);
