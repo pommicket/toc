@@ -1,6 +1,7 @@
 #!/bin/bash
 
 tests='bf
+varargs
 arr
 arr2
 arr3
