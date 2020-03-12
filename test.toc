@@ -1,6 +1,6 @@
 #include "std/io.toc";
 
-g ::= fn(modulator:: int, x : ..) int {
+g ::= fn(modulator:: int, x :: ..) int {
   total := 0;
   for e := x {
   	  total += modulator * (e as int);
@@ -8,7 +8,7 @@ g ::= fn(modulator:: int, x : ..) int {
   total
 };
 
-f ::= fn(x : ..) int {
+f ::= fn(x :: ..) int {
   g(2, x)
 };
 

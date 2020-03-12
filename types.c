@@ -2191,14 +2191,23 @@ static Status types_expr(Typer *tr, Expression *e) {
 				VarArg *varargs = NULL;
 				arr_set_lena(&varargs, nvarargs, tr->allocr);
 				Declaration *varargs_param = arr_last(fn_copy->params);
+				DeclFlags is_const = varargs_param->flags & DECL_IS_CONST;
 				varargs_param->val.varargs = varargs;
 				for (int v = 0; v < (int)nvarargs; ++v) {
 					Expression *arg = &arg_exprs[v+order[nparams-1]];
 					VarArg *vararg = &varargs[v];
-						
-					if (varargs_param->flags & DECL_IS_CONST)
-						vararg->val = arg->val;
+					if (is_const) {
+						Value val;
+						if (!eval_expr(tr->evalr, arg, &val))
+							return false;
+						arg->kind = EXPR_VAL;
+						arg->val = val;
+						copy_val(tr->allocr, &vararg->val, arg->val, &arg->type);
+					}
 					vararg->type = &arg->type;
+				}
+				if (is_const) {
+					varargs_param->flags |= DECL_FOUND_VAL;
 				}
 			}
 		}
