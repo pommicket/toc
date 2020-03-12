@@ -288,7 +288,8 @@ static void ffmgr_create(ForeignFnManager *ffmgr, Allocator *allocr) {
 	str_hash_table_create(&ffmgr->libs_loaded, sizeof(Library), allocr);
 }
 
-static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *fn_type, Value *args, Location call_where, Value *ret) {
+/* args must be a dynamic array. */
+static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, Type *arg_types, size_t arg_types_stride, Value *args, size_t nargs, Location call_where, Value *ret) {
 	void (*fn_ptr)() = fn->foreign.fn_ptr;
 	if (!fn_ptr) {
 		assert(fn->flags & FN_EXPR_FOREIGN);
@@ -326,16 +327,15 @@ static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *fn_type, Val
 	}
 
 	av_alist arg_list;
-	if (!arg_list_start(&arg_list, fn_ptr, ret, &fn_type->fn.types[0], call_where))
+	if (!arg_list_start(&arg_list, fn_ptr, ret, ret_type, call_where))
 		return false;
-	size_t nparams = arr_len(fn_type->fn.types)-1;
-	for (size_t i = 0; i < nparams; ++i) {
-		if (!arg_list_add(&arg_list, args[i], &fn_type->fn.types[i+1], call_where))
+	char *type = (char *)arg_types;
+	for (size_t i = 0; i < nargs; ++i) {
+		if (!arg_list_add(&arg_list, args[i], (Type *)type, call_where))
 			return false;
+		type += arg_types_stride;
 	}
 	av_call(arg_list);
-	
-	(void)fn_type; (void)args;	
 	return true;
 }
 

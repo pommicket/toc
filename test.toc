@@ -1,5 +1,8 @@
-printf ::= #foreign("printf") fn(#C &"const char", #C ..);
+printf ::= #foreign("printf", "libc.so.6") fn(#C &"const char", #C ..) #C int;
 
 main::=fn(){
-	printf("Hello %d", 5);
+	s := "Hello %d\n\0";
+	printf(&s[0], 5);
+	
 };
+main();

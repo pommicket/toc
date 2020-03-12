@@ -1433,7 +1433,8 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				if (!eval_expr(ev, &e->call.arg_exprs[i], &args[i]))
 					return false;
 			}
-			bool success = foreign_call(&ev->ffmgr, fn, &e->call.fn->type, args, e->where, v);
+			Type *ret_type = &e->call.fn->type.fn.types[0];
+			bool success = foreign_call(&ev->ffmgr, fn, ret_type, &e->call.arg_exprs[0].type, sizeof(Expression), args, nargs, e->where, v);
 			free(args);
 			if (!success)
 				return false;

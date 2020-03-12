@@ -2045,7 +2045,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 			}
 			fn_decl = val.fn;
 			if (has_varargs) fn_decl->flags |= FN_EXPR_HAS_VARARGS;
-			
 		}
 		
 		Type *ret_type = f->type.fn.types;
@@ -2055,8 +2054,9 @@ static Status types_expr(Typer *tr, Expression *e) {
 		size_t nargs = arr_len(c->args);
 		Expression *arg_exprs = NULL;
 		size_t narg_exprs = 0;
+		bool is_foreign = (fn_decl->flags & FN_EXPR_FOREIGN) != 0;
 		I16 *order = NULL;
-		if (fn_decl && !(fn_decl->flags & FN_EXPR_FOREIGN)) {
+		if (fn_decl && !is_foreign) {
 			if (!call_arg_param_order(fn_decl, &f->type, c->args, e->where, &order)) {
 				free(order);
 				return false;
@@ -2066,7 +2066,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 		size_t nvarargs = 0;
 		if (has_varargs) {
 			assert(fn_decl);
-			nvarargs = nargs - (size_t)order[nparams-1];
+			/* fn_decl could be foreign, so order could be NULL */
+			nvarargs = nargs - (order ? (size_t)order[nparams-1] : nparams-1);
 			narg_exprs = nparams-1 + nvarargs;
 		} else {
 			narg_exprs = nparams;
@@ -2075,7 +2076,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		arg_exprs = NULL;
 		arr_set_lena(&arg_exprs, narg_exprs, tr->allocr);
 		
-		if (fn_decl && !(fn_decl->flags & FN_EXPR_FOREIGN)) {
+		if (fn_decl && !is_foreign) {
 			size_t i = 0;
 			Declaration *last_param = arr_last(fn_decl->params);
 			arr_foreach(fn_decl->params, Declaration, param) {
@@ -2170,7 +2171,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		FnExpr *original_fn = NULL;
 		FnExpr *fn_copy = NULL;
 
-		if (fn_type->constness || has_varargs) {
+		if (fn_type->constness || (has_varargs && !is_foreign)) {
 			/* eval function, create copy */
 			
 			
@@ -2328,7 +2329,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				}
 			}
 		}
-		if (fn_type->constness || has_varargs) {
+		if (fn_type->constness || (has_varargs && !is_foreign)) {
 			/* type params, return declarations, etc */
 			if (!type_of_fn(tr, fn_copy, &f->type, TYPE_OF_FN_IS_INSTANCE))
 				return false;
@@ -2381,7 +2382,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		}
 
 		
-		if (fn_type->constness || has_varargs) {
+		if (fn_type->constness || (has_varargs && !is_foreign)) {
 			
 			Type table_index_type = {0};
 			Value table_index = {0};
