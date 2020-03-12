@@ -98,6 +98,9 @@ static void cgen_ctype(CGenerator *g, CType *c) {
 	case CTYPE_SIZE_T:
 		cgen_write(g, "size_t");
 		break;
+	case CTYPE_VARARGS:
+		cgen_write(g, "...");
+		break;
 	default:
 		assert(0);
 		break;

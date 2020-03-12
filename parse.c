@@ -1128,6 +1128,9 @@ static Status ctype_to_type(Allocator *a, CType *ctype, Type *type, Location whe
 	case CTYPE_SIZE_T:
 		size = sizeof(size_t);
 		break;
+	case CTYPE_VARARGS:
+		type->builtin = BUILTIN_VARARGS;
+		break;
 	case CTYPE_LONGLONG:
 	case CTYPE_UNSIGNED_LONGLONG:
 #if LONGLONG_AVAILABLE
@@ -1165,34 +1168,42 @@ static Status parse_c_type(Parser *p, CType *ctype, Type *type) {
 	if (token_is_direct(t->token, DIRECT_C)) {
 		++t->token;
 		ctype->kind = CTYPE_NONE;
-		if (token_is_kw(t->token, KW_INT)) {
-			ctype->kind = CTYPE_INT;
-			++t->token;
-		} else if (token_is_kw(t->token, KW_FLOAT)) {
-			ctype->kind = CTYPE_FLOAT;
-			++t->token;
-		} else if (token_is_kw(t->token, KW_CHAR)) {
-			ctype->kind = CTYPE_CHAR;
-			++t->token;
-		} else if (token_is_kw(t->token, KW_AMPERSAND)) {
-			ctype->kind = CTYPE_PTR;
-			++t->token;
-			if (t->token->kind == TOKEN_IDENT) {
-				size_t n = ident_str_len(t->token->ident);
-				ctype->points_to = parser_malloc(p, n+1);
-				memcpy(ctype->points_to, t->token->ident, n);
-				ctype->points_to[n] = 0;
-			} else if (t->token->kind == TOKEN_LITERAL_STR) {
-				size_t n = t->token->str.len;
-				ctype->points_to = parser_malloc(p, n+1);
-				memcpy(ctype->points_to, t->token->str.str, n);
-				ctype->points_to[n] = 0;
-			} else {
-				tokr_err(t, "Expected type to follow &");
+		if (t->token->kind == TOKEN_KW) {
+			switch (t->token->kw) {
+			case KW_INT:
+				ctype->kind = CTYPE_INT;
+				++t->token;
+				break;
+			case CTYPE_FLOAT:
+				ctype->kind = CTYPE_FLOAT;
+				++t->token;
+				break;
+			case KW_CHAR:
+				ctype->kind = CTYPE_CHAR;
+				++t->token;
+				break;
+			case KW_AMPERSAND:
+				ctype->kind = CTYPE_PTR;
+				++t->token;
+				if (t->token->kind == TOKEN_LITERAL_STR) {
+					size_t n = t->token->str.len;
+					ctype->points_to = parser_malloc(p, n+1);
+					memcpy(ctype->points_to, t->token->str.str, n);
+					ctype->points_to[n] = 0;
+				} else {
+					tokr_err(t, "Expected string literal to follow #C &");
+					return false;
+				}
+				++t->token;
+				break;
+			case KW_DOTDOT:
+				ctype->kind = CTYPE_VARARGS;
+				++t->token;
+				break;
+			default:
+				tokr_err(t, "Unrecognized C type");
 				return false;
 			}
-			
-			++t->token;
 		} else if (t->token->kind == TOKEN_IDENT) {
 			char *id = t->token->ident;
 			ctype->kind = 0;
