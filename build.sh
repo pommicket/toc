@@ -7,6 +7,10 @@ if [ "$CC" = "" ]; then
 	fi
 fi
 
+if uname | grep -qi bsd; then
+	CFLAGS="$CFLAGS -L/usr/local/lib -I/usr/local/include"
+fi
+
 ADDITIONAL_FLAGS="$CFLAGS -Wno-unused-function"
 
 if [ "$CC" = "clang" ]; then
@@ -22,7 +26,12 @@ else
 fi
 
 if [ "$COMPILE_TIME_FOREIGN_FN_SUPPORT" != "no" ]; then
-	ADDITIONAL_FLAGS="$ADDITIONAL_FLAGS -DCOMPILE_TIME_FOREIGN_FN_SUPPORT=1 -lffcall -ldl"
+	if uname | grep -qi bsd; then
+		LIBRARIES='-lavcall'
+	else
+		LIBRARIES='-ldl -lffcall'
+	fi
+	ADDITIONAL_FLAGS="$ADDITIONAL_FLAGS -DCOMPILE_TIME_FOREIGN_FN_SUPPORT=1 $LIBRARIES -DNO_STATIC_ASSERT"
 fi
 
 

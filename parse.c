@@ -1130,7 +1130,7 @@ static Status ctype_to_type(Allocator *a, CType *ctype, Type *type, Location whe
 		break;
 	case CTYPE_LONGLONG:
 	case CTYPE_UNSIGNED_LONGLONG:
-#if HAVE_LONGLONG
+#if LONGLONG_AVAILABLE
 		size = sizeof(longlong);
 #else
 		err_print(where, "long long is not supported. Did you compile toc with a pre-C99 compiler?");

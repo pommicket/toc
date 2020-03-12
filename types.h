@@ -29,10 +29,10 @@ typedef long double Floating; /* OPTIM: Switch to double, but make sure floating
 
 
 #if __STDC_VERSION__ >= 199901
-#define HAVE_LONGLONG 1
+#define LONGLONG_AVAILABLE 1
 typedef long long longlong;
 #else
-#define HAVE_LONGLONG 0
+#define LONGLONG_AVAILABLE 0
 typedef long longlong;
 #endif
 
@@ -42,9 +42,7 @@ typedef long longlong;
 typedef union {
 	long double floating;
 	void *ptr;
-	#if HAVE_LONGLONG
 	longlong integer;
-	#endif
 	void (*fn_ptr)(void);
 } MaxAlign;
 #else

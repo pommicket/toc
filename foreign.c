@@ -4,6 +4,14 @@
 #if CHAR_BIT != 8
 #error "Compile-time foreign functions can only be used on systems where CHAR_BIT is 8."
 #endif
+
+/* avcall has some sign conversion problems on BSD */
+/* (the macros it defines cause problems too, which is why this is ignored for so long) */
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#endif
 #include <avcall.h>
 #include <dlfcn.h>
 
@@ -271,6 +279,10 @@ static bool arg_list_add(av_alist *arg_list, Value val, Type *type, Location whe
 	}
 	return true;
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 static void ffmgr_create(ForeignFnManager *ffmgr, Allocator *allocr) {
 	str_hash_table_create(&ffmgr->libs_loaded, sizeof(Library), allocr);
