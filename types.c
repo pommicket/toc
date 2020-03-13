@@ -1466,8 +1466,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 			return false;
 		}
 		if (fn_has_any_const_params(e->fn) || fn_type_has_varargs(&e->type.fn)) {
-			HashTable z = {0};
-			e->fn->instances = z;
+			e->fn->instances = typer_calloc(tr, 1, sizeof *e->fn->instances);
 		} else {
 			if (!types_fn(tr, e->fn, &e->type, NULL)) {
 				return false;
@@ -2444,14 +2443,14 @@ static Status types_expr(Typer *tr, Expression *e) {
 				}
 			}
 			bool instance_already_exists;
-			c->instance = instance_table_adda(tr->allocr, &original_fn->instances, table_index, &table_index_type, &instance_already_exists);
+			c->instance = instance_table_adda(tr->allocr, original_fn->instances, table_index, &table_index_type, &instance_already_exists);
 			if (instance_already_exists) {
 				arr_cleara(&table_index_type.tuple, tr->allocr);
 				arr_cleara(&table_index.tuple, tr->allocr);
 			} else {
 				c->instance->fn = fn_copy;
 				/* fix parameter and return types (they were kind of problematic before, because we didn't know about the instance) */
-				c->instance->c.id = original_fn->instances.n; /* let's help cgen out and assign an ID to this */
+			    fn_copy->instance_id = 1+original_fn->instances->n; /* let's help cgen out and assign a non-zero ID to this */
 				/* type this instance */
 				
 				/* if anything happens, make sure we let the user know that this happened while generating a fn */

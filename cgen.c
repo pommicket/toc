@@ -122,9 +122,9 @@ static void cgen_defs_decl(CGenerator *g, Declaration *d);
 	case EXPR_FN: {														\
 		FnExpr *fn = e->fn;												\
 		if (fn_has_instances(fn)) {										\
-			Instance **data = fn->instances.data;						\
-			for (U64 i = 0; i < fn->instances.cap; ++i) {				\
-				if (fn->instances.occupied[i]) {						\
+			Instance **data = fn->instances->data;						\
+			for (U64 i = 0; i < fn->instances->cap; ++i) {				\
+				if (fn->instances->occupied[i]) {						\
 					cgen_recurse_subexprs_fn_simple(((*data)->fn), decl_f, block_f); \
 				}														\
 				++data;													\
@@ -432,15 +432,14 @@ static bool cgen_should_gen_fn(FnExpr *f) {
 	}
 }
 
-static void cgen_full_fn_name(CGenerator *g, FnExpr *f, U64 instance) {
+static void cgen_full_fn_name(CGenerator *g, FnExpr *f) {
 	cgen_fn_name(g, f);
-	if (instance) {
-		cgen_fn_instance_number(g, instance);
+	if (f->instance_id) {
+		cgen_fn_instance_number(g, f->instance_id);
 	}
 }
 
-static void cgen_fn_params(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_const) {
-	(void)instance; /* not needed atm */
+static void cgen_fn_params(CGenerator *g, FnExpr *f, U64 which_are_const) {
 	bool out_param = cgen_uses_ptr(&f->ret_type);
 	cgen_write(g, "(");
 	int semi_const_idx = 0;
@@ -527,8 +526,8 @@ static inline void cgen_arg(CGenerator *g, Expression *arg) {
 	}
 }
 
-/* unless f has const/semi-const args, instance and which_are_const can be set to 0 */
-static void cgen_fn_header(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_const) {
+/* unless f has const/semi-const args, which_are_const can be set to 0 */
+static void cgen_fn_header(CGenerator *g, FnExpr *f, U64 which_are_const) {
 	assert(!(f->flags & FN_EXPR_FOREIGN));
 	
 	bool out_param = cgen_uses_ptr(&f->ret_type);
@@ -541,8 +540,8 @@ static void cgen_fn_header(CGenerator *g, FnExpr *f, U64 instance, U64 which_are
 		cgen_type_pre(g, &f->ret_type);
 		cgen_write(g, " ");
 	}
-	cgen_full_fn_name(g, f, instance);	
-    cgen_fn_params(g, f, instance, which_are_const);
+	cgen_full_fn_name(g, f);	
+    cgen_fn_params(g, f, which_are_const);
 	if (!out_param) {
 		cgen_type_post(g, &f->ret_type);
 	}
@@ -690,7 +689,7 @@ static void cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 		cgen_expr(g, to->call.fn);
 		
 		if (to->call.instance)
-			cgen_fn_instance_number(g, to->call.instance->c.id);
+			cgen_fn_instance_number(g, to->call.instance->fn->instance_id);
 		cgen_write(g, "(");
 		bool any_args = false;
 		i = 0;
@@ -1039,7 +1038,7 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 			}
 		    cgen_expr(g, e->call.fn);
 			if (e->call.instance) {
-				cgen_fn_instance_number(g, e->call.instance->c.id);
+				cgen_fn_instance_number(g, e->call.instance->fn->instance_id);
 			}
 			cgen_write(g, "(");
 			bool any_args = false;
@@ -1068,7 +1067,7 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 			cgen_write(g, ";"); cgen_nl(g);
 			cgen_expr(g, e->call.fn);
 			if (e->call.instance) {
-				cgen_fn_instance_number(g, e->call.instance->c.id);
+				cgen_fn_instance_number(g, e->call.instance->fn->instance_id);
 			}
 			cgen_write(g, "(");
 			bool any_args = false;
@@ -1452,7 +1451,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			cgen_write(g, "(");
 			cgen_expr(g, e->call.fn);
 			if (e->call.instance) {
-				cgen_fn_instance_number(g, e->call.instance->c.id);
+				cgen_fn_instance_number(g, e->call.instance->fn->instance_id);
 			}
 			cgen_write(g, "(");
 			bool first_arg = true;
@@ -1608,8 +1607,11 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 	}
 }
 
-/* pass 0 for instance and NULL for compile_time_args if there are no compile time arguments. */
-static void cgen_fn(CGenerator *g, FnExpr *f, U64 instance, Value *compile_time_args) {
+/* pass NULL for compile_time_args if there are no compile time arguments.
+compile_time_args is needed because we can't determine which_are_const
+from just f.
+ */
+static void cgen_fn(CGenerator *g, FnExpr *f, Value *compile_time_args) {
 	if (f->flags & FN_EXPR_FOREIGN)
 		return; /* handled by decls_cgen */
 	/* see also cgen_defs_expr */
@@ -1617,7 +1619,7 @@ static void cgen_fn(CGenerator *g, FnExpr *f, U64 instance, Value *compile_time_
 	U64 which_are_const = compile_time_args ? compile_time_args->u64 : 0;
 	if (!cgen_should_gen_fn(f))
 		return;
-	cgen_fn_header(g, f, instance, which_are_const);
+	cgen_fn_header(g, f, which_are_const);
 	g->fn = f;
 	cgen_write(g, " {");
 	cgen_nl(g);
@@ -1982,17 +1984,17 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 
 static void cgen_defs_fn(CGenerator *g, FnExpr *f) {
 	if (fn_has_instances(f)) {
-		HashTable *instances = &f->instances;
+		HashTable *instances = f->instances;
 		/* generate each instance */
 		Instance **is = instances->data;
 		for (U64 i = 0; i < instances->cap; ++i) {
 			if (instances->occupied[i]) {
 				/* generate this instance */
-				cgen_fn(g, is[i]->fn, is[i]->c.id, is[i]->val.tuple);
+				cgen_fn(g, is[i]->fn, is[i]->val.tuple);
 			}
 		}
 	} else {
-		cgen_fn(g, f, 0, NULL);
+		cgen_fn(g, f, NULL);
 	}
 }
 

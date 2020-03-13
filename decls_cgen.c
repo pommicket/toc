@@ -37,9 +37,9 @@ static void cgen_decls_type(CGenerator *g, Type *type) {
 	cgen_recurse_subtypes(cgen_decls_type, g, type);
 }
 
-static void cgen_single_fn_decl(CGenerator *g, FnExpr *f, U64 instance, U64 which_are_const) {
+static void cgen_single_fn_decl(CGenerator *g, FnExpr *f, U64 which_are_const) {
 	if (cgen_should_gen_fn(f)) {
-		cgen_fn_header(g, f, instance, which_are_const);
+		cgen_fn_header(g, f, which_are_const);
 		cgen_write(g, ";");
 		cgen_nl(g);
 	}
@@ -47,13 +47,13 @@ static void cgen_single_fn_decl(CGenerator *g, FnExpr *f, U64 instance, U64 whic
 
 
 static void cgen_decls_fn_instances(CGenerator *g, FnExpr *f) {
-	Instance **data = f->instances.data;
-	for (U64 i = 0; i < f->instances.cap; ++i) {
-		if (f->instances.occupied[i]) {
+	Instance **data = f->instances->data;
+	for (U64 i = 0; i < f->instances->cap; ++i) {
+		if (f->instances->occupied[i]) {
 			if (cgen_should_gen_fn((*data)->fn)) {
 				(*data)->fn->c.name = f->c.name;
 				(*data)->fn->c.id = f->c.id;
-				cgen_single_fn_decl(g, (*data)->fn, (*data)->c.id, (*data)->val.tuple[0].u64);
+				cgen_single_fn_decl(g, (*data)->fn, (*data)->val.tuple[0].u64);
 				cgen_write(g, ";");
 				cgen_nl(g);
 			}
@@ -170,7 +170,7 @@ static void cgen_fn_decl(CGenerator *g, FnExpr *f, Type *t) {
 	if (fn_has_instances(f)) {
 		cgen_decls_fn_instances(g, f);
 	} else {
-		cgen_single_fn_decl(g, f, 0, 0);
+		cgen_single_fn_decl(g, f, 0);
 	}
 }
 

@@ -684,6 +684,7 @@ typedef struct FnExpr {
 		struct {
 			struct Declaration *params; /* declarations of the parameters to this function */
 			struct Declaration *ret_decls; /* array of decls, if this has named return values. otherwise, NULL */
+			U64 instance_id;
 			Type ret_type;	
 			Block body;
 		};
@@ -701,11 +702,11 @@ typedef struct FnExpr {
 			void (*fn_ptr)();
 		} foreign;
 	};
-	HashTable instances; /* for fns with constant parameters. the key is a tuple where
-							the first element is a u64 value whose ith bit (1<<i) is 1
-							if the ith semi-constant parameter is constant.
-							cgen relies on this being here even for foreign fns.
-						 */
+	HashTable *instances; /* for fns with constant parameters. the key is a tuple where
+							 the first element is a u64 value whose ith bit (1<<i) is 1
+							 if the ith semi-constant parameter is constant.
+							 cgen relies on this being here even for foreign fns.
+						  */
 	struct {
 		/* if name = NULL, this is an anonymous function, and id will be the ID of the fn. */
 		Identifier name;
@@ -717,12 +718,7 @@ typedef struct FnExpr {
 typedef struct Instance {
 	Value val; /* key into hash table */
 	union {
-		struct {
-			FnExpr *fn; /* the typed function */
-			struct {
-				U64 id;
-			} c;
-		};
+		FnExpr *fn; /* the typed function */
 		StructDef struc;
 	};
 } Instance;
