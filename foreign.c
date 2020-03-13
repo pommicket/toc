@@ -287,7 +287,6 @@ static void ffmgr_create(ForeignFnManager *ffmgr, Allocator *allocr) {
 	str_hash_table_create(&ffmgr->libs_loaded, sizeof(Library), allocr);
 }
 
-/* args must be a dynamic array. */
 static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, Type *arg_types, size_t arg_types_stride, Value *args, size_t nargs, Location call_where, Value *ret) {
 	void (*fn_ptr)() = fn->foreign.fn_ptr;
 	if (!fn_ptr) {
@@ -344,8 +343,8 @@ static void ffmgr_create(ForeignFnManager *ffmgr, Allocator *allocr) {
 	(void)allocr;
 }
 
-static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *fn_type, Value *args, Location call_where, Value *ret) {
-	(void)ffmgr; (void)fn; (void)fn_type; (void)args; (void)ret;
+static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, Type *arg_types, size_t arg_types_stride, Value *args, size_t nargs, Location call_where, Value *ret) {
+	(void)ffmgr; (void)fn; (void)ret_type; (void)arg_types; (void)arg_types_stride; (void)args; (void)nargs; (void)ret;
 	err_print(call_where, "You have not compiled toc with compile time foreign function support.");
 	return false;
 }

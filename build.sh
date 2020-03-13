@@ -29,7 +29,7 @@ if [ "$COMPILE_TIME_FOREIGN_FN_SUPPORT" != "no" ]; then
 	if uname | grep -qi bsd; then
 		LIBRARIES='-lavcall'
 	else
-		LIBRARIES='-ldl -lffcall'
+		LIBRARIES='-ldl -lavcall'
 	fi
 	ADDITIONAL_FLAGS="$ADDITIONAL_FLAGS -DCOMPILE_TIME_FOREIGN_FN_SUPPORT=1 $LIBRARIES"
 fi
