@@ -227,8 +227,12 @@ static void copy_fn_expr(Copier *c, FnExpr *fout, FnExpr *fin, U8 flags) {
 					copy_decl(c, fout->ret_decls + i, fin->ret_decls + i);
 			}
 			copy_type(c, &fout->ret_type, &fin->ret_type);
+			
+			if (fin->condition) {
+				fout->condition = copy_expr_(c, fin->condition);
+			}
+			c->block = prev;
 			if (copy_body) {
-				c->block = prev;
 				copy_block(c, &fout->body, &fin->body, copy_body ? COPY_BLOCK_DONT_CREATE_IDENTS : 0);
 			}
 		}

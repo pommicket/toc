@@ -1653,10 +1653,13 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 			return false;
 	} break;
 	case STMT_RET: {
-		Value r;
-		if (!eval_expr(ev, &stmt->ret.expr, &r))
-			return false;
-		copy_val(NULL, &ev->ret_val, r, &stmt->ret.expr.type);
+		if (stmt->ret.flags & RET_HAS_EXPR) {
+			Value r;
+			if (!eval_expr(ev, &stmt->ret.expr, &r))
+				return false;
+			copy_val(NULL, &ev->ret_val, r, &stmt->ret.expr.type);
+		}
+		ev->returning = true;
 	} break;
 	case STMT_INCLUDE:
 		arr_foreach(stmt->inc.stmts, Statement, sub)
@@ -1667,13 +1670,14 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 	return true;
 }
 
-static void eval_exit_stmts(Statement *stmts) {
-	arr_foreach(stmts, Statement, s) {
+static void eval_exit_stmts(Statement *stmts, Statement *last_reached) {
+    for (Statement *s = stmts; s <= last_reached; ++s) {
 		if (s->kind == STMT_DECL && !(s->decl->flags & DECL_IS_CONST)) {
 			Declaration *d = s->decl;
 			decl_remove_val(d);
 		} else if (s->kind == STMT_INCLUDE) {
-			eval_exit_stmts(s->inc.stmts);
+			/* TODO: this doesn't work!!! */
+			eval_exit_stmts(s->inc.stmts, arr_last(s->inc.stmts));
 		}
 	}
 }
@@ -1682,12 +1686,16 @@ static Status eval_block(Evaluator *ev, Block *b, Value *v) {
 	Block *prev = ev->typer->block;
 	ev->typer->block = b;
 	bool success = true;
+	Statement *last_reached = arr_last(b->stmts);
 	arr_foreach(b->stmts, Statement, stmt) {
 		if (!eval_stmt(ev, stmt)) {
 			success = false;
 			goto ret;
 		}
-		if (ev->returning) break;
+		if (ev->returning) {
+			last_reached = stmt;
+			break;
+		}
 	}
 	if (!ev->returning && b->ret_expr) {
 		Value r;
@@ -1704,7 +1712,7 @@ static Status eval_block(Evaluator *ev, Block *b, Value *v) {
 			*v = r;
 		}
 	}
-	eval_exit_stmts(b->stmts);
+	eval_exit_stmts(b->stmts, last_reached);
  ret:
 	ev->typer->block = prev;
 	return success;

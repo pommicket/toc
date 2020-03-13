@@ -2358,6 +2358,32 @@ static Status types_expr(Typer *tr, Expression *e) {
 					}	
 				}
 			}
+
+			if (fn_copy->condition) {
+				typer_block_enter(tr, &fn_copy->body);
+				/* check where condition */
+				if (!types_expr(tr, fn_copy->condition)) {
+					typer_block_exit(tr);
+					return false;
+				}
+				typer_block_exit(tr);
+				
+				Type *condition_type = &fn_copy->condition->type;
+				if (!type_is_builtin(condition_type, BUILTIN_BOOL)) {
+					char *s = type_to_str(condition_type);
+					err_print(fn_copy->condition->where, "where conditions must be of type bool, but this is of type %s.", s);
+					free(s);
+					return false;
+				}
+				Value val;
+				if (!eval_expr(tr->evalr, fn_copy->condition, &val)) {
+					return false;
+				}
+				if (!val.boolv) {
+					err_print(fn_copy->condition->where, "Function where condition not satisfied. You are probably calling this function incorrectly.");
+					return false;
+				}
+			}
 			
 			ret_type = f->type.fn.types;
 			param_types = ret_type + 1;

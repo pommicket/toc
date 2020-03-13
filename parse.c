@@ -331,6 +331,7 @@ typedef enum {
 			  EXPR_CAN_END_WITH_COLON = 0x04,
 			  EXPR_CAN_END_WITH_DOTDOT = 0x08,
 			  EXPR_CAN_END_WITH_EQ = 0x10,
+			  EXPR_CAN_END_WITH_WHERE = 0x20
 			  /* note that parse_type uses -1 for this */
 } ExprEndFlags;
 
@@ -393,6 +394,10 @@ static Token *expr_find_end(Parser *p, ExprEndFlags flags)  {
 				break;
 			case KW_EQ:
 				if (all_levels_0 && (flags & EXPR_CAN_END_WITH_EQ))
+					return token;
+				break;
+			case KW_WHERE:
+				if (all_levels_0 && (flags & EXPR_CAN_END_WITH_WHERE))
 					return token;
 				break;
 			case KW_COLON:
@@ -802,7 +807,7 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 							--paren_level;
 							if (paren_level == 0) {
 								++t->token;
-								if (token_is_kw(t->token, KW_LBRACE)) goto end; /* void fn expr */
+								if (token_is_kw(t->token, KW_LBRACE) || token_is_kw(t->token, KW_WHERE)) goto end; /* void fn expr */
 								if (is_decl(t)) /* has return declaration */
 									goto end;
 								
@@ -954,6 +959,7 @@ static Status parse_fn_expr(Parser *p, FnExpr *f) {
 	f->instance_id = 0;
 	f->ret_decls = NULL;
 	f->instances = NULL;
+	f->condition = NULL;
 	/* only called when token is fn */
 	assert(token_is_kw(t->token, KW_FN));
 	++t->token;
@@ -984,7 +990,7 @@ static Status parse_fn_expr(Parser *p, FnExpr *f) {
 	    success = false; goto ret;
 	}
 	
-	if (token_is_kw(t->token, KW_LBRACE)) {
+	if (token_is_kw(t->token, KW_LBRACE) || token_is_kw(t->token, KW_WHERE)) {
 		/* void function */
 		f->ret_type.kind = TYPE_VOID;
 		f->ret_type.flags = 0;
@@ -1009,6 +1015,13 @@ static Status parse_fn_expr(Parser *p, FnExpr *f) {
 		if (!parse_type(p, &f->ret_type, NULL)) {
 			success = false;
 			goto ret;
+		}
+	}
+	if (token_is_kw(t->token, KW_WHERE)) {
+		++t->token;
+		f->condition = parser_new_expr(p);
+		if (!parse_expr(p, f->condition, expr_find_end(p, EXPR_CAN_END_WITH_LBRACE))) {
+			return false;
 		}
 	}
 	p->block = prev_block; /* be nice to parse_block */
@@ -2194,7 +2207,6 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					return false;
 				goto success;
 			}
-		
 			tokr_err(t, "Unrecognized expression.");
 			return false;
 		}

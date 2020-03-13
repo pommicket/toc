@@ -168,6 +168,10 @@ static Location token_location(File *file, Token *t) {
 	return loc;
 }
 
+static void print_token_location(File *file, Token *t) {
+	print_location(token_location(file, t));
+}
+
 /* for use during tokenization */
 static void tokenization_err_(
 #if ERR_SHOW_SOURCE_LOCATION

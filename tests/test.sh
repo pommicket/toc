@@ -8,6 +8,7 @@ foreign
 params
 nms
 varargs
+where
 misc'
 
 STARTPWD=$(pwd)
