@@ -234,7 +234,7 @@ static void cgen_decls_decl(CGenerator *g, Declaration *d) {
 					if (d->flags & DECL_HAS_EXPR) {
 						Value *val = decl_val_at_index(d, i);
 						cgen_write(g, " = ");
-						cgen_val(g, *val, type);
+						cgen_val(g, val, type);
 					} else {
 						cgen_write(g, " = ");
 						cgen_zero_value(g, type);
