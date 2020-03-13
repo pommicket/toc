@@ -1062,6 +1062,7 @@ static Value *decl_add_val(Declaration *d) {
 }
 	
 static void decl_remove_val(Declaration *d) {
+	assert(arr_len(d->val_stack));
 	Value **valpp = arr_last(d->val_stack);
 	Value *valp = *valpp;
 	if (arr_len(d->idents) == 1 || d->type.kind == TYPE_TUPLE) {
@@ -1642,6 +1643,19 @@ static Status eval_decl(Evaluator *ev, Declaration *d) {
 	return true;
 }
 
+
+static void eval_exit_stmts(Statement *stmts, Statement *last_reached) {
+	if (stmts) {
+		for (Statement *s = stmts; s <= last_reached; ++s) {
+			if (s->kind == STMT_DECL && !(s->decl->flags & DECL_IS_CONST)) {
+				Declaration *d = s->decl;
+				decl_remove_val(d);
+			}
+			/* STMT_INCLUDEs are handled by eval_stmt; don't worry */
+		}
+	}
+}
+
 static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 	switch (stmt->kind) {
 	case STMT_DECL:
@@ -1661,25 +1675,20 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 		}
 		ev->returning = true;
 	} break;
-	case STMT_INCLUDE:
-		arr_foreach(stmt->inc.stmts, Statement, sub)
+	case STMT_INCLUDE: {
+		Statement *last_reached = arr_last(stmt->inc.stmts);
+		arr_foreach(stmt->inc.stmts, Statement, sub) {
 			if (!eval_stmt(ev, sub))
 				return false;
-		break;
+			if (ev->returning) {
+				last_reached = sub;
+				break;
+			}
+		}
+		eval_exit_stmts(stmt->inc.stmts, last_reached);
+	} break;
 	}
 	return true;
-}
-
-static void eval_exit_stmts(Statement *stmts, Statement *last_reached) {
-    for (Statement *s = stmts; s <= last_reached; ++s) {
-		if (s->kind == STMT_DECL && !(s->decl->flags & DECL_IS_CONST)) {
-			Declaration *d = s->decl;
-			decl_remove_val(d);
-		} else if (s->kind == STMT_INCLUDE) {
-			/* TODO: this doesn't work!!! */
-			eval_exit_stmts(s->inc.stmts, arr_last(s->inc.stmts));
-		}
-	}
 }
 
 static Status eval_block(Evaluator *ev, Block *b, Value *v) {

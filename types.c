@@ -2381,6 +2381,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				}
 				if (!val.boolv) {
 					err_print(fn_copy->condition->where, "Function where condition not satisfied. You are probably calling this function incorrectly.");
+					info_print(e->where, "Offending call is here.");
 					return false;
 				}
 			}

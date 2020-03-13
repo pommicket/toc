@@ -26,5 +26,10 @@ tprintf ::= fn(fmt :: []char, args: ..) where tprintf_valid(fmt, args.len) {
 };
 
 main ::= fn() {
-	 tprintf("%d %d%%\n\0", 3, 4);
+	tprintf("Hello\n\0");
+	return;
+	x := 5;
+	tprintf("%d %d%%\n\0", 3, 4);
 };
+
+main();
