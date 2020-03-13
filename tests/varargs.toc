@@ -8,7 +8,7 @@ sum ::= fn(x: ..) int {
 	total := 0;
 	n := 0;
 	for a, i := x { 
-		total += a + i / i;
+		total += a + i - i + 1;
 		n += 1;
 	}
 	total - n
@@ -18,7 +18,7 @@ sumc ::= fn(x:: ..) int {
 	total := 0;
 	n := 0;
 	for a, i := x { 
-		total += a + i / i;
+		total += a + i - i + 1;
 		n += 1;
 	}
 	total - n

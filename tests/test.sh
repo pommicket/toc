@@ -1,13 +1,13 @@
 #!/bin/bash
 
 tests='bf
-varargs
 arr
 arr2
 arr3
 foreign
 params
 nms
+varargs
 misc'
 
 STARTPWD=$(pwd)
