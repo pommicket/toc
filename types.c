@@ -2585,14 +2585,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 			t->builtin = BUILTIN_BOOL;
 			break;
 		case UNARY_LEN:
-			t->kind = TYPE_BUILTIN;
-			t->builtin = BUILTIN_I64;
-			if (of_type->kind != TYPE_SLICE || of_type->kind != TYPE_ARR) {
-				char *s = type_to_str(of_type);
-				err_print(e->where, "Cannot get length of non-array, non-slice type %s.", s);
-				free(s);
-				return false;
-			}
+			assert(0); /* types_expr is what makes things UNARY_LEN */
 			break;
 		case UNARY_TYPEOF: {
 			if (of->type.kind == TYPE_VOID) {
@@ -2915,19 +2908,31 @@ static Status types_expr(Typer *tr, Expression *e) {
 						return false;
 					break;
 				}
-			} else if (struct_type->kind == TYPE_SLICE || struct_type->kind == TYPE_ARR) {
+			} else if (struct_type->kind == TYPE_SLICE || struct_type->kind == TYPE_ARR || type_is_builtin(struct_type, BUILTIN_VARARGS)) {
 				if (!ident_eq_str(rhs->ident, "len")) {
-					err_print(rhs->where, "Field of array or slice must be .len");
+					char *s = type_to_str(struct_type);
+					err_print(rhs->where, "Field of %s must be .len", s);
+					free(s);
 					return false;
 				}
 				/* length of slice/arr is i64 */
 				t->kind = TYPE_BUILTIN;
 				t->builtin = BUILTIN_I64;
-				/* change expr to UNARY_LEN */
-				e->kind = EXPR_UNARY_OP;
 				Expression *of = lhs;
-				e->unary.op = UNARY_LEN;
-				e->unary.of = of;
+				if (type_is_builtin(struct_type, BUILTIN_VARARGS)) {
+					/* replace with val */
+					assert(of->kind == EXPR_IDENT);
+					Identifier ident = of->ident;
+					assert(ident->decl_kind == IDECL_DECL);
+					Declaration *decl = ident->decl;
+					e->kind = EXPR_VAL;
+					e->val.i64 = (I64)arr_len(decl->val.varargs);
+				} else {
+					/* change expr to UNARY_LEN */
+					e->kind = EXPR_UNARY_OP;
+					e->unary.op = UNARY_LEN;
+					e->unary.of = of;
+				}
 			} else if (type_is_builtin(struct_type, BUILTIN_NMS)) {
 				Value nms_val;
 				if (!eval_expr(tr->evalr, lhs, &nms_val))

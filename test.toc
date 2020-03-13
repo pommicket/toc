@@ -1,10 +1,33 @@
 printf ::= #foreign("printf","libc.so.6") fn(#C &"const char", #C ..) #C int;
 
+tprintf ::= fn(fmt: []char, args: ..) {
+	printf(&fmt[0], args);
+};
 
-f ::= fn(x: int, y: int) int {
-  x+y
+sum ::= fn(x: ..) int {
+	total := 0;
+	for a, i := x { 
+		total += a + i - i + 1;
+	}
+	total - x.len
+};
+
+sumc ::= fn(x:: ..) int {
+	total := 0;
+	for a, i := x { 
+		total += a + i - i + 1;
+	}
+	total - x.len
+};
+
+do_printing ::= fn(x::..) {
+	tprintf("%ld\n",sum(x));
+	tprintf("%ld\n",sumc(x));
 };
 
 main ::= fn() {
-	 f(3,4 as typeof f(3,4));
+	do_printing();
+	do_printing(1,2,3);
+	do_printing(4);
+	do_printing(1,10,100,1000,10000);
 };

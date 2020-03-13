@@ -6,22 +6,18 @@ tprintf ::= fn(fmt: []char, args: ..) {
 
 sum ::= fn(x: ..) int {
 	total := 0;
-	n := 0;
 	for a, i := x { 
 		total += a + i - i + 1;
-		n += 1;
 	}
-	total - n
+	total - x.len
 };
 
 sumc ::= fn(x:: ..) int {
 	total := 0;
-	n := 0;
 	for a, i := x { 
 		total += a + i - i + 1;
-		n += 1;
 	}
-	total - n
+	total - x.len
 };
 
 do_printing ::= fn(x::..) {
