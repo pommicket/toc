@@ -415,7 +415,7 @@ static inline void cgen_fn_name(CGenerator *g, FnExpr *f) {
 }
 
 static inline void cgen_fn_instance_number(CGenerator *g, U64 instance) {
-	cgen_write(g, U64_FMT"_", instance);
+	cgen_write(g, U64_FMT "_", instance);
 }
 
 /* should we generate this function? (or is it just meant for compile time) */
@@ -1622,7 +1622,6 @@ static void cgen_fn(CGenerator *g, FnExpr *f, U64 instance, Value *compile_time_
 	cgen_write(g, " {");
 	cgen_nl(g);
 	if (compile_time_args) {
-		int carg_idx = 0;
 		++compile_time_args; /* move past which_are_const */
 		int semi_const_idx = 0;
 		arr_foreach(f->params, Declaration, param) {
@@ -1630,24 +1629,41 @@ static void cgen_fn(CGenerator *g, FnExpr *f, U64 instance, Value *compile_time_
 				|| ((param->flags & DECL_SEMI_CONST)
 					&& (which_are_const & (((U64)1) << semi_const_idx++)))) {
 				int i = 0;
-				arr_foreach(param->idents, Identifier, ident) {
-					Type *type = param->type.kind == TYPE_TUPLE ? &param->type.tuple[i]
-						: &param->type;
-					Value arg = compile_time_args[carg_idx];
-					if (type_is_builtin(type, BUILTIN_TYPE) || type_is_builtin(type, BUILTIN_VARARGS)) {
-						/* don't need to do anything */
-					} else {
-						cgen_val_pre(g, arg, type);
-						cgen_type_pre(g, type);
-						cgen_write(g, " const ");
-						cgen_ident(g, *ident);
-					    cgen_type_post(g, type);
-						cgen_write(g, " = ");
-						cgen_val(g, arg, type);
-						cgen_write(g, ";");
-						cgen_nl(g);
+				if (type_is_builtin(&param->type, BUILTIN_VARARGS)) {
+					VarArg *vararg = param->val.varargs;
+					size_t nvarargs = arr_len(vararg);
+					for (size_t v = 0; v < nvarargs; ++v, ++vararg) {
+						Type *type = vararg->type;
+						Value arg = vararg->val;
+						if (!type_is_compileonly(type)) {
+							cgen_val_pre(g, arg, type);
+							cgen_type_pre(g, type);
+							cgen_write(g, " const ");
+							assert(arr_len(param->idents) == 1);
+							cgen_ident(g, param->idents[0]);
+							cgen_write(g, "%lu_", (unsigned long)v);
+							cgen_type_post(g, type);
+							cgen_write(g, " = ");
+							cgen_val(g, arg, type);
+							cgen_writeln(g, ";");
+						}
 					}
-					++carg_idx;
+				} else {
+					arr_foreach(param->idents, Identifier, ident) {
+						Type *type = decl_type_at_index(param, i);
+						Value arg = *decl_val_at_index(param, i);
+						if (!type_is_compileonly(type)) {
+							cgen_val_pre(g, arg, type);
+							cgen_type_pre(g, type);
+							cgen_write(g, " const ");
+							cgen_ident(g, *ident);
+							cgen_type_post(g, type);
+							cgen_write(g, " = ");
+							cgen_val(g, arg, type);
+							cgen_writeln(g, ";");
+						}
+						++i;
+					}
 				}
 			}
 		}
@@ -1757,7 +1773,7 @@ static void cgen_val_ptr(CGenerator *g, void *v, Type *t) {
 		case BUILTIN_U32: cgen_write(g, U32_FMT, *(U32 *)v); break;
 		case BUILTIN_I64: cgen_write(g, I64_FMT, *(I64 *)v); break;
 		case BUILTIN_U64: cgen_write(g, U64_FMT, *(U64 *)v); break;
-		case BUILTIN_F32: cgen_write(g, F32_FMT"f", *(F32 *)v); break;
+		case BUILTIN_F32: cgen_write(g, F32_FMT "f", *(F32 *)v); break;
 		case BUILTIN_F64: cgen_write(g, F64_FMT, *(F64 *)v); break;
 		case BUILTIN_CHAR: cgen_write(g, "'\\x%02x'", *(char *)v); break;
 		case BUILTIN_BOOL: cgen_write(g, "%s", *(bool *)v ? "true" : "false"); break;

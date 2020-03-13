@@ -1,8 +1,37 @@
-printf ::= #foreign("printf", "libc.so.6") fn(#C &"const char", #C ..) #C int;
+printf ::= #foreign("printf","libc.so.6") fn(#C &"const char", #C ..) #C int;
 
-main::=fn(){
-	s := "Hello %d\n\0";
-	printf(&s[0], 5);
-	
+tprintf ::= fn(fmt: []char, args: ..) {
+	printf(&fmt[0], args);
 };
-main();
+
+sum ::= fn(x: ..) int {
+	total := 0;
+	n := 0;
+	for a, i := x { 
+		total += a + i / i;
+		n += 1;
+	}
+	total - n
+};
+
+sumc ::= fn(x:: ..) int {
+	total := 0;
+	n := 0;
+	for a, i := x { 
+		total += a + i / i;
+		n += 1;
+	}
+	total - n
+};
+
+do_printing ::= fn(x::..) {
+	tprintf("%ld\n",sum(x));
+	tprintf("%ld\n",sumc(x));
+};
+
+main ::= fn() {
+	do_printing();
+	do_printing(1,2,3);
+	do_printing(4);
+	do_printing(1,10,100,1000,10000);
+};

@@ -8,6 +8,7 @@
 
 /* 
 TODO:
+is the current cgen_val situation good? there are probably situations where it could be problematic (i.e. where an expression is replaced with an array value-- try varargs[0][0], where varargs[0] is an array)
 EXPR_VALs don't always need temp variables
 where
 #returns_code (function/struct body is a block, to be evaluated at compile time, which returns the actual statements -- you can use this for implementation of printf)
