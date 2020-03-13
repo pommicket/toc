@@ -8,7 +8,6 @@
 
 /* 
 TODO:
-make new and del functions!
 where
 #returns_code (function/struct body is a block, to be evaluated at compile time, which returns the actual statements -- you can use this for implementation of printf)
 	- struct varargs
@@ -17,6 +16,8 @@ continue
 switch
 enums
 unions
+sizeof (not #sizeof)
+- make new and del functions!
 ---
 switch to / add as an alternative: libffi
 X ::= newtype(int); or something

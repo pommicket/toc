@@ -85,6 +85,7 @@ Here are the major versions of `toc`.
 <tr><td>0.1</td><td>Constant parameter inference.</td><td>2019 Dec 15</td></tr>
 <tr><td>0.2</td><td>Foreign functions and <code>#include</code>.</td><td>2020 Jan 29</td></tr>
 <tr><td>0.3</td><td><code>struct</code> parameters</td><td>2020 Feb 25</td></tr>
+<tr><td>0.4</td><td>Variadic functions</td><td>2020 Mar 13</td></tr>
 </table>
 
 ---
