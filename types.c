@@ -657,8 +657,10 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 		typedef Declaration *DeclarationPtr;
 		arr_foreach(tr->in_decls, DeclarationPtr, in_decl) {
 			if (d == *in_decl) {
-				assert(d->flags & DECL_HAS_EXPR); /* we can only be in decls with an expr */
-				if (d->expr.kind != EXPR_FN) { /* it's okay if a function references itself */
+				/* d needn't have an expression, because it could be its type that refers to itself */
+				if ((d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_FN) {
+					/* it's okay if a function references itself */
+				} else {
 					/* if we've complained about it before when we were figuring out the type, don't complain again */
 					if (!(d->flags & DECL_ERRORED_ABOUT_SELF_REFERENCE)) {
 						char *s = ident_to_str(i);
@@ -2516,7 +2518,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 	case EXPR_UNARY_OP: {
 		Expression *of = e->unary.of;
 		Type *of_type = &of->type;
-		if (!types_expr(tr, e->unary.of)) return false;
+		if (!types_expr(tr, of)) return false;
 		if (of_type->kind == TYPE_UNKNOWN) {
 			return true;
 		}
@@ -2592,10 +2594,22 @@ static Status types_expr(Typer *tr, Expression *e) {
 				return false;
 			}
 			break;
+		case UNARY_TYPEOF: {
+			if (of->type.kind == TYPE_VOID) {
+				err_print(of->where, "This has type void, but you're trying to apply typeof to it.");
+				return false;
+			}
+			if (type_is_builtin(&of->type, BUILTIN_VARARGS)) {
+				err_print(of->where, "You can't apply typeof to varargs.");
+				return false;
+			}
+			e->kind = EXPR_TYPE;
+			e->typeval = &of->type;
+			t->kind = TYPE_BUILTIN;
+			t->builtin = BUILTIN_TYPE;
+		} break;
 		case UNARY_DSIZEOF:
 		case UNARY_DALIGNOF: {
-			if (!types_expr(tr, of))
-				return false;
 			Type *queried_type;
 			if (type_is_builtin(&of->type, BUILTIN_TYPE)) {
 				Value val;

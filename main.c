@@ -8,6 +8,8 @@
 
 /* 
 TODO:
+varargs len
+make new and del functions!
 where
 #returns_code (function/struct body is a block, to be evaluated at compile time, which returns the actual statements -- you can use this for implementation of printf)
 	- struct varargs
@@ -15,8 +17,6 @@ break
 continue
 switch
 enums
-typeof
-	- make sure you can't do typeof(something_that_is_varargs)
 unions
 ---
 switch to / add as an alternative: libffi

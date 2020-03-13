@@ -64,6 +64,7 @@ static const char *unary_op_to_str(UnaryOp u) {
 	case UNARY_LEN: return "len";
 	case UNARY_DSIZEOF: return "#sizeof";
 	case UNARY_DALIGNOF: return "#alignof";
+	case UNARY_TYPEOF: return "typeof";
 	}
 	assert(0);
 	return "";
@@ -1041,7 +1042,8 @@ static int op_precedence(Keyword op) {
 	case KW_LE: return 3;
 	case KW_GE: return 3;
 	case KW_EQ_EQ: return 3;
-	case KW_NE: return 3; 
+	case KW_NE: return 3;
+	case KW_TYPEOF: return 5;
 	case KW_PLUS: return 10;
 	case KW_MINUS: return 20;
 	case KW_AMPERSAND: return 25;
@@ -1740,6 +1742,9 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 						return false;
 					}
 					op = UNARY_DEL;
+					break;
+				case KW_TYPEOF:
+					op = UNARY_TYPEOF;
 					break;
 				default:
 					is_unary = false;

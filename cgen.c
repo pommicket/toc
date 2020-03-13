@@ -1516,6 +1516,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			}
 			handled = true;
 		} break;
+		case UNARY_TYPEOF:
 		case UNARY_DSIZEOF:
 		case UNARY_DALIGNOF:
 			assert(0);

@@ -1153,6 +1153,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			break;
 		case UNARY_DSIZEOF:
 		case UNARY_DALIGNOF:
+		case UNARY_TYPEOF:
 			assert(0);
 			return false;
 		}
