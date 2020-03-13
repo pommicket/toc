@@ -11,6 +11,9 @@
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
+#elif defined __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-conversion"
 #endif
 #include <avcall.h>
 #include <dlfcn.h>
@@ -179,17 +182,11 @@ static bool arg_list_start(av_alist *arg_list, void (*fn)(), Value *return_val, 
 				}
 			}
 		}
-		_av_start_struct(*arg_list, fn, struct_size, splittable, return_val->struc);
+		/* getting warning on Debian stretch about splittable being set but not used */
+		_av_start_struct(*arg_list, fn, struct_size, splittable, return_val->struc); (void)splittable;
 	} break;
 	case TYPE_SLICE:
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wsign-conversion"
-#endif	
 		av_start_struct(*arg_list, fn, Slice, av_word_splittable_2(I64, void *), &return_val->slice);
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
 		break;
 	case TYPE_EXPR:
 		assert(0);
@@ -282,6 +279,8 @@ static bool arg_list_add(av_alist *arg_list, Value val, Type *type, Location whe
 
 #ifdef __clang__
 #pragma clang diagnostic pop
+#elif defined __GNUC__
+#pragma GCC diagnostic pop
 #endif
 
 static void ffmgr_create(ForeignFnManager *ffmgr, Allocator *allocr) {
