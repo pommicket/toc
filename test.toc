@@ -1,35 +1,8 @@
 printf ::= #foreign("printf","libc.so.6") fn(#C &"const char", #C ..) #C int;
 
-tprintf_valid ::= fn(fmt :: []char, nargs: int) bool {
-	if fmt[fmt.len-1] != '\0' {
-		return false;
-	}
-	count := 0;
-	for x, i := fmt {
-		if x == '%' {
-			if i == fmt.len-1 {
-				count += 1;
-			} elif fmt[i+1] != '%' {
-				count += 1;
-			} else {
-				count -= 1;
-			}
-		}
-	}
-	count == nargs
-};
-	
-
-tprintf ::= fn(fmt :: []char, args: ..) where tprintf_valid(fmt, args.len) {
-	f := fmt;
-	printf(&f[0], args);
-};
 
 main ::= fn() {
-	tprintf("Hello\n\0");
-	return;
-	x := 5;
-	tprintf("%d %d%%\n\0", 3, 4);
+	 printf("hey\n\0");
 };
 
 main();

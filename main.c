@@ -8,7 +8,9 @@
 
 /* 
 TODO:
-#returns_code (function/struct body is a block, to be evaluated at compile time, which returns the actual statements -- you can use this for implementation of printf)
+fix foreign varargs
+user-generated errors
+#returns_code (struct body is a block, to be evaluated at compile time, which returns the actual statements)
 	- struct varargs
 break
 continue

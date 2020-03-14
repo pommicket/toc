@@ -1126,7 +1126,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			eval_unary_op_nums_only(-);
 		} break;
 		case UNARY_NOT:
-			v->boolv = !val_truthiness(*v, &e->unary.of->type);
+			v->boolv = !val_truthiness(of, &e->unary.of->type);
 			break;
 		case UNARY_DEL:
 			if (of_type->kind == TYPE_PTR)
