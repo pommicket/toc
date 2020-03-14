@@ -2,7 +2,8 @@ printf ::= #foreign("printf","libc.so.6") fn(#C &"const char", #C ..) #C int;
 
 
 main ::= fn() {
-	 printf("hey\n\0");
+	 x := "hey %ld %ld %ld %ld %ld\n\0";
+	 printf(&x[0], 5, 3, 8, 9, 4);
 };
 
 main();

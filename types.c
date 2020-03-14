@@ -2103,8 +2103,10 @@ static Status types_expr(Typer *tr, Expression *e) {
 			
 		} else {
 			if (nargs != nparams) {
-				err_print(e->where, "Expected %lu arguments to function call, but got %lu.", (unsigned long)nparams, (unsigned long)nargs);
-				return false;
+				if (!has_varargs || nargs < nparams-1) {
+					err_print(e->where, "Expected %lu arguments to function call, but got %lu.", (unsigned long)nparams, (unsigned long)nargs);
+					return false;
+				}
 			}
 			for (size_t p = 0; p < nargs; ++p) {
 				if (args[p].name) {

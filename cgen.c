@@ -1326,6 +1326,11 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		cgen_write(g, "%.16Lf", (long double)e->floatl);
 		break;
 	case EXPR_LITERAL_INT:
+		/* make sure it's the right type (for variadic foreign functions) */
+		cgen_write(g, "(");
+		cgen_type_pre(g, &e->type);
+		cgen_type_post(g, &e->type);
+		cgen_write(g, ")");
 		cgen_write(g, U64_FMT, e->intl);
 		break;
 	case EXPR_LITERAL_STR: {
