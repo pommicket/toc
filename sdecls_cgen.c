@@ -43,8 +43,8 @@ static void cgen_sdecls_block(CGenerator *g, Block *b) {
 }
 
 static char *cgen_nms_prefix_part(CGenerator *g, Namespace *n) {
-    char *s;
-    while (n->points_to) {
+	char *s;
+	while (n->points_to) {
 		n = n->points_to;
 	}
 	if (n->associated_ident) {
@@ -103,7 +103,7 @@ static void cgen_sdecls_expr(CGenerator *g, Expression *e) {
 
 
 static void cgen_sdecls_decl(CGenerator *g, Declaration *d) {
-    cgen_sdecls_type(g, &d->type);
+	cgen_sdecls_type(g, &d->type);
 	if (cgen_fn_is_direct(g, d)) {
 		d->expr.fn->c.name = d->idents[0];
 	}
@@ -112,11 +112,11 @@ static void cgen_sdecls_decl(CGenerator *g, Declaration *d) {
 
 		if (type_is_builtin(type, BUILTIN_TYPE) && !(d->flags & DECL_IS_PARAM)) {
 			Value *val = decl_val_at_index(d, idx);
-		    cgen_sdecls_type(g, val->type);
+			cgen_sdecls_type(g, val->type);
 		}
 	}
 	if (d->flags & DECL_HAS_EXPR) {
-	    cgen_sdecls_expr(g, &d->expr);
+		cgen_sdecls_expr(g, &d->expr);
 		if (d->flags & DECL_EXPORT) {
 			if (d->expr.kind == EXPR_FN)
 				d->expr.fn->flags |= FN_EXPR_EXPORT;
@@ -145,7 +145,7 @@ static void cgen_sdecls_stmt(CGenerator *g, Statement *s) {
 			arr_foreach(s->inc.stmts, Statement, sub)
 				cgen_sdecls_stmt(g, sub);
 		}
-	    break;
+		break;
 	}
 }
 

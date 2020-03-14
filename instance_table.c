@@ -225,7 +225,7 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 		case BUILTIN_BOOL: return *(bool *)u == *(bool *)v;
 		case BUILTIN_CHAR: return *(char *)u == *(char *)v;
 		case BUILTIN_VARARGS: {
-		    VarArg *us = *(VarArg **)u, *vs = *(VarArg **)v;
+			VarArg *us = *(VarArg **)u, *vs = *(VarArg **)v;
 			size_t n = arr_len(us);
 			if (arr_len(vs) != n)
 				return false;
@@ -238,7 +238,7 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 			return true;
 		}	
 		case BUILTIN_TYPE:
-		    return type_eq(*(Type **)u, *(Type **)v);
+			return type_eq(*(Type **)u, *(Type **)v);
 		case BUILTIN_NMS:
 			return *(Namespace **)u == *(Namespace **)v;
 		}

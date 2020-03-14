@@ -204,7 +204,7 @@ static void copy_fn_expr(Copier *c, FnExpr *fout, FnExpr *fin, U8 flags) {
 		copy_type(c, &fout->foreign.type, &fin->foreign.type);
 		size_t nctypes = arr_len(fin->foreign.type.fn.types);
 		fout->foreign.ctypes = copier_malloc(c, nctypes * sizeof(CType));
-	    memcpy(fout->foreign.ctypes, fin->foreign.ctypes, nctypes * sizeof(CType));
+		memcpy(fout->foreign.ctypes, fin->foreign.ctypes, nctypes * sizeof(CType));
 	} else {
 		Block *prev = c->block;
 		if (copy_body) {
@@ -284,8 +284,8 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		copy_block(c, &wout->body, &win->body, 0);
 	} break;
 	case EXPR_FOR: {
-	    ForExpr *fin = in->for_;
-	    ForExpr *fout = allocr_malloc(a, sizeof *fout);
+		ForExpr *fin = in->for_;
+		ForExpr *fout = allocr_malloc(a, sizeof *fout);
 		out->for_ = fout;
 		*fout = *fin;
 		
@@ -412,7 +412,7 @@ static void copy_decl(Copier *c, Declaration *out, Declaration *in) {
 		copier_ident_translate(c, &out->idents[i]);
 		
 		out->idents[i]->decl_kind = IDECL_DECL;
-	    out->idents[i]->decl = out;
+		out->idents[i]->decl = out;
 	}
 	
 }

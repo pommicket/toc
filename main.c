@@ -42,7 +42,7 @@ macros
 #include <execinfo.h>
 #include <unistd.h>
 static void signal_handler(int num) {
-    switch (num) {
+	switch (num) {
 	case SIGABRT:
 		fprintf(stderr, "Aborted.\n");
 		break;
@@ -50,14 +50,14 @@ static void signal_handler(int num) {
 		fprintf(stderr, "Segmentation fault.\n");
 		break;
 	default:
-	    fprintf(stderr, "Terminated for unknown reason.\n");
+		fprintf(stderr, "Terminated for unknown reason.\n");
 		break;
 	}
 	fprintf(stderr, "Stack trace:\n");
 
 	static void *addrs[30];
-    int naddrs = (int)(sizeof addrs / sizeof *addrs);
-    naddrs = backtrace(addrs, naddrs);
+	int naddrs = (int)(sizeof addrs / sizeof *addrs);
+	naddrs = backtrace(addrs, naddrs);
 	/* char **syms = backtrace_symbols(addrs, naddrs); */
 	char command[2048] = "addr2line -p -f -a -e toc ";
 	for (int i = 4; i < naddrs; ++i) {
@@ -159,7 +159,7 @@ int main(int argc, char **argv) {
 	Evaluator ev;
 	evalr_create(&ev, &tr, &main_allocr);
 	typer_create(&tr, &ev, &err_ctx, &main_allocr, &globals);
-    
+	
 	if (!types_file(&tr, &f)) {
 		err_text_important(&err_ctx, "Errors occured while determining types.\n");
 		allocr_free_all(&main_allocr);

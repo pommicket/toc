@@ -259,7 +259,7 @@ static bool arg_list_add(av_alist *arg_list, Value val, Type *type, Location whe
 			break;
 		case BUILTIN_VARARGS:
 			arr_foreach(val.varargs, VarArg, arg) {
-			    arg_list_add(arg_list, arg->val, arg->type, where);
+				arg_list_add(arg_list, arg->val, arg->type, where);
 			}
 			break;
 		}

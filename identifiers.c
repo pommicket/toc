@@ -61,7 +61,7 @@ static inline bool ident_eq_str(Identifier i, const char *s) {
 static Identifier ident_insert(Identifiers *ids, char **s) {
 	char *original = *s;
 	size_t len = ident_str_len_advance(s);
-    IdentSlot *slot = (IdentSlot *)str_hash_table_insert_(&ids->table, original, len);
+	IdentSlot *slot = (IdentSlot *)str_hash_table_insert_(&ids->table, original, len);
 	slot->idents = ids;
 	return slot;
 }
@@ -112,7 +112,7 @@ static void fprint_ident_reduced_charset(FILE *out, Identifier id) {
 		if (c > 127) {
 			fprintf(out, "x__%02x", c);
 		} else {
-		    putc(*s, out);
+			putc(*s, out);
 		}
 	}
 }
@@ -157,14 +157,14 @@ static inline Identifier ident_get(Identifiers *ids, char *s) {
 /* translate and insert if not already there */
 static inline Identifier ident_translate_forced(Identifier i, Identifiers *to_idents) {
 	char *p = i->str;
-    Identifier translated = ident_insert(to_idents, &p);
+	Identifier translated = ident_insert(to_idents, &p);
 	assert(translated->idents == to_idents);
 	return translated;
 }
 
 /* translate but don't add it if it's not there */
 static inline Identifier ident_translate(Identifier i, Identifiers *to_idents) {
-    return ident_get(to_idents, i->str);
+	return ident_get(to_idents, i->str);
 }
 
 /* returns true if i and j are equal, even if they're not in the same table */

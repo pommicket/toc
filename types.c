@@ -320,7 +320,7 @@ static Status expr_must_lval(Expression *e) {
 				return false;
 		}
 		return true;
-    default: {
+	default: {
 		err_print(e->where, "Cannot use %s as l-value.", expr_kind_to_str(e->kind));
 		return false;
 	}
@@ -543,7 +543,7 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 		}
 		if (type_is_builtin(&f->ret_type, BUILTIN_VARARGS)) {
 			err_print(f->where, "Functions cannot return varargs.");
-		    success = false;
+			success = false;
 			goto ret;
 		}
 		if (type_is_compileonly(&f->ret_type)) {
@@ -591,7 +591,7 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 		print_block_location(tr->block);
 		printf("But the identifier's scope is:\n");
 		print_block_location(i->idents->scope);
-	    abort();
+		abort();
 	}
 #else
 	assert(i->idents->scope == tr->block);
@@ -696,7 +696,7 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 					}
 					/* let's type the declaration, and redo this (for evaling future functions) */
 					if (!types_decl(tr, d)) return false;
-				    return type_of_ident(tr, where, ident, t);
+					return type_of_ident(tr, where, ident, t);
 				}
 				return false;
 			}
@@ -1108,7 +1108,7 @@ static Status call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Lo
 				  nparams, plural_suffix(nparams), nargs);
 		return false;
 	}
-    
+	
 	
 	I16 *order = *orderp =
 		/* thanks, gcc, for making me do this! (getting erroneous -Walloc-size-larger-than) */
@@ -1294,7 +1294,7 @@ static Status parameterized_struct_arg_order(StructDef *struc, Argument *args, I
 			free(s);
 			return false;
 		}
-	    (*order)[param_idx] = argno;
+		(*order)[param_idx] = argno;
 		++argno;
 	}
 	
@@ -1534,7 +1534,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					char *s = type_to_str(tt);
 					err_print(e->where, "to expression of for loop must be a builtin numerical type, not %s", s);
 					free(s);
-				    goto for_fail;
+					goto for_fail;
 				}
 			}
 
@@ -1632,8 +1632,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 							/* TODO(eventually): don't put a decl in each block, just put one at the start */
 							Statement *s = &sub->stmts[0];
 							s->flags = 0;
-						    s->kind = STMT_DECL;
-						    s->where = e->where;
+							s->kind = STMT_DECL;
+							s->where = e->where;
 
 							/* declare value */
 							Declaration *decl = s->decl = typer_calloc(tr, 1, sizeof *decl);
@@ -1657,8 +1657,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 							/* TODO(eventually): don't put a decl in each block, just put one at the start */
 							Statement *s = &sub->stmts[has_val];
 							s->flags = 0;
-						    s->kind = STMT_DECL;
-						    s->where = e->where;
+							s->kind = STMT_DECL;
+							s->where = e->where;
 
 							/* declare value */
 							Declaration *decl = s->decl = typer_calloc(tr, 1, sizeof *decl);
@@ -1930,7 +1930,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					info_print(base->struc->where, "struct was declared here.");
 					return false;
 				}
-			    Copier cop = copier_create(tr->allocr, base->struc->scope.parent);
+				Copier cop = copier_create(tr->allocr, base->struc->scope.parent);
 				HashTable *table = &base->struc->instances;
 				StructDef struc;
 				copy_struct(&cop, &struc, base->struc);
@@ -1958,7 +1958,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					/* temporarily add this instance to the stack, while we type the decl, in case you, e.g., pass t = float to struct(t::Type, u::t = "hello") */
 					*(Location *)arr_add(&err_ctx->instance_stack) = e->where;
 					typer_block_enter(tr, &struc.scope);
-				    bool success = types_decl(tr, param);
+					bool success = types_decl(tr, param);
 					arr_remove_last(&err_ctx->instance_stack);
 					typer_block_exit(tr);
 					if (!success) return false;
@@ -1968,7 +1968,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 						arg_types[p] = *type;
 						Value ident_val;
 						if (order[p] == -1) {
-						    ident_val = *decl_val_at_index(param, ident_idx);
+							ident_val = *decl_val_at_index(param, ident_idx);
 						} else {
 							Argument *arg = &c->args[order[p]];
 							assert(arg->val.type.flags & TYPE_IS_RESOLVED);
@@ -2003,7 +2003,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					inst->struc = struc;
 					size_t i = 0;
 					arr_foreach(inst->struc.params, Declaration, param) {
-					    param->flags |= DECL_FOUND_VAL;
+						param->flags |= DECL_FOUND_VAL;
 						if (arr_len(param->idents) == 1) {
 							param->val = arg_vals[i];
 							++i;
@@ -2026,7 +2026,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					tr->block = &inst->struc.scope;
 					bool success = type_resolve(tr, &struct_t, e->where); /* resolve the struct */
 					tr->block = prev_block;
-				    arr_remove_last(&err_ctx->instance_stack);
+					arr_remove_last(&err_ctx->instance_stack);
 					if (!success) return false;
 						
 					inst->struc.instance_id = table->n;
@@ -2039,7 +2039,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				e->typeval->kind = TYPE_STRUCT;
 				e->typeval->flags = TYPE_IS_RESOLVED;
 				e->typeval->struc = &inst->struc;
-			    t->kind = TYPE_BUILTIN;
+				t->kind = TYPE_BUILTIN;
 				t->builtin = BUILTIN_TYPE;
 				arr_clear(&arg_types);
 				goto ret;
@@ -2479,7 +2479,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 			} else {
 				c->instance->fn = fn_copy;
 				/* fix parameter and return types (they were kind of problematic before, because we didn't know about the instance) */
-			    fn_copy->instance_id = 1+original_fn->instances->n; /* let's help cgen out and assign a non-zero ID to this */
+				fn_copy->instance_id = 1+original_fn->instances->n; /* let's help cgen out and assign a non-zero ID to this */
 				/* type this instance */
 				
 				/* if anything happens, make sure we let the user know that this happened while generating a fn */
@@ -2911,7 +2911,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				lhs->kind = EXPR_VAL;
 				lhs->flags = EXPR_FOUND_TYPE;
 				lhs->val = lval;
-			    Type *struc = lhs->val.type;
+				Type *struc = lhs->val.type;
 				if (struc->kind != TYPE_STRUCT) {
 					char *s = type_to_str(struc);
 					err_print(lhs->where, "Cannot access member from non-struct type (%s).", s);
@@ -3034,14 +3034,14 @@ static Status types_expr(Typer *tr, Expression *e) {
 	case EXPR_NMS: {
 		Namespace *prev_nms = tr->nms;
 		Namespace *n = tr->nms = e->nms;
-	    n->points_to = NULL;
+		n->points_to = NULL;
 		n->body.flags |= BLOCK_IS_NMS;
 		if (!types_block(tr, &n->body)) {
 			tr->nms = prev_nms;
 			return false;
 		}
 		tr->nms = prev_nms;
-	    n->associated_ident = NULL; /* set when we type the declaration which contains this namespace */
+		n->associated_ident = NULL; /* set when we type the declaration which contains this namespace */
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_NMS;
 	} break;
@@ -3231,7 +3231,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 		if (d->type.kind == TYPE_PTR) {
 			err_print(d->where, "You can't have a constant pointer.");
 			success = false;
-		    goto ret;
+			goto ret;
 		}
 	}
 	
@@ -3376,7 +3376,7 @@ static Status types_stmt(Typer *tr, Statement *s) {
 		if (inc_f) {
 			inc_f->stmts = stmts_inc;
 		}
-	    s->inc.stmts = stmts_inc;
+		s->inc.stmts = stmts_inc;
 		arr_foreach(stmts_inc, Statement, s_incd) {
 			if (!types_stmt(tr, s_incd))
 				return false;

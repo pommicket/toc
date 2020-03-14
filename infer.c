@@ -33,8 +33,8 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identi
 	case EXPR_CALL: {
 		if (!types_expr(tr, match->call.fn))
 			return false;
-	    if (type_is_builtin(&match->call.fn->type, BUILTIN_TYPE)) {
-	    	/* it's a parameterized struct */
+		if (type_is_builtin(&match->call.fn->type, BUILTIN_TYPE)) {
+			/* it's a parameterized struct */
 			Value fn_val;
 			if (!eval_expr(tr->evalr, to, &fn_val))
 				return false;

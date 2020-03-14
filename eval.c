@@ -717,7 +717,7 @@ static inline bool eval_address_of_ident(Identifier i, Location where, Type *typ
 		err_print(where, "Cannot access value of variable %s at compile time.", s);
 		return false;
 	}
-    *ptr = val_get_ptr(val, type);
+	*ptr = val_get_ptr(val, type);
 	return true;
 }
 
@@ -736,17 +736,17 @@ static Status eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr, void
 			struc_data = struc.ptr;
 			if (struc_data == NULL) {
 				err_print(dot_expr->where, "Attempt to dereference NULL pointer.");
-			    return false;
+				return false;
 			}
 		} else {
 			struc_data = struc.struc;
 		}
-	    *p = (char *)struc_data + dot_expr->binary.dot.field->offset;
+		*p = (char *)struc_data + dot_expr->binary.dot.field->offset;
 	} else {
 		void *ptr;
 		Identifier ident = dot_expr->binary.rhs->ident;
 		assert(type_is_builtin(struct_type, BUILTIN_NMS));
-	    if (!eval_address_of_ident(ident, dot_expr->where, &dot_expr->type, &ptr))
+		if (!eval_address_of_ident(ident, dot_expr->where, &dot_expr->type, &ptr))
 			return false;
 		*p = ptr;
 	}
@@ -890,7 +890,7 @@ static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value 
 	eval_binary_op_one(u64, U64, op);			
 	
 #define eval_binary_op_nums(builtin, op)		\
-    eval_binary_op_ints(builtin, op);			\
+	eval_binary_op_ints(builtin, op);			\
 	eval_binary_op_one(f32, F32, op);			\
 	eval_binary_op_one(f64, F64, op)
 
@@ -1273,7 +1273,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			index_val = NULL;
 		}
 		if (fo->value) {
-		    value_val = fo->index ? &for_valp->tuple[1] : for_valp;
+			value_val = fo->index ? &for_valp->tuple[1] : for_valp;
 		} else {
 			value_val = NULL;
 		}
@@ -1490,7 +1490,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				Value *ival = multiple_idents ? &dval->tuple[idx] : dval;
 				Type *type = is_tuple ? &d->type.tuple[idx] : &d->type;
 				if (d->flags & DECL_HAS_EXPR) {
-				    *ival = d->type.kind == TYPE_TUPLE ? ret_decl_val.tuple[idx] : ret_decl_val;
+					*ival = d->type.kind == TYPE_TUPLE ? ret_decl_val.tuple[idx] : ret_decl_val;
 				} else {
 					*ival = val_zero(type);
 				}

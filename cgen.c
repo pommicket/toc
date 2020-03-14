@@ -226,7 +226,7 @@ static void cgen_ident(CGenerator *g, Identifier i) {
 		/* don't conflict with C's main! */
 		cgen_write(g, "main_");
 	} else {
-	    cgen_ident_simple(g, i);
+		cgen_ident_simple(g, i);
 	}
 }
 
@@ -351,7 +351,7 @@ static void cgen_type_post(CGenerator *g, Type *t) {
 	switch (t->kind) {
 	case TYPE_PTR:
 		cgen_write(g, ")");
-	    cgen_type_post(g, t->ptr);
+		cgen_type_post(g, t->ptr);
 		break;
 	case TYPE_ARR:
 		assert(t->flags & TYPE_IS_RESOLVED);
@@ -448,7 +448,7 @@ static void cgen_val_ptr_pre(CGenerator *g, void *v, Type *t) {
 		for (I64 i = 0; i < s->n; ++i) {
 			cgen_val_ptr_pre(g, (char *)s->data + (U64)i * compiler_sizeof(t->slice), t->slice);
 		}
-	    cgen_type_pre(g, t->slice);
+		cgen_type_pre(g, t->slice);
 		cgen_write(g, "(d%p_[])", v); /* TODO: improve this somehow? */
 		cgen_type_post(g, t->slice);
 		cgen_write(g, " = {");
@@ -577,7 +577,7 @@ static void cgen_fn_params(CGenerator *g, FnExpr *f, U64 which_are_const) {
 				   && (which_are_const & (((U64)1) << semi_const_idx++))) {
 			/* semi constant argument is constant */
 		} else {
-		    int idx = 0;
+			int idx = 0;
 			arr_foreach(d->idents, Identifier, i) {
 				if (any_params) 
 					cgen_write(g, ", ");
@@ -655,7 +655,7 @@ static void cgen_fn_header(CGenerator *g, FnExpr *f, U64 which_are_const) {
 		cgen_write(g, " ");
 	}
 	cgen_full_fn_name(g, f);	
-    cgen_fn_params(g, f, which_are_const);
+	cgen_fn_params(g, f, which_are_const);
 	if (!out_param) {
 		cgen_type_post(g, &f->ret_type);
 	}
@@ -1128,7 +1128,7 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 		break;
 	case EXPR_CALL: {
 		cgen_expr_pre(g, e->call.fn);
-	    size_t i = 0;
+		size_t i = 0;
 		Constness *constness = e->call.fn->type.fn.constness;
 		size_t nparams = arr_len(e->call.fn->type.fn.types)-1;
 		arr_foreach(e->call.arg_exprs, Expression, arg) {
@@ -1150,7 +1150,7 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 				cgen_type_post(g, &t->tuple[i]);
 				cgen_write(g, "; ");
 			}
-		    cgen_expr(g, e->call.fn);
+			cgen_expr(g, e->call.fn);
 			if (e->call.instance) {
 				cgen_fn_instance_number(g, e->call.instance->fn->instance_id);
 			}
@@ -1301,7 +1301,7 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 			cgen_write(g, "extern void *stdin;");
 			cgen_nl(g);
 			break;
-	    default:
+		default:
 			break;
 		}
 		break;
@@ -1349,7 +1349,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		bool handled = false;
 		if (e->type.kind == TYPE_FN) {
 			/* generate the right function name, because it might be anonymous */
-		    Identifier i = e->ident;
+			Identifier i = e->ident;
 			if (i->decl_kind == IDECL_DECL) {
 				Declaration *d = i->decl;
 				if (d->flags & DECL_IS_CONST) {
@@ -1437,7 +1437,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 				cgen_write(g, "]");
 				break;
 			case TYPE_BUILTIN:
-			    if (lhs_type->builtin == BUILTIN_VARARGS) {
+				if (lhs_type->builtin == BUILTIN_VARARGS) {
 					assert(lhs->kind == EXPR_IDENT);
 					assert(rhs->kind == EXPR_VAL);
 					assert(type_is_builtin(&rhs->type, BUILTIN_I64));
@@ -1571,7 +1571,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			}
 			cgen_write(g, "(");
 			bool first_arg = true;
-		    size_t i = 0;
+			size_t i = 0;
 			size_t nparams = arr_len(fn_type->types)-1;
 			arr_foreach(e->call.arg_exprs, Expression, arg) {
 				if (!fn_type->constness || !arg_is_const(arg, fn_type->constness[i])) {
@@ -1823,16 +1823,16 @@ static void cgen_decl(CGenerator *g, Declaration *d) {
 			Identifier i = d->idents[idx];
 			Type *type = decl_type_at_index(d, idx);
 			if (type_is_compileonly(&d->type)) {
-			    continue;
+				continue;
 			}
 			Value *val = decl_val_at_index(d, idx);
 			if (has_expr) {
 				cgen_val_pre(g, val, type);
 			}
-		    cgen_type_pre(g, type);
+			cgen_type_pre(g, type);
 			cgen_write(g, " ");
 			cgen_ident(g, i);
-		    cgen_type_post(g, type);
+			cgen_type_post(g, type);
 			if (has_expr) {
 				cgen_write(g, " = ");
 				cgen_val(g, val, type);
@@ -1850,10 +1850,10 @@ static void cgen_decl(CGenerator *g, Declaration *d) {
 			Identifier i = d->idents[idx];
 			if (ident_eq_str(i, "_")) continue;
 			Type *type = decl_type_at_index(d, idx);
-		    cgen_type_pre(g, type);
+			cgen_type_pre(g, type);
 			cgen_write(g, " ");
 			cgen_ident(g, i);
-		    cgen_type_post(g, type);
+			cgen_type_post(g, type);
 			if (!has_expr) {
 				cgen_write(g, " = ");
 				cgen_zero_value(g, type);
@@ -1873,7 +1873,7 @@ static void cgen_decl(CGenerator *g, Declaration *d) {
 					cgen_nl(g);
 					cgen_type_pre(g, &d->type);
 					cgen_write(g, " expr_");
-				    cgen_type_post(g, &d->type);
+					cgen_type_post(g, &d->type);
 					cgen_write(g, "; ");
 					cgen_set(g, NULL, "expr_", &d->expr, NULL);
 				
@@ -1923,7 +1923,7 @@ static void cgen_ret(CGenerator *g, Expression *ret) {
 					++idx;
 				}
 			}
-		    cgen_set_tuple(g, NULL, NULL, "*ret__", &ret_expr);
+			cgen_set_tuple(g, NULL, NULL, "*ret__", &ret_expr);
 			arr_clear(&ret_expr.tuple);
 		} else if (cgen_uses_ptr(&f->ret_type)) {
 			Expression ret_expr = {0};
@@ -1951,12 +1951,12 @@ static void cgen_ret(CGenerator *g, Expression *ret) {
 		if (f->ret_type.kind == TYPE_TUPLE) {
 			cgen_set_tuple(g, NULL, NULL, "*ret__", ret);
 		} else {
-		    cgen_set(g, NULL, "*ret__", ret, NULL);
+			cgen_set(g, NULL, "*ret__", ret, NULL);
 		}
 		cgen_write(g, " return");
 	} else {
 		cgen_write(g, "return ");
-	    cgen_expr(g, ret);
+		cgen_expr(g, ret);
 	}
 	cgen_writeln(g, ";");
 }
@@ -1973,7 +1973,7 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 		break;
 	case STMT_EXPR:
 		if ((g->block != NULL || s->expr.kind == EXPR_C) && !type_is_compileonly(&s->expr.type)) {
-		    cgen_expr_pre(g, &s->expr);
+			cgen_expr_pre(g, &s->expr);
 			cgen_expr(g, &s->expr);
 			if (s->expr.kind != EXPR_C)
 				cgen_writeln(g, ";");
@@ -1990,8 +1990,8 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 			if (s->inc.inc_file) s->inc.inc_file->flags |= INC_FILE_CGEND;
 			arr_foreach(s->inc.stmts, Statement, sub)
 				cgen_stmt(g, sub);
-	    }
-	    break;
+		}
+		break;
 	}
 }
 
@@ -2013,7 +2013,7 @@ static void cgen_defs_fn(CGenerator *g, FnExpr *f) {
 
 static void cgen_defs_expr(CGenerator *g, Expression *e) {
 	if (e->kind == EXPR_FN) {
-	    cgen_defs_fn(g, e->fn);
+		cgen_defs_fn(g, e->fn);
 	}
 	cgen_recurse_subexprs(g, e, cgen_defs_expr, cgen_defs_block, cgen_defs_decl);
 }
@@ -2041,7 +2041,7 @@ static void cgen_defs_stmt(CGenerator *g, Statement *s) {
 		if (s->inc.inc_file && (s->inc.inc_file->flags & INC_FILE_CGEND_DEFS)) {
 			/* already generated */
 		} else {
-		    if (s->inc.inc_file) s->inc.inc_file->flags |= INC_FILE_CGEND_DEFS;
+			if (s->inc.inc_file) s->inc.inc_file->flags |= INC_FILE_CGEND_DEFS;
 			arr_foreach(s->inc.stmts, Statement, sub)
 				cgen_defs_stmt(g, sub);
 		}

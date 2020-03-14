@@ -384,8 +384,8 @@ typedef struct Location {
 	Token *start;
 	union {
 		Token *end; /* Exclusive */
-	    struct {
-		    U32 line; /* if 0, this is a null location */
+		struct {
+			U32 line; /* if 0, this is a null location */
 		} simple_location;
 	};
 } Location;
@@ -510,7 +510,7 @@ enum {
 };
 typedef struct StructDef {
 	Field *fields;
-    struct Declaration *constants;
+	struct Declaration *constants;
 	Location where;
 	U8 flags;
 	Block scope; /* to make sure that parameters and constants live somewhere. fields are not kept here. */
@@ -796,7 +796,7 @@ typedef struct Expression {
 	Type type;
 	Location where;
 	ExprKind kind : 8;
-    ExprFlags flags;
+	ExprFlags flags;
 	struct {
 		IdentID id; /* cgen ID used for this expression */
 	} cgen;
@@ -825,7 +825,7 @@ typedef struct Expression {
 		struct {
 			union {
 				struct Expression *expr;
-			    BuiltinVal val;
+				BuiltinVal val;
 			} which;
 		} builtin;
 		Identifier ident;

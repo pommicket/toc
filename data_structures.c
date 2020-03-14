@@ -243,7 +243,7 @@ static U64 str_hash(const char *s, size_t len) {
 	U32 x = 0xabcdef01;
 	U32 y = 0x31415926;
 	U64 hash = 0;
-    for (size_t i = 0; i < len; ++i) {
+	for (size_t i = 0; i < len; ++i) {
 		hash += (U64)x * (unsigned char)(*s) + y;
 		x = rand_u32(x);
 		y = rand_u32(y);

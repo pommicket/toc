@@ -622,7 +622,7 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 			struc->where.start = t->token;
 			memset(&struc->scope, 0, sizeof struc->scope);
 			idents_create(&struc->scope.idents, p->allocr, &struc->scope);
-		    memset(&struc->instances, 0, sizeof struc->instances);
+			memset(&struc->instances, 0, sizeof struc->instances);
 			struc->scope.parent = p->block;
 			
 			Block *prev_block = p->block;
@@ -987,7 +987,7 @@ static Status parse_fn_expr(Parser *p, FnExpr *f) {
 	
 	if (t->token->kind == TOKEN_EOF) {
 		tokr_err(t, "End of file encountered while parsing parameter list.");
-	    success = false; goto ret;
+		success = false; goto ret;
 	}
 	
 	if (token_is_kw(t->token, KW_LBRACE) || token_is_kw(t->token, KW_WHERE)) {
@@ -1111,7 +1111,7 @@ static BuiltinType uint_with_size(size_t size) {
 }
 
 static Status ctype_to_type(Allocator *a, CType *ctype, Type *type, Location where) {
-    memset(type, 0, sizeof *type);
+	memset(type, 0, sizeof *type);
 	type->kind = TYPE_BUILTIN;
 	size_t size = 0;
 	switch (ctype->kind) {
@@ -1127,7 +1127,7 @@ static Status ctype_to_type(Allocator *a, CType *ctype, Type *type, Location whe
 		break;
 	case CTYPE_SHORT:
 	case CTYPE_UNSIGNED_SHORT:
-	    size = sizeof(short);
+		size = sizeof(short);
 		break;
 	case CTYPE_INT:
 	case CTYPE_UNSIGNED_INT:
@@ -1479,7 +1479,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 								&& token_is_kw(t->token + 3, KW_COLON))))) {
 					if (t->token->kind == TOKEN_IDENT) {
 						fo->value = parser_ident_insert(p, t->token->ident);
-					    if (!check_ident_redecl(p, fo->value))
+						if (!check_ident_redecl(p, fo->value))
 							goto for_fail;
 						fo->value->decl_kind = IDECL_EXPR;
 						fo->value->decl_expr = e;
@@ -1526,7 +1526,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				Token *first_end; first_end = expr_find_end(p, EXPR_CAN_END_WITH_COMMA|EXPR_CAN_END_WITH_DOTDOT|EXPR_CAN_END_WITH_LBRACE);
 				Expression *first; first = parser_new_expr(p);
 				if (!parse_expr(p, first, first_end))
-				    goto for_fail;
+					goto for_fail;
 				if (token_is_kw(first_end, KW_LBRACE)) {
 					fo->of = first;
 				} else if (token_is_kw(first_end, KW_DOTDOT) || token_is_kw(first_end, KW_COMMA)) {
@@ -1561,12 +1561,12 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					}
 				} else {
 					err_print(token_location(p->file, first_end), "Expected { or .. to follow expression in for statement.");
-				    goto for_fail;
+					goto for_fail;
 				}
 				e->where.end = t->token; /* temporarily set end so that redeclaration errors aren't messed up */
 				p->block = prev_block;
 				if (!parse_block(p, &fo->body, PARSE_BLOCK_DONT_CREATE_IDENTS))
-				    goto for_fail;
+					goto for_fail;
 				goto success;
 				for_fail:
 				p->block = prev_block;
@@ -1945,7 +1945,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					Type *fn_t = &fn->foreign.type;
 					fn_t->kind = TYPE_FN;
 					FnType *fn_type = &fn_t->fn;
-				    fn_type->constness = NULL;
+					fn_type->constness = NULL;
 					fn_type->types = NULL;
 					Type *ret_type = parser_arr_add(p, &fn_type->types);
 					CType *ret_ctype = parser_arr_add(p, &fn->foreign.ctypes);
@@ -2110,7 +2110,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 						return false;
 					}
 					t->token = opening_bracket;
-				    if (!parse_args(p, &e->call.args))
+					if (!parse_args(p, &e->call.args))
 						return false;
 					goto success;
 				}
@@ -2309,7 +2309,7 @@ static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 f
 				is_varargs = true;
 				if (d->flags & DECL_SEMI_CONST) {
 					tokr_err(t, "Semi-constant varargs are not allowed. Sorry!");
-				    goto ret_false;
+					goto ret_false;
 				}
 				++t->token;
 			} else {
@@ -2502,7 +2502,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				
 				if (!check_ident_redecl(p, ident)) {
 					tokr_skip_semicolon(t);
-				    return false;
+					return false;
 				}
 				ident->decl_kind = IDECL_DECL;
 				ident->decl = d;
@@ -2901,7 +2901,7 @@ static void fprint_stmt(FILE *out, Statement *s) {
 		break;
 	case STMT_INCLUDE:
 		if (s->flags & STMT_TYPED) {
-		    arr_foreach(s->inc.stmts, Statement, sub)
+			arr_foreach(s->inc.stmts, Statement, sub)
 				fprint_stmt(out, sub);
 		} else {
 			fprintf(out, "#include ");
