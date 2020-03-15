@@ -321,7 +321,6 @@ typedef enum {
 			  KW_FALSE,
 			  KW_NMS,
 			  KW_TYPEOF,
-			  KW_WHERE,
 			  KW_COUNT
 } Keyword;
 
@@ -336,7 +335,7 @@ static const char *const keywords[KW_COUNT] =
 	 "int", "i8", "i16", "i32", "i64",
 	 "u8", "u16", "u32", "u64", "float", "f32", "f64", "Type",
 	 "Namespace",
-	 "char", "bool", "true", "false", "nms", "typeof", "where"};
+	 "char", "bool", "true", "false", "nms", "typeof"};
 
 typedef enum {
 			  NUM_LITERAL_INT,
@@ -694,7 +693,6 @@ typedef struct FnExpr {
 			U64 instance_id;
 			Type ret_type;	
 			Block body;
-			struct Expression *condition; /* fn(...) ... where ...  */
 		};
 		struct {
 			Type type; /* type of this function */

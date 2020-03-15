@@ -8,7 +8,7 @@ foreign
 params
 nms
 varargs
-where
+printf
 misc'
 
 STARTPWD=$(pwd)
@@ -22,7 +22,7 @@ compile_c() {
 	if [ "$CC" = "gcc -O0 -g" ]; then
 		EXTRA_FLAGS="-Wno-builtin-declaration-mismatch"
 	elif [ "$CC" = "clang -O3 -s" ]; then
-		EXTRA_FLAGS="-Wno-builtin-requires-header"
+		EXTRA_FLAGS="-Wno-builtin-requires-header -Wno-format-security"
 	elif [ "$CC" = "tcc" ]; then
 		EXTRA_FLAGS="-w"
 	fi

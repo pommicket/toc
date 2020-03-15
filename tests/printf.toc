@@ -1,5 +1,7 @@
 printf ::= #foreign("printf","libc.so.6") fn(#C &"const char", #C ..) #C int;
 
+
+// NOTE: this doesn't work (e.g. "%%%")
 tprintf_valid ::= fn(fmt :: []char, nargs: int) bool {
 	if fmt[fmt.len-1] != '\0' {
 		return false;
@@ -20,11 +22,16 @@ tprintf_valid ::= fn(fmt :: []char, nargs: int) bool {
 };
 	
 
-tprintf ::= fn(fmt :: []char, args: ..) where tprintf_valid(fmt, args.len) {
+tprintf ::= fn(fmt :: []char, args: ..) {
+	#if !tprintf_valid(fmt, args.len) {
+		#error "Invalid printf format";
+	}
 	f := fmt;
 	printf(&f[0], args);
 };
 
 main ::= fn() {
 	 tprintf("%d %d%%\n\0", 3, 4);
+	 tprintf("%d %d %d%%\n\0", 3, 4, 5);
+	 tprintf("Hello!\n\0");
 };
