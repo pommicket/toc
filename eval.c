@@ -1687,6 +1687,8 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 		}
 		eval_exit_stmts(stmt->inc.stmts, last_reached);
 	} break;
+	case STMT_MESSAGE:
+		break;
 	}
 	return true;
 }

@@ -3385,6 +3385,23 @@ static Status types_stmt(Typer *tr, Statement *s) {
 		}
 		
 	} break;
+	case STMT_MESSAGE: {
+		Message *m = &s->message;
+	    char *text = eval_expr_as_cstr(tr, &m->text, "message");
+		if (!text)
+			return false;
+		switch (m->kind) {
+		case MESSAGE_INFO:
+			info_print(s->where, "%s", text);
+			break;
+		case MESSAGE_WARN:
+			warn_print(s->where, "%s", text);
+			break;
+		case MESSAGE_ERROR:
+			err_print(s->where, "%s", text);
+			return false;
+		}
+	} break;
 	}
 	s->flags |= STMT_TYPED;
 	return true;

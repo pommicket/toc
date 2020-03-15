@@ -2011,6 +2011,9 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					fn->where.end = t->token;
 					return true;
 				}
+				case DIRECT_ERROR:
+				case DIRECT_WARN:
+				case DIRECT_INFO:
 				case DIRECT_EXPORT:
 				case DIRECT_INCLUDE:
 				case DIRECT_FORCE:
@@ -2531,6 +2534,32 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			++t->token;
 			goto success;
 		} break;
+		case DIRECT_ERROR:
+		case DIRECT_WARN:
+		case DIRECT_INFO: {
+			MessageKind kind;
+			if (t->token->direct == DIRECT_ERROR) {
+				kind = MESSAGE_ERROR;
+			} else if (t->token->direct == DIRECT_WARN) {
+				kind = MESSAGE_WARN;
+			} else {
+				kind = MESSAGE_INFO;
+			}
+			++t->token;
+			s->kind = STMT_MESSAGE;
+			Message *m = &s->message;
+			m->kind = kind;
+			if (!parse_expr(p, &m->text, expr_find_end(p, 0))) {
+				tokr_skip_semicolon(t);
+				return false;
+			}
+			if (!token_is_kw(t->token, KW_SEMICOLON)) {
+				tokr_err(t, "Expected ; at end of statement.");
+				tokr_skip_semicolon(t);
+				return false;
+			}
+		    goto success;
+		}
 		default:
 			break;
 		}
@@ -2909,6 +2938,20 @@ static void fprint_stmt(FILE *out, Statement *s) {
 			fprintf(out, ";\n");
 		}
 		break;
+	case STMT_MESSAGE: {
+		Message *m = &s->message;
+		switch (m->kind) {
+		case MESSAGE_ERROR:
+			fprintf(out, "#error ");
+			break;
+		case MESSAGE_WARN:
+			fprintf(out, "#warn ");
+			break;
+		case MESSAGE_INFO:
+			fprintf(out, "#info ");
+			break;
+		}
+	} break;
 	}
 }
 

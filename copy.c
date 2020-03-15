@@ -441,6 +441,9 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 	case STMT_DECL:
 		copy_decl(c, out->decl = allocr_malloc(c->allocr, sizeof *out->decl), in->decl);
 		break;
+	case STMT_MESSAGE:
+		copy_expr(c, &out->message.text, &in->message.text);
+		break;
 	}
 }
 

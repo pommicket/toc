@@ -1997,6 +1997,8 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 				cgen_stmt(g, sub);
 		}
 		break;
+	case STMT_MESSAGE:
+		break;
 	}
 }
 
@@ -2050,6 +2052,8 @@ static void cgen_defs_stmt(CGenerator *g, Statement *s) {
 			arr_foreach(s->inc.stmts, Statement, sub)
 				cgen_defs_stmt(g, sub);
 		}
+		break;
+	case STMT_MESSAGE:
 		break;
 	}
 }

@@ -248,11 +248,15 @@ typedef enum {
 			  DIRECT_INCLUDE,
 			  DIRECT_FORCE,
 			  DIRECT_IF,
+			  DIRECT_ERROR,
+			  DIRECT_WARN,
+			  DIRECT_INFO,
 			  DIRECT_COUNT
 } Directive;
 
 static const char *directives[DIRECT_COUNT] =
-	{"C", "sizeof", "alignof", "export", "foreign", "builtin", "include", "force", "if"};
+	{"C", "sizeof", "alignof", "export", "foreign", "builtin", "include", "force", "if", "error", "warn",
+	"info"};
 
 typedef enum {
 			  KW_SEMICOLON,
@@ -786,9 +790,11 @@ typedef struct Namespace {
 	} c;
 } Namespace;
 
+
 enum {
 	  EXPR_FOUND_TYPE = 0x01
 };
+
 
 typedef U8 ExprFlags;
 
@@ -900,7 +906,8 @@ typedef enum {
 			  STMT_DECL,
 			  STMT_EXPR,
 			  STMT_RET,
-			  STMT_INCLUDE
+			  STMT_INCLUDE,
+			  STMT_MESSAGE
 } StatementKind;
 
 enum {
@@ -937,6 +944,17 @@ typedef union {
 	IncludedFile *inc_file;
 } Include;
 
+typedef enum {
+			  MESSAGE_ERROR,
+			  MESSAGE_WARN,
+			  MESSAGE_INFO
+} MessageKind;
+
+typedef struct {
+	MessageKind kind;
+	Expression text;
+} Message;
+
 enum {
 	  STMT_EXPR_NO_SEMICOLON = 0x01,
 	  STMT_INC_TO_NMS = 0x01,
@@ -951,6 +969,7 @@ typedef struct Statement {
 		Expression expr;
 		Return ret;
 		Include inc;
+		Message message; /* #error, #warn, #info */
 	};
 } Statement;
 

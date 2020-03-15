@@ -268,6 +268,8 @@ static void cgen_decls_stmt(CGenerator *g, Statement *s) {
 				cgen_decls_stmt(g, sub);
 		}
 		break;
+	case STMT_MESSAGE:
+		break;
 	}
 }
 

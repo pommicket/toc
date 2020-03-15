@@ -8,10 +8,8 @@
 
 /* 
 TODO:
-fix foreign varargs
-user-generated errors
-#returns_code (struct body is a block, to be evaluated at compile time, which returns the actual statements)
-	- struct varargs
+allow omission of trailing ; in foo ::= fn() {...} or foo ::= nms {...} or foo ::= struct { ... }
+- just end expressions when you get to a closing brace unless there's an elif, etc.
 break
 continue
 switch
@@ -24,11 +22,12 @@ switch to / add as an alternative: libffi
 X ::= newtype(int); or something
 don't allow while {3; 5} or for 0..10 { 3; 5 } (once break is added)
 any odd number of "s for a string
-allow omission of trailing ; in foo ::= fn() {...} or foo ::= nms {...} or foo ::= struct { ... }
 consider- should #sizeof always take a Type? it would be more verbose, but we might not actually need
 	#sizeof that much, given that we have new.
 	it probably should, because #sizeof(x[0]) can't be evaluated at compile time if x is not a constant
 ---
+#returns_code (struct body is a block, to be evaluated at compile time, which returns the actual statements)
+	- struct varargs
 macros
 */
 
