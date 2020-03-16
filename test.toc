@@ -6,4 +6,12 @@ main ::= fn() {
 		io.puti(i);
 		if i == 7 { break; }
 	}
+	i := 0;
+	while {
+		i += 1;
+		io.puti(i);
+		if i == 10 {
+			break;
+		}
+	}
 }

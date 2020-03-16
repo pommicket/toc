@@ -1437,6 +1437,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 						return false;
 				}
 				if (!parse_block(p, &w->body, 0)) return false;
+				w->body.flags |= BLOCK_IS_LOOP;
 				goto success;
 			}
 			case KW_FOR: {

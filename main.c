@@ -10,19 +10,21 @@
 TODO:
 break
 continue
+&&, ||
+don't allow while {3; 5} or for 0..10 { 3; 5 } 
+make #sizeof always take a Type
+sizeof (not #sizeof)
+- make new(s) and del functions!
+start making a standard library... (printf; stringbuilder would be nice to have)
 switch
+ - #fallthrough
+ - make sure break works inside a switch with cgen! - you'll need goto
 enums
 unions
-sizeof (not #sizeof)
-- make new and del functions!
 ---
 switch to / add as an alternative: libffi
 X ::= newtype(int); or something
-don't allow while {3; 5} or for 0..10 { 3; 5 } (once break is added)
 any odd number of "s for a string
-consider- should #sizeof always take a Type? it would be more verbose, but we might not actually need
-	#sizeof that much, given that we have new.
-	it probably should, because #sizeof(x[0]) can't be evaluated at compile time if x is not a constant
 ---
 #returns_code (struct body is a block, to be evaluated at compile time, which returns the actual statements)
 	- struct varargs
