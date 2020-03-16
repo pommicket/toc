@@ -2,6 +2,7 @@
 
 tests='bf
 control_flow
+sizeof
 arr
 arr2
 arr3
@@ -30,6 +31,8 @@ compile_c() {
 	$CC $CFLAGS $EXTRA_FLAGS -Werror -o a.out out.c || exit 1
 }
 
+failed=false
+
 do_tests() {
 	valgrind  -q --exit-on-first-error=yes --error-exitcode=1 $TOC "$1.toc" -o out.c || exit 1
 	for CC in "gcc -O0 -g" "tcc" "clang -O3 -s"; do
@@ -40,7 +43,7 @@ do_tests() {
 			printf '\x1b[92mpassed!\x1b[0m\n'
 		else
 			printf '\x1b[91mfailed!\x1b[0m\n'
-			exit 1
+			failed=true
 		fi
 	done
 }
@@ -49,3 +52,6 @@ for x in $tests; do
 done
 
 rm got a.out out.c
+if $failed; then
+	exit 1
+fi

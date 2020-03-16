@@ -8,8 +8,7 @@
 
 /* 
 TODO:
-make #sizeof always take a Type
-sizeof (not #sizeof)
+cast varargs, not integer literals in cgen
 - make new(s) and del functions!
 defer
 &&, ||

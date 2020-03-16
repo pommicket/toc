@@ -1,0 +1,17 @@
+#include "io.toc", io;
+
+Point3D ::= struct {
+	x, y, z: f32;
+}
+
+calculation ::= fn() int {
+	p: Point3D;
+	(#sizeof Point3D) * (#sizeof typeof p) * (sizeof Point3D) * (sizeof typeof p)
+	* (#alignof Point3D) * (#alignof typeof p) * (alignof Point3D) * (alignof typeof p)
+}
+
+main ::= fn() {
+	x ::= calculation();
+	io.puti(x);
+	io.puti(calculation());
+}

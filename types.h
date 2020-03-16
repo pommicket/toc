@@ -323,6 +323,8 @@ typedef enum {
 			  KW_FALSE,
 			  KW_NMS,
 			  KW_TYPEOF,
+			  KW_SIZEOF,
+			  KW_ALIGNOF,
 			  KW_COUNT
 } Keyword;
 
@@ -338,7 +340,7 @@ static const char *const keywords[KW_COUNT] =
 	 "int", "i8", "i16", "i32", "i64",
 	 "u8", "u16", "u32", "u64", "float", "f32", "f64", "Type",
 	 "Namespace",
-	 "char", "bool", "true", "false", "nms", "typeof"};
+	 "char", "bool", "true", "false", "nms", "typeof", "sizeof", "alignof"};
 
 typedef enum {
 			  NUM_LITERAL_INT,
@@ -581,7 +583,9 @@ typedef enum {
 			  UNARY_TYPEOF, /* typeof x */
 			  UNARY_LEN, /* x.len ; replaces BINARY_DOT len when typing  */
 			  UNARY_DSIZEOF,
-			  UNARY_DALIGNOF
+			  UNARY_DALIGNOF,
+			  UNARY_SIZEOF,
+			  UNARY_ALIGNOF
 } UnaryOp;
 
 typedef enum {

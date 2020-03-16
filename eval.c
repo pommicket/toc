@@ -1152,6 +1152,12 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			default: assert(0); break;
 			}
 			break;
+		case UNARY_SIZEOF:
+			v->i64 = (I64)compiler_sizeof(of.type);
+			break;
+		case UNARY_ALIGNOF:
+			v->i64 = (I64)compiler_alignof(of.type);
+			break;
 		case UNARY_DSIZEOF:
 		case UNARY_DALIGNOF:
 		case UNARY_TYPEOF:

@@ -64,6 +64,8 @@ static const char *unary_op_to_str(UnaryOp u) {
 	case UNARY_LEN: return "len";
 	case UNARY_DSIZEOF: return "#sizeof";
 	case UNARY_DALIGNOF: return "#alignof";
+	case UNARY_SIZEOF: return "sizeof";
+	case UNARY_ALIGNOF: return "alignof";
 	case UNARY_TYPEOF: return "typeof";
 	}
 	assert(0);
@@ -1020,6 +1022,8 @@ static void fprint_expr(FILE *out, Expression *e);
 /* cast/new aren't really operators since they operate on types, not exprs. */
 #define CAST_PRECEDENCE 2
 #define NEW_PRECEDENCE 22
+#define DSIZEOF_PRECEDENCE 5
+#define DALIGNOF_PRECEDENCE 5
 static int op_precedence(Keyword op) {
 	switch (op) {
 	case KW_EQ:
@@ -1036,7 +1040,11 @@ static int op_precedence(Keyword op) {
 	case KW_GE: return 3;
 	case KW_EQ_EQ: return 3;
 	case KW_NE: return 3;
-	case KW_TYPEOF: return 5;
+	case KW_SIZEOF:
+	case KW_ALIGNOF:
+		return 5;
+	case KW_TYPEOF:
+		return 6;
 	case KW_PLUS: return 10;
 	case KW_MINUS: return 20;
 	case KW_AMPERSAND: return 25;
@@ -1608,24 +1616,34 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					}
 					break;
 				case KW_DOT:
-					if (paren_level == 0 && brace_level == 0 && square_level == 0)
-						dot = token;
-					break;
-				default: { /* OPTIM: use individual cases for each op */
 					if (paren_level == 0 && brace_level == 0 && square_level == 0) {
-						int precedence;
-						switch (token->kw) {
-						case KW_AS: precedence = CAST_PRECEDENCE; break;
-						case KW_NEW: precedence = NEW_PRECEDENCE; break;
-						default: precedence = op_precedence(token->kw); break;
-						}
-						if (precedence == NOT_AN_OP) break; /* nvm it's not an operator */
-						if (lowest_precedence == NOT_AN_OP || precedence <= lowest_precedence) {
-							lowest_precedence = precedence;
-							lowest_precedence_op = token;
-						}
+						dot = token;
 					}
-				} break;
+					break;
+				default: break;
+				}
+			}
+			
+			if (paren_level == 0 && brace_level == 0 && square_level == 0) {
+				int precedence = NOT_AN_OP;
+				if (token->kind == TOKEN_KW) {
+					switch (token->kw) {
+					case KW_AS: precedence = CAST_PRECEDENCE; break;
+					case KW_NEW: precedence = NEW_PRECEDENCE; break;
+					default: precedence = op_precedence(token->kw); break;
+					}
+				} else if (token->kind == TOKEN_DIRECT) {
+					switch (token->direct) {
+					case DIRECT_SIZEOF: precedence = DSIZEOF_PRECEDENCE; break;
+					case DIRECT_ALIGNOF: precedence = DALIGNOF_PRECEDENCE; break;
+					default: break;
+					}
+				}
+				if (precedence != NOT_AN_OP) {
+					if (lowest_precedence == NOT_AN_OP || precedence <= lowest_precedence) {
+						lowest_precedence = precedence;
+						lowest_precedence_op = token;
+					}
 				}
 			}
 		}
@@ -1681,72 +1699,94 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				/* Unary */
 				UnaryOp op;
 				bool is_unary = true;
-				switch (t->token->kw) {
-				case KW_PLUS:
-					/* unary + is ignored entirely */
-					++t->token;
-					/* re-parse this expression without + */
-					return parse_expr(p, e, end);
-				case KW_MINUS:
-					op = UNARY_MINUS;
-					break;
-				case KW_AMPERSAND:
-					op = UNARY_ADDRESS;
-					break;
-				case KW_ASTERISK:
-					op = UNARY_DEREF;
-					break;
-				case KW_EXCLAMATION:
-					op = UNARY_NOT;
-					break;
-				case KW_NEW:
-					e->kind = EXPR_NEW;
-					++t->token;
-					if (!token_is_kw(t->token, KW_LPAREN)) {
-						tokr_err(t, "Expected ( to follow new.");
-						return false;
-					}
-					++t->token;
-					if (!parse_type(p, &e->new.type, NULL)) return false;
-					if (token_is_kw(t->token, KW_COMMA)) {
-						/* new(int, 5) */
+				if (t->token->kind == TOKEN_KW) {
+					switch (t->token->kw) {
+					case KW_PLUS:
+						/* unary + is ignored entirely */
 						++t->token;
-						Token *n_end = expr_find_end(p, 0);
-						e->new.n = parser_new_expr(p);
-						if (!parse_expr(p, e->new.n, n_end))
+						/* re-parse this expression without + */
+						return parse_expr(p, e, end);
+					case KW_MINUS:
+						op = UNARY_MINUS;
+						break;
+					case KW_AMPERSAND:
+						op = UNARY_ADDRESS;
+						break;
+					case KW_ASTERISK:
+						op = UNARY_DEREF;
+						break;
+					case KW_EXCLAMATION:
+						op = UNARY_NOT;
+						break;
+					case KW_SIZEOF:
+						op = UNARY_SIZEOF;
+						break;
+					case KW_ALIGNOF:
+						op = UNARY_ALIGNOF;
+						break;
+					case KW_NEW:
+						e->kind = EXPR_NEW;
+						++t->token;
+						if (!token_is_kw(t->token, KW_LPAREN)) {
+							tokr_err(t, "Expected ( to follow new.");
 							return false;
-					} else e->new.n = NULL;
-					if (!token_is_kw(t->token, KW_RPAREN)) {
-						tokr_err(t, "Expected ).");
-						return false;
+						}
+						++t->token;
+						if (!parse_type(p, &e->new.type, NULL)) return false;
+						if (token_is_kw(t->token, KW_COMMA)) {
+							/* new(int, 5) */
+							++t->token;
+							Token *n_end = expr_find_end(p, 0);
+							e->new.n = parser_new_expr(p);
+							if (!parse_expr(p, e->new.n, n_end))
+								return false;
+						} else e->new.n = NULL;
+						if (!token_is_kw(t->token, KW_RPAREN)) {
+							tokr_err(t, "Expected ).");
+							return false;
+						}
+						++t->token;
+						if (e->new.type.kind == TYPE_TUPLE) {
+							err_print(e->where, "You cannot new a tuple.");
+							return false;
+						}
+						if (t->token == end)
+							goto success;
+						/* otherwise, there's more stuff after the new (e.g. new(int, 5).len)*/
+						t->token = start;
+						goto not_an_op;
+					case KW_DEL:
+						if (!token_is_kw(t->token + 1, KW_LPAREN)) {
+							/* for the future, when del could be a function */
+							err_print(e->where, "Expected ( after del.");
+							return false;
+						}
+						op = UNARY_DEL;
+						break;
+					case KW_TYPEOF:
+						op = UNARY_TYPEOF;
+						break;
+					default:
+						is_unary = false;
+						break;
 					}
-					++t->token;
-					if (e->new.type.kind == TYPE_TUPLE) {
-						err_print(e->where, "You cannot new a tuple.");
-						return false;
+				} else if (t->token->kind == TOKEN_DIRECT) {
+					switch (t->token->direct) {
+					case DIRECT_SIZEOF:
+						op = UNARY_DSIZEOF;
+						break;
+					case DIRECT_ALIGNOF:
+						op = UNARY_DALIGNOF;
+						break;
+					default:
+						is_unary = false;
+						break;
 					}
-					if (t->token == end)
-						goto success;
-					/* otherwise, there's more stuff after the new (e.g. new(int, 5).len)*/
-					t->token = start;
-					goto not_an_op;
-				case KW_DEL:
-					if (!token_is_kw(t->token + 1, KW_LPAREN)) {
-						/* for the future, when del could be a function */
-						err_print(e->where, "Expected ( after del.");
-						return false;
-					}
-					op = UNARY_DEL;
-					break;
-				case KW_TYPEOF:
-					op = UNARY_TYPEOF;
-					break;
-				default:
+				} else {
 					is_unary = false;
-					break;
 				}
 				if (!is_unary) {
-					tokr_err(t, "%s is not a unary operator.", keywords[lowest_precedence_op->kw]);
+					tokr_err(t, "This is not a unary operator, but it's being used as one.");
 					return false;
 				}
 				e->unary.op = op;
@@ -1858,12 +1898,9 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			case KW_PERCENT_EQ:
 				op = BINARY_SET_MOD;
 				break;
-			case KW_AMPERSAND:
-			case KW_EXCLAMATION:
-			case KW_DEL:
+			default:
 				err_print(token_location(p->file, lowest_precedence_op), "Unary operator '%s' being used as a binary operator!", kw_to_str(lowest_precedence_op->kw));
 				return false;
-			default: assert(0); return false;
 			}
 			e->binary.op = op;
 			e->kind = EXPR_BINARY_OP;
@@ -1899,16 +1936,6 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				case DIRECT_BUILTIN:
 					e->kind = EXPR_BUILTIN;
 					single_arg = e->builtin.which.expr = parser_new_expr(p);
-					break;
-				case DIRECT_SIZEOF:
-					e->kind = EXPR_UNARY_OP;
-					e->unary.op = UNARY_DSIZEOF;
-					single_arg = e->unary.of = parser_new_expr(p);
-					break;
-				case DIRECT_ALIGNOF:
-					e->kind = EXPR_UNARY_OP;
-					e->unary.op = UNARY_DALIGNOF;
-					single_arg = e->unary.of = parser_new_expr(p);
 					break;
 				case DIRECT_FOREIGN: {
 					
@@ -1993,12 +2020,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					fn->where.end = t->token;
 					return true;
 				}
-				case DIRECT_ERROR:
-				case DIRECT_WARN:
-				case DIRECT_INFO:
-				case DIRECT_EXPORT:
-				case DIRECT_INCLUDE:
-				case DIRECT_FORCE:
+				default:
 					tokr_err(t, "Unrecognized expression.");
 					return false;
 				case DIRECT_COUNT: assert(0); break;
@@ -2006,7 +2028,6 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				if (single_arg) {
 					++t->token;
 					if (!token_is_kw(t->token, KW_LPAREN)) {
-						printf("%d\n",t->token->direct);
 						tokr_err(t, "Expected ( to follow #%s.", directives[t->token[-1].direct]);
 						return false;
 					}
@@ -2192,6 +2213,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					return false;
 				goto success;
 			}
+			
 			tokr_err(t, "Unrecognized expression.");
 			return false;
 		}

@@ -6,8 +6,18 @@ Point3D ::= struct {
 
 main ::= fn() {
 	 p: Point3D;
-	 io.puti(#sizeof(Point3D));
-	 // io.puti(#sizeof(p));
-	 io.puti(#sizeof(typeof p));
+	 io.puti(#sizeof Point3D);
+	 // io.puti(#sizeof p);
+	 io.puti(#sizeof typeof p);
+	 io.puti(sizeof Point3D);
+	 // io.puti(sizeof p);
+	 io.puti(sizeof typeof p);
+	 
+	 io.puti(#alignof Point3D);
+	 // io.puti(#alignof p);
+	 io.puti(#alignof typeof p);
+	 io.puti(alignof Point3D);
+	 // io.puti(alignof p);
+	 io.puti(alignof typeof p);
 }
 main();

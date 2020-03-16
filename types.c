@@ -2605,7 +2605,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 		case UNARY_DALIGNOF: {
 			Type *queried_type;
 			if (!type_is_builtin(&of->type, BUILTIN_TYPE)) {
-				err_print(e->where, "Argument of #sizeof or #alignof must be a Type. Did you mean #sizeof(typeof ...)?");
+				char *s = e->unary.op == UNARY_DSIZEOF ? "sizeof" : "alignof";
+				err_print(e->where, "Argument of #%s must be a Type. Did you mean #%s(typeof ...)?", s, s);
 				return false;
 			}
 			Value val;
@@ -2617,6 +2618,22 @@ static Status types_expr(Typer *tr, Expression *e) {
 			else
 				e->val.i64 = (I64)compiler_alignof(queried_type);
 			e->kind = EXPR_VAL;
+			t->kind = TYPE_BUILTIN;
+			t->builtin = BUILTIN_I64;
+		} break;
+		case UNARY_SIZEOF:
+		case UNARY_ALIGNOF: {
+			/* eval of */
+			if (!type_is_builtin(&of->type, BUILTIN_TYPE)) {
+				char *s = e->unary.op == UNARY_SIZEOF ? "sizeof" : "alignof";
+				err_print(e->where, "Argument of %s must be a Type. Did you mean %s(typeof ...)?", s, s);
+				return false;
+			}
+			Value val;
+			if (!eval_expr(tr->evalr, of, &val))
+				return false;
+			of->kind = EXPR_VAL;
+			of->val = val;
 			t->kind = TYPE_BUILTIN;
 			t->builtin = BUILTIN_I64;
 		} break;

@@ -1508,6 +1508,15 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			s = "&"; break;
 		case UNARY_NOT:
 			s = "!"; break;
+		case UNARY_SIZEOF:
+		case UNARY_ALIGNOF:
+			cgen_write(g, "%s(", e->unary.op == UNARY_SIZEOF ? "sizeof" : "_Alignof");
+			assert(e->unary.of->kind == EXPR_VAL);
+			cgen_type_pre(g, e->unary.of->val.type);
+			cgen_type_post(g, e->unary.of->val.type);
+			cgen_write(g, ")");
+			handled = true;
+			break;
 		case UNARY_DEL:
 			cgen_write(g, "free_(");
 			cgen_expr(g, e->unary.of);
