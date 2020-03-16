@@ -8,9 +8,9 @@
 
 /* 
 TODO:
-cast varargs, not integer literals in cgen
 - make new(s) and del functions!
 defer
+use
 &&, ||
 start making a standard library... (printf; stringbuilder would be nice to have)
 switch
