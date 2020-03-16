@@ -1,6 +1,7 @@
 #!/bin/bash
 
 tests='bf
+control_flow
 arr
 arr2
 arr3
@@ -26,7 +27,7 @@ compile_c() {
 	elif [ "$CC" = "tcc" ]; then
 		EXTRA_FLAGS="-w"
 	fi
-	$CC $CFLAGS $EXTRA_FLAGS -o a.out out.c || exit 1
+	$CC $CFLAGS $EXTRA_FLAGS -Werror -o a.out out.c || exit 1
 }
 
 do_tests() {

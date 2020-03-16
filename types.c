@@ -3282,6 +3282,7 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			err_print(s->where, "return outside of a function.");
 			return false;
 		}
+	    s->ret.referring_to = &tr->fn->body;
 		if (s->ret.flags & RET_HAS_EXPR) {
 			if (tr->fn->ret_type.kind == TYPE_VOID) {
 				err_print(s->where, "Return value in a void function.");

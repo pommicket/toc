@@ -8,13 +8,12 @@
 
 /* 
 TODO:
-break
-continue
-&&, ||
-don't allow while {3; 5} or for 0..10 { 3; 5 } 
+don't allow while/for ret exprs, e.g. for 0..10 { 3; 5 } 
 make #sizeof always take a Type
 sizeof (not #sizeof)
 - make new(s) and del functions!
+defer
+&&, ||
 start making a standard library... (printf; stringbuilder would be nice to have)
 switch
  - #fallthrough

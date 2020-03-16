@@ -12,7 +12,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v);
 static Value get_builtin_val(BuiltinVal val);
 
 static void evalr_create(Evaluator *ev, Typer *tr, Allocator *allocr) {
-	ev->returning = false;
+	ev->returning = NULL;
 	ev->typer = tr;
 	ev->enabled = true;
 	ev->allocr = allocr;
@@ -1237,7 +1237,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (!eval_expr(ev, i->cond, &cond)) return false;
 			if (val_truthiness(cond, &i->cond->type)) {
 				if (!eval_block(ev, &i->body, v)) return false;
-			} else if (i->next_elif) {
+			} else if (i->next_elif && !ev->returning) {
 				if (!eval_expr(ev, i->next_elif, v)) return false;
 			}
 		} else {
@@ -1255,6 +1255,13 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 					break;
 			}
 			if (!eval_block(ev, &w->body, v)) return false;
+			if (ev->returning) {
+				if (ev->returning == &w->body) {
+					ev->returning = NULL;
+					if (ev->is_break)
+						break;
+				} else break;
+			}
 		}
 	} break;
 	case EXPR_FOR: {
@@ -1310,6 +1317,14 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				if (value_val) *value_val = x;
 
 				if (!eval_block(ev, &fo->body, v)) return false;
+				
+				if (ev->returning) {
+					if (ev->returning == &fo->body) {
+						ev->returning = NULL;
+						if (ev->is_break)
+							break;
+					} else break;
+				}
 				if (index_val) {
 					++index_val->i64;
 				}
@@ -1356,6 +1371,13 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 					eval_deref(value_val, ptr, &fo->type);
 				if (!eval_block(ev, &fo->body, v))
 					return false;
+				if (ev->returning) {
+					if (ev->returning == &fo->body) {
+						ev->returning = NULL;
+						if (ev->is_break)
+							break;
+					} else break;
+				}
 				++index->i64;
 			}
 		}
@@ -1533,7 +1555,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		if (ev->returning) {
 			if (fn->ret_type.kind != TYPE_VOID && !fn->ret_decls)
 				*v = ev->ret_val;
-			ev->returning = false;
+			ev->returning = NULL;
 		}
 		arr_foreach(fn->params, Declaration, p)
 			decl_remove_val(p);
@@ -1673,8 +1695,16 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 				return false;
 			copy_val(NULL, &ev->ret_val, r, &stmt->ret.expr.type);
 		}
-		ev->returning = true;
+		ev->returning = stmt->ret.referring_to;
 	} break;
+	case STMT_BREAK:
+		ev->returning = stmt->referring_to;
+		ev->is_break = true;
+		break;
+	case STMT_CONT:
+		ev->returning = stmt->referring_to;
+		ev->is_break = false;
+		break;
 	case STMT_INCLUDE: {
 		Statement *last_reached = arr_last(stmt->inc.stmts);
 		arr_foreach(stmt->inc.stmts, Statement, sub) {

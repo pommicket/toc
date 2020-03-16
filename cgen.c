@@ -1126,12 +1126,12 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 			}
 		}
 		cgen_block(g, &fo->body, ret_name, CGEN_BLOCK_NOBRACES);
+		
+		cgen_write(g, "}}");
 		if (fo->body.c.break_lbl) {
 			cgen_lbl(g, fo->body.c.break_lbl);
 			cgen_writeln(g, ":;");
 		}
-		
-		cgen_write(g, "}}");
 	} break;
 	case EXPR_BLOCK:
 		e->cgen.id = id;

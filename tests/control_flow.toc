@@ -1,4 +1,4 @@
-#include "std/io.toc", io;
+#include "io.toc", io;
 
 f ::= fn() int {
 	total := 0;

@@ -922,6 +922,7 @@ enum {
 };
 typedef struct Return {
 	U8 flags;
+	Block *referring_to; /* eval uses this; it's the function body we're returning from */
 	Expression expr;
 } Return;
 
@@ -1017,7 +1018,8 @@ typedef struct {
 typedef struct Evaluator {
 	Allocator *allocr;
 	struct Typer *typer;
-	bool returning;
+    Block *returning; /* function body from which we are returning OR loop body in which we are continuing/breaking */
+	bool is_break; /* is returning because of a break, as opposed to a continue? */
 	Value ret_val;
 	bool enabled;
 	ForeignFnManager ffmgr;

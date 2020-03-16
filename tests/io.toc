@@ -1,19 +1,15 @@
-
 putchar ::= #foreign("putchar", "libc.so.6") fn(#C int) #C int;
 toc_putchar ::= fn(x: char) {
 	putchar(x as #C int);
-};
+}
 
-fwrite ::= #foreign("fwrite", "libc.so.6") fn(#C &"void", #C size_t, #C size_t, #C &"void") #C size_t;
-
-stdout_fwrite ::= fn(data: &u8, size: u64, nmemb: u64) {
-	fwrite(data, size as #C size_t, nmemb as #C size_t, #builtin("stdout"));
-};
 
 puts ::= fn(x: []char) {
-	stdout_fwrite(&x[0] as &u8, 1, x.len as u64);
+	for c := x {
+		toc_putchar(c);
+	}
 	toc_putchar('\n');
-};
+}
 
 puti ::= fn(x: int) {
 	if x < 0 {
@@ -36,4 +32,4 @@ puti ::= fn(x: int) {
 		}
 	}
 	toc_putchar('\n');
-};
+}
