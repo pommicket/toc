@@ -2604,14 +2604,14 @@ static Status types_expr(Typer *tr, Expression *e) {
 		case UNARY_DSIZEOF:
 		case UNARY_DALIGNOF: {
 			Type *queried_type;
-			if (type_is_builtin(&of->type, BUILTIN_TYPE)) {
-				Value val;
-				if (!eval_expr(tr->evalr, of, &val))
-					return false;
-				queried_type = val.type;
-			} else {
-				queried_type = &of->type;
+			if (!type_is_builtin(&of->type, BUILTIN_TYPE)) {
+				err_print(e->where, "Argument of #sizeof or #alignof must be a Type. Did you mean #sizeof(typeof ...)?");
+				return false;
 			}
+			Value val;
+			if (!eval_expr(tr->evalr, of, &val))
+				return false;
+			queried_type = val.type;
 			if (e->unary.op == UNARY_DSIZEOF)
 				e->val.i64 = (I64)compiler_sizeof(queried_type);
 			else

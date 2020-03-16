@@ -1,5 +1,13 @@
 #include "std/io.toc", io;
 
-main ::= fn() {
-	for i := 0..10 { 3; };
+Point3D ::= struct {
+	x, y, z: f32;
 }
+
+main ::= fn() {
+	 p: Point3D;
+	 io.puti(#sizeof(Point3D));
+	 // io.puti(#sizeof(p));
+	 io.puti(#sizeof(typeof p));
+}
+main();
