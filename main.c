@@ -8,7 +8,6 @@
 
 /* 
 TODO:
-don't allow while/for ret exprs, e.g. for 0..10 { 3; 5 } 
 make #sizeof always take a Type
 sizeof (not #sizeof)
 - make new(s) and del functions!

@@ -1726,13 +1726,13 @@ static Status types_expr(Typer *tr, Expression *e) {
 		arr_remove_lasta(&tr->in_exprs, tr->allocr);
 		in_header = false;
 		if (!types_block(tr, &fo->body)) goto for_fail;
-		
 		if (fo->body.ret_expr) {
-			*t = fo->body.ret_expr->type;
-		} else {
-			t->kind = TYPE_VOID;
-			t->flags |= TYPE_IS_RESOLVED;
+			err_print(fo->body.ret_expr->where, "for loops can't return values -- you're missing a semicolon (;)");
+			goto for_fail;
 		}
+		
+		t->kind = TYPE_VOID;
+		
 		typer_block_exit(tr);
 		break;
 		for_fail:
@@ -1882,14 +1882,12 @@ static Status types_expr(Typer *tr, Expression *e) {
 		if (!types_block(tr, &w->body))
 			ret = false;
 		if (!ret) return false;
-		if (w->cond != NULL && w->body.ret_expr != NULL) {
-			err_print(e->where, "A finite loop can't have a return expression (for an infinite loop, use while { ... }).");
+		
+		if (w->body.ret_expr) {
+			err_print(w->body.ret_expr->where, "while loops can't return values -- you're missing a semicolon (;)");
 			return false;
 		}
-		if (w->body.ret_expr)
-			*t = w->body.ret_expr->type;
-		else
-			t->kind = TYPE_VOID;
+		t->kind = TYPE_VOID;
 	} break;
 	case EXPR_CALL: {
 		CallExpr *c = &e->call;

@@ -1,31 +1,5 @@
 #include "std/io.toc", io;
 
-f ::= fn() int {
-	total := 0;
-	for i := 1..10 {
-		if i % 2 == 0 { continue; }
-		total += i;
-		if i == 7 { break; }
-	}
-	i := 0;
-	while {
-		i += 1;
-		total += i;
-		if i == 10 {
-			break;
-		}
-	}
-	while i < 100 {
-		i += 1;
-		if i == 100 {
-			return total;
-		}
-	}
-	0
-}
-
 main ::= fn() {
-	x ::= f();
-	io.puti(x);
-	io.puti(f());
+	for i := 0..10 { 3; };
 }
