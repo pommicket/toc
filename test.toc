@@ -1,3 +1,4 @@
+
 printf ::= #foreign("printf","libc.so.6") fn(#C &"const char", #C ..) #C int;
 
 
@@ -19,7 +20,7 @@ tprintf_valid ::= fn(fmt :: []char, nargs: int) bool {
 		}
 	}
 	count == nargs
-};
+}
 	
 
 tprintf ::= fn(fmt :: []char, args: ..) {
@@ -28,8 +29,10 @@ tprintf ::= fn(fmt :: []char, args: ..) {
 	}
 	f := fmt;
 	printf(&f[0], args);
-};
+}
 
 main ::= fn() {
-	 tprintf("%d %d%%\n", 3, 4);
-};
+	 tprintf("%d %d%%\n\0", 3, 4);
+}
+
+main();

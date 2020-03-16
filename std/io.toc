@@ -1,7 +1,7 @@
 putchar ::= #foreign("putchar", "libc.so.6") fn(#C int) #C int;
 toc_putchar ::= fn(x: char) {
 	putchar(x as #C int);
-};
+}
 
 
 puts ::= fn(x: []char) {
@@ -9,7 +9,7 @@ puts ::= fn(x: []char) {
 		toc_putchar(c);
 	}
 	toc_putchar('\n');
-};
+}
 
 puti ::= fn(x: int) {
 	if x < 0 {
@@ -32,4 +32,4 @@ puti ::= fn(x: int) {
 		}
 	}
 	toc_putchar('\n');
-};
+}

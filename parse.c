@@ -341,7 +341,6 @@ static Token *expr_find_end(Parser *p, ExprEndFlags flags)  {
 	int brace_level = 0;
 	int square_level = 0;
 	Token *token = t->token;
-	bool could_be_vbs = false; /* could this be a void block statement (whose semicolons can be omitted)? e.g. {x := 5;} */
 	while (1) {
 		bool all_levels_0 = paren_level == 0 && brace_level == 0 && square_level == 0;
 		if (token->kind == TOKEN_KW) {
@@ -370,12 +369,10 @@ static Token *expr_find_end(Parser *p, ExprEndFlags flags)  {
 				if ((flags & EXPR_CAN_END_WITH_LBRACE) && square_level == 0 && paren_level == 0)
 					return token;
 				++brace_level;
-				could_be_vbs = true;
 				break;
 			case KW_RBRACE:
 				--brace_level;
-				if (paren_level == 0 && brace_level == 0 && square_level == 0
-					&& could_be_vbs && !token_is_kw(token + 1, KW_RPAREN)) {
+				if (paren_level == 0 && brace_level == 0 && square_level == 0) {
 					/* if there's an else/elif, the expr must continue */
 					if (!(token_is_kw(token + 1, KW_ELSE) || token_is_kw(token + 1, KW_ELIF)))
 						return token + 1; /* token afer } is end */
@@ -386,7 +383,6 @@ static Token *expr_find_end(Parser *p, ExprEndFlags flags)  {
 			case KW_SEMICOLON:
 				if (brace_level == 0)
 					return token;
-				could_be_vbs = true;
 				break;
 			case KW_DOTDOT:
 				if (all_levels_0 && (flags & EXPR_CAN_END_WITH_DOTDOT))
@@ -401,10 +397,6 @@ static Token *expr_find_end(Parser *p, ExprEndFlags flags)  {
 					return token;
 			default: break;
 			}
-			if (token->kw != KW_RBRACE && token->kw != KW_SEMICOLON && token->kw != KW_LBRACE)
-				could_be_vbs = false;
-		} else {
-			could_be_vbs = false;
 		}
 		if (token->kind == TOKEN_EOF) {
 			if (brace_level > 0) {
@@ -2352,7 +2344,7 @@ static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 f
 					goto ret_false;
 				}
 				Token *end = expr_find_end(p, expr_flags);
-				if (!end || !ends_decl(end, ends_with)) {
+				if (!end) {
 					if (end) t->token = end;
 					tokr_err(t, "Expected %s at end of declaration.", end_str);
 					goto ret_false;
@@ -2361,7 +2353,9 @@ static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 f
 					t->token = end; /* move to ; */
 					goto ret_false;
 				}
-				if (ends_decl(t->token, ends_with)) {
+				if (ends_with == DECL_END_SEMICOLON && end > t->tokens && token_is_kw(end - 1, KW_RBRACE)) {
+					/* allow semicolon to be ommitted, e.g. f ::= fn() {} */
+				} else if (ends_decl(t->token, ends_with)) {
 					++t->token;
 				} else {
 					tokr_err(t, "Expected %s at end of declaration.", end_str);

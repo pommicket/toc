@@ -8,8 +8,6 @@
 
 /* 
 TODO:
-allow omission of trailing ; in foo ::= fn() {...} or foo ::= nms {...} or foo ::= struct { ... }
-- just end expressions when you get to a closing brace unless there's an elif, etc.
 break
 continue
 switch
