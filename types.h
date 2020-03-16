@@ -501,6 +501,9 @@ enum {
 typedef U8 BlockFlags;
 typedef struct Block {
 	BlockFlags flags;
+	struct {
+		IdentID break_lbl, cont_lbl; /* initially 0, set to non-zero values if needed (++g->lbl_counter); set by sdecls_cgen. */
+	} c;
 	Location where;
 	Identifiers idents;
 	struct Statement *stmts;
@@ -974,7 +977,7 @@ typedef struct Statement {
 		Return ret;
 		Include inc;
 		Message message; /* #error, #warn, #info */
-		Block *referring_to; /* for break/continue */
+		Block *referring_to; /* for break/continue; set during typing */
 	};
 } Statement;
 
@@ -1038,7 +1041,7 @@ typedef struct Typer {
 typedef struct CGenerator {
 	Allocator *allocr;
 	FILE *outc;
-	IdentID ident_counter;
+	IdentID ident_counter, lbl_counter;
 	int indent_lvl; /* how many levels of indentation? */
 	bool will_indent; /* will the next thing be indented? */
 	ParsedFile *file;

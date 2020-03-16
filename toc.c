@@ -166,7 +166,6 @@ static char *read_file_contents(Allocator *a, const char *filename, Location whe
 static void cgen_decls_file(CGenerator *g, ParsedFile *f);
 static void cgen_sdecls_file(CGenerator *g, ParsedFile *f);
 #include "cgen.c"
-#include "sdecls_cgen.c"
 #include "decls_cgen.c"
 
 #ifdef RUN_TESTS

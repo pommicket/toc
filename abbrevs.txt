@@ -16,6 +16,7 @@ fn - function
 ident - identifier
 inc - include
 kw - keyword
+lbl - label
 len - length
 nms - namespace
 num - number

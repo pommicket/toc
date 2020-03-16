@@ -18,7 +18,6 @@ sizeof (not #sizeof)
 start making a standard library... (printf; stringbuilder would be nice to have)
 switch
  - #fallthrough
- - make sure break works inside a switch with cgen! - you'll need goto
 enums
 unions
 ---

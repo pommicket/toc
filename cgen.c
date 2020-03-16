@@ -6,6 +6,7 @@
 static void cgen_create(CGenerator *g, FILE *out, Identifiers *ids, Allocator *allocr) {
 	g->outc = out;
 	g->ident_counter = 0;
+	g->lbl_counter = 0;
 	g->main_ident = ident_get(ids, "main");
 	g->will_indent = true;
 	g->indent_lvl = 0;
@@ -212,6 +213,11 @@ static inline char *cgen_ident_to_str(Identifier i) {
 static inline void cgen_ident_id(CGenerator *g, IdentID id) {
 	cgen_write(g, "a%lu_", (unsigned long)id);
 }
+
+static inline void cgen_lbl(CGenerator *g, IdentID lbl) {
+	cgen_write(g, "lbl%lu_", (unsigned long)lbl);
+}
+
 /* used for fields */
 static inline void cgen_ident_simple(CGenerator *g, Identifier i) {
 	cgen_indent(g);
@@ -1120,6 +1126,11 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 			}
 		}
 		cgen_block(g, &fo->body, ret_name, CGEN_BLOCK_NOBRACES);
+		if (fo->body.c.break_lbl) {
+			cgen_lbl(g, fo->body.c.break_lbl);
+			cgen_writeln(g, ":;");
+		}
+		
 		cgen_write(g, "}}");
 	} break;
 	case EXPR_BLOCK:
@@ -1686,10 +1697,10 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 static void cgen_block(CGenerator *g, Block *b, const char *ret_name, U16 flags) {
 	Block *prev_block = g->block;
 	g->block = b;
+	++g->indent_lvl;
 	
 	if (!(flags & CGEN_BLOCK_NOBRACES)) {
-		cgen_write(g, "{");
-		cgen_nl(g);
+		cgen_writeln(g, "{");
 	}
 	arr_foreach(b->stmts, Statement, s)
 		cgen_stmt(g, s);
@@ -1702,8 +1713,18 @@ static void cgen_block(CGenerator *g, Block *b, const char *ret_name, U16 flags)
 		}
 		cgen_nl(g);
 	}
-	if (!(flags & CGEN_BLOCK_NOBRACES))
+	if (b->c.cont_lbl) {
+		cgen_lbl(g, b->c.cont_lbl);
+		cgen_writeln(g, ":;");
+	}
+	--g->indent_lvl;
+	if (!(flags & CGEN_BLOCK_NOBRACES)) {
 		cgen_write(g, "}");
+		if (b->c.break_lbl) {
+			cgen_lbl(g, b->c.break_lbl);
+			cgen_writeln(g, ":;");
+		}
+	}
 	g->block = prev_block;
 }
 
@@ -1809,8 +1830,8 @@ static void cgen_fn(CGenerator *g, FnExpr *f, Value *compile_time_args) {
 		cgen_ret(g, f->body.ret_expr);
 	}
 	
-	cgen_write(g, "}");
-	cgen_nl(g);
+	cgen_writeln(g, "}");
+	
 	g->fn = prev_fn;
 	cgen_nl(g);
 	cgen_nl(g);
@@ -1998,10 +2019,14 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 		}
 		break;
 	case STMT_BREAK:
-		cgen_writeln(g, "break;");
+		cgen_write(g, "goto ");
+		cgen_lbl(g, s->referring_to->c.break_lbl);
+		cgen_writeln(g, ";");
 		break;
 	case STMT_CONT:
-		cgen_writeln(g, "continue;");
+		cgen_write(g, "goto ");
+		cgen_lbl(g, s->referring_to->c.cont_lbl);
+		cgen_writeln(g, ";");
 		break;
 	case STMT_MESSAGE:
 		break;

@@ -37,6 +37,8 @@ static void cgen_sdecls_type(CGenerator *g, Type *type) {
 static void cgen_sdecls_block(CGenerator *g, Block *b) {
 	Block *prev_block = g->block;
 	g->block = b;
+	b->c.break_lbl = 0;
+	b->c.cont_lbl = 0;
 	
 	arr_foreach(b->stmts, Statement, s)
 		cgen_sdecls_stmt(g, s);
@@ -150,7 +152,15 @@ static void cgen_sdecls_stmt(CGenerator *g, Statement *s) {
 		}
 		break;
 	case STMT_BREAK:
+		if (!s->referring_to->c.break_lbl) {
+			s->referring_to->c.break_lbl = ++g->lbl_counter;
+		}
+		break;
 	case STMT_CONT:
+		if (!s->referring_to->c.cont_lbl) {
+			s->referring_to->c.cont_lbl = ++g->lbl_counter;
+		}
+		break;
 	case STMT_MESSAGE:
 		break;
 	}
