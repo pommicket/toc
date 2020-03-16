@@ -296,6 +296,8 @@ typedef enum {
 			  KW_WHILE,
 			  KW_FOR,
 			  KW_RETURN,
+			  KW_BREAK,
+			  KW_CONTINUE,
 			  KW_FN,
 			  KW_AS,
 			  KW_NEW,
@@ -330,7 +332,8 @@ static const char *const keywords[KW_COUNT] =
 	 "!=", "<=", "<", ">=", ">",
 	 "+", "-", "*", "!", "&", "/", "%", "..", ".",
 	 "=",
-	 "if", "elif", "else", "while", "for", "return", "fn", "as",
+	 "if", "elif", "else", "while", "for", "return", "break",
+	 "continue", "fn", "as",
 	 "new", "del", "struct",
 	 "int", "i8", "i16", "i32", "i64",
 	 "u8", "u16", "u32", "u64", "float", "f32", "f64", "Type",
@@ -492,7 +495,8 @@ enum {
 	  BLOCK_IS_FN = 0x01,
 	  BLOCK_IS_NMS = 0x02,
 	  BLOCK_FINDING_TYPES = 0x04,
-	  BLOCK_FOUND_TYPES = 0x08
+	  BLOCK_FOUND_TYPES = 0x08,
+	  BLOCK_IS_LOOP = 0x10 /* can we break/continue in this block? */
 };
 typedef U8 BlockFlags;
 typedef struct Block {
@@ -904,6 +908,8 @@ typedef enum {
 			  STMT_DECL,
 			  STMT_EXPR,
 			  STMT_RET,
+			  STMT_BREAK,
+			  STMT_CONT,
 			  STMT_INCLUDE,
 			  STMT_MESSAGE
 } StatementKind;
@@ -968,6 +974,7 @@ typedef struct Statement {
 		Return ret;
 		Include inc;
 		Message message; /* #error, #warn, #info */
+		Block *referring_to; /* for break/continue */
 	};
 } Statement;
 

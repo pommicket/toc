@@ -1547,6 +1547,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				p->block = prev_block;
 				if (!parse_block(p, &fo->body, PARSE_BLOCK_DONT_CREATE_IDENTS))
 					goto for_fail;
+				fo->body.flags |= BLOCK_IS_LOOP;
 				goto success;
 				for_fail:
 				p->block = prev_block;
@@ -2444,14 +2445,33 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				return false;
 			}
 			if (!token_is_kw(end, KW_SEMICOLON)) {
-				err_print(token_location(p->file, end), "Expected ';' at end of return statement.");
+				err_print(token_location(p->file, end), "Expected ; at end of return statement.");
 				t->token = end->kind == TOKEN_EOF ? end : end + 1;
 				return false;
 			}
-			bool success = parse_expr(p, &s->ret.expr, end);
+			bool parsed = parse_expr(p, &s->ret.expr, end);
 			t->token = end + 1;
-			return success;
+			if (!parsed) return false;
+			goto success;
 		}
+		case KW_BREAK:
+			s->kind = STMT_BREAK;
+			++t->token;
+			if (!token_is_kw(t->token, KW_SEMICOLON)) {
+				tokr_err(t, "Expected ; after break.");
+				tokr_skip_semicolon(t);
+				return false;
+			}
+			goto success;
+		case KW_CONTINUE:
+			s->kind = STMT_CONT;
+			++t->token;
+			if (!token_is_kw(t->token, KW_SEMICOLON)) {
+				tokr_err(t, "Expected ; after continue.");
+				tokr_skip_semicolon(t);
+				return false;
+			}
+			goto success;
 		default: break;
 		}
 	} else if (t->token->kind == TOKEN_DIRECT) {
@@ -2934,6 +2954,12 @@ static void fprint_stmt(FILE *out, Statement *s) {
 			break;
 		}
 	} break;
+	case STMT_BREAK:
+		fprintf(out, "break;");
+		break;
+	case STMT_CONT:
+		fprintf(out, "continue;");
+		break;
 	}
 }
 

@@ -3375,6 +3375,21 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			return false;
 		}
 	} break;
+	case STMT_BREAK:
+	case STMT_CONT: {
+		/* make sure we are actually in a loop */
+		Block *block;
+		for (block = tr->block; block; block = block->parent) {
+			if (block->flags & BLOCK_IS_LOOP) {
+				s->referring_to = block;
+				break;
+			}
+		}
+		if (!block) {
+			err_print(s->where, "%s not in loop.", s->kind == STMT_BREAK ? "break" : "continue");
+			return false;
+		}
+	} break;
 	}
 	s->flags |= STMT_TYPED;
 	return true;

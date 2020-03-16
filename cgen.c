@@ -1997,6 +1997,12 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 				cgen_stmt(g, sub);
 		}
 		break;
+	case STMT_BREAK:
+		cgen_writeln(g, "break;");
+		break;
+	case STMT_CONT:
+		cgen_writeln(g, "continue;");
+		break;
 	case STMT_MESSAGE:
 		break;
 	}
@@ -2053,6 +2059,8 @@ static void cgen_defs_stmt(CGenerator *g, Statement *s) {
 				cgen_defs_stmt(g, sub);
 		}
 		break;
+	case STMT_BREAK:
+	case STMT_CONT:
 	case STMT_MESSAGE:
 		break;
 	}

@@ -1,6 +1,7 @@
 allocr - allocator
 arg - argument
 cap - capacity
+cont - continue
 ctx - context
 decl - declaration
 del - delete
