@@ -1690,6 +1690,10 @@ static Status types_expr(Typer *tr, Expression *e) {
 				}
 				/* fallthrough */
 			default: {
+				if (fo->of->type.kind == TYPE_UNKNOWN && tr->err_ctx->have_errored) {
+					/* silently fail */
+					goto for_fail;
+				}
 				char *s = type_to_str(&fo->of->type);
 				err_print(e->where, "Cannot iterate over non-array non-slice type %s.", s);
 				free(s);
@@ -1766,24 +1770,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 		}
 		*t = c->type;
 	} break;
-	case EXPR_NEW:
-		if (!type_resolve(tr, &e->new.type, e->where))
-			return false;
-		if (e->new.n) {
-			if (!types_expr(tr, e->new.n)) return false;
-			if (e->new.n->type.kind != TYPE_BUILTIN || !type_builtin_is_int(e->new.n->type.builtin)) {
-				char *got = type_to_str(&e->new.n->type);
-				err_print(e->where, "Expected integer as second argument to new, but got %s.", got);
-				free(got);
-				return false;
-			}
-			t->kind = TYPE_SLICE;
-			t->slice = &e->new.type;
-		} else {
-			t->kind = TYPE_PTR;
-			t->ptr = &e->new.type;
-		}
-		break;
 	case EXPR_IF: {
 		IfExpr *i = e->if_;
 		IfExpr *curr = i;
@@ -2565,15 +2551,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 			
 			*t = *of_type->ptr;
 			break;
-		case UNARY_DEL:
-			if (of_type->kind != TYPE_PTR && of_type->kind != TYPE_SLICE) {
-				char *s = type_to_str(of_type);
-				err_print(e->where, "Cannot delete non-pointer, non-slice type %s.", s);
-				free(s);
-				return false;
-			}
-			t->kind = TYPE_VOID;
-			break;
 		case UNARY_NOT:
 			if (!type_can_be_truthy(of_type)) {
 				char *s = type_to_str(of_type);
@@ -2926,6 +2903,14 @@ static Status types_expr(Typer *tr, Expression *e) {
 					break;
 				}
 			} else if (struct_type->kind == TYPE_SLICE || struct_type->kind == TYPE_ARR || type_is_builtin(struct_type, BUILTIN_VARARGS)) {
+				if (ident_eq_str(rhs->ident, "data") && struct_type->kind == TYPE_SLICE) {
+					/* allow access of slice pointer */
+					t->kind = TYPE_PTR;
+					t->ptr = typer_calloc(tr, 1, sizeof *t->ptr);
+					t->ptr->kind = TYPE_VOID;
+					t->ptr->flags = TYPE_IS_RESOLVED;
+					break;
+				}
 				if (!ident_eq_str(rhs->ident, "len")) {
 					char *s = type_to_str(struct_type);
 					err_print(rhs->where, "Field of %s must be .len", s);

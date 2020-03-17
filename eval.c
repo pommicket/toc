@@ -9,6 +9,7 @@ static Status types_decl(Typer *tr, Declaration *d);
 static Status type_resolve(Typer *tr, Type *t, Location where);
 static Status eval_block(Evaluator *ev, Block *b, Value *v);
 static Status eval_expr(Evaluator *ev, Expression *e, Value *v);
+static Status eval_address_of(Evaluator *ev, Expression *e, void **ptr);
 static Value get_builtin_val(BuiltinVal val);
 
 static void evalr_create(Evaluator *ev, Typer *tr, Allocator *allocr) {
@@ -742,6 +743,14 @@ static Status eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr, void
 			struc_data = struc.struc;
 		}
 		*p = (char *)struc_data + dot_expr->binary.dot.field->offset;
+	} else if (struct_type->kind == TYPE_SLICE) {
+	    void *ptr;
+		if (!eval_address_of(ev, dot_expr->binary.lhs, &ptr))
+			return false;
+		/* access struct data */
+		Identifier ident = dot_expr->binary.rhs->ident;
+		assert(ident_eq_str(ident, "data"));
+		*p = &((Slice *)ptr)->data;
 	} else {
 		void *ptr;
 		Identifier ident = dot_expr->binary.rhs->ident;
@@ -848,7 +857,7 @@ static Status eval_set(Evaluator *ev, Expression *set, Value *to) {
 			void *ptr;
 			if (!eval_ptr_to_struct_field(ev, set, &ptr))
 				return false;
-			eval_deref_set(ptr, to, &set->binary.dot.field->type);
+			eval_deref_set(ptr, to, &set->type);
 		} break;
 		default: assert(0); break;
 		}
@@ -1127,14 +1136,6 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		} break;
 		case UNARY_NOT:
 			v->boolv = !val_truthiness(of, &e->unary.of->type);
-			break;
-		case UNARY_DEL:
-			if (of_type->kind == TYPE_PTR)
-				free(of.ptr);
-			else {
-				assert(of_type->kind == TYPE_SLICE);
-				free(of.slice.data);
-			}
 			break;
 		case UNARY_LEN:
 			if (of_type->kind == TYPE_PTR) {
@@ -1431,19 +1432,6 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		return false;
 	case EXPR_BUILTIN:
 		*v = get_builtin_val(e->builtin.which.val);
-		break;
-	case EXPR_NEW:
-		/* it's not strictly necessary to do the if here */
-		if (e->new.n) {
-			Value n;
-			if (!eval_expr(ev, e->new.n, &n))
-				return false;
-			U64 n64 = val_to_u64(n, e->new.n->type.builtin);
-			v->slice.data = err_calloc(n64, compiler_sizeof(&e->new.type));
-			v->slice.n = (I64)n64;
-		} else {
-			v->ptr = err_calloc(1, compiler_sizeof(&e->new.type));
-		}
 		break;
 	case EXPR_CALL: {
 		FnExpr *fn;

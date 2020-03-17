@@ -322,13 +322,6 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		copy_type(c, &cout->type, &cin->type);
 		cout->expr = copy_expr_(c, cin->expr);
 	} break;
-	case EXPR_NEW: {
-		NewExpr *nin = &in->new;
-		NewExpr *nout = &out->new;
-		copy_type(c, &nout->type, &nin->type);
-		if (nin->n)
-			nout->n = copy_expr_(c, nin->n);
-	} break;
 	case EXPR_CALL: {
 		CallExpr *cin = &in->call;
 		CallExpr *cout = &out->call;

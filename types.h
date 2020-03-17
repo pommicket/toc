@@ -300,8 +300,6 @@ typedef enum {
 			  KW_CONTINUE,
 			  KW_FN,
 			  KW_AS,
-			  KW_NEW,
-			  KW_DEL,
 			  KW_STRUCT,
 			  KW_INT,
 			  KW_I8,
@@ -335,8 +333,7 @@ static const char *const keywords[KW_COUNT] =
 	 "+", "-", "*", "!", "&", "/", "%", "..", ".",
 	 "=",
 	 "if", "elif", "else", "while", "for", "return", "break",
-	 "continue", "fn", "as",
-	 "new", "del", "struct",
+	 "continue", "fn", "as", "struct",
 	 "int", "i8", "i16", "i32", "i64",
 	 "u8", "u16", "u32", "u64", "float", "f32", "f64", "Type",
 	 "Namespace",
@@ -557,7 +554,6 @@ typedef enum {
 			  EXPR_FOR,
 			  EXPR_FN,
 			  EXPR_CAST,
-			  EXPR_NEW,
 			  EXPR_CALL,
 			  EXPR_BLOCK,
 			  EXPR_TUPLE,
@@ -579,7 +575,6 @@ typedef enum {
 			  UNARY_ADDRESS, /* &x */
 			  UNARY_DEREF, /* *x */
 			  UNARY_NOT, /* !x */
-			  UNARY_DEL, /* del x */
 			  UNARY_TYPEOF, /* typeof x */
 			  UNARY_LEN, /* x.len ; replaces BINARY_DOT len when typing  */
 			  UNARY_DSIZEOF,

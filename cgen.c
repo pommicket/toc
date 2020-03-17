@@ -135,9 +135,6 @@ static void cgen_defs_decl(CGenerator *g, Declaration *d);
 			cgen_recurse_subexprs_fn_simple(fn, decl_f, block_f);		\
 		}																\
 	} break;															\
-	case EXPR_NEW:														\
-		if (e->new.n) f(g, e->new.n);									\
-		break;															\
 	}
 
 
@@ -880,7 +877,6 @@ static void cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 	case EXPR_BINARY_OP:
 	case EXPR_FN:
 	case EXPR_CAST:
-	case EXPR_NEW:
 	case EXPR_C:
 	case EXPR_BUILTIN:
 	case EXPR_TYPE:
@@ -1275,9 +1271,6 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 		cgen_write(g, "; }");
 		cgen_nl(g);
 	} break;
-	case EXPR_NEW:
-		if (e->new.n) cgen_expr_pre(g, e->new.n);
-		break;
 	case EXPR_VAL:
 		/* TODO: don't make a variable for this if it's not needed */
 		if (type_is_compileonly(&e->type))
@@ -1474,6 +1467,12 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 				cgen_write(g, is_ptr ? "->" :".");
 				cgen_ident_simple(g, e->binary.dot.field->name);
 				cgen_write(g, ")");
+			} else if (struct_type->kind == TYPE_SLICE) {
+				/* access slice data */
+				cgen_expr(g, lhs);
+				bool is_ptr = lhs->type.kind == TYPE_PTR;
+				cgen_write(g, is_ptr ? "->" :".");
+				cgen_write(g, "data");
 			} else {
 				assert(type_is_builtin(struct_type, BUILTIN_NMS));
 				char *prefix = lhs->val.nms->c.prefix;
@@ -1512,14 +1511,6 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			cgen_write(g, ")");
 			handled = true;
 			break;
-		case UNARY_DEL:
-			cgen_write(g, "free_(");
-			cgen_expr(g, e->unary.of);
-			if (of_type->kind == TYPE_SLICE)
-				cgen_write(g, ".data");
-			cgen_write(g, ")");
-			handled = true;
-			break;
 		case UNARY_LEN: {
 			bool is_ptr = of_type->kind == TYPE_PTR;
 			if (is_ptr) {
@@ -1548,27 +1539,6 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		cgen_write(g, "%s", s);
 		cgen_expr(g, e->unary.of);
 		cgen_write(g, ")");
-	} break;
-	case EXPR_NEW: {
-		if (e->new.n) {
-			cgen_write(g, "mkslice_(ecalloc_(");
-			cgen_expr(g, e->new.n);
-			cgen_write(g, ", (i64)sizeof(");
-			cgen_type_pre(g, &e->new.type);
-			cgen_type_post(g, &e->new.type);
-			cgen_write(g, ")), ");
-			cgen_expr(g, e->new.n);
-			cgen_write(g, ")");
-		} else {
-			Type *t = &e->new.type;
-			cgen_write(g, "((");
-			cgen_type_pre(g, &e->type);
-			cgen_type_post(g, &e->type);
-			cgen_write(g, ")ecalloc_(1, sizeof(");
-			cgen_type_pre(g, t);
-			cgen_type_post(g, t);
-			cgen_write(g, ")))");
-		}
 	} break;
 	case EXPR_IF:
 	case EXPR_WHILE:
@@ -2131,9 +2101,7 @@ static void cgen_file(CGenerator *g, ParsedFile *f) {
 			   "typedef struct { void *data; i64 n; } slice_;\n"
 			   "#define false ((bool)0)\n"
 			   "#define true ((bool)1)\n"
-			   "static slice_ mkslice_(void *data, i64 n) { slice_ ret; ret.data = data; ret.n = n; return ret; }\n"
-			   "static void free_(void *data) { extern void free(void *data); free(data); }\n" /* don't introduce free to global namespace */
-			   "static void *ecalloc_(size_t n, size_t sz) { extern void *calloc(size_t n, size_t size); extern void abort(void); extern int printf(const char *fmt, ...); void *ret = calloc(n, sz); if (n && sz && !ret) { printf(\"Out of memory.\\n\"); abort(); } return ret; }\n\n\n");
+			   "static slice_ mkslice_(void *data, i64 n) { slice_ ret; ret.data = data; ret.n = n; return ret; }\n");
 
 	cgen_sdecls_file(g, f);
 	cgen_decls_file(g, f);

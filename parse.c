@@ -37,7 +37,6 @@ static const char *expr_kind_to_str(ExprKind k) {
 	case EXPR_CALL: return "function call";
 	case EXPR_C: return "C code";
 	case EXPR_BUILTIN: return "#builtin value";
-	case EXPR_NEW: return "new expression";
 	case EXPR_CAST: return "cast expression";
 	case EXPR_UNARY_OP: return "unary operator";
 	case EXPR_BINARY_OP: return "binary operator";
@@ -60,7 +59,6 @@ static const char *unary_op_to_str(UnaryOp u) {
 	case UNARY_ADDRESS: return "&";
 	case UNARY_DEREF: return "*";
 	case UNARY_NOT: return "!";
-	case UNARY_DEL: return "del";
 	case UNARY_LEN: return "len";
 	case UNARY_DSIZEOF: return "#sizeof";
 	case UNARY_DALIGNOF: return "#alignof";
@@ -1019,9 +1017,8 @@ static void fprint_expr(FILE *out, Expression *e);
 
 
 #define NOT_AN_OP -1
-/* cast/new aren't really operators since they operate on types, not exprs. */
+/* cast isn't really an operator since it operates on types, not exprs. */
 #define CAST_PRECEDENCE 2
-#define NEW_PRECEDENCE 22
 #define DSIZEOF_PRECEDENCE 5
 #define DALIGNOF_PRECEDENCE 5
 static int op_precedence(Keyword op) {
@@ -1052,7 +1049,6 @@ static int op_precedence(Keyword op) {
 	case KW_SLASH: return 40;
 	case KW_PERCENT: return 45;
 	case KW_EXCLAMATION: return 50;
-	case KW_DEL: return 1000;
 	default: return NOT_AN_OP;
 	}
 }
@@ -1564,7 +1560,88 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			}
 			default: break;
 			}
-
+		if (token_is_direct(t->token, DIRECT_FOREIGN)) {
+			e->kind = EXPR_FN;
+			FnExpr *fn = e->fn = parser_calloc(p, 1, sizeof *e->fn);
+			fn->flags |= FN_EXPR_FOREIGN;
+			fn->foreign.fn_ptr = 0;
+			fn->where.start = t->token;
+			fn->where.file = p->file;
+			++t->token;
+			if (!token_is_kw(t->token, KW_LPAREN)) {
+				tokr_err(t, "Expected ( following #foreign.");
+				return false;
+			}
+			++t->token;
+			Type *fn_t = &fn->foreign.type;
+			fn_t->kind = TYPE_FN;
+			FnType *fn_type = &fn_t->fn;
+			fn_type->constness = NULL;
+			fn_type->types = NULL;
+			Type *ret_type = parser_arr_add(p, &fn_type->types);
+			CType *ret_ctype = parser_arr_add(p, &fn->foreign.ctypes);
+			Expression *name = fn->foreign.name_expr = parser_new_expr(p);
+					
+			if (!parse_expr(p, name, expr_find_end(p, EXPR_CAN_END_WITH_COMMA)))
+				return false;
+			if (token_is_kw(t->token, KW_RPAREN)) {
+				fn->foreign.lib_expr = NULL;
+			} else {
+				if (!token_is_kw(t->token, KW_COMMA)) {
+					tokr_err(t, "Expected , to follow #foreign name.");
+					return false;
+				}
+				++t->token;
+				Expression *lib = fn->foreign.lib_expr = parser_new_expr(p);
+				if (!parse_expr(p, lib, expr_find_end(p, 0)))
+					return false;
+				if (!token_is_kw(t->token, KW_RPAREN)) {
+					tokr_err(t, "Expected ) to follow #foreign lib.");
+					return false;
+				}	
+			}
+			++t->token;
+					
+					
+			if (!token_is_kw(t->token, KW_FN)) {
+				tokr_err(t, "Expected fn to follow #foreign.");
+				return false;
+			}
+			++t->token;
+			if (!token_is_kw(t->token, KW_LPAREN)) {
+				tokr_err(t, "Expected ( after #foreign fn");
+				return false;
+			}
+			++t->token;
+			while (!token_is_kw(t->token, KW_RPAREN)) {
+				Type *type = parser_arr_add(p, &fn_type->types);
+				CType *ctype = parser_arr_add(p, &fn->foreign.ctypes);
+				if (!parse_c_type(p, ctype, type)) {
+					return false;
+				}
+				if (token_is_kw(t->token, KW_COMMA)) {
+					++t->token;
+				} else if (token_is_kw(t->token, KW_RPAREN)) {
+					++t->token;
+					break;
+				} else {
+					tokr_err(t, "Expected , or ) following #foreign fn type.");
+					return false;
+				}
+			}
+			if (t->token == end) {
+				/* void */
+				ret_ctype->kind = CTYPE_NONE;
+				ret_type->kind = TYPE_VOID;
+				ret_type->flags = 0;
+				ret_type->was_expr = NULL;
+			} else {
+				if (!parse_c_type(p, ret_ctype, ret_type))
+					return false;
+			}
+			fn->where.end = t->token;
+			return true;
+		}
 
 		/* NOTE: the . operator is not handled here, but further down, in order to allow some_struct.fn_member() */
 		Token *dot = NULL; /* this keeps track of it for later */
@@ -1629,7 +1706,6 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				if (token->kind == TOKEN_KW) {
 					switch (token->kw) {
 					case KW_AS: precedence = CAST_PRECEDENCE; break;
-					case KW_NEW: precedence = NEW_PRECEDENCE; break;
 					default: precedence = op_precedence(token->kw); break;
 					}
 				} else if (token->kind == TOKEN_DIRECT) {
@@ -1723,45 +1799,6 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 						break;
 					case KW_ALIGNOF:
 						op = UNARY_ALIGNOF;
-						break;
-					case KW_NEW:
-						e->kind = EXPR_NEW;
-						++t->token;
-						if (!token_is_kw(t->token, KW_LPAREN)) {
-							tokr_err(t, "Expected ( to follow new.");
-							return false;
-						}
-						++t->token;
-						if (!parse_type(p, &e->new.type, NULL)) return false;
-						if (token_is_kw(t->token, KW_COMMA)) {
-							/* new(int, 5) */
-							++t->token;
-							Token *n_end = expr_find_end(p, 0);
-							e->new.n = parser_new_expr(p);
-							if (!parse_expr(p, e->new.n, n_end))
-								return false;
-						} else e->new.n = NULL;
-						if (!token_is_kw(t->token, KW_RPAREN)) {
-							tokr_err(t, "Expected ).");
-							return false;
-						}
-						++t->token;
-						if (e->new.type.kind == TYPE_TUPLE) {
-							err_print(e->where, "You cannot new a tuple.");
-							return false;
-						}
-						if (t->token == end)
-							goto success;
-						/* otherwise, there's more stuff after the new (e.g. new(int, 5).len)*/
-						t->token = start;
-						goto not_an_op;
-					case KW_DEL:
-						if (!token_is_kw(t->token + 1, KW_LPAREN)) {
-							/* for the future, when del could be a function */
-							err_print(e->where, "Expected ( after del.");
-							return false;
-						}
-						op = UNARY_DEL;
 						break;
 					case KW_TYPEOF:
 						op = UNARY_TYPEOF;
@@ -1918,7 +1955,6 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			}		
 			goto success;
 		} else {
-		not_an_op:;
 			/* function calls, array accesses, etc. */
 
 			if (t->token->kind == TOKEN_DIRECT) {
@@ -1937,89 +1973,6 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					e->kind = EXPR_BUILTIN;
 					single_arg = e->builtin.which.expr = parser_new_expr(p);
 					break;
-				case DIRECT_FOREIGN: {
-					
-					e->kind = EXPR_FN;
-					FnExpr *fn = e->fn = parser_calloc(p, 1, sizeof *e->fn);
-					fn->flags |= FN_EXPR_FOREIGN;
-					fn->foreign.fn_ptr = 0;
-					fn->where.start = t->token;
-					fn->where.file = p->file;
-					++t->token;
-					if (!token_is_kw(t->token, KW_LPAREN)) {
-						tokr_err(t, "Expected ( following #foreign.");
-						return false;
-					}
-					++t->token;
-					Type *fn_t = &fn->foreign.type;
-					fn_t->kind = TYPE_FN;
-					FnType *fn_type = &fn_t->fn;
-					fn_type->constness = NULL;
-					fn_type->types = NULL;
-					Type *ret_type = parser_arr_add(p, &fn_type->types);
-					CType *ret_ctype = parser_arr_add(p, &fn->foreign.ctypes);
-					Expression *name = fn->foreign.name_expr = parser_new_expr(p);
-					
-					if (!parse_expr(p, name, expr_find_end(p, EXPR_CAN_END_WITH_COMMA)))
-						return false;
-					if (token_is_kw(t->token, KW_RPAREN)) {
-						fn->foreign.lib_expr = NULL;
-					} else {
-						if (!token_is_kw(t->token, KW_COMMA)) {
-							tokr_err(t, "Expected , to follow #foreign name.");
-							return false;
-						}
-						++t->token;
-						Expression *lib = fn->foreign.lib_expr = parser_new_expr(p);
-						if (!parse_expr(p, lib, expr_find_end(p, 0)))
-							return false;
-						if (!token_is_kw(t->token, KW_RPAREN)) {
-							tokr_err(t, "Expected ) to follow #foreign lib.");
-							return false;
-						}	
-					}
-					++t->token;
-					
-					
-					if (!token_is_kw(t->token, KW_FN)) {
-						tokr_err(t, "Expected fn to follow #foreign.");
-						return false;
-					}
-					++t->token;
-					if (!token_is_kw(t->token, KW_LPAREN)) {
-						tokr_err(t, "Expected ( after #foreign fn");
-						return false;
-					}
-					++t->token;
-					while (!token_is_kw(t->token, KW_RPAREN)) {
-						Type *type = parser_arr_add(p, &fn_type->types);
-						CType *ctype = parser_arr_add(p, &fn->foreign.ctypes);
-						if (!parse_c_type(p, ctype, type)) {
-							return false;
-						}
-						if (token_is_kw(t->token, KW_COMMA)) {
-							++t->token;
-						} else if (token_is_kw(t->token, KW_RPAREN)) {
-							++t->token;
-							break;
-						} else {
-							tokr_err(t, "Expected , or ) following #foreign fn type.");
-							return false;
-						}
-					}
-					if (t->token == end) {
-						/* void */
-						ret_ctype->kind = CTYPE_NONE;
-						ret_type->kind = TYPE_VOID;
-						ret_type->flags = 0;
-						ret_type->was_expr = NULL;
-					} else {
-						if (!parse_c_type(p, ret_ctype, ret_type))
-							return false;
-					}
-					fn->where.end = t->token;
-					return true;
-				}
 				default:
 					tokr_err(t, "Unrecognized expression.");
 					return false;
@@ -2782,10 +2735,6 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprint_type(out, &e->cast.type);
 		fprintf(out, ")");
 		break;
-	case EXPR_NEW:
-		fprintf(out, "new ");
-		fprint_type(out, &e->new.type);
-		break;
 	case EXPR_IF: {
 		IfExpr *i = e->if_;
 		if (i->cond) {
@@ -3043,7 +2992,6 @@ static bool expr_is_definitely_const(Expression *e) {
 	case EXPR_WHILE:
 	case EXPR_C:
 	case EXPR_BUILTIN:
-	case EXPR_NEW:
 	case EXPR_CAST:
 	case EXPR_CALL:
 	case EXPR_BLOCK:

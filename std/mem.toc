@@ -1,0 +1,23 @@
+// TODO: check for failed malloc
+malloc ::= #foreign("malloc", "libc.so.6") fn(#C size_t) #C &"void";
+free ::= #foreign("free", "libc.so.6") fn(#C &"void");
+
+new ::= fn(t :: Type) &t {
+	malloc((sizeof t) as u64)
+}
+
+news ::= fn(t :: Type, n :: int) []t {
+	s: []t;
+	s.data = malloc((n * sizeof t) as u64);
+	s.len = n;
+	s
+}
+
+// TODO(eventually): use type information to make this just one function
+del ::= fn(t::=, x: &t) {
+	free(x);
+}
+
+dels ::= fn(t::=, x: []t) {
+	free(x.data);
+}
