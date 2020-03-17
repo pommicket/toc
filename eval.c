@@ -1731,19 +1731,24 @@ static Status eval_block(Evaluator *ev, Block *b, Value *v) {
 			break;
 		}
 	}
-	if (!ev->returning && b->ret_expr) {
-		Value r;
-		if (!eval_expr(ev, b->ret_expr, &r)) {
-			success = false;
-			goto ret;
-		}
-		if (!type_is_builtin(&b->ret_expr->type, BUILTIN_TYPE)) {
-			/* make a copy so that r's data isn't freed when we exit the block */
-			copy_val(NULL, v, r, &b->ret_expr->type);
-			if (b->ret_expr->kind == EXPR_TUPLE)
-				free(r.tuple);
+	if (b->ret_expr) {
+		if (ev->returning) {
+			/* return 0 from this block */
+			*v = val_zero(&b->ret_expr->type);
 		} else {
-			*v = r;
+			Value r;
+			if (!eval_expr(ev, b->ret_expr, &r)) {
+				success = false;
+				goto ret;
+			}
+			if (!type_is_builtin(&b->ret_expr->type, BUILTIN_TYPE)) {
+				/* make a copy so that r's data isn't freed when we exit the block */
+				copy_val(NULL, v, r, &b->ret_expr->type);
+				if (b->ret_expr->kind == EXPR_TUPLE)
+					free(r.tuple);
+			} else {
+				*v = r;
+			}
 		}
 	}
 	eval_exit_stmts(b->stmts, last_reached);
