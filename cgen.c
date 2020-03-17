@@ -186,7 +186,7 @@ static inline void *cgen_malloc(CGenerator *g, size_t sz) {
 /* indent iff needed */
 static inline void cgen_indent(CGenerator *g) {
 	if (g->will_indent) {
-		for (int i = 0; i < g->indent_lvl; ++i)
+		for (unsigned i = 0; i < g->indent_lvl; ++i)
 			fprintf(cgen_writing_to(g), "\t");
 		g->will_indent = false;
 	}

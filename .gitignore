@@ -3,7 +3,7 @@ toc
 a.out
 out.c
 point.c
-*.top
+*.swp
 tests/**/*.c
 tests/**/*.bin
 tests/**/got

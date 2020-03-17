@@ -1,6 +1,6 @@
 /*
 toc's types. Note that although these types are in the public domain,
-the code which uses them (i.e. most of the rest of toc) is not.
+the code which uses them (i.e. most of the rest of toc) is not necessarily.
 
 This is free and unencumbered software released into the public domain.
 Anyone is free to copy, modify, publish, use, compile, sell, or
@@ -163,8 +163,8 @@ typedef union Value {
 	I64 i64;
 	bool boolv;
 	char charv;
-	float f32;
-	double f64;
+	F32 f32;
+	F64 f64;
 	struct FnExpr *fn;
 	void *arr;
 	void *ptr;
@@ -1043,7 +1043,7 @@ typedef struct CGenerator {
 	Allocator *allocr;
 	FILE *outc;
 	IdentID ident_counter, lbl_counter;
-	int indent_lvl; /* how many levels of indentation? */
+	U16 indent_lvl; /* how many levels of indentation? */
 	bool will_indent; /* will the next thing be indented? */
 	ParsedFile *file;
 	Block *block;

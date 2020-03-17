@@ -676,12 +676,14 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 	
 		if (d->flags & DECL_FOUND_TYPE) {
 			*t = *decl_type_at_index(d, decl_ident_index(d, i));
+			assert(t->flags & TYPE_IS_RESOLVED);
 			return true;
 		} else {
 			if ((d->flags & DECL_HAS_EXPR) && (d->expr.kind == EXPR_FN)) {
 				/* allow using a function before declaring it */
 				if (!type_of_fn(tr, d->expr.fn, &d->expr.type, 0)) return false;
 				*t = d->expr.type;
+				t->flags |= TYPE_IS_RESOLVED; /* for function templates */
 				return true;
 			} else {
 				if (where.start <= d->where.end) {
@@ -689,6 +691,7 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 					err_print(where, "Use of identifier %s before its declaration.", s);
 					info_print(d->where, "%s will be declared here.", s);
 					free(s);
+					return false;
 				} else {
 					if (d->flags & DECL_INFER) {
 						err_print(where, "Use of identifier before it has been inferred. You are trying to do stuff with inference which toc doesn't support.");
@@ -698,7 +701,6 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 					if (!types_decl(tr, d)) return false;
 					return type_of_ident(tr, where, ident, t);
 				}
-				return false;
 			}
 		}
 	} break;
@@ -720,6 +722,7 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 			if (i == fo->index) {
 				t->kind = TYPE_BUILTIN;
 				t->builtin = BUILTIN_I64;
+				t->flags = TYPE_IS_RESOLVED;
 			} else {
 				assert(i == fo->value);
 				*t = fo->type;
@@ -1469,6 +1472,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		}
 		if (fn_has_any_const_params(e->fn) || fn_type_has_varargs(&e->type.fn)) {
 			e->fn->instances = typer_calloc(tr, 1, sizeof *e->fn->instances);
+			t->flags |= TYPE_IS_RESOLVED; /* pretend this type is resolved, even though its children aren't to fix some assertions */
 		} else {
 			if (!types_fn(tr, e->fn, &e->type, NULL)) {
 				return false;
@@ -3025,7 +3029,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		return false;
 	}
  ret:
-	t->flags |= TYPE_IS_RESOLVED;
+	assert(t->flags & TYPE_IS_RESOLVED);
 	return true;
 }
 

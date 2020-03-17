@@ -37,6 +37,11 @@ failed=false
 do_tests() {
 	valgrind  -q --exit-on-first-error=yes --error-exitcode=1 $TOC "$1.toc" -o out.c || exit 1
 	for CC in "gcc -O0 -g" "tcc" "clang -O3 -s"; do
+		if [ "$1" = "sizeof" ]; then
+			if [ "$CC" = "tcc" ]; then
+				continue # some versions of tcc don't have _Alignof
+			fi
+		fi
 		printf "Running test $1 with C compiler $CC... "
 		compile_c "$1"
 		./a.out > got
