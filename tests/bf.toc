@@ -1,7 +1,9 @@
+#include "mem.toc";
+
 readfile ::= fn(filename: []char) []char {
 #C("extern void *fopen(char *name, char const *mode); extern char *fgets(char *buf, size_t sz, void *f);");
 		 fp : &u8 = #C("fopen(&(((char *)filename.data)[0]), \"r\")");
-		 contents : []char;
+		 contents := news(char, 1);
 		 contents_sz : int;
 		 contents_len : int;
 		 buffer : [1024]char;
@@ -13,13 +15,13 @@ readfile ::= fn(filename: []char) []char {
 			   if contents_sz < contents_len + buffer_len {
 			   	  old_contents := contents;
 				  contents_sz = 2*contents_sz + 1024;
-			   	  contents = new(char, contents_sz);
+			   	  contents = news(char, contents_sz);
 				  i := 0;
 				  while i < contents_len {
 				  		contents[i] = old_contents[i];
 				  		i = i + 1;
 				  }
-				  del(old_contents);
+				  dels(old_contents);
 			   }
 			   i := 0;
 			   while i < buffer_len {
@@ -44,7 +46,7 @@ runfile ::= fn(filename: []char) {
 	 #C("extern int putchar(int c);");
 	 code := readfile(filename);
 	 tape_sz := 3;
-	 tape := new(int, tape_sz);
+	 tape := news(int, tape_sz);
 	 ptr := tape_sz / 2;
 	 i := 0;
 	 while code[i] {
@@ -58,28 +60,28 @@ runfile ::= fn(filename: []char) {
 		   	 ptr = ptr + 1;
 			 if ptr >= tape_sz {
 			 	// extend to the right
-			 	newtape := new(int, 2*tape_sz);
+			 	newtape := news(int, 2*tape_sz);
 				j := 0;
 				while j < tape_sz {
 					  newtape[j] = tape[j];
 					  j = j + 1;
 				}
 				tape_sz = tape_sz * 2;
-				del(tape);
+				dels(tape);
 				tape = newtape;
 			 }
 		   } elif code[i] == '<' {
 		   	 ptr = ptr - 1;
 			 if ptr < 0 {
 			 	// extend to the left
-			 	newtape := new(int, 2*tape_sz);
+			 	newtape := news(int, 2*tape_sz);
 				j := 0;
 				while j < tape_sz {
 					  newtape[j+tape_sz] = tape[j];
 					  j = j + 1;
 				}
 				tape_sz = tape_sz * 2;
-				del(tape);
+				dels(tape);
 				tape = newtape;
 				ptr = ptr + tape_sz;
 			 }
@@ -110,11 +112,11 @@ runfile ::= fn(filename: []char) {
 		   }
 		   i = i + 1;
 	 }
-	 del(tape);
-	 del(code);
+	 dels(tape);
+	 dels(code);
 };
 
 main ::= fn() {
-	 runfile("bf_hw0");
-	 runfile("bf_hw1");
+	 runfile("bf_hw0\0");
+	 runfile("bf_hw1\0");
 };

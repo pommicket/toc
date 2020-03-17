@@ -748,8 +748,7 @@ static Status eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr, void
 		if (!eval_address_of(ev, dot_expr->binary.lhs, &ptr))
 			return false;
 		/* access struct data */
-		Identifier ident = dot_expr->binary.rhs->ident;
-		assert(ident_eq_str(ident, "data"));
+		assert(ident_eq_str(dot_expr->binary.rhs->ident, "data"));
 		*p = &((Slice *)ptr)->data;
 	} else {
 		void *ptr;

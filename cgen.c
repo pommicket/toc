@@ -138,34 +138,39 @@ static void cgen_defs_decl(CGenerator *g, Declaration *d);
 	}
 
 
-#define cgen_recurse_subtypes(f, g, type)			\
-	switch (type->kind) {							\
-	case TYPE_STRUCT:								\
-		/* don't descend into fields */				\
-		break;										\
-	case TYPE_FN:									\
-		arr_foreach(type->fn.types, Type, sub) {	\
-			f(g, sub);								\
-		}											\
-		break;										\
-	case TYPE_TUPLE:								\
-		arr_foreach(type->tuple, Type, sub)			\
-			f(g, sub);								\
-		break;										\
-	case TYPE_ARR:									\
-		f(g, type->arr.of);							\
-		break;										\
-	case TYPE_SLICE:								\
-		f(g, type->slice);							\
-		break;										\
-	case TYPE_PTR:									\
-		f(g, type->ptr);							\
-		break;										\
-	case TYPE_VOID:									\
-	case TYPE_BUILTIN:								\
-	case TYPE_UNKNOWN:								\
-		break;										\
-	case TYPE_EXPR: assert(0);						\
+#define cgen_recurse_subtypes(f, g, type)								\
+	switch (type->kind) {												\
+	case TYPE_STRUCT:													\
+		/* don't descend into fields */									\
+		break;															\
+	case TYPE_FN:														\
+		if (type->kind == TYPE_FN && (type->fn.constness || fn_type_has_varargs(&type->fn))) { \
+			/* we don't want to do this, because it's a template-y thing */	\
+		}																\
+		else {															\
+			arr_foreach(type->fn.types, Type, sub) {					\
+				f(g, sub);												\
+			}															\
+		}																\
+		break;															\
+	case TYPE_TUPLE:													\
+		arr_foreach(type->tuple, Type, sub)								\
+			f(g, sub);													\
+		break;															\
+	case TYPE_ARR:														\
+		f(g, type->arr.of);												\
+		break;															\
+	case TYPE_SLICE:													\
+		f(g, type->slice);												\
+		break;															\
+	case TYPE_PTR:														\
+		f(g, type->ptr);												\
+		break;															\
+	case TYPE_VOID:														\
+	case TYPE_BUILTIN:													\
+	case TYPE_UNKNOWN:													\
+		break;															\
+	case TYPE_EXPR: assert(0);											\
 	}
 
 

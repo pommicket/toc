@@ -1,4 +1,5 @@
 #include "io.toc";
+#include "mem.toc";
 
 Arr ::= struct (t :: Type) {
 	data: []t;
@@ -9,7 +10,7 @@ Arr ::= struct (t :: Type) {
 arr_add ::= fn(t ::=, a : &Arr(t), x : t) {
 		if a.len >= a.cap {
 		   a.cap = a.cap * 2 + 2;
-		   new_data := new(t, a.cap);
+		   new_data := news(t, a.cap);
 		   for i := 0..a.len-1 {
 		   		new_data[i] = a.data[i];
 		   }

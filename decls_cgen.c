@@ -12,15 +12,11 @@ static void cgen_decls_decl(CGenerator *g, Declaration *d);
 
 /* i is the name for this type, NULL if not available */
 static void cgen_sdecls_type(CGenerator *g, Type *type) {
-	if (!(type->flags & TYPE_IS_RESOLVED)) /* non-instance constant fn parameter type */
-		return;
 	if (type->kind == TYPE_STRUCT) {
 		StructDef *sdef = type->struc;
 		/* we'll actually define the struct later; here we can just declare it */
 	
-		if (sdef->flags & STRUCT_DEF_CGEN_DECLARED) {
-			/* we've already done this */
-		} else {
+		if ((sdef->flags & STRUCT_DEF_RESOLVED) && !(sdef->flags & STRUCT_DEF_CGEN_DECLARED)) {
 			cgen_write(g, "struct ");
 			if (!sdef->name) {
 				sdef->c.id = ++g->ident_counter;
@@ -173,11 +169,9 @@ static void cgen_sdecls_file(CGenerator *g, ParsedFile *f) {
 }
 
 static void cgen_decls_type(CGenerator *g, Type *type) {
-	if (!(type->flags & TYPE_IS_RESOLVED)) /* non-instance constant fn parameter type */
-		return;
 	if (type->kind == TYPE_STRUCT) {
 		StructDef *sdef = type->struc;
-		if (!(sdef->flags & STRUCT_DEF_CGEN_DEFINED)) {
+		if ((sdef->flags & STRUCT_DEF_RESOLVED) && !(sdef->flags & STRUCT_DEF_CGEN_DEFINED)) {
 			/* generate struct definition */
 			cgen_write(g, "struct ");
 			cgen_struct_name(g, sdef);

@@ -1,5 +1,5 @@
-#include "std/mem.toc", mem;
-#include "std/io.toc", io;
+#include "mem.toc", mem;
+#include "io.toc", io;
 
 calculation ::= fn() int {
 	total := 0;

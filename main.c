@@ -8,7 +8,6 @@
 
 /* 
 TODO:
-- make new(s) and del functions!
 defer
 use
 &&, ||

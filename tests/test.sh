@@ -3,6 +3,7 @@
 tests='bf
 control_flow
 sizeof
+new
 arr
 arr2
 arr3
