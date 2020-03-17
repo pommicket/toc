@@ -2067,6 +2067,9 @@ static void cgen_defs_stmt(CGenerator *g, Statement *s) {
 	case STMT_CONT:
 	case STMT_MESSAGE:
 		break;
+	case STMT_DEFER:
+		cgen_defs_stmt(g, s->defer);
+		break;
 	}
 }
 

@@ -3395,6 +3395,14 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			return false;
 		}
 	} break;
+	case STMT_DEFER:
+		if (!types_stmt(tr, s->defer))
+			return false;
+		if (s->defer->kind == STMT_DEFER) {
+			err_print(s->where, "You can't defer a defer!");
+			return false;
+		}
+		break;
 	}
 	s->flags |= STMT_TYPED;
 	return true;

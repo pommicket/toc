@@ -298,6 +298,7 @@ typedef enum {
 			  KW_RETURN,
 			  KW_BREAK,
 			  KW_CONTINUE,
+			  KW_DEFER,
 			  KW_FN,
 			  KW_AS,
 			  KW_STRUCT,
@@ -333,7 +334,7 @@ static const char *const keywords[KW_COUNT] =
 	 "+", "-", "*", "!", "&", "/", "%", "..", ".",
 	 "=",
 	 "if", "elif", "else", "while", "for", "return", "break",
-	 "continue", "fn", "as", "struct",
+	 "continue", "defer", "fn", "as", "struct",
 	 "int", "i8", "i16", "i32", "i64",
 	 "u8", "u16", "u32", "u64", "float", "f32", "f64", "Type",
 	 "Namespace",
@@ -913,7 +914,8 @@ typedef enum {
 			  STMT_BREAK,
 			  STMT_CONT,
 			  STMT_INCLUDE,
-			  STMT_MESSAGE
+			  STMT_MESSAGE,
+			  STMT_DEFER
 } StatementKind;
 
 enum {
@@ -978,6 +980,7 @@ typedef struct Statement {
 		Include inc;
 		Message message; /* #error, #warn, #info */
 		Block *referring_to; /* for break/continue; set during typing */
+		struct Statement *defer;
 	};
 } Statement;
 

@@ -159,6 +159,9 @@ static void cgen_sdecls_stmt(CGenerator *g, Statement *s) {
 		break;
 	case STMT_MESSAGE:
 		break;
+	case STMT_DEFER:
+		cgen_sdecls_stmt(g, s->defer);
+		break;
 	}
 }
 
@@ -429,6 +432,9 @@ static void cgen_decls_stmt(CGenerator *g, Statement *s) {
 	case STMT_BREAK:
 	case STMT_CONT:
 	case STMT_MESSAGE:
+		break;
+	case STMT_DEFER:
+		cgen_decls_stmt(g, s->defer);
 		break;
 	}
 }

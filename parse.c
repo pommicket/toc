@@ -2448,6 +2448,13 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				return false;
 			}
 			goto success;
+		case KW_DEFER:
+			s->kind = STMT_DEFER;
+			++t->token;
+			s->defer = parser_malloc(p, sizeof *s->defer);
+			if (!parse_stmt(p, s->defer, was_a_statement))
+				return false;
+			goto success;
 		default: break;
 		}
 	} else if (t->token->kind == TOKEN_DIRECT) {
@@ -2931,6 +2938,10 @@ static void fprint_stmt(FILE *out, Statement *s) {
 		break;
 	case STMT_CONT:
 		fprintf(out, "continue;");
+		break;
+	case STMT_DEFER:
+		fprintf(out, "defer ");
+		fprint_stmt(out, s->defer);
 		break;
 	}
 }

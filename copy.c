@@ -433,6 +433,9 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 	case STMT_MESSAGE:
 		copy_expr(c, &out->message.text, &in->message.text);
 		break;
+	case STMT_DEFER:
+		copy_stmt(c, out->defer = allocr_malloc(c->allocr, sizeof *out->defer), in->defer);
+		break;
 	case STMT_BREAK:
 	case STMT_CONT:
 		break;

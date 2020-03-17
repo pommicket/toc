@@ -28,7 +28,7 @@ See `docs` for more information (in progress).
 
 `tests` has some test programs written in `toc`.
 
-To compile the compiler on a Unix-y system, just run `./build.sh release`. You can supply a compiler by running `CC=tcc ./build.sh release`, or build it in debug mode without the `release`. To disable compile time foreign function support (which you will need to do if you don't have ffcall/dl), prefix this with `COMPILE_TIME_FOREIGN_FN_SUPPORT=no`.
+To compile the compiler on a Unix-y system, just run `./build.sh release` (or `make release`). You can supply a compiler by running `CC=tcc ./build.sh release`, or build it in debug mode without the `release`. To disable compile time foreign function support (which you will need to do if you don't have ffcall/dl), prefix this with `COMPILE_TIME_FOREIGN_FN_SUPPORT=no`.
 
 On other systems, you can just compile main.c with a C compiler. `toc` uses several C99 and a couple of C11 features, so it might not work on all compilers. But it does compile on quite a few, including `clang`, `gcc`, and `tcc`. It can also be compiled as if it were C++, so and `g++` can also compile it (it does rely on implicit casting of  `void *` though). MSVC can also compile toc. The *outputted* code should be C99-compliant.
 

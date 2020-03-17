@@ -1,3 +1,5 @@
+#include "std/io.toc";
 main ::= fn() {
-	x ::= {return; 3}
+	defer puts("bye");
+	puts("hello");
 }
