@@ -28,7 +28,7 @@ static void cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 static void cgen_type_pre(CGenerator *g, Type *t);
 static void cgen_type_post(CGenerator *g, Type *t);
 static void cgen_decl(CGenerator *g, Declaration *d);
-static void cgen_ret(CGenerator *g, Expression *ret);
+static void cgen_ret(CGenerator *g, Block *returning_from, Expression *ret_expr);
 /* yes, these do need to take pointers, and furthermore they must be the same pointer (because of slices) */
 static void cgen_val(CGenerator *g, Value *v, Type *t);
 static void cgen_val_pre(CGenerator *g, Value *v, Type *t);
@@ -322,7 +322,10 @@ static void cgen_type_pre(CGenerator *g, Type *t) {
 			assert(0); break;
 		} break;
 	case TYPE_PTR:
-		cgen_type_pre(g, t->ptr);
+		if (t->ptr->kind == TYPE_UNKNOWN)
+			cgen_write(g, "void"); /* #C &"foo", for example */
+		else
+			cgen_type_pre(g, t->ptr);
 		cgen_write(g, "(*");
 		break;
 	case TYPE_ARR:
@@ -669,6 +672,18 @@ static void cgen_fn_header(CGenerator *g, FnExpr *f, U64 which_are_const) {
 	}
 }
 
+static inline void cgen_deferred_stmts_from_block(CGenerator *g, Block *from) {
+	arr_foreach(from->deferred, StatementPtr, s) {
+		cgen_stmt(g, *s);
+	}
+}
+
+/* generates deferred statements in g->block, g->block->parent, ..., to) */
+static void cgen_deferred_stmts_up_to(CGenerator *g, Block *to) {
+	for (Block *b = g->block; b; b = b == to ? NULL : b->parent) {
+		cgen_deferred_stmts_from_block(g, b);
+	}
+}
 
 /* 
    Either set_expr or set_str should be NULL and either to_expr or to_str should be NULL 
@@ -1676,6 +1691,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 static void cgen_block(CGenerator *g, Block *b, const char *ret_name, U16 flags) {
 	Block *prev_block = g->block;
 	g->block = b;
+	b->deferred = NULL;
 	++g->indent_lvl;
 	
 	if (!(flags & CGEN_BLOCK_NOBRACES)) {
@@ -1698,6 +1714,8 @@ static void cgen_block(CGenerator *g, Block *b, const char *ret_name, U16 flags)
 	}
 	--g->indent_lvl;
 	if (!(flags & CGEN_BLOCK_NOBRACES)) {
+		cgen_deferred_stmts_from_block(g, b);
+		arr_clear(&b->deferred);
 		cgen_write(g, "}");
 		if (b->c.break_lbl) {
 			cgen_lbl(g, b->c.break_lbl);
@@ -1803,12 +1821,7 @@ static void cgen_fn(CGenerator *g, FnExpr *f, Value *compile_time_args) {
 	}
 	
 	cgen_block(g, &f->body, NULL, CGEN_BLOCK_NOBRACES);
-	if (f->ret_decls) {
-		cgen_ret(g, NULL);
-	} else if (f->body.ret_expr) {
-		cgen_ret(g, f->body.ret_expr);
-	}
-	
+	cgen_ret(g, &f->body, f->body.ret_expr);
 	cgen_writeln(g, "}");
 	
 	g->fn = prev_fn;
@@ -1906,21 +1919,31 @@ static void cgen_decl(CGenerator *g, Declaration *d) {
 	}
 }
 
-static void cgen_ret(CGenerator *g, Expression *ret) {
+static void cgen_ret(CGenerator *g, Block *returning_from, Expression *ret_expr) {
 	FnExpr *f = g->fn;
+	if (ret_expr) {
+		cgen_expr_pre(g, ret_expr);
+		/* set ret_ to ret_expr */
+		cgen_type_pre(g, &ret_expr->type);
+		cgen_write(g, " ret_");
+		cgen_type_post(g, &ret_expr->type);
+		cgen_write(g, "; ");
+		cgen_set(g, NULL, "ret_", ret_expr, NULL);
+		cgen_nl(g);
+	}
+	cgen_deferred_stmts_up_to(g, returning_from);
 	if (f->ret_decls) {
-		assert(!ret);
 		if (f->ret_type.kind == TYPE_TUPLE) {
-			Expression ret_expr = {0};
-			ret_expr.flags = EXPR_FOUND_TYPE;
-			ret_expr.type = f->ret_type;
-			ret_expr.kind = EXPR_TUPLE;
-			ret_expr.tuple = NULL;
-			arr_set_len(&ret_expr.tuple, arr_len(f->ret_type.tuple));
+			Expression tuple_expr = {0};
+			tuple_expr.flags = EXPR_FOUND_TYPE;
+			tuple_expr.type = f->ret_type;
+			tuple_expr.kind = EXPR_TUPLE;
+			tuple_expr.tuple = NULL;
+			arr_set_len(&tuple_expr.tuple, arr_len(f->ret_type.tuple));
 			int idx = 0;
 			arr_foreach(f->ret_decls, Declaration, d) {
 				arr_foreach(d->idents, Identifier, ident) {
-					Expression *e = &ret_expr.tuple[idx];
+					Expression *e = &tuple_expr.tuple[idx];
 					e->flags = EXPR_FOUND_TYPE;
 					e->type = f->ret_type.tuple[idx];
 					e->kind = EXPR_IDENT;
@@ -1928,15 +1951,15 @@ static void cgen_ret(CGenerator *g, Expression *ret) {
 					++idx;
 				}
 			}
-			cgen_set_tuple(g, NULL, NULL, "*ret__", &ret_expr);
-			arr_clear(&ret_expr.tuple);
+			cgen_set_tuple(g, NULL, NULL, "*ret__", &tuple_expr);
+			arr_clear(&tuple_expr.tuple);
 		} else if (cgen_uses_ptr(&f->ret_type)) {
-			Expression ret_expr = {0};
-			ret_expr.flags = EXPR_FOUND_TYPE;
-			ret_expr.type = f->ret_type;
-			ret_expr.kind = EXPR_IDENT;
-			ret_expr.ident = f->ret_decls[0].idents[0];
-			cgen_set(g, NULL, "*ret__", &ret_expr, NULL);
+			Expression expr = {0};
+			expr.flags = EXPR_FOUND_TYPE;
+			expr.type = f->ret_type;
+			expr.kind = EXPR_IDENT;
+			expr.ident = f->ret_decls[0].idents[0];
+			cgen_set(g, NULL, "*ret__", &expr, NULL);
 			cgen_writeln(g, ";");
 			cgen_writeln(g, "return;");
 		} else {
@@ -1946,24 +1969,21 @@ static void cgen_ret(CGenerator *g, Expression *ret) {
 		}
 		return;
 	}
-	if (ret) {
-		assert(type_eq(&f->ret_type, &ret->type));
-		cgen_expr_pre(g, ret);
-	}
-	if (!ret) {
-		cgen_write(g, "return");
-	} else if (cgen_uses_ptr(&f->ret_type)) {
+	if (cgen_uses_ptr(&f->ret_type)) {
+		Expression ret = {0};
+		ret.kind = EXPR_IDENT;
+		ret.ident = ident_get(g->globals, "ret_");
+		ret.flags = EXPR_FOUND_TYPE;
+		ret.type = f->ret_type;
 		if (f->ret_type.kind == TYPE_TUPLE) {
-			cgen_set_tuple(g, NULL, NULL, "*ret__", ret);
+			cgen_set_tuple(g, NULL, NULL, "*ret__", &ret);
 		} else {
-			cgen_set(g, NULL, "*ret__", ret, NULL);
+			cgen_set(g, NULL, "*ret__", &ret, NULL);
 		}
-		cgen_write(g, " return");
-	} else {
-		cgen_write(g, "return ");
-		cgen_expr(g, ret);
+		cgen_write(g, " return;");
+	} else if (f->ret_type.kind != TYPE_VOID) {
+		cgen_writeln(g, "return ret_;");
 	}
-	cgen_writeln(g, ";");
 }
 
 static void cgen_stmt(CGenerator *g, Statement *s) {
@@ -1986,7 +2006,7 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 		break;
 	case STMT_RET: {
 		unsigned has_expr = s->ret.flags & RET_HAS_EXPR;
-		cgen_ret(g, has_expr ? &s->ret.expr : NULL);
+		cgen_ret(g, s->ret.referring_to, has_expr ? &s->ret.expr : NULL);
 	} break;
 	case STMT_INCLUDE:
 		if (s->inc.inc_file && (s->inc.inc_file->flags & INC_FILE_CGEND)){
@@ -2008,6 +2028,9 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 		cgen_writeln(g, ";");
 		break;
 	case STMT_MESSAGE:
+		break;
+	case STMT_DEFER:
+		*(Statement **)arr_add(&g->block->deferred) = s->defer;
 		break;
 	}
 }
@@ -2080,6 +2103,7 @@ static void cgen_defs_block(CGenerator *g, Block *b) {
 	*/
 	Block *prev_block = g->block;
 	g->block = b;
+	b->deferred = NULL;
 	arr_foreach(b->stmts, Statement, s) {
 		cgen_defs_stmt(g, s);
 	}

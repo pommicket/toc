@@ -9,6 +9,8 @@
 /* 
 TODO:
 defer
+make sure defer works with for
+make sure you can't return a #C() (because of the current defer system)
 use
 &&, ||
 start making a standard library... (printf; stringbuilder would be nice to have)
@@ -37,6 +39,9 @@ macros
 #include <signal.h>
 #include <execinfo.h>
 #include <unistd.h>
+
+static char *program_name;
+
 static void signal_handler(int num) {
 	switch (num) {
 	case SIGABRT:
@@ -55,7 +60,10 @@ static void signal_handler(int num) {
 	int naddrs = (int)(sizeof addrs / sizeof *addrs);
 	naddrs = backtrace(addrs, naddrs);
 	/* char **syms = backtrace_symbols(addrs, naddrs); */
-	char command[2048] = "addr2line -p -f -a -e toc ";
+	char command[2048] = "addr2line -p -f -a -e ";
+	strcat(command, program_name);
+	strcat(command, " ");
+
 	for (int i = 4; i < naddrs; ++i) {
 		snprintf(command + strlen(command), sizeof command - strlen(command), "%p ", addrs[i]);
 	}
@@ -67,6 +75,7 @@ static void signal_handler(int num) {
 
 int main(int argc, char **argv) {
 #ifdef BACKTRACE
+	program_name = argv[0];
 	signal(SIGABRT, signal_handler);
 	signal(SIGSEGV, signal_handler);
 #endif

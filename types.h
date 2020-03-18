@@ -509,6 +509,7 @@ typedef struct Block {
 	struct Statement *stmts;
 	struct Expression *ret_expr; /* the return expression of this block, e.g. {foo(); 3} => 3  NULL for no expression. */
 	struct Block *parent;
+	struct Statement **deferred; /* deferred stuff from this block; used by both eval and cgen */
 } Block;
 
 enum {
@@ -983,6 +984,8 @@ typedef struct Statement {
 		struct Statement *defer;
 	};
 } Statement;
+
+typedef Statement *StatementPtr;
 
 typedef struct ParsedFile {
 	Statement *stmts;

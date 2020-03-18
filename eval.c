@@ -1712,6 +1712,9 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 	} break;
 	case STMT_MESSAGE:
 		break;
+	case STMT_DEFER:
+		/* TODO */
+		break;
 	}
 	return true;
 }

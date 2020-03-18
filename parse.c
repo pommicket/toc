@@ -2449,6 +2449,10 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			}
 			goto success;
 		case KW_DEFER:
+			if (p->block == NULL) {
+				tokr_err(t, "You can't defer something at global scope.");
+				return false;
+			}
 			s->kind = STMT_DEFER;
 			++t->token;
 			s->defer = parser_malloc(p, sizeof *s->defer);
