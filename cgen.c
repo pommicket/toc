@@ -672,17 +672,23 @@ static void cgen_fn_header(CGenerator *g, FnExpr *f, U64 which_are_const) {
 	}
 }
 
-static inline void cgen_deferred_stmts_from_block(CGenerator *g, Block *from) {
-	arr_foreach(from->deferred, StatementPtr, s) {
+static inline void cgen_deferred_from_block(CGenerator *g, Block *from) {
+	arr_foreach_reversed(from->deferred, StatementPtr, s) {
 		cgen_stmt(g, *s);
 	}
 }
 
 /* generates deferred statements in g->block, g->block->parent, ..., to) */
-static void cgen_deferred_stmts_up_to(CGenerator *g, Block *to) {
+static inline void cgen_deferred_up_to(CGenerator *g, Block *to) {
 	for (Block *b = g->block; b; b = b == to ? NULL : b->parent) {
-		cgen_deferred_stmts_from_block(g, b);
+		cgen_deferred_from_block(g, b);
 	}
+}
+
+/* same as cgen_deferred_up_to but doesn't generate to->deferred */
+static inline void cgen_deferred_up_to_not_including(CGenerator *g, Block *to) {
+	for (Block *b = g->block; b != to; b = b->parent)
+		cgen_deferred_from_block(g, b);
 }
 
 /* 
@@ -1551,7 +1557,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			}
 		}
 		cgen_block(g, &fo->body, NULL, CGEN_BLOCK_NOBRACES);
-		
+		cgen_deferred_from_block(g, &fo->body);
 		cgen_write(g, "}}");
 		if (fo->body.c.break_lbl) {
 			cgen_lbl(g, fo->body.c.break_lbl);
@@ -1710,7 +1716,7 @@ static void cgen_block(CGenerator *g, Block *b, const char *ret_name, U16 flags)
 	}
 	--g->indent_lvl;
 	if (!(flags & CGEN_BLOCK_NOBRACES)) {
-		cgen_deferred_stmts_from_block(g, b);
+		cgen_deferred_from_block(g, b);
 		arr_clear(&b->deferred);
 		cgen_write(g, "}");
 		if (b->c.break_lbl) {
@@ -1931,7 +1937,7 @@ static void cgen_ret(CGenerator *g, Block *returning_from, Expression *ret_expr)
 		cgen_set(g, NULL, "ret_", ret_expr, NULL);
 		cgen_nl(g);
 	}
-	cgen_deferred_stmts_up_to(g, returning_from);
+	cgen_deferred_up_to(g, returning_from);
 	if (f->ret_decls) {
 		if (f->ret_type.kind == TYPE_TUPLE) {
 			Expression tuple_expr = {0};
@@ -2019,16 +2025,20 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 				cgen_stmt(g, sub);
 		}
 		break;
-	case STMT_BREAK:
+	case STMT_BREAK: {
+		Block *b = s->referring_to;
+		cgen_deferred_up_to(g, b);
 		cgen_write(g, "goto ");
-		cgen_lbl(g, s->referring_to->c.break_lbl);
+		cgen_lbl(g, b->c.break_lbl);
 		cgen_writeln(g, ";");
-		break;
-	case STMT_CONT:
+	} break;
+	case STMT_CONT: {
+		Block *b = s->referring_to;
+		cgen_deferred_up_to_not_including(g, b);
 		cgen_write(g, "goto ");
-		cgen_lbl(g, s->referring_to->c.cont_lbl);
+		cgen_lbl(g, b->c.cont_lbl);
 		cgen_writeln(g, ";");
-		break;
+	} break;
 	case STMT_MESSAGE:
 		break;
 	case STMT_DEFER:

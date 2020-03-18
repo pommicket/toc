@@ -2,6 +2,7 @@
 
 tests='bf
 control_flow
+defer
 sizeof
 new
 arr

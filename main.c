@@ -8,7 +8,6 @@
 
 /* 
 TODO:
-make sure defer works with for, break, continue
 make sure you can't return a #C() (because of the current defer system)
 switch to:
 	static void 

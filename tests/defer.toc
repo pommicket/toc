@@ -1,4 +1,4 @@
-#include "std/io.toc", io;
+#include "io.toc", io;
 
 main ::= fn() {
 	defer io.puts("deferred from main()");

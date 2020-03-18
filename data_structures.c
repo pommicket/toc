@@ -214,7 +214,8 @@ You shouldn't rely on this, though, e.g. by doing
 #define arr_last(arr) arr_last_((void *)(arr), sizeof *(arr))
 /* one past last, or NULL if empty */
 #define arr_end(arr) arr_end_((void *)(arr), sizeof *(arr))
-#define arr_foreach(arr, type, var) for (type *var = arr, *var##_foreach_end = arr_end(arr); var < var##_foreach_end; ++var) /* NOTE: < is useful here because currently it's possible for var_foreach_end to be NULL but var could start out not null */
+#define arr_foreach(arr, type, var) for (type *var = (arr), *var##_foreach_end = arr_end(arr); var != var##_foreach_end; ++var)
+#define arr_foreach_reversed(arr, type, var) for (type *var = arr_last(arr), *var##_foreach_last = arr; var; var = var == var##_foreach_last ? NULL : (var-1))
 #define arr_remove_last(arr) arr_remove_last_((void **)(arr)), (void)sizeof **(arr)
 #define arr_remove_lasta(arr, a) arr_remove_lasta_((void **)(arr), sizeof **(arr), (a))
 #define arr_copya(out, in, a) do { assert(sizeof *(in) == sizeof **(out)); arr_copya_((void **)(out), (in), sizeof **(out), (a)); } while(0)
