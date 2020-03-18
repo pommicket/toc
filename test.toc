@@ -1,27 +1,13 @@
-#include "std/mem.toc", mem;
 #include "std/io.toc", io;
 
-calculation ::= fn() int {
-	total := 0;
-	i := mem.new(int);
-	*i = 3;
-	ns := mem.news(int, 10);
-	for n, i := &ns {
-		if i % 2 == 0 {
-			*n = i;
-		}
-	}
-	for n := ns {
-		total += n;
-	}
-	total += *i;
-	mem.del(i);
-	mem.dels(ns);
-	total
-}
-
 main ::= fn() {
-	 io.puti(calculation());
-	 x ::= calculation();
-	 io.puti(x);
+	defer io.puts("second");
+	defer io.puts("third");
+	{
+		defer io.puts("there");
+		io.puts("hey");
+	}
+	io.puts("FIRST");
+	return;
+	io.puts("first");
 }

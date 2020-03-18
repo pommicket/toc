@@ -92,6 +92,7 @@ static void print_token(Token *t);
 static void print_type(Type *t);
 static void print_block(Block *b);
 static void print_decl(Declaration *d);
+static void print_stmt(Statement *s);
 static void print_block_location(Block *b);
 
 

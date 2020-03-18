@@ -8,9 +8,12 @@
 
 /* 
 TODO:
-defer
-make sure defer works with for
+make sure defer works with for, break, continue
 make sure you can't return a #C() (because of the current defer system)
+switch to:
+	static void 
+	foo() {
+get rid of angle brackets for tuple types - just check if a TYPE_EXPR which is an EXPR_TUPLE is returned
 use
 &&, ||
 start making a standard library... (printf; stringbuilder would be nice to have)
@@ -23,6 +26,7 @@ switch to / add as an alternative: libffi
 X ::= newtype(int); or something
 any odd number of "s for a string
 ---
+error on x ::= {return; 3}
 #returns_code (struct body is a block, to be evaluated at compile time, which returns the actual statements)
 	- struct varargs
 macros

@@ -2448,17 +2448,23 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				return false;
 			}
 			goto success;
-		case KW_DEFER:
+		case KW_DEFER: {
 			if (p->block == NULL) {
 				tokr_err(t, "You can't defer something at global scope.");
 				return false;
 			}
-			s->kind = STMT_DEFER;
 			++t->token;
+			s->kind = STMT_DEFER;
+			Token *deferred_start = t->token;
 			s->defer = parser_malloc(p, sizeof *s->defer);
 			if (!parse_stmt(p, s->defer, was_a_statement))
 				return false;
+			if (!*was_a_statement) {
+				err_print(token_location(p->file, deferred_start), "Empty defer");
+				return false;
+			}
 			goto success;
+		}
 		default: break;
 		}
 	} else if (t->token->kind == TOKEN_DIRECT) {

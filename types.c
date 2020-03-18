@@ -3402,6 +3402,10 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			err_print(s->where, "You can't defer a defer!");
 			return false;
 		}
+		if (s->defer->kind == STMT_DECL) {
+			err_print(s->where, "Deferring a declaration doesn't make sense!");
+			return false;
+		}
 		break;
 	}
 	s->flags |= STMT_TYPED;

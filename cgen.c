@@ -1821,7 +1821,11 @@ static void cgen_fn(CGenerator *g, FnExpr *f, Value *compile_time_args) {
 	}
 	
 	cgen_block(g, &f->body, NULL, CGEN_BLOCK_NOBRACES);
+	Block *prev = g->block;
+	g->block = &f->body;
+	/* cgen_ret needs to think it's in the function body */
 	cgen_ret(g, &f->body, f->body.ret_expr);
+	g->block = prev;
 	cgen_writeln(g, "}");
 	
 	g->fn = prev_fn;
@@ -1980,8 +1984,10 @@ static void cgen_ret(CGenerator *g, Block *returning_from, Expression *ret_expr)
 		} else {
 			cgen_set(g, NULL, "*ret__", &ret, NULL);
 		}
-		cgen_write(g, " return;");
-	} else if (f->ret_type.kind != TYPE_VOID) {
+		cgen_writeln(g, " return;");
+	} else if (f->ret_type.kind == TYPE_VOID) {
+		cgen_writeln(g, "return;");
+	} else {
 		cgen_writeln(g, "return ret_;");
 	}
 }
