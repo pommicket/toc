@@ -1074,6 +1074,14 @@ static Status types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 			success = false;
 			goto ret;
 		}
+		if (ret_expr->type.kind == TYPE_UNKNOWN) { 
+			/* maybe it's just unknown because something messed up (like typing another function), 
+			   and ??? is a placeholder */
+			if (!tr->err_ctx->have_errored) {
+				err_print(ret_expr->where, "Can't determine type of return value. Try assigning it to a variable before returning it.");
+				return false;
+			}
+		}
 	} else if (ret_type->kind != TYPE_VOID && !has_named_ret_vals) {
 		Statement *stmts = f->body.stmts;
 		if (arr_len(stmts)) {

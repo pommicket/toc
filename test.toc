@@ -1,6 +1,18 @@
 #include "std/io.toc", io;
 
+plusone ::= fn(n : int) x := n {
+	defer x += 1;
+}
+
+same ::= fn(n : int) int {
+	x := n;
+	defer x += 1;
+	x
+}
+
 main ::= fn() {
+	io.puti(plusone(3));
+	io.puti(same(3));
 	defer io.puts("deferred from main()");
 	for i := 1..10 {
 		defer io.puts("deferred from for");
