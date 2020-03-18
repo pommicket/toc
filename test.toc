@@ -1,13 +1,14 @@
 #include "std/io.toc", io;
 
 main ::= fn() {
-	defer io.puts("second");
-	defer io.puts("third");
-	{
-		defer io.puts("there");
-		io.puts("hey");
+	defer io.puts("deferred from main()");
+	for i := 1..10 {
+		defer io.puts("deferred from for");
+		io.puti(i);
+		if i == 2 {
+			defer io.puts("deferred from if");
+			return;
+		}
 	}
-	io.puts("FIRST");
-	return;
-	io.puts("first");
+	io.puts("end of main()");
 }
