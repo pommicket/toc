@@ -1034,7 +1034,7 @@ static Status check_ident_redecl(Parser *p, Identifier i) {
 		if (i->decl_kind != IDECL_NONE) {
 			char *s = ident_to_str(i);
 			tokr_err(t, "Redeclaration of identifier %s.", s);
-			info_print(ident_decl_location(i), "Previous declaration was here.");
+			info_print(ident_decl_location(p->file, i), "Previous declaration was here.");
 			free(s);
 			return false;
 		}
@@ -1434,10 +1434,12 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 						fo->value = parser_ident_insert(p, t->token->ident);
 						if (!check_ident_redecl(p, fo->value))
 							goto for_fail;
-						fo->value->decl_kind = IDECL_EXPR;
-						fo->value->decl_expr = e;
-						if (ident_eq_str(fo->value, "_")) /* ignore value */
+						if (ident_eq_str(fo->value, "_")) { /* ignore value */
 							fo->value = NULL;
+						} else {
+							fo->value->decl_kind = IDECL_FOR;
+							fo->value->decl_for = fo;
+						}
 						++t->token;
 						if (token_is_kw(t->token, KW_COMMA)) {
 							++t->token;
@@ -1445,10 +1447,12 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 								fo->index = parser_ident_insert(p, t->token->ident);
 								if (!check_ident_redecl(p, fo->index))
 									goto for_fail;
-								fo->index->decl_kind = IDECL_EXPR;
-								fo->index->decl_expr = e;
-								if (ident_eq_str(fo->index, "_")) /* ignore index */
+								if (ident_eq_str(fo->index, "_")) { /* ignore index */
 									fo->index = NULL;
+								} else {
+									fo->index->decl_kind = IDECL_FOR;
+									fo->index->decl_for = fo;
+								}
 								++t->token;
 							} else {
 								tokr_err(t, "Expected identifier after , in for loop.");

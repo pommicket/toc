@@ -291,13 +291,13 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 
 		if (fout->index) {
 			copier_ident_translate(c, &fout->index);
-			fout->index->decl_kind = IDECL_EXPR;
-			fout->index->decl_expr = out;
+			fout->index->decl_kind = IDECL_FOR;
+			fout->index->decl_for = fout;
 		}
 		if (fout->value) {
 			copier_ident_translate(c, &fout->value);
-			fout->value->decl_kind = IDECL_EXPR;
-			fout->value->decl_expr = out;
+			fout->value->decl_kind = IDECL_FOR;
+			fout->value->decl_for = fout;
 		}
 		if (fin->flags & FOR_ANNOTATED_TYPE)
 			copy_type(c, &fout->type, &fin->type);

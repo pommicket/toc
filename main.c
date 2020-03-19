@@ -8,7 +8,6 @@
 
 /* 
 TODO:
-get rid of angle brackets for tuple types - just check if a TYPE_EXPR which is an EXPR_TUPLE is returned
 allow #ifs in structs
 	- you can just have a dyn array of stmts and when you want to resolve the struct,
 	  just type the statements, then loop over them (going into blocks if necessary)

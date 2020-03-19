@@ -185,7 +185,7 @@ typedef struct VarArg {
 typedef enum {
 			  IDECL_NONE,
 			  IDECL_DECL,
-			  IDECL_EXPR
+			  IDECL_FOR
 } IdentDeclKind;
 
 
@@ -196,7 +196,7 @@ typedef struct IdentSlot {
 	IdentDeclKind decl_kind;	
 	union {
 		struct Declaration *decl;
-		struct Expression *decl_expr;
+		struct ForExpr *decl_for;
 	};
 	struct Identifiers *idents;
 	struct Namespace *nms; /* only exists after typing, and only for namespace-level declarations (i.e. not local variables) */
@@ -643,6 +643,7 @@ typedef struct ForExpr {
 	Type type; /* uninitialized unless typed or flags & FOR_ANNOTATED_TYPE */
 	Identifier index; /* NULL = no index */
 	Identifier value; /* NULL = no value */
+	Token *index_token, *value_token; /* used for errors */
 	Block body;
 	union {
 		struct {
@@ -1034,7 +1035,7 @@ typedef struct Typer {
 	Allocator *allocr;
 	Evaluator *evalr;
 	Identifiers *globals;
-	Expression **in_exprs; /* which expression declarations we are currently inside (e.g. for x := foo)*/
+	ForExpr **in_fors; /* array of for loop headers we are currently inside */
 	Declaration **in_decls; /* array of declarations we are currently inside */
 	Block *block;
 	Block **blocks; /* dyn array of all the block's we're in ([0] = NULL for global scope) */

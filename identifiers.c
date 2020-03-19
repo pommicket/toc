@@ -206,12 +206,18 @@ static int ident_index_in_decl(Identifier i, Declaration *d) {
 	return -1;
 }
 
-static Location ident_decl_location(Identifier i) {
+static Location ident_decl_location(File *file, Identifier i) {
 	switch (i->decl_kind) {
 	case IDECL_DECL:
 		return i->decl->where;
-	case IDECL_EXPR:
-		return i->decl_expr->where;
+	case IDECL_FOR:
+		if (i == i->decl_for->index) {
+			return token_location(file, i->decl_for->index_token);
+		} else {
+			assert(i == i->decl_for->value);	
+			return token_location(file, i->decl_for->value_token);
+		}
+		break;
 	case IDECL_NONE:
 		break;
 	}

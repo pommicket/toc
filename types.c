@@ -698,31 +698,25 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 			}
 		}
 	} break;
-	case IDECL_EXPR: {
-		Expression *e = i->decl_expr;
-		/* are we inside this expr? */
-		typedef Expression *ExprPtr;
-		arr_foreach(tr->in_exprs, ExprPtr, in_e) {
-			if (*in_e == e) {
+	case IDECL_FOR: {
+		ForExpr *fo = i->decl_for;
+		/* are we inside this for loop? */
+		typedef ForExpr *ForExprPtr;
+		arr_foreach(tr->in_fors, ForExprPtr, in_f) {
+			if (*in_f == fo) {
 				char *s = ident_to_str(i);
 				err_print(where, "Use of identifier %s in its own declaration.", s);
 				free(s);
 				return false;
 			}
 		}
-		switch (e->kind) {
-		case EXPR_FOR: {
-			ForExpr *fo = e->for_;
-			if (i == fo->index) {
-				t->kind = TYPE_BUILTIN;
-				t->builtin = BUILTIN_I64;
-				t->flags = TYPE_IS_RESOLVED;
-			} else {
-				assert(i == fo->value);
-				*t = fo->type;
-			}
-		} break;
-		default: assert(0); break;
+		if (i == fo->index) {
+			t->kind = TYPE_BUILTIN;
+			t->builtin = BUILTIN_I64;
+			t->flags = TYPE_IS_RESOLVED;
+		} else {
+			assert(i == fo->value);
+			*t = fo->type;
 		}
 	} break;
 	case IDECL_NONE: {
@@ -1510,7 +1504,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 	case EXPR_FOR: {
 		ForExpr *fo = e->for_;
 		bool in_header = true;
-		*(Expression **)typer_arr_add(tr, &tr->in_exprs) = e;
+		*(ForExpr **)typer_arr_add(tr, &tr->in_fors) = fo;
 		typer_block_enter(tr, &fo->body); /* while this block is being typed, fo->body will be in tr->blocks twice. hopefully that doesn't mess anything up! */
 		if (fo->flags & FOR_IS_RANGE) {
 			if (!types_expr(tr, fo->range.from)) goto for_fail;
@@ -1600,7 +1594,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				case BUILTIN_VARARGS: {
 					/* exit for body */
 					typer_block_exit(tr);
-					arr_remove_lasta(&tr->in_exprs, tr->allocr);
+					arr_remove_lasta(&tr->in_fors, tr->allocr);
 					/* create one block, containing a block for each vararg */
 					/* e.g. for x := varargs { total += x; } => { { x := varargs[0]; total += x; } { x := varargs[0]; total += x; } } */
 					assert(fo->of->kind == EXPR_IDENT);
@@ -1733,7 +1727,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 			fo->range.stepval = stepval;
 		}
 		
-		arr_remove_lasta(&tr->in_exprs, tr->allocr);
+		arr_remove_lasta(&tr->in_fors, tr->allocr);
 		in_header = false;
 		if (!types_block(tr, &fo->body)) goto for_fail;
 		if (fo->body.ret_expr) {
@@ -1747,7 +1741,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		break;
 		for_fail:
 		if (in_header)
-			arr_remove_lasta(&tr->in_exprs, tr->allocr);
+			arr_remove_lasta(&tr->in_fors, tr->allocr);
 		typer_block_exit(tr);
 		return false;
 	};
@@ -3422,7 +3416,7 @@ static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *a
 	tr->evalr = ev;
 	tr->err_ctx = err_ctx;
 	tr->in_decls = NULL;
-	tr->in_exprs = NULL;
+	tr->in_fors = NULL;
 	tr->allocr = allocr;
 	tr->globals = idents;
 	*(Block **)arr_adda(&tr->blocks, allocr) = NULL;

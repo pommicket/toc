@@ -1,4 +1,4 @@
-#include "io.toc", io;
+#include "std/io.toc", io;
 
 plusone ::= fn(n : int) x := n {
 	defer x += 1;

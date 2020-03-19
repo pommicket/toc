@@ -154,6 +154,7 @@ static char *read_file_contents(Allocator *a, const char *filename, Location whe
 }
 	
 
+static Location token_location(File *file, Token *t);
 
 #include "identifiers.c"
 #include "copy.c"

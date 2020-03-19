@@ -656,22 +656,17 @@ static Status eval_expr_ptr_at_index(Evaluator *ev, Expression *e, void **ptr, T
 
 static Value *ident_val(Identifier i) {
 	switch (i->decl_kind) {
-	case IDECL_EXPR: {
-		switch (i->decl_expr->kind) {
-		case EXPR_FOR: {
-			ForExpr *fo = i->decl_expr->for_;
-			Value *v = *(Value **)arr_last(fo->val_stack);
-			if (i == fo->index) {
-				if (fo->value)
-					v = &v->tuple[0];
-			} else {
-				if (fo->index)
-					v = &v->tuple[1];
-			}
-			return v;
+	case IDECL_FOR: {
+		ForExpr *fo = i->decl_for;
+		Value *v = *(Value **)arr_last(fo->val_stack);
+		if (i == fo->index) {
+			if (fo->value)
+				v = &v->tuple[0];
+		} else {
+			if (fo->index)
+				v = &v->tuple[1];
 		}
-		default: assert(0); return NULL;
-		}
+		return v;
 	}
 	case IDECL_DECL: {
 		Declaration *decl = i->decl;
