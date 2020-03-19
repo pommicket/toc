@@ -79,16 +79,7 @@ static void print_location_highlight(FILE *out, Location where) {
 
 /* for debugging */
 static void fprint_location(FILE *out, Location location) {
-	if (location.start) {
-		fprintf(out, "Line %ld of %s: ", (long)location.start->pos.line, location.file->filename);
-	} else {
-		U32 line = location.simple_location.line;
-		if (line)
-			fprintf(out, "Line %lu of %s: ", (unsigned long)line, location.file->filename);
-		else
-			fprintf(out, "In file %s: ", location.file->filename);
-		return;
-	}
+	fprintf(out, "Line %ld of %s: ", (long)location.start->pos.line, location.file->filename);
 	print_location_highlight(out, location);
 }
 
@@ -151,16 +142,7 @@ static void err_vfprint(ErrCtx *ctx, const char *fmt, va_list args) {
 
 static void err_print_line_file(Location where) {
 	ErrCtx *ctx = where.file->ctx;
-	if (where.start) {
-		err_fprint(ctx, " at line %lu of %s:\n", (unsigned long)where.start->pos.line, where.file->filename);
-	} else {
-		U32 line = where.simple_location.line; 
-		if (line)
-			err_fprint(ctx, " at line %lu of %s:\n", (unsigned long)line, where.file->filename);
-		else
-			err_fprint(ctx, ":\n");
-	}
-	
+	err_fprint(ctx, " at line %lu of %s:\n", (unsigned long)where.start->pos.line, where.file->filename);
 }
 
 static void err_print_header_(Location where) {

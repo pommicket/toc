@@ -245,7 +245,7 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 				fprintf(f, ", ");
 			fprint_ident_debug(f, fi->name);
 			fprintf(f, ": ");
-			fprint_val_ptr(f, (char *)p + fi->offset, &fi->type);
+			fprint_val_ptr(f, (char *)p + fi->offset, fi->type);
 		}
 		fprintf(f, "]");
 		break;

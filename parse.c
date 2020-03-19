@@ -14,6 +14,10 @@ enum {
 };
 static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 flags);
 static Status parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end);
+enum {
+	  PARSE_BLOCK_DONT_CREATE_IDENTS = 0x01
+};
+static bool parse_block(Parser *p, Block *b, U8 flags);
 static bool is_decl(Tokenizer *t);
 static inline bool ends_decl(Token *t, DeclEndKind ends_with);
 
@@ -574,9 +578,7 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 			struc->name = NULL;
 			/* help cgen out */
 			struc->c.id = 0;
-			struc->fields = NULL;
 			struc->params = NULL;
-			struc->constants = NULL;
 			struc->where = parser_mk_loc(p);
 			struc->where.start = t->token;
 			memset(&struc->scope, 0, sizeof struc->scope);
@@ -615,48 +617,11 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 					param->flags |= DECL_IS_PARAM;
 				}
 			}
-			if (!token_is_kw(t->token, KW_LBRACE)) {
-				tokr_err(t, "Expected { to follow struct.");
-				goto struct_fail;
-			}
-			++t->token;
-			{
-				while (!token_is_kw(t->token, KW_RBRACE)) {
-					Declaration field_decl;
-					if (!parse_decl(p, &field_decl, DECL_END_SEMICOLON, PARSE_DECL_DONT_SET_IDECLS)) {
-						goto struct_fail;
-					}
-					if (field_decl.flags & DECL_IS_CONST) {
-						Declaration *d = parser_arr_add(p, &struc->constants);
-						*d = field_decl;
-					} else {
-						if (field_decl.flags & DECL_HAS_EXPR) {
-							err_print(field_decl.where, "struct members cannot have initializers.");
-							goto struct_fail;
-						}
-						long idx = 0;
-						arr_foreach(field_decl.idents, Identifier, fident) {
-							Type *ftype = field_decl.type.kind == TYPE_TUPLE ? &field_decl.type.tuple[idx] : &field_decl.type;
-							Field *f = parser_arr_add(p, &struc->fields);
-							f->name = *fident;
-							f->where = field_decl.where;
-							f->type = *ftype;
-							++idx;
-						}
-					}
-				}
-				arr_foreach(struc->constants, Declaration, c) {
-					arr_foreach(c->idents, Identifier, ip) {
-						Identifier i = *ip;
-						i->decl = c;
-						i->decl_kind = IDECL_DECL;
-					}
-				}
-				++t->token;
-				struc->where.end = t->token;
-			}
-			struc->scope.where = struc->where;
+			
 			p->block = prev_block;
+			if (!parse_block(p, &struc->scope, PARSE_BLOCK_DONT_CREATE_IDENTS))
+				return false;
+			struc->where = struc->scope.where;
 			break;
 			
 		struct_fail:
@@ -819,9 +784,6 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 	return ret;
 }
 
-enum {
-	  PARSE_BLOCK_DONT_CREATE_IDENTS = 0x01
-};
 static Status parse_block(Parser *p, Block *b, U8 flags) {
 	Tokenizer *t = p->tokr;
 	Block *prev_block = p->block;

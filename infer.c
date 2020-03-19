@@ -197,17 +197,10 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 		if (!infer_from_type(tr, match->slice, to->slice, idents, vals, types, where))
 			return false;
 		break;
-	case TYPE_STRUCT: {
-		if (to->kind != TYPE_STRUCT) return true;
-		Field *fields_m = match->struc->fields;
-		Field *fields_t = to->struc->fields;
-		size_t i, len = arr_len(fields_m);
-		if (len != arr_len(fields_t)) return true;
-		for (i = 0; i < len; ++i) {
-			if (!infer_from_type(tr, &fields_m[i].type, &fields_t[i].type, idents, vals, types, where))
-				return false;
-		}
-	} break;
+	case TYPE_STRUCT:
+		/* this would be difficult because match could contain #ifs and 
+		   no sane person will ever write something that needs this */
+		break;
 	case TYPE_EXPR: {
 		Expression *to_expr = to->was_expr;
 		Expression e = {0};

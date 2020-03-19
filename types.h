@@ -200,7 +200,6 @@ typedef struct IdentSlot {
 	};
 	struct Identifiers *idents;
 	struct Namespace *nms; /* only exists after typing, and only for namespace-level declarations (i.e. not local variables) */
-	SOURCE_LOCATION
 } IdentSlot;
 
 typedef struct StrHashTableSlot {
@@ -386,14 +385,8 @@ typedef struct {
 
 typedef struct Location {
 	File *file;
-	/* if start is NULL, simple_location will be used. */
 	Token *start;
-	union {
-		Token *end; /* Exclusive */
-		struct {
-			U32 line; /* if 0, this is a null location */
-		} simple_location;
-	};
+	Token *end; /* Exclusive */
 } Location;
 
 
@@ -486,7 +479,7 @@ typedef struct Type {
 typedef struct Field {
 	Location where;
 	Identifier name;
-	Type type;
+	Type *type;
 	size_t offset; /* offset during compile time */
 } Field;
 
@@ -520,11 +513,13 @@ enum {
 	  STRUCT_DEF_RESOLVED = 0x10
 };
 typedef struct StructDef {
+	/* these two only exist after resolving (before then, it's scope.stmts) */
 	Field *fields;
-	struct Declaration *constants;
+	struct Declaration **constants;
+	
 	Location where;
 	U8 flags;
-	Block scope; /* to make sure that parameters and constants live somewhere. fields are not kept here. */
+	Block scope; /* parameters and constants live here. statements aren't used after resolving (but are kept around because why not) */
 	union {
 		HashTable instances;
 		struct {
@@ -908,6 +903,7 @@ typedef struct Declaration {
 	/* OPTIM: some block array of values somewhere which we can just use a pointer to, which is freed when the block is exited? */
 	Value **val_stack;
 } Declaration;
+typedef Declaration *DeclarationPtr;
 
 typedef enum {
 			  STMT_DECL,

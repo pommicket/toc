@@ -295,7 +295,7 @@ static void cgen_struct_name(CGenerator *g, StructDef *sdef) {
 	}
 	if (sdef->instance_id) {
 		possibly_static_assert(sizeof sdef->instance_id == 8);
-		cgen_write(g, U64_FMT, sdef->instance_id);
+		cgen_write(g, U64_FMT "_", sdef->instance_id);
 	}
 }
 
@@ -515,7 +515,7 @@ static void cgen_val_ptr(CGenerator *g, void *v, Type *t) {
 		arr_foreach(t->struc->fields, Field, f) {
 			if (f != t->struc->fields)
 				cgen_write(g, ", ");
-			cgen_val_ptr(g, (char *)v + f->offset, &f->type);
+			cgen_val_ptr(g, (char *)v + f->offset, f->type);
 		}
 		cgen_write(g, "}");
 		break;

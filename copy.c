@@ -90,34 +90,36 @@ static void copy_val_full(Copier *c, Value *out, Value in, Type *t) {
 
 static void copy_struct(Copier *c, StructDef *out, StructDef *in) {
 	*out = *in;
-	size_t nfields = arr_len(in->fields);
-	out->fields = NULL;
-
 	out->scope = in->scope;
 	idents_create(&out->scope.idents, c->allocr, &out->scope);
 	
 	Block *prev = c->block;
 	copy_block(c, &out->scope, &in->scope, 0);
 	c->block = &out->scope;
+	if (in->flags & STRUCT_DEF_RESOLVED) {
+		size_t nfields = arr_len(in->fields);
+		out->fields = NULL;
 
-	arr_set_lena(&out->fields, nfields, c->allocr);
-	for (size_t i = 0; i < nfields; ++i) {
-		Field *fout = &out->fields[i];
-		Field *fin = &in->fields[i];
-		*fout = *fin;
-		copy_type(c, &fout->type, &fin->type);
+		arr_set_lena(&out->fields, nfields, c->allocr);
+		for (size_t i = 0; i < nfields; ++i) {
+			Field *fout = &out->fields[i];
+			Field *fin = &in->fields[i];
+			*fout = *fin;
+			fout->type = copy_type_(c, fin->type);
+		}
+		out->constants = NULL;
+		size_t nconstants = arr_len(in->constants);
+		arr_set_lena(&out->constants, nconstants, c->allocr);
+		for (size_t i = 0; i < nconstants; ++i) {
+			copy_decl(c, out->constants[i] = allocr_malloc(c->allocr, sizeof *out->constants[i]), 
+				in->constants[i]);
+		}
 	}
 	size_t nparams = arr_len(in->params);
 	out->params = NULL;
 	arr_set_lena(&out->params, nparams, c->allocr);
 	for (size_t i = 0; i < nparams; ++i) {
 		copy_decl(c, &out->params[i], &in->params[i]);
-	}
-	out->constants = NULL;
-	size_t nconstants = arr_len(in->constants);
-	arr_set_lena(&out->constants, nconstants, c->allocr);
-	for (size_t i = 0; i < nconstants; ++i) {
-		copy_decl(c, &out->constants[i], &in->constants[i]);
 	}
 	c->block = prev;
 }

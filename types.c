@@ -85,12 +85,12 @@ static Status struct_find_offsets(StructDef *s) {
 		size_t bytes = 0;
 		size_t total_align = 1;
 		arr_foreach(s->fields, Field, f) {
-			size_t size = compiler_sizeof(&f->type);
+			size_t size = compiler_sizeof(f->type);
 			if (size == SIZE_MAX) {
 				info_print(f->where, "... while descending into this field of a struct.");
 				return false;
 			}
-			size_t falign = compiler_alignof(&f->type);
+			size_t falign = compiler_alignof(f->type);
 			if (falign > total_align)
 				total_align = falign;
 			/* align */
@@ -648,7 +648,6 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 		}
 		 
 		/* are we inside this declaration? */
-		typedef Declaration *DeclarationPtr;
 		arr_foreach(tr->in_decls, DeclarationPtr, in_decl) {
 			if (d == *in_decl) {
 				/* d needn't have an expression, because it could be its type that refers to itself */
@@ -728,6 +727,68 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 	}
 	return true;
 }
+static Status add_block_to_struct(Typer *tr, Block *b, StructDef *s) {
+	arr_foreach(b->stmts, Statement, stmt) {
+		if (stmt->kind == STMT_EXPR) {
+			if (stmt->expr.kind == EXPR_BLOCK) {
+				if (!add_block_to_struct(tr, stmt->expr.block, s))
+					return false;
+				continue;
+			}
+		}
+		if (stmt->kind != STMT_DECL) {
+			err_print(stmt->where, "structs can only contain declarations.");
+			return false;
+		}
+		Declaration *d = stmt->decl;
+		DeclFlags flags = d->flags;
+		if (flags & DECL_EXPORT) {
+			err_print(d->where, "struct members can't be exported.");
+			return false;
+		}
+		if (flags & DECL_IS_CONST) {
+			if (flags & DECL_INFER) {
+				err_print(d->where, "struct members can't be inferred.");
+				return false;
+			}
+			*(Declaration **)typer_arr_add(tr, &s->constants) = d;
+		} else {
+			if (flags & DECL_SEMI_CONST) {
+				err_print(d->where, "struct members can't be semi-constant.");
+				return false;
+			}
+			if (flags & DECL_HAS_EXPR) {
+				err_print(d->where, "Non-constant struct members can't have initializers.");
+				return false;
+			}
+			int i = 0;
+			arr_foreach(d->idents, Identifier, ident) {
+				Field *field = typer_arr_add(tr, &s->fields);
+				field->where = d->where;
+				field->name = *ident;
+				field->type = decl_type_at_index(d, i);
+				++i;
+			}
+		}
+		if (b != &s->scope) {
+			/* we need to translate d's identifiers to s's scope */
+			arr_foreach(d->idents, Identifier, ip) {
+				Identifier redeclared = ident_get(&s->scope.idents, (*ip)->str);
+				if (redeclared && redeclared->decl_kind != IDECL_NONE) {
+					char *str = ident_to_str(*ip);
+					err_print(d->where, "Redeclaration of struct member %s", str);
+					info_print(ident_decl_location(d->where.file, redeclared), "Previous declaration was here.");
+					free(str);
+					return false;
+				}
+				*ip = ident_translate_forced(*ip, &s->scope.idents);
+				(*ip)->decl_kind = IDECL_DECL;
+				(*ip)->decl = d;
+			}
+		}
+	}
+	return true;
+}
 
 /* fixes the type (replaces [5+3]int with [8]int, etc.) */
 static Status type_resolve(Typer *tr, Type *t, Location where) {
@@ -789,24 +850,17 @@ static Status type_resolve(Typer *tr, Type *t, Location where) {
 			return false;
 		break;
 	case TYPE_STRUCT: {
-		if (!(t->struc->flags & STRUCT_DEF_RESOLVED)) {
-			typer_block_enter(tr, &t->struc->scope);
-			arr_foreach(t->struc->fields, Field, f) {
-				if (!type_resolve(tr, &f->type, where)) {
-					typer_block_exit(tr);
-					return false;
-				}
-			}
-			arr_foreach(t->struc->constants, Declaration, c) {
-				if (!types_decl(tr, c)) {
-					typer_block_exit(tr);
-					return false;
-				}
-			}
-			typer_block_exit(tr);
-			assert(tr->block != &t->struc->scope);
-			t->struc->instance_id = 0;
-			t->struc->flags |= STRUCT_DEF_RESOLVED;
+		StructDef *s = t->struc;
+		if (!(s->flags & STRUCT_DEF_RESOLVED)) {
+			if (!types_block(tr, &s->scope))
+				return false;
+			s->fields = NULL;
+			s->constants = NULL;
+			if (!add_block_to_struct(tr, &s->scope, s))
+				return false;
+			
+			s->instance_id = 0;
+			s->flags |= STRUCT_DEF_RESOLVED;
 		}
 	} break;
 	case TYPE_EXPR: {
@@ -1422,7 +1476,11 @@ static void get_builtin_val_type(Allocator *a, BuiltinVal val, Type *t) {
 
 
 /* gets a struct's constant or parameter, and puts it into e->val.  */
-static Status get_struct_constant(StructDef *struc, Identifier member, Expression *e) {	
+static Status get_struct_constant(StructDef *struc, Identifier member, Expression *e) {
+	if (struc->params && !(struc->params[0].flags & DECL_FOUND_VAL)) {
+		err_print(e->where, "To access constants from a parameterized struct, you must supply its arguments.");
+		return false;
+	}
 	Identifier i = ident_translate(member, &struc->scope.idents);
 	if (!i || i->decl_kind == IDECL_NONE) {
 		char *member_s = ident_to_str(member);
@@ -2785,7 +2843,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				arr_foreach(lhs_type->struc->fields, Field, f) {
 					if (ident_eq_str(f->name, field_name.slice.data)) {
 						is_field = true;
-						*t = f->type;
+						*t = *f->type;
 						e->binary.dot.field = f;
 					}
 				}
@@ -2898,7 +2956,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				arr_foreach(struct_type->struc->fields, Field, f) {
 					if (ident_eq(f->name, rhs->ident)) {
 						is_field = true;
-						*t = f->type;
+						*t = *f->type;
 						e->binary.dot.field = f;
 					}
 				}

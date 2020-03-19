@@ -182,10 +182,10 @@ static void cgen_decls_type(CGenerator *g, Type *type) {
 			cgen_nl(g);
 			++g->indent_lvl;
 			arr_foreach(sdef->fields, Field, f) {
-				cgen_type_pre(g, &f->type);
+				cgen_type_pre(g, f->type);
 				cgen_write(g, " ");
 				cgen_ident_simple(g, f->name);
-				cgen_type_post(g, &f->type);
+				cgen_type_post(g, f->type);
 				cgen_write(g, ";");
 				cgen_nl(g);
 			}

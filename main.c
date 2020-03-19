@@ -8,10 +8,8 @@
 
 /* 
 TODO:
-allow #ifs in structs
-	- you can just have a dyn array of stmts and when you want to resolve the struct,
-	  just type the statements, then loop over them (going into blocks if necessary)
 use
+ - use with a decl, e.g. use p : Point;
 &&, ||
 start making a standard library... (printf; stringbuilder would be nice to have)
 switch
@@ -81,6 +79,7 @@ int main(int argc, char **argv) {
 	signal(SIGSEGV, signal_handler);
 #endif
 #ifdef RUN_TESTS	
+	printf("running tests...\n");
 	test_all();
 #endif
 

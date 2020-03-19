@@ -176,7 +176,7 @@ static bool arg_list_start(av_alist *arg_list, void (*fn)(), Value *return_val, 
 			splittable = true;
 			size_t word_size = sizeof(__avword);
 			arr_foreach(struc->fields, Field, f) {
-				if (f->offset / word_size != (f->offset + compiler_sizeof(&f->type) - 1) / word_size) {
+				if (f->offset / word_size != (f->offset + compiler_sizeof(f->type) - 1) / word_size) {
 					splittable = false;
 					break;
 				}
