@@ -455,6 +455,22 @@ static Status parse_args(Parser *p, Argument **args) {
 	++t->token;	/* move past ) */
 	return true;
 }
+static void correct_ret_type(Parser *p, Type *ret_type) {
+	if (ret_type->kind == TYPE_EXPR && ret_type->expr->kind == EXPR_TUPLE) {
+		/* it's returning a tuple! */
+		Expression *tuple_members = ret_type->expr->tuple;
+		size_t ntuple_members = arr_len(tuple_members);
+		ret_type->kind = TYPE_TUPLE;
+		ret_type->tuple = NULL;
+		arr_set_lena(&ret_type->tuple, ntuple_members, p->allocr);
+		for (size_t i = 0; i < ntuple_members; ++i) {
+			Type *out_type = &ret_type->tuple[i];
+			out_type->flags = 0;
+			out_type->kind = TYPE_EXPR;
+			out_type->expr = &tuple_members[i];
+		}
+	}
+}
 
 /* where will be filled out with the location, if not NULL */
 static Status parse_type(Parser *p, Type *type, Location *where) {
@@ -521,6 +537,7 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 			} else {
 				if (!parse_type(p, ret_type, NULL))
 					return false;
+				correct_ret_type(p, ret_type);
 			}
 			break;
 		}
@@ -1003,6 +1020,7 @@ static Status parse_fn_expr(Parser *p, FnExpr *f) {
 			success = false;
 			goto ret;
 		}
+		correct_ret_type(p, &f->ret_type);
 	}
 	p->block = prev_block; /* be nice to parse_block */
 	if (!parse_block(p, &f->body, PARSE_BLOCK_DONT_CREATE_IDENTS))
@@ -1759,6 +1777,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			Token *new_end = end - 1; /* parse to ending ) */
 			if (!parse_expr(p, e, new_end))
 				return false;
+			e->where.start = start; /* make sure we keep e->where.start intact */
 			++t->token;	/* move past closing ) */
 			goto success;
 		}

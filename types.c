@@ -828,7 +828,7 @@ static Status type_resolve(Typer *tr, Type *t, Location where) {
 		if (t->expr->type.kind == TYPE_UNKNOWN && tr->err_ctx->have_errored)
 			return false; /* silently fail (e.g. if a function couldn't be typed) */
 		if (!type_is_builtin(&t->expr->type, BUILTIN_TYPE)) {
-			err_print(where, "This expression is not a type, but it's being used as one.");
+			err_print(t->expr->where, "This expression is not a type, but it's being used as one.");
 			return false;
 		}
 		Expression *expr = t->expr;

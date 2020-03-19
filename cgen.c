@@ -1929,13 +1929,22 @@ static void cgen_ret(CGenerator *g, Block *returning_from, Expression *ret_expr)
 	FnExpr *f = g->fn;
 	if (ret_expr) {
 		cgen_expr_pre(g, ret_expr);
-		/* set ret_ to ret_expr */
-		cgen_type_pre(g, &ret_expr->type);
-		cgen_write(g, " ret_");
-		cgen_type_post(g, &ret_expr->type);
-		cgen_write(g, "; ");
-		cgen_set(g, NULL, "ret_", ret_expr, NULL);
-		cgen_nl(g);
+		if (cgen_uses_ptr(&f->ret_type)) {
+			if (f->ret_type.kind == TYPE_TUPLE) {
+				cgen_set_tuple(g, NULL, NULL, "*ret__", ret_expr);
+			} else {
+				cgen_set(g, NULL, "*ret__", ret_expr, NULL);
+			}
+		} else {
+			/* set ret_ to ret_expr */
+			cgen_type_pre(g, &ret_expr->type);
+			cgen_write(g, " ret_");
+			cgen_type_post(g, &ret_expr->type);
+			cgen_write(g, "; ");
+			cgen_set(g, NULL, "ret_", ret_expr, NULL);
+			cgen_nl(g);
+		}
+
 	}
 	cgen_deferred_up_to(g, returning_from);
 	if (f->ret_decls) {
@@ -1976,16 +1985,13 @@ static void cgen_ret(CGenerator *g, Block *returning_from, Expression *ret_expr)
 		return;
 	}
 	if (cgen_uses_ptr(&f->ret_type)) {
+	#if 0
 		Expression ret = {0};
 		ret.kind = EXPR_IDENT;
 		ret.ident = ident_get(g->globals, "ret_");
 		ret.flags = EXPR_FOUND_TYPE;
 		ret.type = f->ret_type;
-		if (f->ret_type.kind == TYPE_TUPLE) {
-			cgen_set_tuple(g, NULL, NULL, "*ret__", &ret);
-		} else {
-			cgen_set(g, NULL, "*ret__", &ret, NULL);
-		}
+		#endif
 		cgen_writeln(g, " return;");
 	} else if (f->ret_type.kind == TYPE_VOID) {
 		cgen_writeln(g, "return;");
