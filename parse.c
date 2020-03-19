@@ -270,13 +270,13 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 		return written;
 	}
 	case TYPE_TUPLE: {
-		size_t written = str_copy(buffer, bufsize, "<");
+		size_t written = str_copy(buffer, bufsize, "(");
 		arr_foreach(t->tuple, Type, child) {
 			if (child != t->tuple)
 				written += str_copy(buffer + written, bufsize - written, ", ");
 			written += type_to_str_(child, buffer + written, bufsize - written);
 		}
-		written += str_copy(buffer + written, bufsize - written, ">");
+		written += str_copy(buffer + written, bufsize - written, ")");
 		return written;
 	}
 	case TYPE_PTR: {
@@ -510,10 +510,6 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 					Type *param_type = parser_arr_add(p, &type->fn.types);
 					Location type_where;
 					if (!parse_type(p, param_type, &type_where)) return false;
-					if (param_type->kind == TYPE_TUPLE) {
-						err_print(type_where, "Functions cannot have tuples as parameters.");
-						return false;
-					}
 					if (token_is_kw(t->token, KW_RPAREN))
 						break;
 					if (!token_is_kw(t->token, KW_COMMA)) {
@@ -552,10 +548,6 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 				++t->token; /* move past ] */
 				Location slice_where;
 				if (!parse_type(p, type->slice, &slice_where)) return false;
-				if (type->slice->kind == TYPE_TUPLE) {
-					err_print(slice_where, "You cannot have a slice of tuples.");
-					return false;
-				}
 				break;
 			}
 			Token *end = expr_find_end(p, 0);
@@ -565,41 +557,7 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 			type->arr.of = parser_malloc(p, sizeof *type->arr.of);
 			Location of_where;
 			if (!parse_type(p, type->arr.of, &of_where)) return false;
-			if (type->arr.of->kind == TYPE_TUPLE) {
-				err_print(of_where, "You cannot have an array of tuples.");
-				return false;
-			}
 		} break;
-		case KW_LT:
-			/* tuple! */
-			type->kind = TYPE_TUPLE;
-			type->tuple = NULL;
-			++t->token;	/* move past < */
-			while (1) {
-				Type *child = parser_arr_add(p, &type->tuple);
-				Location child_where;
-				if (!parse_type(p, child, &child_where)) return false;
-				if (child->kind == TYPE_TUPLE) {
-					err_print(child_where, "Tuples cannot contain tuples.");
-					return false;
-				}
-				if (type_is_builtin(child, BUILTIN_VARARGS)) {
-					err_print(child_where, "Tuples cannot contain varargs.");
-					return false;
-				}
-				if (token_is_kw(t->token, KW_GT)) { /* we're done with the tuple */
-					++t->token;	/* move past > */
-					break;
-				}
-				if (token_is_kw(t->token, KW_COMMA)) {
-					++t->token;	/* move past , */
-					continue;
-				} else {
-					tokr_err(t, "Expected , to list next tuple type or ) to end tuple type.");
-					return false;
-				}
-			}
-			break;
 		case KW_AMPERSAND: {
 			/* pointer */
 			type->kind = TYPE_PTR;
@@ -607,10 +565,6 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 			++t->token;	/* move past & */
 			Location ptr_where;
 			if (!parse_type(p, type->ptr, &ptr_where)) return false;
-			if (type->ptr->kind == TYPE_TUPLE) {
-				err_print(ptr_where, "You cannot have a pointer to a tuple.");
-				return false;
-			}
 		} break;
 		case KW_STRUCT: {
 			/* struct */
@@ -791,10 +745,6 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 					}
 				}
 				break;
-			case KW_LT: {
-				/* no expression can start with < */
-				return true;
-			} break;
 			case KW_FN: {
 				ret = false;
 				++t->token;

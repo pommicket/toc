@@ -1,12 +1,65 @@
-#include "std/io.toc", io;
-f ::= fn() (int, int) {
+#include "io.toc", io;
+
+plusone ::= fn(n : int) x := n {
+	defer x += 1;
+}
+
+same ::= fn(n : int) int {
+	x := n;
+	defer x += 1;
+	x
+}
+
+thing1 ::= fn() (int, int) {
 	x := 5;
-	y := 88;
+	y := 6;
 	defer x += 1;
 	x, y
 }
+
+thing2 ::= fn() x := 5, y := 6 {
+	defer x += 1;
+}
+
 main ::= fn() {
-	a,b := f();
+	io.puti(plusone(3));
+	io.puti(same(3));
+	a, b := thing1();
+	c, d := thing2();
 	io.puti(a);
 	io.puti(b);
+	io.puti(c);
+	io.puti(d);
+	defer io.puts("deferred from main()");
+	for i := 1..10 {
+		defer io.puts("deferred from for");
+		io.puti(i);
+		if i == 2 {
+			defer io.puts("deferred from if1");
+			defer io.puts("deferred from if2");
+			defer io.puts("deferred from if3");
+			defer io.puts("deferred from if4");
+			defer io.puts("deferred from if5");
+			defer io.puts("deferred from if6");
+			defer io.puts("deferred from if7");
+			defer io.puts("deferred from if8");
+			continue;
+		}
+		if i == 8 {
+			break;
+		}
+	}
+	i := 0;
+	while {
+		defer io.puts("deferred from while");
+		i += 1;
+		io.puti(i);
+		if i % 2 == 0 { continue; }
+		if i == 7 {
+			defer io.puts("deferred from if");
+			break;
+		}
+
+	}
+	io.puts("end of main()");
 }

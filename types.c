@@ -459,12 +459,6 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 				}
 			}
 			
-			if (param->type.kind == TYPE_TUPLE) {
-				err_print(param->where, "Functions can't have tuple parameters.");
-				success = false;
-				goto ret;
-			}
-			
 			if (param->flags & DECL_HAS_EXPR) {
 				if (param->expr.kind != EXPR_VAL) {
 					Value val;
@@ -2546,6 +2540,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				return false;
 			}
 			if (of_type->kind == TYPE_TUPLE) {
+				/* necessary because x, y (where x and y are variables) is an l-value */
 				err_print(e->where, "Cannot take address of tuple.");
 				return false;
 			}
@@ -2583,6 +2578,10 @@ static Status types_expr(Typer *tr, Expression *e) {
 			}
 			if (type_is_builtin(&of->type, BUILTIN_VARARGS)) {
 				err_print(of->where, "You can't apply typeof to varargs.");
+				return false;
+			}
+			if (of->type.kind == TYPE_TUPLE) {
+				err_print(of->where, "You can't apply typeof to a tuple.");
 				return false;
 			}
 			e->kind = EXPR_TYPE;
@@ -3175,11 +3174,6 @@ static Status types_decl(Typer *tr, Declaration *d) {
 					/* don't resolve it because it's not really complete */
 				} else {
 					if (!type_resolve(tr, val->type, d->where)) return false;
-					if (val->type->kind == TYPE_TUPLE) {
-						err_print(d->where, "You can't declare a new type to be a tuple.");
-						success = false;
-						goto ret;
-					}
 				}
 			}
 		} else if (!(d->flags & DECL_IS_CONST) && t->kind == TYPE_FN && t->fn.constness) {
