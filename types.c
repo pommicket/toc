@@ -490,7 +490,10 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 		}
 		for (size_t i = 0; i < arr_len(param->idents); ++i) {
 			Type *param_type = typer_arr_add(tr, &t->fn.types);
-			*param_type = param->type;
+			if (param->flags & (DECL_ANNOTATES_TYPE|DECL_FOUND_TYPE))
+				*param_type = param->type;
+			else
+				param_type->kind = TYPE_UNKNOWN;
 			if (has_constant_params) {
 				Constness constn;
 				if (param->flags & DECL_IS_CONST) {
@@ -2087,7 +2090,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 				goto ret;
 			}
 			fn_decl = val.fn;
-			if (has_varargs) fn_decl->flags |= FN_EXPR_HAS_VARARGS;
 		}
 		
 		Type *ret_type = f->type.fn.types;
