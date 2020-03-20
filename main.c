@@ -8,7 +8,6 @@
 
 /* 
 TODO:
-compile time defer
 use
  - use with a decl, e.g. use p : Point;
 &&, ||
@@ -28,17 +27,20 @@ error on x ::= {return; 3}
 macros
 */
 
+#if defined __unix__ || (defined __APPLE__ && defined __MACH__)
+#define _POSIX_C_SOURCE 200112L
+#include <unistd.h>
+#define UNISTD_AVAILABLE 1
+#endif
 
 #include "toc.c"
 
-
-#if defined TOC_DEBUG && defined __GNU_LIBRARY__
+#if defined TOC_DEBUG && defined __GNU_LIBRARY__ && defined UNISTD_AVAILABLE
 #define BACKTRACE
 #endif
 #ifdef BACKTRACE
 #include <signal.h>
 #include <execinfo.h>
-#include <unistd.h>
 
 static char *program_name;
 
@@ -72,7 +74,6 @@ static void signal_handler(int num) {
 	
 }
 #endif
-
 int main(int argc, char **argv) {
 #ifdef BACKTRACE
 	program_name = argv[0];
@@ -89,13 +90,26 @@ int main(int argc, char **argv) {
 
 	ErrCtx err_ctx = {0};
 	err_ctx.enabled = true;
-	err_ctx.color_enabled = true;
-	
+	bool default_color_enabled;
+#if UNISTD_AVAILABLE
+	#if defined _POSIX_VERSION && _POSIX_VERSION >= 200112L
+	/* isatty available */
+	default_color_enabled = isatty(2); /* is /dev/stderr a tty? */
+	#else
+	default_color_enabled = false; /* old posix version */
+	#endif
+#else
+	default_color_enabled = false; /* probably windows */
+#endif
+	err_ctx.color_enabled = default_color_enabled;
+
 	for (int i = 1; i < argc; ++i) {
 		if ((i == 1 || argv[i-1][0] != '-') && argv[i][0] != '-') {
 			in_filename = argv[i];
 		} else if (strs_equal(argv[i], "-no-color")) {
 			err_ctx.color_enabled = false;
+		} else if (strs_equal(argv[i], "-color")) {
+			err_ctx.color_enabled = true;
 		} else if (strs_equal(argv[i], "-o")) {
 			if (i == argc-1) {
 				fprintf(stderr, "-o cannot be the last argument to toc.\n");
