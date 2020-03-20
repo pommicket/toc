@@ -2128,12 +2128,23 @@ static Status types_expr(Typer *tr, Expression *e) {
 					I16 arg_idx = order[i];
 					if (arg_idx == -1) {
 						if (param->flags & DECL_HAS_EXPR) {
-							assert(param->expr.kind == EXPR_VAL); /* evaluated in type_of_fn */
 							arg_exprs[i].kind = EXPR_VAL;
 							arg_exprs[i].where = param->where;
 							arg_exprs[i].flags = param->expr.flags;
 							arg_exprs[i].type = param->type;
-							arg_exprs[i].val = param->expr.val;
+							if (has_varargs || f->type.fn.constness) {
+								/* param->expr hasn't been typed or evaluated, because we passed type_of_fn a "generic" function */
+								/* we actually need to make a copy of this, so that copy_fn_expr still works later */
+								Expression default_arg;
+								Copier cop = copier_create(tr->allocr, tr->block);
+								copy_expr(&cop, &default_arg, &param->expr);
+								if (!types_expr(tr, &default_arg))
+									return false;
+								if (!eval_expr(tr->evalr, &default_arg, &arg_exprs[i].val))
+									return false;
+							} else {
+								arg_exprs[i].val = param->expr.val;
+							}
 						}
 						/* else, it's inferred */
 					} else {

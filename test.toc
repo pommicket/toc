@@ -1,20 +1,28 @@
 #include "std/io.toc", io;
 
-main ::= fn() {
-	defer io.puts("deferred from main");
-	for i := 0..10 {
-		defer io.puti(i);
-		if i == 7 {
-			defer io.puts("break!!!");
-			break;
-		}
-		if i % 2 == 0 {
-			defer io.puts("continue!!!");
-			continue;
-		}
-		io.puts("number...");
+prime_sieve ::= fn(N::=10000) sieve: [N]bool {
+	for x, i := &sieve {
+		*x = i%2 != 0;
 	}
-	return;
-	io.puts("end of main");
+	sieve[1] = false;
+	sieve[2] = true;
+	i := 3;
+	while i*i <= N {
+		defer i += 2;
+		if !sieve[i] { continue; }
+		j := 2*i;
+		while j < N {
+			sieve[j] = false;
+			j += i;
+		}
+	}
 }
-main();
+
+main ::= fn() {
+	sieve := prime_sieve();
+	for x, i := sieve {
+		if x {
+			io.puti(i);
+		}
+	}
+}
