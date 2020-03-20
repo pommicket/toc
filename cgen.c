@@ -673,7 +673,7 @@ static void cgen_fn_header(CGenerator *g, FnExpr *f, U64 which_are_const) {
 }
 
 static inline void cgen_deferred_from_block(CGenerator *g, Block *from) {
-	arr_foreach_reversed(from->deferred, StatementPtr, s) {
+	arr_foreach(from->deferred, StatementPtr, s) {
 		cgen_stmt(g, *s);
 	}
 }

@@ -8,6 +8,7 @@
 
 /* 
 TODO:
+compile time defer
 use
  - use with a decl, e.g. use p : Point;
 &&, ||

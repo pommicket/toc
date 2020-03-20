@@ -1708,7 +1708,7 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 	case STMT_MESSAGE:
 		break;
 	case STMT_DEFER:
-		/* TODO */
+		*(Statement **)arr_add(&ev->typer->block->deferred) = stmt->defer;
 		break;
 	}
 	return true;
@@ -1717,6 +1717,7 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 static Status eval_block(Evaluator *ev, Block *b, Value *v) {
 	Block *prev = ev->typer->block;
 	ev->typer->block = b;
+	b->deferred = NULL;
 	bool success = true;
 	Statement *last_reached = arr_last(b->stmts);
 	arr_foreach(b->stmts, Statement, stmt) {
@@ -1749,6 +1750,12 @@ static Status eval_block(Evaluator *ev, Block *b, Value *v) {
 			}
 		}
 	}
+	arr_foreach(b->deferred, StatementPtr, stmtp) {
+		Statement *stmt = *stmtp;
+		if (!eval_stmt(ev, stmt))
+			return false;
+	}
+	arr_clear(&b->deferred);
 	eval_exit_stmts(b->stmts, last_reached);
  ret:
 	ev->typer->block = prev;

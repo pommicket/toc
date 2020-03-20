@@ -26,10 +26,10 @@ main ::= fn() {
 	io.puti(same(3));
 	a, b := thing1();
 	c, d := thing2();
-	io.puti(a);
-	io.puti(b);
-	io.puti(c);
-	io.puti(d);
+	e, f ::= thing1();
+	g, h ::= thing2();
+	io.puti(a); io.puti(b); io.puti(c); io.puti(d);
+	io.puti(e); io.puti(f); io.puti(g); io.puti(h);
 	defer io.puts("deferred from main()");
 	for i := 1..10 {
 		defer io.puts("deferred from for");
