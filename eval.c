@@ -1749,13 +1749,23 @@ static Status eval_block(Evaluator *ev, Block *b, Value *v) {
 				*v = r;
 			}
 		}
+	
 	}
-	arr_foreach(b->deferred, StatementPtr, stmtp) {
-		Statement *stmt = *stmtp;
-		if (!eval_stmt(ev, stmt))
-			return false;
+	{
+		/* deal with deferred stmts */
+		/* these could overwrite ev->returning, ev->ret_val, so we should save them */
+		Block *return_block = ev->returning;
+		Value return_val = ev->ret_val;
+		ev->returning = NULL; /* if we didn't set this, the deferred stmts would immediately return */
+		arr_foreach(b->deferred, StatementPtr, stmtp) {
+			Statement *stmt = *stmtp;
+			if (!eval_stmt(ev, stmt))
+				return false;
+		}
+		arr_clear(&b->deferred);
+		ev->returning = return_block;
+		ev->ret_val = return_val;
 	}
-	arr_clear(&b->deferred);
 	eval_exit_stmts(b->stmts, last_reached);
  ret:
 	ev->typer->block = prev;

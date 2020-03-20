@@ -1,6 +1,5 @@
 #include "std/io.toc", io;
 
-
 main ::= fn() {
 	defer io.puts("deferred from main");
 	for i := 0..10 {
@@ -19,4 +18,3 @@ main ::= fn() {
 	io.puts("end of main");
 }
 main();
-
