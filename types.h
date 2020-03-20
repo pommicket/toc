@@ -28,7 +28,7 @@ For more information, please refer to <http://unlicense.org/>
 typedef long double Floating; /* OPTIM: Switch to double, but make sure floating-point literals are right */
 
 
-#if __STDC_VERSION__ >= 199901
+#if __STDC_VERSION__ >= 199901 || defined _MSC_VER
 #define LONGLONG_AVAILABLE 1
 typedef long long longlong;
 #else

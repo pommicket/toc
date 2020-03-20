@@ -8,6 +8,7 @@
 
 /* 
 TODO:
+make casting to #C type work
 use
  - use with a decl, e.g. use p : Point;
 &&, ||
