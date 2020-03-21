@@ -183,9 +183,9 @@ typedef struct VarArg {
 
 
 typedef enum {
-			  IDECL_NONE,
-			  IDECL_DECL,
-			  IDECL_FOR
+	IDECL_NONE,
+	IDECL_DECL,
+	IDECL_FOR
 } IdentDeclKind;
 
 
@@ -228,29 +228,29 @@ typedef struct Identifiers {
 } Identifiers;
 
 typedef enum {
-			  TOKEN_KW,
-			  TOKEN_IDENT,
-			  TOKEN_DIRECT,
-			  TOKEN_LITERAL_NUM,
-			  TOKEN_LITERAL_CHAR,
-			  TOKEN_LITERAL_STR,
-			  TOKEN_EOF
+	TOKEN_KW,
+	TOKEN_IDENT,
+	TOKEN_DIRECT,
+	TOKEN_LITERAL_NUM,
+	TOKEN_LITERAL_CHAR,
+	TOKEN_LITERAL_STR,
+	TOKEN_EOF
 } TokenKind;
 
 typedef enum {
-			  DIRECT_C,
-			  DIRECT_SIZEOF,
-			  DIRECT_ALIGNOF,
-			  DIRECT_EXPORT,
-			  DIRECT_FOREIGN,
-			  DIRECT_BUILTIN,
-			  DIRECT_INCLUDE,
-			  DIRECT_FORCE,
-			  DIRECT_IF,
-			  DIRECT_ERROR,
-			  DIRECT_WARN,
-			  DIRECT_INFO,
-			  DIRECT_COUNT
+	DIRECT_C,
+	DIRECT_SIZEOF,
+	DIRECT_ALIGNOF,
+	DIRECT_EXPORT,
+	DIRECT_FOREIGN,
+	DIRECT_BUILTIN,
+	DIRECT_INCLUDE,
+	DIRECT_FORCE,
+	DIRECT_IF,
+	DIRECT_ERROR,
+	DIRECT_WARN,
+	DIRECT_INFO,
+	DIRECT_COUNT
 } Directive;
 
 static const char *directives[DIRECT_COUNT] =
@@ -258,90 +258,91 @@ static const char *directives[DIRECT_COUNT] =
 	"info"};
 
 typedef enum {
-			  KW_SEMICOLON,
-			  KW_COLON,
-			  KW_COMMA,
-			  KW_LPAREN,
-			  KW_RPAREN,
-			  KW_LBRACE,
-			  KW_RBRACE,
-			  KW_LSQUARE,
-			  KW_RSQUARE,
-			  KW_EQ_EQ,
-			  KW_PLUS_EQ,
-			  KW_MINUS_EQ,
-			  KW_ASTERISK_EQ,
-			  KW_SLASH_EQ,
-			  KW_PERCENT_EQ,
-			  KW_NE,
-			  KW_LE,
-			  KW_LT,
-			  KW_GE,
-			  KW_GT,
-			  KW_PLUS,
-			  KW_MINUS,
-			  KW_ASTERISK,
-			  KW_EXCLAMATION,
-			  KW_AMPERSAND,
-			  KW_SLASH,
-			  KW_PERCENT,
-			  KW_DOTDOT,
-			  KW_DOT,
-			  KW_EQ,
-			  KW_LAST_SYMBOL = KW_EQ, /* last one entirely consisting of symbols */
-			  KW_IF,
-			  KW_ELIF,
-			  KW_ELSE,
-			  KW_WHILE,
-			  KW_FOR,
-			  KW_RETURN,
-			  KW_BREAK,
-			  KW_CONTINUE,
-			  KW_DEFER,
-			  KW_FN,
-			  KW_AS,
-			  KW_STRUCT,
-			  KW_INT,
-			  KW_I8,
-			  KW_I16,
-			  KW_I32,
-			  KW_I64,
-			  KW_U8,
-			  KW_U16,
-			  KW_U32,
-			  KW_U64,
-			  KW_FLOAT,
-			  KW_F32,
-			  KW_F64,
-			  KW_TYPE,
-			  KW_NAMESPACE,
-			  KW_CHAR,
-			  KW_BOOL,
-			  KW_TRUE,
-			  KW_FALSE,
-			  KW_NMS,
-			  KW_TYPEOF,
-			  KW_SIZEOF,
-			  KW_ALIGNOF,
-			  KW_COUNT
+	KW_SEMICOLON,
+	KW_COLON,
+	KW_COMMA,
+	KW_LPAREN,
+	KW_RPAREN,
+	KW_LBRACE,
+	KW_RBRACE,
+	KW_LSQUARE,
+	KW_RSQUARE,
+	KW_EQ_EQ,
+	KW_PLUS_EQ,
+	KW_MINUS_EQ,
+	KW_ASTERISK_EQ,
+	KW_SLASH_EQ,
+	KW_PERCENT_EQ,
+	KW_NE,
+	KW_LE,
+	KW_LT,
+	KW_GE,
+	KW_GT,
+	KW_PLUS,
+	KW_MINUS,
+	KW_ASTERISK,
+	KW_EXCLAMATION,
+	KW_AMPERSAND,
+	KW_SLASH,
+	KW_PERCENT,
+	KW_DOTDOT,
+	KW_DOT,
+	KW_EQ,
+	KW_LAST_SYMBOL = KW_EQ, /* last one entirely consisting of symbols */
+	KW_IF,
+	KW_ELIF,
+	KW_ELSE,
+	KW_WHILE,
+	KW_FOR,
+	KW_RETURN,
+	KW_BREAK,
+	KW_CONTINUE,
+	KW_DEFER,
+	KW_FN,
+	KW_AS,
+	KW_STRUCT,
+	KW_INT,
+	KW_I8,
+	KW_I16,
+	KW_I32,
+	KW_I64,
+	KW_U8,
+	KW_U16,
+	KW_U32,
+	KW_U64,
+	KW_FLOAT,
+	KW_F32,
+	KW_F64,
+	KW_TYPE,
+	KW_NAMESPACE,
+	KW_CHAR,
+	KW_BOOL,
+	KW_TRUE,
+	KW_FALSE,
+	KW_NMS,
+	KW_TYPEOF,
+	KW_SIZEOF,
+	KW_ALIGNOF,
+	KW_COUNT
 } Keyword;
 
-static const char *const keywords[KW_COUNT] =
-	{";", ":", ",", "(", ")", "{", "}", "[", "]", "==",
-	 "+=", "-=", "*=", "/=", "%=",
-	 "!=", "<=", "<", ">=", ">",
-	 "+", "-", "*", "!", "&", "/", "%", "..", ".",
-	 "=",
-	 "if", "elif", "else", "while", "for", "return", "break",
-	 "continue", "defer", "fn", "as", "struct",
-	 "int", "i8", "i16", "i32", "i64",
-	 "u8", "u16", "u32", "u64", "float", "f32", "f64", "Type",
-	 "Namespace",
-	 "char", "bool", "true", "false", "nms", "typeof", "sizeof", "alignof"};
+static const char *const keywords[KW_COUNT] = {
+	";", ":", ",", "(", ")", "{", "}", "[", "]", "==",
+	"+=", "-=", "*=", "/=", "%=",
+	"!=", "<=", "<", ">=", ">",
+	"+", "-", "*", "!", "&", "/", "%", "..", ".",
+	"=",
+	"if", "elif", "else", "while", "for", "return", "break",
+	"continue", "defer", "fn", "as", "struct",
+	"int", "i8", "i16", "i32", "i64",
+	"u8", "u16", "u32", "u64", "float", "f32", "f64", "Type",
+	"Namespace",
+	"char", "bool", "true", "false", "nms", "typeof", "sizeof", "alignof"
+};
 
 typedef enum {
-			  NUM_LITERAL_INT,
-			  NUM_LITERAL_FLOAT
+	NUM_LITERAL_INT,
+	NUM_LITERAL_FLOAT
 } NumLiteralKind;
 
 typedef struct NumLiteral {
@@ -403,36 +404,36 @@ typedef struct Tokenizer {
 
 
 typedef enum {
-			  TYPE_UNKNOWN,
-			  TYPE_VOID,
-			  TYPE_BUILTIN,
-			  TYPE_FN,
-			  TYPE_TUPLE,
-			  TYPE_ARR,
-			  TYPE_PTR,
-			  TYPE_SLICE,
-			  TYPE_EXPR, /* just use this expression as the type. this kind of type doesn't exist after resolving. */
-			  TYPE_STRUCT
+	TYPE_UNKNOWN,
+	TYPE_VOID,
+	TYPE_BUILTIN,
+	TYPE_FN,
+	TYPE_TUPLE,
+	TYPE_ARR,
+	TYPE_PTR,
+	TYPE_SLICE,
+	TYPE_EXPR, /* just use this expression as the type. this kind of type doesn't exist after resolving. */
+	TYPE_STRUCT
 #define TYPE_COUNT (TYPE_STRUCT+1)
 } TypeKind;
 
 
 typedef enum {
-			  BUILTIN_I8,
-			  BUILTIN_I16,
-			  BUILTIN_I32,
-			  BUILTIN_I64,
-			  BUILTIN_U8,
-			  BUILTIN_U16,
-			  BUILTIN_U32,
-			  BUILTIN_U64,
-			  BUILTIN_F32,
-			  BUILTIN_F64,
-			  BUILTIN_CHAR,
-			  BUILTIN_BOOL,
-			  BUILTIN_TYPE,
-			  BUILTIN_VARARGS,
-			  BUILTIN_NMS
+	BUILTIN_I8,
+	BUILTIN_I16,
+	BUILTIN_I32,
+	BUILTIN_I64,
+	BUILTIN_U8,
+	BUILTIN_U16,
+	BUILTIN_U32,
+	BUILTIN_U64,
+	BUILTIN_F32,
+	BUILTIN_F64,
+	BUILTIN_CHAR,
+	BUILTIN_BOOL,
+	BUILTIN_TYPE,
+	BUILTIN_VARARGS,
+	BUILTIN_NMS
 } BuiltinType;
 
 
@@ -448,8 +449,8 @@ typedef struct FnType {
 } FnType;
 
 enum {
-	  TYPE_IS_FLEXIBLE = 0x01,
-	  TYPE_IS_RESOLVED = 0x02,
+	TYPE_IS_FLEXIBLE = 0x01,
+	TYPE_IS_RESOLVED = 0x02,
 };
 typedef U8 TypeFlags;
 typedef struct Type {
@@ -485,11 +486,11 @@ typedef struct Field {
 
 
 enum {
-	  BLOCK_IS_FN = 0x01,
-	  BLOCK_IS_NMS = 0x02,
-	  BLOCK_FINDING_TYPES = 0x04,
-	  BLOCK_FOUND_TYPES = 0x08,
-	  BLOCK_IS_LOOP = 0x10 /* can we break/continue in this block? */
+	BLOCK_IS_FN = 0x01,
+	BLOCK_IS_NMS = 0x02,
+	BLOCK_FINDING_TYPES = 0x04,
+	BLOCK_FOUND_TYPES = 0x08,
+	BLOCK_IS_LOOP = 0x10 /* can we break/continue in this block? */
 };
 typedef U8 BlockFlags;
 typedef struct Block {
@@ -506,11 +507,11 @@ typedef struct Block {
 } Block;
 
 enum {
-	  STRUCT_DEF_FOUND_OFFSETS = 0x01,
-	  STRUCT_DEF_FINDING_OFFSETS = 0x02,
-	  STRUCT_DEF_CGEN_DECLARED = 0x04,
-	  STRUCT_DEF_CGEN_DEFINED = 0x08,
-	  STRUCT_DEF_RESOLVED = 0x10
+	STRUCT_DEF_FOUND_OFFSETS = 0x01,
+	STRUCT_DEF_FINDING_OFFSETS = 0x02,
+	STRUCT_DEF_CGEN_DECLARED = 0x04,
+	STRUCT_DEF_CGEN_DEFINED = 0x08,
+	STRUCT_DEF_RESOLVED = 0x10
 };
 typedef struct StructDef {
 	/* these two only exist after resolving (before then, it's scope.stmts) */
@@ -538,68 +539,68 @@ typedef struct StructDef {
 
 
 typedef enum {
-			  EXPR_LITERAL_FLOAT,
-			  EXPR_LITERAL_INT,
-			  EXPR_LITERAL_STR,
-			  EXPR_LITERAL_BOOL,
-			  EXPR_LITERAL_CHAR,
-			  EXPR_IDENT, /* variable or constant */
-			  EXPR_BINARY_OP,
-			  EXPR_UNARY_OP,
-			  EXPR_IF,
-			  EXPR_WHILE,
-			  EXPR_FOR,
-			  EXPR_FN,
-			  EXPR_CAST,
-			  EXPR_CALL,
-			  EXPR_BLOCK,
-			  EXPR_TUPLE,
-			  EXPR_C,
-			  EXPR_BUILTIN,
-			  EXPR_SLICE,
-			  EXPR_TYPE,
-			  EXPR_NMS,
-			  /* 
-				 a value (it's useful to have this). 
-				 right now they don't work with cgen_set_tuple
-				 (as of yet, that is unneeded)
-			  */
-			  EXPR_VAL 
+	EXPR_LITERAL_FLOAT,
+	EXPR_LITERAL_INT,
+	EXPR_LITERAL_STR,
+	EXPR_LITERAL_BOOL,
+	EXPR_LITERAL_CHAR,
+	EXPR_IDENT, /* variable or constant */
+	EXPR_BINARY_OP,
+	EXPR_UNARY_OP,
+	EXPR_IF,
+	EXPR_WHILE,
+	EXPR_FOR,
+	EXPR_FN,
+	EXPR_CAST,
+	EXPR_CALL,
+	EXPR_BLOCK,
+	EXPR_TUPLE,
+	EXPR_C,
+	EXPR_BUILTIN,
+	EXPR_SLICE,
+	EXPR_TYPE,
+	EXPR_NMS,
+	/* 
+	   a value (it's useful to have this). 
+	   right now they don't work with cgen_set_tuple
+	   (as of yet, that is unneeded)
+	 */
+	EXPR_VAL 
 } ExprKind;
 
 typedef enum {
-			  UNARY_MINUS,
-			  UNARY_ADDRESS, /* &x */
-			  UNARY_DEREF, /* *x */
-			  UNARY_NOT, /* !x */
-			  UNARY_TYPEOF, /* typeof x */
-			  UNARY_LEN, /* x.len ; replaces BINARY_DOT len when typing  */
-			  UNARY_DSIZEOF,
-			  UNARY_DALIGNOF,
-			  UNARY_SIZEOF,
-			  UNARY_ALIGNOF
+	UNARY_MINUS,
+	UNARY_ADDRESS, /* &x */
+	UNARY_DEREF, /* *x */
+	UNARY_NOT, /* !x */
+	UNARY_TYPEOF, /* typeof x */
+	UNARY_LEN, /* x.len ; replaces BINARY_DOT len when typing  */
+	UNARY_DSIZEOF,
+	UNARY_DALIGNOF,
+	UNARY_SIZEOF,
+	UNARY_ALIGNOF
 } UnaryOp;
 
 typedef enum {
-			  BINARY_SET, /* e.g. x = y */
-			  BINARY_ADD,
-			  BINARY_SUB,
-			  BINARY_MUL,
-			  BINARY_DIV,
-			  BINARY_MOD,
-			  BINARY_SET_ADD, /* e.g. x += y */
-			  BINARY_SET_SUB,
-			  BINARY_SET_MUL,
-			  BINARY_SET_DIV,
-			  BINARY_SET_MOD,
-			  BINARY_GT,
-			  BINARY_LT,
-			  BINARY_GE,
-			  BINARY_LE,
-			  BINARY_EQ,
-			  BINARY_NE,
-			  BINARY_AT_INDEX, /* e.g. x[i] */
-			  BINARY_DOT
+	BINARY_SET, /* e.g. x = y */
+	BINARY_ADD,
+	BINARY_SUB,
+	BINARY_MUL,
+	BINARY_DIV,
+	BINARY_MOD,
+	BINARY_SET_ADD, /* e.g. x += y */
+	BINARY_SET_SUB,
+	BINARY_SET_MUL,
+	BINARY_SET_DIV,
+	BINARY_SET_MOD,
+	BINARY_GT,
+	BINARY_LT,
+	BINARY_GE,
+	BINARY_LE,
+	BINARY_EQ,
+	BINARY_NE,
+	BINARY_AT_INDEX, /* e.g. x[i] */
+	BINARY_DOT
 } BinaryOp;
 
 typedef struct CallExpr {
@@ -612,7 +613,7 @@ typedef struct CallExpr {
 } CallExpr;
 
 enum {
-	  IF_STATIC = 0x01
+	IF_STATIC = 0x01
 };
 
 typedef struct IfExpr {
@@ -629,8 +630,8 @@ typedef struct WhileExpr {
 
 
 enum {
-	  FOR_IS_RANGE = 0x01,
-	  FOR_ANNOTATED_TYPE = 0x02,
+	FOR_IS_RANGE = 0x01,
+	FOR_ANNOTATED_TYPE = 0x02,
 };
 
 typedef struct ForExpr {
@@ -657,31 +658,31 @@ typedef struct ForExpr {
 
 
 enum {
-	  FN_EXPR_FOREIGN = 0x01,
-	  FN_EXPR_EXPORT = 0x02, /* set by sdecls_cgen.c */
-	  FN_EXPR_HAS_VARARGS = 0x04
+	FN_EXPR_FOREIGN = 0x01,
+	FN_EXPR_EXPORT = 0x02, /* set by sdecls_cgen.c */
+	FN_EXPR_HAS_VARARGS = 0x04
 };
 
 typedef enum {
-	  CTYPE_NONE = 0x00,
-	  CTYPE_CHAR = 0x01,
-	  CTYPE_SHORT = 0x02,
-	  CTYPE_INT = 0x03,
-	  CTYPE_LONG = 0x04,
-	  CTYPE_LONGLONG = 0x05,
-	  CTYPE_SIGNED_CHAR = 0x06,
-	  CTYPE_UNSIGNED = 0x08,
-	  CTYPE_UNSIGNED_CHAR = CTYPE_UNSIGNED|CTYPE_CHAR,
-	  CTYPE_UNSIGNED_SHORT = CTYPE_UNSIGNED|CTYPE_SHORT,
-	  CTYPE_UNSIGNED_INT = CTYPE_UNSIGNED|CTYPE_INT,
-	  CTYPE_UNSIGNED_LONG = CTYPE_UNSIGNED|CTYPE_LONG,
-	  CTYPE_UNSIGNED_LONGLONG = CTYPE_UNSIGNED|CTYPE_LONGLONG,
-	  /* things that can't be unsigned */
-	  CTYPE_PTR = 0x10,
-	  CTYPE_FLOAT,
-	  CTYPE_DOUBLE,
-	  CTYPE_SIZE_T,
-	  CTYPE_VARARGS
+	CTYPE_NONE = 0x00,
+	CTYPE_CHAR = 0x01,
+	CTYPE_SHORT = 0x02,
+	CTYPE_INT = 0x03,
+	CTYPE_LONG = 0x04,
+	CTYPE_LONGLONG = 0x05,
+	CTYPE_SIGNED_CHAR = 0x06,
+	CTYPE_UNSIGNED = 0x08,
+	CTYPE_UNSIGNED_CHAR = CTYPE_UNSIGNED|CTYPE_CHAR,
+	CTYPE_UNSIGNED_SHORT = CTYPE_UNSIGNED|CTYPE_SHORT,
+	CTYPE_UNSIGNED_INT = CTYPE_UNSIGNED|CTYPE_INT,
+	CTYPE_UNSIGNED_LONG = CTYPE_UNSIGNED|CTYPE_LONG,
+	CTYPE_UNSIGNED_LONGLONG = CTYPE_UNSIGNED|CTYPE_LONGLONG,
+	/* things that can't be unsigned */
+	CTYPE_PTR = 0x10,
+	CTYPE_FLOAT,
+	CTYPE_DOUBLE,
+	CTYPE_SIZE_T,
+	CTYPE_VARARGS
 } CTypeKind;
 typedef struct {
 	CTypeKind kind;
@@ -754,26 +755,26 @@ typedef struct SliceExpr {
 } SliceExpr;
 
 typedef enum {
-			  BUILTIN_STDOUT,
-			  BUILTIN_STDERR,
-			  BUILTIN_STDIN,
-			  BUILTIN_SIZEOF_SHORT,
-			  BUILTIN_TSIZEOF_SHORT, /* target sizeof(short) */
-			  BUILTIN_SIZEOF_INT,
-			  BUILTIN_TSIZEOF_INT,
-			  BUILTIN_SIZEOF_LONG,
-			  BUILTIN_TSIZEOF_LONG,
-			  BUILTIN_SIZEOF_LONG_LONG,
-			  BUILTIN_TSIZEOF_LONG_LONG,
-			  BUILTIN_SIZEOF_SIZE_T,
-			  BUILTIN_TSIZEOF_SIZE_T,
-			  BUILTIN_SIZEOF_FLOAT,
-			  BUILTIN_TSIZEOF_FLOAT,
-			  BUILTIN_SIZEOF_DOUBLE,
-			  BUILTIN_TSIZEOF_DOUBLE,
-			  BUILTIN_SIZEOF_LONG_DOUBLE,
-			  BUILTIN_TSIZEOF_LONG_DOUBLE,
-			  BUILTIN_COMPILING
+	BUILTIN_STDOUT,
+	BUILTIN_STDERR,
+	BUILTIN_STDIN,
+	BUILTIN_SIZEOF_SHORT,
+	BUILTIN_TSIZEOF_SHORT, /* target sizeof(short) */
+	BUILTIN_SIZEOF_INT,
+	BUILTIN_TSIZEOF_INT,
+	BUILTIN_SIZEOF_LONG,
+	BUILTIN_TSIZEOF_LONG,
+	BUILTIN_SIZEOF_LONG_LONG,
+	BUILTIN_TSIZEOF_LONG_LONG,
+	BUILTIN_SIZEOF_SIZE_T,
+	BUILTIN_TSIZEOF_SIZE_T,
+	BUILTIN_SIZEOF_FLOAT,
+	BUILTIN_TSIZEOF_FLOAT,
+	BUILTIN_SIZEOF_DOUBLE,
+	BUILTIN_TSIZEOF_DOUBLE,
+	BUILTIN_SIZEOF_LONG_DOUBLE,
+	BUILTIN_TSIZEOF_LONG_DOUBLE,
+	BUILTIN_COMPILING
 #define BUILTIN_VAL_COUNT (BUILTIN_COMPILING+1)
 } BuiltinVal;
 
@@ -795,7 +796,7 @@ typedef struct Namespace {
 
 
 enum {
-	  EXPR_FOUND_TYPE = 0x01
+	EXPR_FOUND_TYPE = 0x01
 };
 
 
@@ -864,16 +865,16 @@ typedef struct Argument {
 } Argument;
 
 enum {
-	  DECL_ANNOTATES_TYPE = 0x0001,
-	  DECL_IS_CONST = 0x0002,
-	  DECL_SEMI_CONST = 0x0004,
-	  DECL_HAS_EXPR = 0x0008,
-	  DECL_FOUND_TYPE = 0x0010,
-	  DECL_ERRORED_ABOUT_SELF_REFERENCE = 0x0020, /* has there been an error about this decl referencing itself? */
-	  DECL_FOUND_VAL = 0x0040,
-	  DECL_INFER = 0x0080, /* infer the value (e.g. fn(t::Type=, x:t)) */
-	  DECL_EXPORT = 0x0100,
-	  DECL_IS_PARAM = 0x0200
+	DECL_ANNOTATES_TYPE = 0x0001,
+	DECL_IS_CONST = 0x0002,
+	DECL_SEMI_CONST = 0x0004,
+	DECL_HAS_EXPR = 0x0008,
+	DECL_FOUND_TYPE = 0x0010,
+	DECL_ERRORED_ABOUT_SELF_REFERENCE = 0x0020, /* has there been an error about this decl referencing itself? */
+	DECL_FOUND_VAL = 0x0040,
+	DECL_INFER = 0x0080, /* infer the value (e.g. fn(t::Type=, x:t)) */
+	DECL_EXPORT = 0x0100,
+	DECL_IS_PARAM = 0x0200
 };
 
 typedef U16 DeclFlags;
@@ -907,18 +908,18 @@ typedef struct Declaration {
 typedef Declaration *DeclarationPtr;
 
 typedef enum {
-			  STMT_DECL,
-			  STMT_EXPR,
-			  STMT_RET,
-			  STMT_BREAK,
-			  STMT_CONT,
-			  STMT_INCLUDE,
-			  STMT_MESSAGE,
-			  STMT_DEFER
+	STMT_DECL,
+	STMT_EXPR,
+	STMT_RET,
+	STMT_BREAK,
+	STMT_CONT,
+	STMT_INCLUDE,
+	STMT_MESSAGE,
+	STMT_DEFER
 } StatementKind;
 
 enum {
-	  RET_HAS_EXPR = 0x01,
+	RET_HAS_EXPR = 0x01
 };
 typedef struct Return {
 	U8 flags;
@@ -927,10 +928,10 @@ typedef struct Return {
 } Return;
 
 enum {
-	  INC_FILE_CGEND_SDECLS = 0x01,
-	  INC_FILE_CGEND_DECLS = 0x02,
-	  INC_FILE_CGEND_DEFS = 0x04,
-	  INC_FILE_CGEND = 0x08
+	INC_FILE_CGEND_SDECLS = 0x01,
+	INC_FILE_CGEND_DECLS = 0x02,
+	INC_FILE_CGEND_DEFS = 0x04,
+	INC_FILE_CGEND = 0x08
 };
 
 typedef struct {
@@ -940,7 +941,7 @@ typedef struct {
 } IncludedFile;
 
 enum {
-	  INC_FORCED = 0x01
+	INC_FORCED = 0x01
 };
 
 typedef union {
@@ -953,9 +954,9 @@ typedef union {
 } Include;
 
 typedef enum {
-			  MESSAGE_ERROR,
-			  MESSAGE_WARN,
-			  MESSAGE_INFO
+	MESSAGE_ERROR,
+	MESSAGE_WARN,
+	MESSAGE_INFO
 } MessageKind;
 
 typedef struct {
@@ -964,9 +965,9 @@ typedef struct {
 } Message;
 
 enum {
-	  STMT_EXPR_NO_SEMICOLON = 0x01,
-	  STMT_INC_TO_NMS = 0x01,
-	  STMT_TYPED = 0x02
+	STMT_EXPR_NO_SEMICOLON = 0x01,
+	STMT_INC_TO_NMS = 0x01,
+	STMT_TYPED = 0x02
 };
 typedef struct Statement {
 	Location where;
@@ -999,9 +1000,9 @@ typedef struct Parser {
 } Parser;
 
 typedef enum {
-			  DECL_END_SEMICOLON,
-			  DECL_END_RPAREN_COMMA,
-			  DECL_END_LBRACE_COMMA
+	DECL_END_SEMICOLON,
+	DECL_END_RPAREN_COMMA,
+	DECL_END_LBRACE_COMMA
 } DeclEndKind;
 
 #if COMPILE_TIME_FOREIGN_FN_SUPPORT
