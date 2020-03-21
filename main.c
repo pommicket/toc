@@ -8,9 +8,9 @@
 
 /* 
 TODO:
-simplify eval macros with val_to_u/i64
 use
  - use with a decl, e.g. use p : Point;
+simplify eval macros with val_to_u/i64
 &&, ||
 start making a standard library... (printf; stringbuilder would be nice to have)
 switch

@@ -441,6 +441,9 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 	case STMT_BREAK:
 	case STMT_CONT:
 		break;
+	case STMT_USE:
+		copy_expr(c, &out->use, &in->use);
+		break;
 	}
 }
 

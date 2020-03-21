@@ -1710,6 +1710,8 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 	case STMT_DEFER:
 		*(Statement **)arr_add(&ev->typer->block->deferred) = stmt->defer;
 		break;
+	case STMT_USE:
+		break;
 	}
 	return true;
 }

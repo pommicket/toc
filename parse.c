@@ -2400,6 +2400,13 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			}
 			goto success;
 		}
+		case KW_USE: {
+			++t->token;
+			s->kind = STMT_USE;
+			if (!parse_expr(p, &s->use, expr_find_end(p, 0)))
+				return false;
+			goto success;
+		}
 		default: break;
 		}
 	} else if (t->token->kind == TOKEN_DIRECT) {
@@ -2887,6 +2894,10 @@ static void fprint_stmt(FILE *out, Statement *s) {
 	case STMT_DEFER:
 		fprintf(out, "defer ");
 		fprint_stmt(out, s->defer);
+		break;
+	case STMT_USE:
+		fprintf(out, "use ");
+		fprint_expr(out, &s->use);
 		break;
 	}
 }
