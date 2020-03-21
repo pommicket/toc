@@ -8,7 +8,7 @@
 
 /* 
 TODO:
-make casting to #C type work
+simplify eval macros with val_to_u/i64
 use
  - use with a decl, e.g. use p : Point;
 &&, ||

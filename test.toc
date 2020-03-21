@@ -1,28 +1,6 @@
-#include "std/io.toc", io;
-
-prime_sieve ::= fn(N::=10000) sieve: [N]bool {
-	for x, i := &sieve {
-		*x = i%2 != 0;
-	}
-	sieve[1] = false;
-	sieve[2] = true;
-	i := 3;
-	while i*i <= N {
-		defer i += 2;
-		if !sieve[i] { continue; }
-		j := 2*i;
-		while j < N {
-			sieve[j] = false;
-			j += i;
-		}
-	}
-}
+#include "std/mem.toc";
 
 main ::= fn() {
-	sieve := prime_sieve();
-	for x, i := sieve {
-		if x {
-			io.puti(i);
-		}
-	}
+	thing := new(int);
+	del(thing);
 }

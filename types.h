@@ -736,6 +736,7 @@ typedef struct Instance {
 typedef struct CastExpr {
 	struct Expression *expr;
 	Type type;
+	CType ctype;
 } CastExpr;
 
 typedef struct NewExpr {

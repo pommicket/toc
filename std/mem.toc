@@ -3,12 +3,12 @@ calloc ::= #foreign("calloc", "libc.so.6") fn(#C size_t, #C size_t) #C &"void";
 free ::= #foreign("free", "libc.so.6") fn(#C &"void");
 
 new ::= fn(t :: Type) &t {
-	calloc(1, (sizeof t) as u64)
+	calloc(1, (sizeof t) as #C size_t)
 }
 
 news ::= fn(t :: Type, n : int) []t {
 	s: []t;
-	s.data = calloc(n as u64, (sizeof t) as u64);
+	s.data = calloc(n as #C size_t, (sizeof t) as #C size_t);
 	s.len = n;
 	s
 }

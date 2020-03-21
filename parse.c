@@ -1781,10 +1781,10 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				t->token = lowest_precedence_op + 1;
 				if (token_is_direct(t->token, DIRECT_C)) {
 					/* cast to #C type */
-					CType unused;
-					if (!parse_c_type(p, &unused, &e->cast.type))
+					if (!parse_c_type(p, &e->cast.ctype, &e->cast.type))
 						return false;
 				} else {
+					e->cast.ctype.kind = CTYPE_NONE;
 					if (!parse_type(p, &e->cast.type, NULL))
 						return false;
 				}

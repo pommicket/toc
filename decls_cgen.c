@@ -223,51 +223,6 @@ static void cgen_decls_fn_instances(CGenerator *g, FnExpr *f) {
 	}
 }
 
-static void cgen_ctype(CGenerator *g, CType *c) {
-	if (c->kind & CTYPE_UNSIGNED) {
-		c->kind &= (CTypeKind)~(CTypeKind)CTYPE_UNSIGNED;
-		cgen_write(g, "unsigned ");
-	}
-	switch (c->kind) {
-	case CTYPE_CHAR:
-		cgen_write(g, "char");
-		break;
-	case CTYPE_SIGNED_CHAR:
-		cgen_write(g, "signed char");
-		break;
-	case CTYPE_SHORT:
-		cgen_write(g, "short");
-		break;
-	case CTYPE_INT:
-		cgen_write(g, "int");
-		break;
-	case CTYPE_LONG:
-		cgen_write(g, "long");
-		break;
-	case CTYPE_LONGLONG:
-		cgen_write(g, "long long");
-		break;
-	case CTYPE_PTR:
-		cgen_write(g, "%s *", c->points_to);
-		break;
-	case CTYPE_FLOAT:
-		cgen_write(g, "float");
-		break;
-	case CTYPE_DOUBLE:
-		cgen_write(g, "double");
-		break;
-	case CTYPE_SIZE_T:
-		cgen_write(g, "size_t");
-		break;
-	case CTYPE_VARARGS:
-		cgen_write(g, "...");
-		break;
-	default:
-		assert(0);
-		break;
-	}
-}
-
 static void cgen_fn_decl(CGenerator *g, FnExpr *f, Type *t) {
 	if (f->flags & FN_EXPR_FOREIGN) {
 		

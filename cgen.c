@@ -418,6 +418,52 @@ static void cgen_type_post(CGenerator *g, Type *t) {
 	}
 }
 
+static void cgen_ctype(CGenerator *g, CType *c) {
+	if (c->kind & CTYPE_UNSIGNED) {
+		c->kind &= (CTypeKind)~(CTypeKind)CTYPE_UNSIGNED;
+		cgen_write(g, "unsigned ");
+	}
+	switch (c->kind) {
+	case CTYPE_CHAR:
+		cgen_write(g, "char");
+		break;
+	case CTYPE_SIGNED_CHAR:
+		cgen_write(g, "signed char");
+		break;
+	case CTYPE_SHORT:
+		cgen_write(g, "short");
+		break;
+	case CTYPE_INT:
+		cgen_write(g, "int");
+		break;
+	case CTYPE_LONG:
+		cgen_write(g, "long");
+		break;
+	case CTYPE_LONGLONG:
+		cgen_write(g, "long long");
+		break;
+	case CTYPE_PTR:
+		cgen_write(g, "%s *", c->points_to);
+		break;
+	case CTYPE_FLOAT:
+		cgen_write(g, "float");
+		break;
+	case CTYPE_DOUBLE:
+		cgen_write(g, "double");
+		break;
+	case CTYPE_SIZE_T:
+		cgen_write(g, "size_t");
+		break;
+	case CTYPE_VARARGS:
+		cgen_write(g, "...");
+		break;
+	default:
+		assert(0);
+		break;
+	}
+}
+
+
 static inline void cgen_fn_name(CGenerator *g, FnExpr *f) {
 	if (f->c.name) {
 		cgen_ident(g, f->c.name);
@@ -1646,9 +1692,14 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			/* can't cast to array type */
 			cgen_expr(g, e->cast.expr);
 		} else {
+			CType *ctype = &e->cast.ctype;
 			cgen_write(g, "((");
-			cgen_type_pre(g, to);
-			cgen_type_post(g, to);
+			if (ctype->kind != CTYPE_NONE) {
+				cgen_ctype(g, ctype);
+			} else {
+				cgen_type_pre(g, to);
+				cgen_type_post(g, to);
+			}
 			cgen_write(g, ")(");
 			cgen_expr(g, e->cast.expr);
 			cgen_write(g, ")");
