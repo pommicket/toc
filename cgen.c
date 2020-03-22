@@ -2096,10 +2096,11 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 		cgen_lbl(g, b->c.cont_lbl);
 		cgen_writeln(g, ";");
 	} break;
-	case STMT_MESSAGE:
-		break;
 	case STMT_DEFER:
 		*(Statement **)arr_add(&g->block->deferred) = s->defer;
+		break;
+	case STMT_USE:
+	case STMT_MESSAGE:
 		break;
 	}
 }

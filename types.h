@@ -1056,7 +1056,7 @@ typedef struct Typer {
 	ParsedFile *parsed_file;
 	Namespace *nms;
 	StrHashTable included_files; /* maps to IncludedFile */
-	UsedExpr *used; /* things which are currently being `use`d */
+	UsedExpr *used; /* things which are currently being `use`d. dynamic array NOT on the allocator. */
 } Typer;
 
 typedef struct CGenerator {

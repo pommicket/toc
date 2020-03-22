@@ -4,7 +4,7 @@
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
 
-/* see toc.c for development information */
+/* see development.md for development information */
 
 /* 
 TODO:

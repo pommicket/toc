@@ -3315,6 +3315,13 @@ static Status types_decl(Typer *tr, Declaration *d) {
 	return success;
 }
 
+static bool expr_is_usable(Expression *e) {
+	if (e->kind == EXPR_IDENT) return true;
+	if (e->kind == EXPR_BINARY_OP && e->binary.op == BINARY_DOT)
+		return expr_is_usable(e->binary.lhs);
+	return false;
+}
+
 static Status types_stmt(Typer *tr, Statement *s) {
 	if (s->flags & STMT_TYPED) return true;
 	switch (s->kind) {
@@ -3474,6 +3481,24 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			return false;
 		}
 		break;
+	case STMT_USE: {
+		Expression *e = &s->use;
+		if (!types_expr(tr, e))
+			return false;
+		if (e->type.kind != TYPE_STRUCT && !type_is_builtin(&e->type, BUILTIN_NMS)) {
+			char *str = type_to_str(&e->type);
+			err_print(s->where, "You cannot use something of type %s (only Namespaces and structs).", str);
+			free(str);
+			return false;
+		}
+		if (!expr_is_usable(e)) {
+			err_print(e->where, "You can't use this value. You should probably assign it to a variable.");
+			return false;
+		}
+		UsedExpr *u = arr_add(&tr->used);
+		u->scope = tr->block;
+		u->stmt = s;
+	} break;
 	}
 	s->flags |= STMT_TYPED;
 	return true;
