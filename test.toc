@@ -1,6 +1,8 @@
-#include "std/mem.toc";
+Point ::= struct {
+	x, y: int;
+}
 
 main ::= fn() {
-	thing := new(int);
-	del(thing);
+	p: Point;
+	use p;
 }

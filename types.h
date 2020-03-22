@@ -1033,6 +1033,16 @@ typedef struct Evaluator {
 	ForeignFnManager ffmgr;
 } Evaluator;
 
+/*
+Keeps track of use stmts.
+We need to keep track of the block so that 
+it can be removed when we exit the block.
+*/
+typedef struct {
+	Statement *stmt;
+	Block *scope;
+} UsedExpr;
+
 typedef struct Typer {
 	Allocator *allocr;
 	Evaluator *evalr;
@@ -1046,6 +1056,7 @@ typedef struct Typer {
 	ParsedFile *parsed_file;
 	Namespace *nms;
 	StrHashTable included_files; /* maps to IncludedFile */
+	UsedExpr *used; /* things which are currently being `use`d */
 } Typer;
 
 typedef struct CGenerator {

@@ -3480,6 +3480,7 @@ static Status types_stmt(Typer *tr, Statement *s) {
 }
 
 static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *allocr, Identifiers *idents) {
+	tr->used = NULL;
 	tr->block = NULL;
 	tr->blocks = NULL;
 	tr->fn = NULL;
