@@ -1,13 +1,8 @@
-Point ::= struct {
-	x, y: int;
-}
-
-mkpoint ::= fn(x, y: int) p: Point {
-	p.x = x;
-	p.y = y;
+n ::= nms {
+	a := 17;
 }
 
 main ::= fn() {
-	p: Point;
-	use p;
+	use n;
+	x := a;
 }

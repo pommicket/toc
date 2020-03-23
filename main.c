@@ -179,7 +179,7 @@ int main(int argc, char **argv) {
 	Typer tr;
 	Evaluator ev;
 	evalr_create(&ev, &tr, &main_allocr);
-	typer_create(&tr, &ev, &err_ctx, &main_allocr, &globals);
+	typer_create(&tr, &ev, &file, &err_ctx, &main_allocr, &globals);
 	
 	if (!types_file(&tr, &f)) {
 		err_text_important(&err_ctx, "Errors occured while determining types.\n");
