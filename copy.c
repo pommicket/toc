@@ -90,12 +90,12 @@ static void copy_val_full(Copier *c, Value *out, Value in, Type *t) {
 
 static void copy_struct(Copier *c, StructDef *out, StructDef *in) {
 	*out = *in;
-	out->scope = in->scope;
-	idents_create(&out->scope.idents, c->allocr, &out->scope);
+	out->body = in->body;
+	idents_create(&out->body.idents, c->allocr, &out->body);
 	
 	Block *prev = c->block;
-	copy_block(c, &out->scope, &in->scope, 0);
-	c->block = &out->scope;
+	copy_block(c, &out->body, &in->body, 0);
+	c->block = &out->body;
 	if (in->flags & STRUCT_DEF_RESOLVED) {
 		size_t nfields = arr_len(in->fields);
 		out->fields = NULL;
@@ -167,7 +167,7 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 		break;
 	case TYPE_STRUCT: {
 		if (in->flags & TYPE_IS_RESOLVED) {
-			/* we don't actually need to make a copy of the struct for inference */
+			/* we don't actually need to make a copy of the struct here */
 		} else {
 			/* 
 			   it's okay to copy the struct definition here, because before resolving,

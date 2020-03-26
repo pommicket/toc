@@ -581,17 +581,17 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 	Identifier i = *ident;
 #if 0
 #ifdef TOC_DEBUG
-	if (i->idents->scope != tr->block) {
+	if (i->idents->body != tr->block) {
 		printf("Ident declaration mismatch for this ident:\n");
 		print_location(where);
 		printf("Typer is typing:\n");
 		print_block_location(tr->block);
 		printf("But the identifier's scope is:\n");
-		print_block_location(i->idents->scope);
+		print_block_location(i->idents->body);
 		abort();
 	}
 #else
-	assert(i->idents->scope == tr->block);
+	assert(i->idents->body == tr->block);
 #endif
 #endif
 	Block *b = tr->block;
@@ -602,9 +602,9 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 		if (translated && translated->decl_kind != IDECL_NONE) {
 #if 0
 			printf("translated %s from\n", ident_to_str(i));
-			print_block_location(i->idents->scope);
+			print_block_location(i->idents->body);
 			printf(" to \n");
-			print_block_location(translated->idents->scope);
+			print_block_location(translated->idents->body);
 #endif			
 			i = *ident = translated;
 			break;
@@ -730,11 +730,13 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 	}
 	return true;
 }
-static Status add_block_to_struct(Typer *tr, Block *b, StructDef *s) {
+
+/* new_stmts is what s->body.stmts will become after typing is done */
+static Status add_block_to_struct(Typer *tr, Block *b, StructDef *s, Statement **new_stmts) {
 	arr_foreach(b->stmts, Statement, stmt) {
 		if (stmt->kind == STMT_EXPR) {
 			if (stmt->expr.kind == EXPR_BLOCK) {
-				if (!add_block_to_struct(tr, stmt->expr.block, s))
+				if (!add_block_to_struct(tr, stmt->expr.block, s, new_stmts))
 					return false;
 				continue;
 			}
@@ -755,6 +757,7 @@ static Status add_block_to_struct(Typer *tr, Block *b, StructDef *s) {
 				return false;
 			}
 			*(Declaration **)typer_arr_add(tr, &s->constants) = d;
+			*(Statement *)typer_arr_add(tr, new_stmts) = *stmt;
 		} else {
 			if (flags & DECL_SEMI_CONST) {
 				err_print(d->where, "struct members can't be semi-constant.");
@@ -772,11 +775,13 @@ static Status add_block_to_struct(Typer *tr, Block *b, StructDef *s) {
 				field->type = decl_type_at_index(d, i);
 				++i;
 			}
+			
+			*(Statement *)typer_arr_add(tr, new_stmts) = *stmt;
 		}
-		if (b != &s->scope) {
+		if (b != &s->body) {
 			/* we need to translate d's identifiers to s's scope */
 			arr_foreach(d->idents, Identifier, ip) {
-				Identifier redeclared = ident_get(&s->scope.idents, (*ip)->str);
+				Identifier redeclared = ident_get(&s->body.idents, (*ip)->str);
 				if (redeclared && redeclared->decl_kind != IDECL_NONE) {
 					char *str = ident_to_str(*ip);
 					err_print(d->where, "Redeclaration of struct member %s", str);
@@ -784,7 +789,7 @@ static Status add_block_to_struct(Typer *tr, Block *b, StructDef *s) {
 					free(str);
 					return false;
 				}
-				*ip = ident_translate_forced(*ip, &s->scope.idents);
+				*ip = ident_translate_forced(*ip, &s->body.idents);
 				(*ip)->decl_kind = IDECL_DECL;
 				(*ip)->decl = d;
 			}
@@ -855,13 +860,25 @@ static Status type_resolve(Typer *tr, Type *t, Location where) {
 	case TYPE_STRUCT: {
 		StructDef *s = t->struc;
 		if (!(s->flags & STRUCT_DEF_RESOLVED)) {
-			if (!types_block(tr, &s->scope))
+			if (!types_block(tr, &s->body))
 				return false;
 			s->fields = NULL;
 			s->constants = NULL;
-			if (!add_block_to_struct(tr, &s->scope, s))
+			Statement *new_stmts = NULL;
+			if (!add_block_to_struct(tr, &s->body, s, &new_stmts))
 				return false;
-			
+			s->body.stmts = new_stmts;
+			/* set the field of each declaration, so that we can lookup struct members quickly */
+			Field *field = s->fields;
+			arr_foreach(new_stmts, Statement, stmt) {
+				assert(stmt->kind == STMT_DECL);
+				Declaration *decl = stmt->decl;
+				if (!(decl->flags & DECL_IS_CONST)) {
+					assert(!(decl->flags & DECL_HAS_EXPR));
+					decl->field = field;
+					field += arr_len(decl->idents);
+				}
+			}
 			s->instance_id = 0;
 			s->flags |= STRUCT_DEF_RESOLVED;
 		}
@@ -1484,7 +1501,7 @@ static Status get_struct_constant(StructDef *struc, Identifier member, Expressio
 		err_print(e->where, "To access constants from a parameterized struct, you must supply its arguments.");
 		return false;
 	}
-	Identifier i = ident_translate(member, &struc->scope.idents);
+	Identifier i = ident_translate(member, &struc->body.idents);
 	if (!i || i->decl_kind == IDECL_NONE) {
 		char *member_s = ident_to_str(member);
 		char *struc_s = struc->name ? ident_to_str(struc->name) : "anonymous struct";
@@ -1975,7 +1992,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					info_print(base->struc->where, "struct was declared here.");
 					return false;
 				}
-				Copier cop = copier_create(tr->allocr, base->struc->scope.parent);
+				Copier cop = copier_create(tr->allocr, base->struc->body.parent);
 				HashTable *table = &base->struc->instances;
 				StructDef struc;
 				copy_struct(&cop, &struc, base->struc);
@@ -2002,7 +2019,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					int ident_idx = 0;
 					/* temporarily add this instance to the stack, while we type the decl, in case you, e.g., pass t = float to struct(t::Type, u::t = "hello") */
 					*(Location *)arr_add(&err_ctx->instance_stack) = e->where;
-					typer_block_enter(tr, &struc.scope);
+					typer_block_enter(tr, &struc.body);
 					bool success = types_decl(tr, param);
 					arr_remove_last(&err_ctx->instance_stack);
 					typer_block_exit(tr);
@@ -2068,7 +2085,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					struct_t.struc = &inst->struc;
 					*(Location *)arr_add(&err_ctx->instance_stack) = e->where;
 					Block *prev_block = tr->block;
-					tr->block = &inst->struc.scope;
+					tr->block = &inst->struc.body;
 					bool success = type_resolve(tr, &struct_t, e->where); /* resolve the struct */
 					tr->block = prev_block;
 					arr_remove_last(&err_ctx->instance_stack);
@@ -2965,19 +2982,18 @@ static Status types_expr(Typer *tr, Expression *e) {
 					return false;
 				break;
 			} else if (struct_type->kind == TYPE_STRUCT) {
-				bool is_field = false;
-				arr_foreach(struct_type->struc->fields, Field, f) {
-					if (ident_eq(f->name, rhs->ident)) {
-						is_field = true;
-						*t = *f->type;
-						e->binary.dot.field = f;
-					}
-				}
-				if (!is_field) {
+				StructDef *struc = struct_type->struc;
+				Identifier struct_ident = ident_translate(rhs->ident, &struc->body.idents);
+				if (ident_is_declared(struct_ident)) {
+					assert(struct_ident->decl_kind == IDECL_DECL);
+					Field *field = struct_ident->decl->field;
+					field += ident_index_in_decl(struct_ident, struct_ident->decl);
+					e->binary.dot.field = field;
+				} else {
 					if (!get_struct_constant(struct_type->struc, rhs->ident, e))
 						return false;
-					break;
 				}
+				break;
 			} else if (struct_type->kind == TYPE_SLICE || struct_type->kind == TYPE_ARR || type_is_builtin(struct_type, BUILTIN_VARARGS)) {
 				if (ident_eq_str(rhs->ident, "data") && struct_type->kind == TYPE_SLICE) {
 					/* allow access of slice pointer */

@@ -581,13 +581,13 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 			struc->params = NULL;
 			struc->where = parser_mk_loc(p);
 			struc->where.start = t->token;
-			memset(&struc->scope, 0, sizeof struc->scope);
-			idents_create(&struc->scope.idents, p->allocr, &struc->scope);
+			memset(&struc->body, 0, sizeof struc->body);
+			idents_create(&struc->body.idents, p->allocr, &struc->body);
 			memset(&struc->instances, 0, sizeof struc->instances);
-			struc->scope.parent = p->block;
+			struc->body.parent = p->block;
 			
 			Block *prev_block = p->block;
-			p->block = &struc->scope;
+			p->block = &struc->body;
 			
 			++t->token;
 			if (token_is_kw(t->token, KW_LPAREN)) {
@@ -619,9 +619,9 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 			}
 			
 			p->block = prev_block;
-			if (!parse_block(p, &struc->scope, PARSE_BLOCK_DONT_CREATE_IDENTS))
+			if (!parse_block(p, &struc->body, PARSE_BLOCK_DONT_CREATE_IDENTS))
 				return false;
-			struc->where = struc->scope.where;
+			struc->where = struc->body.where;
 			break;
 			
 		struct_fail:

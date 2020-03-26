@@ -8,6 +8,7 @@
 
 /* 
 TODO:
+make sure that struct["member"] still works
 use
  - use with a decl, e.g. use p : Point;
 simplify eval macros with val_to_u/i64

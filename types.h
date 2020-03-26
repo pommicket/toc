@@ -522,7 +522,12 @@ typedef struct StructDef {
 	
 	Location where;
 	U8 flags;
-	Block scope; /* parameters and constants live here. statements aren't used after resolving (but are kept around because why not) */
+	/* 
+		use this instead of fields when looking up a field, because it will include "use"d things.
+		this only consists of statements which are declarations after typing (and not #ifs,
+		for example)
+	*/
+	Block body;
 	union {
 		HashTable instances;
 		struct {
@@ -888,6 +893,7 @@ typedef struct Declaration {
 	DeclFlags flags;
 	union {
 		Expression expr;
+		Field *field; /* pointer to the field which the first identifier in this decl refers to */
 		struct {
 			union {
 				struct {

@@ -225,3 +225,8 @@ static Location ident_decl_location(File *file, Identifier i) {
 	Location l = {0};
 	return l;
 }
+
+static bool ident_is_declared(Identifier i) {
+	return i && i->decl_kind != IDECL_NONE;
+}
+
