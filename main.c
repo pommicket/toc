@@ -11,6 +11,7 @@ TODO:
 make sure that struct["member"] still works
 use
  - use with a decl, e.g. use p : Point;
+local structs should not be named in C
 simplify eval macros with val_to_u/i64
 &&, ||
 start making a standard library... (printf; stringbuilder would be nice to have)
@@ -180,7 +181,7 @@ int main(int argc, char **argv) {
 	Typer tr;
 	Evaluator ev;
 	evalr_create(&ev, &tr, &main_allocr);
-	typer_create(&tr, &ev, &err_ctx, &main_allocr, &globals);
+	typer_create(&tr, &ev, &file, &err_ctx, &main_allocr, &globals);
 	
 	if (!types_file(&tr, &f)) {
 		err_text_important(&err_ctx, "Errors occured while determining types.\n");

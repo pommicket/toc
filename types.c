@@ -579,27 +579,51 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *t) {
 	t->flags = 0;
 	Identifier i = *ident;
-#if 0
-#ifdef TOC_DEBUG
-	if (i->idents->body != tr->block) {
-		printf("Ident declaration mismatch for this ident:\n");
-		print_location(where);
-		printf("Typer is typing:\n");
-		print_block_location(tr->block);
-		printf("But the identifier's scope is:\n");
-		print_block_location(i->idents->body);
-		abort();
-	}
-#else
-	assert(i->idents->body == tr->block);
-#endif
-#endif
 	Block *b = tr->block;
 	bool undeclared = false;
-	while (1) {
+	UsedExpr *used = arr_last(tr->used);
+	while (1) { /* for each block we are inside... */
 		/* OPTIM: only hash once */
 		Identifier translated = ident_translate(i, b ? &b->idents : tr->globals);
-		if (translated && translated->decl_kind != IDECL_NONE) {
+		if (translated && translated->decl_kind == IDECL_NONE)
+			translated = NULL;
+		Statement *translated_is_from_use_stmt = NULL;
+		while (used && used->scope == b) {
+			/* look up identifier in this used thing. */
+			Statement *stmt = used->stmt;
+			Expression *expr = &stmt->use;
+			Type *type = &expr->type;
+			if (type->kind == TYPE_STRUCT) {
+				/* TODO */
+			} else {
+				assert(type_is_builtin(type, BUILTIN_NMS));
+				assert(expr->kind == EXPR_VAL);
+				Identifier nms_ident = ident_translate(i, &expr->val.nms->body.idents);
+				if (nms_ident && nms_ident->decl_kind != IDECL_NONE) {
+					if (translated) {
+						/* ambiguous ident reference */
+						char *s = ident_to_str(nms_ident);
+						err_print(where, "Ambiguous reference to identifier %s.", s);
+						info_print(stmt->where, "%s was imported from this use statement.", s);
+						info_print(ident_decl_location(tr->file, nms_ident), "Specifically, it was declared here.");
+						/* 
+							we should have given an error about the use statement if it conflicted with a non-used ident,
+							so translated must be from another use stmt.
+						*/
+						assert(translated_is_from_use_stmt);
+						info_print(translated_is_from_use_stmt->where, "...and also imported from *this* use statement.");
+						info_print(ident_decl_location(tr->file, translated), "Specifically, it was also declared here.");
+					}
+					translated = nms_ident;
+					translated_is_from_use_stmt = stmt;
+				}
+			}
+			if (used > tr->used)
+				--used;
+			else
+				used = NULL;
+		}
+		if (translated) {
 #if 0
 			printf("translated %s from\n", ident_to_str(i));
 			print_block_location(i->idents->body);
@@ -3520,13 +3544,14 @@ static Status types_stmt(Typer *tr, Statement *s) {
 	return true;
 }
 
-static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *allocr, Identifiers *idents) {
+static void typer_create(Typer *tr, Evaluator *ev, File *file, ErrCtx *err_ctx, Allocator *allocr, Identifiers *idents) {
 	tr->used = NULL;
 	tr->block = NULL;
 	tr->blocks = NULL;
 	tr->fn = NULL;
 	tr->nms = NULL;
 	tr->evalr = ev;
+	tr->file = file;
 	tr->err_ctx = err_ctx;
 	tr->in_decls = NULL;
 	tr->in_fors = NULL;
