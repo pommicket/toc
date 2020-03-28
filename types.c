@@ -2892,16 +2892,16 @@ static Status types_expr(Typer *tr, Expression *e) {
 				
 				/* replace with BINARY_DOT */
 				e->binary.op = BINARY_DOT;
-				bool is_field = false;
 				if (!eval_expr(tr->evalr, rhs, &field_name)) return false;
-				arr_foreach(lhs_type->struc->fields, Field, f) {
-					if (ident_eq_str(f->name, field_name.slice.data)) {
-						is_field = true;
-						*t = *f->type;
-						e->binary.dot.field = f;
-					}
-				}
-				if (!is_field) {
+
+				/* get the field, if it exists */
+				Identifier ident = ident_get_with_len(&lhs_type->struc->body.idents,
+						field_name.slice.data, (size_t)field_name.slice.n);
+				if (ident_is_declared(ident)) {
+					assert(ident->decl_kind == IDECL_DECL);
+					Field *f = ident->decl->field + ident_index_in_decl(ident, ident->decl);
+					e->binary.dot.field = f;
+				} else {
 					char *fstr = err_malloc((size_t)(field_name.slice.n + 1));
 					memcpy(fstr, field_name.slice.data, (size_t)field_name.slice.n);
 					fstr[field_name.slice.n] = 0; /* null-terminate */
@@ -3013,6 +3013,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					Field *field = struct_ident->decl->field;
 					field += ident_index_in_decl(struct_ident, struct_ident->decl);
 					e->binary.dot.field = field;
+					*t = *field->type;
 				} else {
 					if (!get_struct_constant(struct_type->struc, rhs->ident, e))
 						return false;

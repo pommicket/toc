@@ -1,10 +1,10 @@
-main ::= fn() {
-	Point ::= struct {
-		x: int;
-		y, z: int;
+s ::= fn(t:: Type) Type {
+	struct {
+		m: t;
 	}
-	p: Point;
-	p.x = 6;
-	p.y = 13;
-	p.z = 43902;
+}
+
+main ::= fn() {
+	o: s(int);
+	x := o.m;
 }

@@ -8,7 +8,8 @@
 
 /* 
 TODO:
-make sure that struct["member"] still works
+do we really need StructDef.constants
+all big Statement members should be pointers
 use
  - use with a decl, e.g. use p : Point;
 local structs should not be named in C
