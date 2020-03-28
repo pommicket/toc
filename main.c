@@ -8,8 +8,8 @@
 
 /* 
 TODO:
-all big Statement members should be pointers
 use
+ - note: just keep an array of useds on the block
  - use with a decl, e.g. use p : Point;
 local structs should not be named in C
 simplify eval macros with val_to_u/i64

@@ -581,48 +581,12 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 	Identifier i = *ident;
 	Block *b = tr->block;
 	bool undeclared = false;
-	UsedExpr *used = arr_last(tr->used);
 	while (1) { /* for each block we are inside... */
 		/* OPTIM: only hash once */
 		Identifier translated = ident_translate(i, b ? &b->idents : tr->globals);
 		if (translated && translated->decl_kind == IDECL_NONE)
 			translated = NULL;
-		Statement *translated_is_from_use_stmt = NULL;
-		while (used && used->scope == b) {
-			/* look up identifier in this used thing. */
-			Statement *stmt = used->stmt;
-			Expression *expr = &stmt->use;
-			Type *type = &expr->type;
-			if (type->kind == TYPE_STRUCT) {
-				/* TODO */
-			} else {
-				assert(type_is_builtin(type, BUILTIN_NMS));
-				assert(expr->kind == EXPR_VAL);
-				Identifier nms_ident = ident_translate(i, &expr->val.nms->body.idents);
-				if (nms_ident && nms_ident->decl_kind != IDECL_NONE) {
-					if (translated) {
-						/* ambiguous ident reference */
-						char *s = ident_to_str(nms_ident);
-						err_print(where, "Ambiguous reference to identifier %s.", s);
-						info_print(stmt->where, "%s was imported from this use statement.", s);
-						info_print(ident_decl_location(tr->file, nms_ident), "Specifically, it was declared here.");
-						/* 
-							we should have given an error about the use statement if it conflicted with a non-used ident,
-							so translated must be from another use stmt.
-						*/
-						assert(translated_is_from_use_stmt);
-						info_print(translated_is_from_use_stmt->where, "...and also imported from *this* use statement.");
-						info_print(ident_decl_location(tr->file, translated), "Specifically, it was also declared here.");
-					}
-					translated = nms_ident;
-					translated_is_from_use_stmt = stmt;
-				}
-			}
-			if (used > tr->used)
-				--used;
-			else
-				used = NULL;
-		}
+		/* TODO: use */
 		if (translated) {
 #if 0
 			printf("translated %s from\n", ident_to_str(i));
@@ -759,8 +723,8 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 static Status add_block_to_struct(Typer *tr, Block *b, StructDef *s, Statement **new_stmts) {
 	arr_foreach(b->stmts, Statement, stmt) {
 		if (stmt->kind == STMT_EXPR) {
-			if (stmt->expr.kind == EXPR_BLOCK) {
-				if (!add_block_to_struct(tr, stmt->expr.block, s, new_stmts))
+			if (stmt->expr->kind == EXPR_BLOCK) {
+				if (!add_block_to_struct(tr, stmt->expr->block, s, new_stmts))
 					return false;
 				continue;
 			}
@@ -1719,8 +1683,9 @@ static Status types_expr(Typer *tr, Expression *e) {
 						/* create sub-block #i */
 						memset(stmt, 0, sizeof *stmt);
 						stmt->kind = STMT_EXPR;
-						stmt->expr.kind = EXPR_BLOCK;
-						Block *sub = stmt->expr.block = typer_calloc(tr, 1, sizeof *sub);
+						stmt->expr = typer_calloc(tr, 1, sizeof *stmt->expr);
+						stmt->expr->kind = EXPR_BLOCK;
+						Block *sub = stmt->expr->block = typer_calloc(tr, 1, sizeof *sub);
 						sub->parent = b;
 						idents_create(&sub->idents, tr->allocr, sub);
 						sub->stmts = NULL;
@@ -3175,7 +3140,7 @@ static Status types_block(Typer *tr, Block *b) {
 		}
 		if (s->kind == STMT_EXPR && (s->flags & STMT_EXPR_NO_SEMICOLON)) {
 			/* not voided */
-			Expression *e = &s->expr;
+			Expression *e = s->expr;
 			if (e->type.kind == TYPE_VOID) {
 				if (!(e->kind == EXPR_BLOCK
 					  || e->kind == EXPR_IF
@@ -3374,17 +3339,18 @@ static bool expr_is_usable(Expression *e) {
 static Status types_stmt(Typer *tr, Statement *s) {
 	if (s->flags & STMT_TYPED) return true;
 	switch (s->kind) {
-	case STMT_EXPR:
-		if (!types_expr(tr, &s->expr)) {
+	case STMT_EXPR: {
+		Expression *e = s->expr;
+		if (!types_expr(tr, e)) {
 			return false;
 		}
 
 		if (!(s->flags & STMT_EXPR_NO_SEMICOLON)) {
-			if (s->expr.kind == EXPR_TUPLE) {
+			if (e->kind == EXPR_TUPLE) {
 				err_print(s->where, "Statement of a tuple is not allowed. Use a semicolon instead of a comma here.");
 				return false;
 			}
-			Type *t = &s->expr.type;
+			Type *t = &e->type;
 			if (type_is_compileonly(t)) {
 				char *str = type_to_str(t);
 				warn_print(s->where, "This expression has a compile-only type (%s), so this statement will not actually be outputted in C code.", str);
@@ -3393,24 +3359,25 @@ static Status types_stmt(Typer *tr, Statement *s) {
 		}
 		if (tr->block == NULL) {
 			/* evaluate expression statements at global scope */
-			if (s->expr.kind != EXPR_C) {
+			if (e->kind != EXPR_C) {
 				if (!eval_stmt(tr->evalr, s))
 					return false;
 			}
 		}
-		break;
+	} break;
 	case STMT_DECL:
 		if (!types_decl(tr, s->decl)) {
 			return false;
 		}
 		break;
-	case STMT_RET:
+	case STMT_RET: {
+		Return *r = s->ret;
 		if (!tr->fn) {
 			err_print(s->where, "return outside of a function.");
 			return false;
 		}
-	    s->ret.referring_to = &tr->fn->body;
-		if (s->ret.flags & RET_HAS_EXPR) {
+	    r->referring_to = &tr->fn->body;
+		if (r->flags & RET_HAS_EXPR) {
 			if (tr->fn->ret_type.kind == TYPE_VOID) {
 				err_print(s->where, "Return value in a void function.");
 				return false;
@@ -3419,10 +3386,10 @@ static Status types_stmt(Typer *tr, Statement *s) {
 				err_print(s->where, "Return expression in a function with named return values.");
 				return false;
 			}
-			if (!types_expr(tr, &s->ret.expr))
+			if (!types_expr(tr, &r->expr))
 				return false;
-			if (!type_eq(&tr->fn->ret_type, &s->ret.expr.type)) {
-				char *got = type_to_str(&s->ret.expr.type);
+			if (!type_eq(&tr->fn->ret_type, &r->expr.type)) {
+				char *got = type_to_str(&r->expr.type);
 				char *expected = type_to_str(&tr->fn->ret_type);
 				err_print(s->where, "Returning type %s in function which returns %s.", got, expected);
 				return false;
@@ -3434,26 +3401,27 @@ static Status types_stmt(Typer *tr, Statement *s) {
 				return false;
 			}
 		}
-		break;
+	} break;
 	case STMT_INCLUDE: {
-		char *filename = eval_expr_as_cstr(tr, &s->inc.filename, "import filename");
+		Include *inc = s->inc;
+		char *filename = eval_expr_as_cstr(tr, &inc->filename, "import filename");
 		if (!filename)
 			return false;
 		size_t filename_len = strlen(filename);
 		IncludedFile *inc_f = NULL;
 		if (s->flags & STMT_INC_TO_NMS) {
-			if (!(s->inc.flags & INC_FORCED)) {
+			if (!(inc->flags & INC_FORCED)) {
 				inc_f = str_hash_table_get(&tr->included_files, filename, filename_len);
 				if (inc_f) {
 					tr->nms->body.idents = inc_f->main_nms->body.idents;
 					tr->nms->body.idents.scope = &tr->nms->body;
 					tr->nms->points_to = inc_f->main_nms;
-					s->inc.inc_file = inc_f;
-					s->inc.stmts = inc_f->stmts;
+					inc->inc_file = inc_f;
+					inc->stmts = inc_f->stmts;
 					break;
 				}
 			}
-			s->inc.inc_file = inc_f = str_hash_table_insert(&tr->included_files, filename, filename_len);
+			inc->inc_file = inc_f = str_hash_table_insert(&tr->included_files, filename, filename_len);
 			inc_f->main_nms = tr->nms;
 		}
 		char *contents = read_file_contents(tr->allocr, filename, s->where);
@@ -3479,7 +3447,7 @@ static Status types_stmt(Typer *tr, Statement *s) {
 		if (inc_f) {
 			inc_f->stmts = stmts_inc;
 		}
-		s->inc.stmts = stmts_inc;
+		inc->stmts = stmts_inc;
 		arr_foreach(stmts_inc, Statement, s_incd) {
 			if (!types_stmt(tr, s_incd))
 				return false;
@@ -3487,7 +3455,7 @@ static Status types_stmt(Typer *tr, Statement *s) {
 		
 	} break;
 	case STMT_MESSAGE: {
-		Message *m = &s->message;
+		Message *m = s->message;
 	    char *text = eval_expr_as_cstr(tr, &m->text, "message");
 		if (!text)
 			return false;
@@ -3531,7 +3499,7 @@ static Status types_stmt(Typer *tr, Statement *s) {
 		}
 		break;
 	case STMT_USE: {
-		Expression *e = &s->use;
+		Expression *e = s->use;
 		if (!types_expr(tr, e))
 			return false;
 		if (e->type.kind != TYPE_STRUCT && !type_is_builtin(&e->type, BUILTIN_NMS)) {

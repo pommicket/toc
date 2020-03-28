@@ -2343,13 +2343,14 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 		case KW_RETURN: {
 			s->kind = STMT_RET;
 			++t->token;
-			s->ret.flags = 0;
+			Return *r = s->ret = parser_malloc(p, sizeof *r);
+			r->flags = 0;
 			if (token_is_kw(t->token, KW_SEMICOLON)) {
 				/* return with no expr */
 				++t->token;
 				goto success;
 			}
-			s->ret.flags |= RET_HAS_EXPR;
+			r->flags |= RET_HAS_EXPR;
 			Token *end = expr_find_end(p, 0);
 			if (!end) {
 				while (t->token->kind != TOKEN_EOF) ++t->token; /* move to end of file */
@@ -2360,7 +2361,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				t->token = end->kind == TOKEN_EOF ? end : end + 1;
 				return false;
 			}
-			bool parsed = parse_expr(p, &s->ret.expr, end);
+			bool parsed = parse_expr(p, &r->expr, end);
 			t->token = end + 1;
 			if (!parsed) return false;
 			goto success;
@@ -2403,7 +2404,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 		case KW_USE: {
 			++t->token;
 			s->kind = STMT_USE;
-			if (!parse_expr(p, &s->use, expr_find_end(p, 0)))
+			if (!parse_expr(p, s->use = parser_malloc(p, sizeof *s->use), expr_find_end(p, 0)))
 				return false;
 			goto success;
 		}
@@ -2412,17 +2413,18 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 	} else if (t->token->kind == TOKEN_DIRECT) {
 		switch (t->token->direct) {
 		case DIRECT_INCLUDE: {
+			Include *i = s->inc = parser_malloc(p, sizeof *i);
 			++t->token;
 			s->kind = STMT_INCLUDE;
-			s->inc.flags = 0;
+			i->flags = 0;
 			if (token_is_direct(t->token, DIRECT_FORCE)) {
-				s->inc.flags |= INC_FORCED;
+				i->flags |= INC_FORCED;
 				++t->token;
 			}
-			if (!parse_expr(p, &s->inc.filename, expr_find_end(p, EXPR_CAN_END_WITH_COMMA)))
+			if (!parse_expr(p, &i->filename, expr_find_end(p, EXPR_CAN_END_WITH_COMMA)))
 				return false;
 			if (token_is_kw(t->token, KW_COMMA)) {
-				Expression filename = s->inc.filename;
+				Expression filename = i->filename;
 				++t->token;
 				if (t->token->kind != TOKEN_IDENT) {
 					tokr_err(t, "Expected identifier for #include name (after comma).");
@@ -2461,7 +2463,8 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				inc_stmt->kind = STMT_INCLUDE;
 				inc_stmt->flags = STMT_INC_TO_NMS;
 				inc_stmt->where = s->where;
-				inc_stmt->inc.filename = filename;
+				inc_stmt->inc = parser_calloc(p, 1, sizeof *inc_stmt->inc);
+				inc_stmt->inc->filename = filename;
 			}
 			if (!token_is_kw(t->token, KW_SEMICOLON)) {
 				tokr_err(t, "Expected ; after #include directive");
@@ -2484,7 +2487,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			}
 			++t->token;
 			s->kind = STMT_MESSAGE;
-			Message *m = &s->message;
+			Message *m = s->message = parser_malloc(p, sizeof *m);
 			m->kind = kind;
 			if (!parse_expr(p, &m->text, expr_find_end(p, 0))) {
 				tokr_skip_semicolon(t);
@@ -2514,7 +2517,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			tokr_skip_to_eof(t);
 			return false;
 		}
-		bool valid = parse_expr(p, &s->expr, end);
+		bool valid = parse_expr(p, s->expr = parser_malloc(p, sizeof *s->expr), end);
 		
 		/* go past end of expr regardless of whether successful or not */
 		if (token_is_kw(end, KW_SEMICOLON)) {
@@ -2852,27 +2855,29 @@ static void fprint_stmt(FILE *out, Statement *s) {
 		fprintf(out, ";\n");
 		break;
 	case STMT_EXPR:
-		fprint_expr(out, &s->expr);
+		fprint_expr(out, s->expr);
 		fprintf(out, ";\n");
 		break;
-	case STMT_RET:
+	case STMT_RET: {
+		Return *r = s->ret;
 		fprintf(out, "return ");
-		if (s->ret.flags & RET_HAS_EXPR)
-			fprint_expr(out, &s->ret.expr);
+		if (r->flags & RET_HAS_EXPR)
+			fprint_expr(out, &r->expr);
 		fprintf(out, ";\n");
-		break;
-	case STMT_INCLUDE:
+	} break;
+	case STMT_INCLUDE: {
+		Include *i = s->inc;
 		if (s->flags & STMT_TYPED) {
-			arr_foreach(s->inc.stmts, Statement, sub)
+			arr_foreach(i->stmts, Statement, sub)
 				fprint_stmt(out, sub);
 		} else {
 			fprintf(out, "#include ");
-			fprint_expr(out, &s->inc.filename);
+			fprint_expr(out, &i->filename);
 			fprintf(out, ";\n");
 		}
-		break;
+	} break;
 	case STMT_MESSAGE: {
-		Message *m = &s->message;
+		Message *m = s->message;
 		switch (m->kind) {
 		case MESSAGE_ERROR:
 			fprintf(out, "#error ");
@@ -2897,7 +2902,7 @@ static void fprint_stmt(FILE *out, Statement *s) {
 		break;
 	case STMT_USE:
 		fprintf(out, "use ");
-		fprint_expr(out, &s->use);
+		fprint_expr(out, s->use);
 		break;
 	}
 }

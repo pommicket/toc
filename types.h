@@ -983,13 +983,13 @@ typedef struct Statement {
 	U8 flags;
 	union {
 		Declaration *decl; /* we want the pointer to be fixed so that we can refer to it from an identifier */
-		Expression expr;
-		Return ret;
-		Include inc;
-		Message message; /* #error, #warn, #info */
+		Expression *expr;
+		Return *ret;
+		Include *inc;
+		Message *message; /* #error, #warn, #info */
 		Block *referring_to; /* for break/continue; set during typing */
 		struct Statement *defer;
-		Expression use;
+		Expression *use;
 	};
 } Statement;
 

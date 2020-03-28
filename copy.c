@@ -405,28 +405,34 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 	*out = *in;
 	switch (in->kind) {
 	case STMT_RET:
-		if (in->ret.flags & RET_HAS_EXPR)
-			copy_expr(c, &out->ret.expr, &in->ret.expr);
+		out->ret = copier_malloc(c, sizeof *out->ret);
+		*out->ret = *in->ret;
+		if (in->ret->flags & RET_HAS_EXPR)
+			copy_expr(c, &out->ret->expr, &in->ret->expr);
 		break;
 	case STMT_INCLUDE:
+		out->inc = copier_malloc(c, sizeof *out->inc);
+		*out->inc = *in->inc;
 		if (in->flags & STMT_TYPED) {
-			size_t nstmts = arr_len(in->inc.stmts);
-			arr_set_lena(&out->inc.stmts, nstmts, c->allocr);
+			size_t nstmts = arr_len(in->inc->stmts);
+			arr_set_lena(&out->inc->stmts, nstmts, c->allocr);
 			for (size_t i = 0; i < nstmts; ++i) {
-				copy_stmt(c, &out->inc.stmts[i], &in->inc.stmts[i]);
+				copy_stmt(c, &out->inc->stmts[i], &in->inc->stmts[i]);
 			}
 		} else {
-			copy_expr(c, &out->inc.filename, &in->inc.filename);
+			copy_expr(c, &out->inc->filename, &in->inc->filename);
 		}
 		break;
 	case STMT_EXPR:
-		copy_expr(c, &out->expr, &in->expr);
+		out->expr = copy_expr_(c, in->expr);
 		break;
 	case STMT_DECL:
 		copy_decl(c, out->decl = allocr_malloc(c->allocr, sizeof *out->decl), in->decl);
 		break;
 	case STMT_MESSAGE:
-		copy_expr(c, &out->message.text, &in->message.text);
+		out->message = copier_malloc(c, sizeof *out->message);
+		*out->message = *in->message;
+		copy_expr(c, &out->message->text, &in->message->text);
 		break;
 	case STMT_DEFER:
 		copy_stmt(c, out->defer = allocr_malloc(c->allocr, sizeof *out->defer), in->defer);
@@ -435,7 +441,7 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 	case STMT_CONT:
 		break;
 	case STMT_USE:
-		copy_expr(c, &out->use, &in->use);
+		out->use = copy_expr_(c, in->use);
 		break;
 	}
 }

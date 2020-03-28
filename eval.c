@@ -1673,17 +1673,19 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 		break;
 	case STMT_EXPR: {
 		Value unused;
-		if (!eval_expr(ev, &stmt->expr, &unused))
+		if (!eval_expr(ev, stmt->expr, &unused))
 			return false;
 	} break;
 	case STMT_RET: {
-		if (stmt->ret.flags & RET_HAS_EXPR) {
-			Value r;
-			if (!eval_expr(ev, &stmt->ret.expr, &r))
+		Return *r = stmt->ret;
+
+		if (r->flags & RET_HAS_EXPR) {
+			Value v;
+			if (!eval_expr(ev, &r->expr, &v))
 				return false;
-			copy_val(NULL, &ev->ret_val, r, &stmt->ret.expr.type);
+			copy_val(NULL, &ev->ret_val, v, &r->expr.type);
 		}
-		ev->returning = stmt->ret.referring_to;
+		ev->returning = r->referring_to;
 	} break;
 	case STMT_BREAK:
 		ev->returning = stmt->referring_to;
@@ -1694,8 +1696,9 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 		ev->is_break = false;
 		break;
 	case STMT_INCLUDE: {
-		Statement *last_reached = arr_last(stmt->inc.stmts);
-		arr_foreach(stmt->inc.stmts, Statement, sub) {
+		Include *i = stmt->inc;
+		Statement *last_reached = arr_last(i->stmts);
+		arr_foreach(i->stmts, Statement, sub) {
 			if (!eval_stmt(ev, sub))
 				return false;
 			if (ev->returning) {
@@ -1703,7 +1706,7 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 				break;
 			}
 		}
-		eval_exit_stmts(stmt->inc.stmts, last_reached);
+		eval_exit_stmts(i->stmts, last_reached);
 	} break;
 	case STMT_MESSAGE:
 		break;
