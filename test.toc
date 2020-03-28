@@ -1,10 +1,12 @@
 s ::= fn(t:: Type) Type {
 	struct {
+		c :: t = 7 as t;
 		m: t;
 	}
 }
 
 main ::= fn() {
 	o: s(int);
-	x := o.m;
+	x := o["m"];
+	y ::= o["c"];
 }

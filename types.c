@@ -780,7 +780,6 @@ static Status add_block_to_struct(Typer *tr, Block *b, StructDef *s, Statement *
 				err_print(d->where, "struct members can't be inferred.");
 				return false;
 			}
-			*(Declaration **)typer_arr_add(tr, &s->constants) = d;
 			*(Statement *)typer_arr_add(tr, new_stmts) = *stmt;
 		} else {
 			if (flags & DECL_SEMI_CONST) {
@@ -887,7 +886,6 @@ static Status type_resolve(Typer *tr, Type *t, Location where) {
 			if (!types_block(tr, &s->body))
 				return false;
 			s->fields = NULL;
-			s->constants = NULL;
 			Statement *new_stmts = NULL;
 			if (!add_block_to_struct(tr, &s->body, s, &new_stmts))
 				return false;
@@ -2889,9 +2887,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 					return false;
 				}
 				Value field_name;
-				
-				/* replace with BINARY_DOT */
-				e->binary.op = BINARY_DOT;
 				if (!eval_expr(tr->evalr, rhs, &field_name)) return false;
 
 				/* get the field, if it exists */
@@ -2899,8 +2894,21 @@ static Status types_expr(Typer *tr, Expression *e) {
 						field_name.slice.data, (size_t)field_name.slice.n);
 				if (ident_is_declared(ident)) {
 					assert(ident->decl_kind == IDECL_DECL);
-					Field *f = ident->decl->field + ident_index_in_decl(ident, ident->decl);
-					e->binary.dot.field = f;
+					Declaration *decl = ident->decl;
+					if (decl->flags & DECL_IS_CONST) {
+						/* replace with value of struct constant */
+						e->kind = EXPR_VAL;
+						assert(decl->flags & DECL_FOUND_VAL);
+						int idx = ident_index_in_decl(ident, decl);
+						*t = *decl_type_at_index(decl, idx);
+						copy_val(tr->allocr, &e->val, *decl_val_at_index(decl, idx), t);
+					} else {
+						/* replace with BINARY_DOT */
+						e->binary.op = BINARY_DOT;
+						Field *f = decl->field + ident_index_in_decl(ident, decl);
+						e->binary.dot.field = f;
+						*t = *f->type;
+					}
 				} else {
 					char *fstr = err_malloc((size_t)(field_name.slice.n + 1));
 					memcpy(fstr, field_name.slice.data, (size_t)field_name.slice.n);

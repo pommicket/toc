@@ -518,7 +518,6 @@ enum {
 typedef struct StructDef {
 	/* these two only exist after resolving (before then, it's scope.stmts) */
 	Field *fields;
-	struct Declaration **constants;
 	
 	Location where;
 	U8 flags;

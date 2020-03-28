@@ -25,5 +25,16 @@ main ::= fn() {
 		a[1] = y;
 		a[2] = z;
 	};
+	
 
+	s ::= struct {
+		foo, e: int;
+		bar ::= 3;
+		baz: float;
+	}
+
+	p: s;
+	p.e = 100;
+	io.puti(p["bar"]);
+	io.puti(p["e"]);
 };

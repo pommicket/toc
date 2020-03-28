@@ -107,13 +107,6 @@ static void copy_struct(Copier *c, StructDef *out, StructDef *in) {
 			*fout = *fin;
 			fout->type = copy_type_(c, fin->type);
 		}
-		out->constants = NULL;
-		size_t nconstants = arr_len(in->constants);
-		arr_set_lena(&out->constants, nconstants, c->allocr);
-		for (size_t i = 0; i < nconstants; ++i) {
-			copy_decl(c, out->constants[i] = allocr_malloc(c->allocr, sizeof *out->constants[i]), 
-				in->constants[i]);
-		}
 	}
 	size_t nparams = arr_len(in->params);
 	out->params = NULL;
