@@ -25,7 +25,7 @@ For more information, please refer to <http://unlicense.org/>
 */
 /* NOTE: make sure you edit copy.c and cgen_recurse_subexprs/types when you make a change to expression-related types or type-related types in this file! */
 
-typedef long double Floating; /* OPTIM: Switch to double, but make sure floating-point literals are right */
+typedef double Floating;
 
 
 #if __STDC_VERSION__ >= 199901 || defined _MSC_VER
@@ -366,7 +366,6 @@ typedef struct {
 	U32 end; /* exclusive */
 } SourcePos;
 
-/* NOTE: Location is typedef'd in util/err.c */
 typedef struct Token {
 	TokenKind kind;
 	SourcePos pos;
