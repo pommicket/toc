@@ -25,6 +25,10 @@ switch to / add as an alternative: libffi
 X ::= newtype(int); or something
 any odd number of "s for a string
 ---
+make sure that floating point literals are exact as possible
+	have some way of doing Infinity and s/qNaN (you can
+	have them be in std/math.toc)
+once you have a bunch of test code, try making more Expression members pointers
 error on x ::= {return; 3}
 #returns_code (struct body is a block, to be evaluated at compile time, which returns the actual statements)
 	- struct varargs
