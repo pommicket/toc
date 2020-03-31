@@ -384,12 +384,13 @@ typedef struct {
 	ErrCtx *ctx;
 	const char *filename;
 	char *contents;
+	Token *tokens;
 } File;
 
 typedef struct Location {
 	File *file;
-	Token *start;
-	Token *end; /* Exclusive */
+	U32 start; /* index of first token */
+	U32 end; /* index of one past last token */
 } Location;
 
 

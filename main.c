@@ -12,6 +12,7 @@ use
  - note: just keep an array of useds on the block
  - use with a decl, e.g. use p : Point;
 local structs should not be named in C
+for some reason forgetting a ; after #include causes a misleading unrecognized expression
 simplify eval macros with val_to_u/i64
 &&, ||
 start making a standard library... (printf; stringbuilder would be nice to have)

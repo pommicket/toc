@@ -304,10 +304,22 @@ static char *type_to_str(Type *t) {
 	return ret;
 }
 
+/* defaults start to wherever we are now */
 static inline Location parser_mk_loc(Parser *p) {
 	Location loc = {0};
 	loc.file = p->file;
+	assert(p->file->tokens == p->tokr->tokens);
+	loc.start = (U32)(p->tokr->token - p->tokr->tokens);
 	return loc;
+}
+
+static inline void parser_set_end_to_token(Parser *p, Location *l, Token *t) {
+	l->end = (U32)(t - p->tokr->tokens);
+	assert(p->file == l->file);
+}
+
+static inline void parser_put_end(Parser *p, Location *l) {
+	parser_set_end_to_token(p, l, p->tokr->token);
 }
 
 static inline void *parser_arr_add_(Parser *p, void **a, size_t sz) {
@@ -437,7 +449,6 @@ static Status parse_args(Parser *p, Argument **args) {
 			}
 			Argument *arg = parser_arr_add(p, args);
 			arg->where = parser_mk_loc(p);
-			arg->where.start = t->token;
 			/* named arguments */
 			if (t->token->kind == TOKEN_IDENT && token_is_kw(t->token + 1, KW_EQ)) {
 				arg->name = t->token->ident;
@@ -448,7 +459,7 @@ static Status parse_args(Parser *p, Argument **args) {
 			if (!parse_expr(p, &arg->val, expr_find_end(p, EXPR_CAN_END_WITH_COMMA))) {
 				return false;
 			}
-			arg->where.end = t->token;
+			parser_put_end(p, &arg->where);
 			
 			if (token_is_kw(t->token, KW_RPAREN))
 				break;
@@ -481,7 +492,6 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 	Tokenizer *t = p->tokr;
 	if (where) {
 		*where = parser_mk_loc(p);
-		where->start = t->token;
 	}
 	type->flags = 0;
 	switch (t->token->kind) {
@@ -580,7 +590,6 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 			struc->c.id = 0;
 			struc->params = NULL;
 			struc->where = parser_mk_loc(p);
-			struc->where.start = t->token;
 			memset(&struc->body, 0, sizeof struc->body);
 			idents_create(&struc->body.idents, p->allocr, &struc->body);
 			memset(&struc->instances, 0, sizeof struc->instances);
@@ -645,7 +654,7 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 		} break;
 	}
 	if (where)
-		where->end = t->token;
+		parser_put_end(p, where);
 	return true;
 	
 }
@@ -799,9 +808,9 @@ static Status parse_block(Parser *p, Block *b, U8 flags) {
 		return false;
 	}
 	b->where = parser_mk_loc(p);
-	b->where.start = t->token;
 #ifdef TOC_DEBUG
-	b->where.end = t->token + 1;
+	/* temporary, so we can still print the location of the block while we're parsing it. */
+	parser_set_end_to_token(p, &b->where, t->token + 1);
 #endif
 	++t->token;	/* move past { */
 	b->stmts = NULL;
@@ -829,8 +838,8 @@ static Status parse_block(Parser *p, Block *b, U8 flags) {
 			
 		}
 	}
-	b->where.end = t->token;
 	++t->token;	/* move past } */
+	parser_put_end(p, &b->where);
  end:
 	p->block = prev_block;
 	return ret;
@@ -1190,7 +1199,6 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 	e->type.flags = 0;
 	if (end == NULL) return false;
 	e->where = parser_mk_loc(p);
-	e->where.start = t->token;
 	if (end <= t->token) {
 		tokr_err(t, "Empty expression.");
 		return false;
@@ -1320,7 +1328,6 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					next->flags = 0;
 					next->kind = EXPR_IF;
 					next->where = parser_mk_loc(p);
-					next->where.start = t->token;
 					curr->next_elif = next;
 					IfExpr *nexti = next->if_ = parser_malloc(p, sizeof *nexti);
 					nexti->flags = 0;
@@ -1344,7 +1351,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 						nexti->cond = cond;
 						if (!parse_block(p, &nexti->body, 0)) return false;
 					}
-					next->where.end = t->token;
+					parser_put_end(p, &next->where);
 					curr = nexti;
 				}
 				goto success;
@@ -1482,7 +1489,6 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					err_print(token_location(p->file, first_end), "Expected { or .. to follow expression in for statement.");
 					goto for_fail;
 				}
-				e->where.end = t->token; /* temporarily set end so that redeclaration errors aren't messed up */
 				p->block = prev_block;
 				if (!parse_block(p, &fo->body, PARSE_BLOCK_DONT_CREATE_IDENTS))
 					goto for_fail;
@@ -1499,8 +1505,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			FnExpr *fn = e->fn = parser_calloc(p, 1, sizeof *e->fn);
 			fn->flags |= FN_EXPR_FOREIGN;
 			fn->foreign.fn_ptr = 0;
-			fn->where.start = t->token;
-			fn->where.file = p->file;
+			fn->where = parser_mk_loc(p);
 			++t->token;
 			if (!token_is_kw(t->token, KW_LPAREN)) {
 				tokr_err(t, "Expected ( following #foreign.");
@@ -1573,7 +1578,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				if (!parse_c_type(p, ret_ctype, ret_type))
 					return false;
 			}
-			fn->where.end = t->token;
+			parser_put_end(p, &fn->where);
 			return true;
 		}
 
@@ -1691,9 +1696,10 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				return false;
 			}
 			Token *new_end = end - 1; /* parse to ending ) */
+			U32 start_idx = e->where.start;
 			if (!parse_expr(p, e, new_end))
 				return false;
-			e->where.start = start; /* make sure we keep e->where.start intact */
+			e->where.start = start_idx; /* make sure we keep e->where.start intact */
 			++t->token;	/* move past closing ) */
 			goto success;
 		}
@@ -2107,7 +2113,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 		}
 	}
  success:
-	e->where.end = t->token;
+	parser_put_end(p, &e->where);
 	if (t->token != end) {
 		tokr_err(t, "Did not expect this stuff after expression. Did you forget a semicolon?");
 		return false;
@@ -2135,7 +2141,6 @@ static inline bool ends_decl(Token *t, DeclEndKind ends_with) {
 static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 flags) {
 	Tokenizer *t = p->tokr;
 	d->where = parser_mk_loc(p);
-	d->where.start = t->token;
 	d->idents = NULL;
 	d->flags = 0;
 	d->val_stack = NULL;
@@ -2289,14 +2294,8 @@ static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 f
 		goto ret_false;
 	}
 	
-	d->where.end = t->token;
-	switch (ends_with) {
-	case DECL_END_RPAREN_COMMA:
-	case DECL_END_LBRACE_COMMA:
-		--d->where.end; /* don't include the ) / { as part of the declaration */
-	case DECL_END_SEMICOLON: break;
-	}
-	
+	parser_put_end(p, &d->where);
+
 	return true;
 	
  ret_false:
@@ -2331,7 +2330,6 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 		return false;
 	}
 	s->where = parser_mk_loc(p);
-	s->where.start = t->token;
 	s->flags = 0;
 	*was_a_statement = true;
 	if (t->token->kind == TOKEN_KW) {
@@ -2433,12 +2431,12 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				}
 				Identifier ident = parser_ident_insert(p, t->token->ident);
 				++t->token;
-				s->where.end = t->token;
 				/* this isn't actually a STMT_INCLUDE, but a STMT_DECL! */
 				/* replace #include "io.toc", io => io ::= nms { #include "io.toc"; } */
 				s->kind = STMT_DECL;
 				Declaration *d = s->decl = parser_calloc(p, 1, sizeof *d);
 				d->where = s->where;
+				parser_put_end(p, &d->where); /* we haven't set s->where.end, so... */
 				d->flags |= DECL_HAS_EXPR|DECL_IS_CONST;
 				*(Identifier *)parser_arr_add(p, &d->idents) = ident;
 				
@@ -2530,7 +2528,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 		if (!valid) return false;
 	}
  success:
-	s->where.end = t->token;
+	parser_put_end(p, &s->where);
 	return true;
 }
 

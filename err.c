@@ -71,15 +71,19 @@ static void print_pos_highlight(FILE *out, ErrCtx *ctx, File *file, U32 start_po
 
 static void print_location_highlight(FILE *out, Location where) {
 	if (where.start) {
-		ErrCtx *ctx = where.file->ctx;
-		print_pos_highlight(out, ctx, where.file, where.start->pos.start, where.end[-1].pos.end);
+		File *f = where.file;
+		ErrCtx *ctx = f->ctx;
+		Token *first = &f->tokens[where.start];
+		Token *last = &f->tokens[where.end-1];
+		print_pos_highlight(out, ctx, f, first->pos.start, last->pos.end);
 	}
 	
 }
 
 /* for debugging */
 static void fprint_location(FILE *out, Location location) {
-	fprintf(out, "Line %ld of %s: ", (long)location.start->pos.line, location.file->filename);
+	File *f = location.file;
+	fprintf(out, "Line %ld of %s: ", (long)f->tokens[location.start].pos.line, f->filename);
 	print_location_highlight(out, location);
 }
 
@@ -141,8 +145,9 @@ static void err_vfprint(ErrCtx *ctx, const char *fmt, va_list args) {
 }
 
 static void err_print_line_file(Location where) {
-	ErrCtx *ctx = where.file->ctx;
-	err_fprint(ctx, " at line %lu of %s:\n", (unsigned long)where.start->pos.line, where.file->filename);
+	File *f = where.file;
+	ErrCtx *ctx = f->ctx;
+	err_fprint(ctx, " at line %lu of %s:\n", (unsigned long)f->tokens[where.start].pos.line, f->filename);
 }
 
 static void err_print_header_(Location where) {

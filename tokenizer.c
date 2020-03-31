@@ -162,8 +162,8 @@ static int tokr_esc_seq(Tokenizer *t) {
 
 static Location token_location(File *file, Token *t) {
 	Location loc;
-	loc.start = t;
-	loc.end = t + 1;
+	loc.start = (U32)(t - file->tokens);
+	loc.end = loc.start + 1;
 	loc.file = file;
 	return loc;
 }
@@ -568,6 +568,7 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 	token->kind = TOKEN_EOF;
 	
 	t->token = t->tokens;
+	file->tokens = t->tokens;
 	return !has_err;
 }
 

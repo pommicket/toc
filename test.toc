@@ -1,8 +1,15 @@
+#include "std/io.toc";
+
 s ::= fn(t:: Type) Type {
 	struct {
 		c :: t = 7 as t;
 		m: t;
 	}
+}
+puti ::= fn() {
+}
+
+puti ::= fn()  {
 }
 
 main ::= fn() {
