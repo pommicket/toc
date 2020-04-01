@@ -70,14 +70,11 @@ static void print_pos_highlight(FILE *out, ErrCtx *ctx, File *file, U32 start_po
 }
 
 static void print_location_highlight(FILE *out, Location where) {
-	if (where.start) {
-		File *f = where.file;
-		ErrCtx *ctx = f->ctx;
-		Token *first = &f->tokens[where.start];
-		Token *last = &f->tokens[where.end-1];
-		print_pos_highlight(out, ctx, f, first->pos.start, last->pos.end);
-	}
-	
+	File *f = where.file;
+	ErrCtx *ctx = f->ctx;
+	Token *first = &f->tokens[where.start];
+	Token *last = &f->tokens[where.end-1];
+	print_pos_highlight(out, ctx, f, first->pos.start, last->pos.end);
 }
 
 /* for debugging */

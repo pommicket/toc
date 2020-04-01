@@ -1002,8 +1002,8 @@ static Identifier parser_ident_insert(Parser *p, char *str) {
 
 static Status check_ident_redecl(Parser *p, Identifier i) {
 	Tokenizer *t = p->tokr;
-	if (i->idents == &p->block->idents) {
-		if (i->decl_kind != IDECL_NONE) {
+	if (i->idents == (p->block ? &p->block->idents : p->globals)) { /* in the same scope */
+		if (i->decl_kind != IDECL_NONE) { /* declared */
 			char *s = ident_to_str(i);
 			tokr_err(t, "Redeclaration of identifier %s.", s);
 			info_print(ident_decl_location(p->file, i), "Previous declaration was here.");
