@@ -2403,7 +2403,8 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 		case KW_USE: {
 			++t->token;
 			s->kind = STMT_USE;
-			if (!parse_expr(p, s->use = parser_malloc(p, sizeof *s->use), expr_find_end(p, 0)))
+			s->use = parser_malloc(p, sizeof *s->use);
+			if (!parse_expr(p, &s->use->expr, expr_find_end(p, 0)))
 				return false;
 			goto success;
 		}
@@ -2901,7 +2902,7 @@ static void fprint_stmt(FILE *out, Statement *s) {
 		break;
 	case STMT_USE:
 		fprintf(out, "use ");
-		fprint_expr(out, s->use);
+		fprint_expr(out, &s->use->expr);
 		break;
 	}
 }

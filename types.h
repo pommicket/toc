@@ -512,7 +512,7 @@ typedef struct Block {
 	struct Expression *ret_expr; /* the return expression of this block, e.g. {foo(); 3} => 3  NULL for no expression. */
 	struct Block *parent;
 	struct Statement **deferred; /* deferred stuff from this block; used by both eval and cgen */
-	struct Statement **used; /* use statements (for types.c) */
+	struct Use **uses; /* use statements (for types.c) */
 } Block;
 
 enum {
@@ -979,6 +979,11 @@ typedef struct {
 	Expression text;
 } Message;
 
+typedef struct Use {
+	Expression expr;
+} Use;
+typedef Use *UsePtr;
+
 enum {
 	STMT_EXPR_NO_SEMICOLON = 0x01,
 	STMT_INC_TO_NMS = 0x01,
@@ -996,7 +1001,7 @@ typedef struct Statement {
 		Message *message; /* #error, #warn, #info */
 		Block *referring_to; /* for break/continue; set during typing */
 		struct Statement *defer;
-		Expression *use;
+		Use *use;
 	};
 } Statement;
 
@@ -1049,6 +1054,7 @@ typedef struct Typer {
 	Allocator *allocr;
 	Evaluator *evalr;
 	Identifiers *globals;
+	Use **uses; /* global used things */
 	ForExpr **in_fors; /* array of for loop headers we are currently inside */
 	Declaration **in_decls; /* array of declarations we are currently inside */
 	Block *block;

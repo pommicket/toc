@@ -441,7 +441,9 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 	case STMT_CONT:
 		break;
 	case STMT_USE:
-		out->use = copy_expr_(c, in->use);
+		out->use = copier_malloc(c, sizeof *in->use);
+		*out->use = *in->use;
+		copy_expr(c, &out->use->expr, &in->use->expr);
 		break;
 	}
 }

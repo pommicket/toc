@@ -1,4 +1,11 @@
 #include "std/io.toc";
-puti ::= fn()  {
-}
 
+x ::= 3;
+
+
+main ::= fn() {
+	p ::= nms {
+		y := 5;
+	}
+	puti(p.x);
+}

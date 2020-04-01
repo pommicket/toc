@@ -2168,7 +2168,7 @@ static void cgen_defs_stmt(CGenerator *g, Statement *s) {
 		cgen_defs_stmt(g, s->defer);
 		break;
 	case STMT_USE:
-		cgen_defs_expr(g, s->use);
+		cgen_defs_expr(g, &s->use->expr);
 		break;
 	}
 }

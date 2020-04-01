@@ -534,6 +534,7 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 		}
 	}
 	if (!generic) {
+		f->body.uses = NULL;
 		if (!type_resolve(tr, &f->ret_type, f->where)) {
 			success = false;
 			goto ret;
@@ -580,14 +581,11 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 	t->flags = 0;
 	Identifier i = *ident;
 	Block *b = tr->block;
-	bool undeclared = false;
+	bool undeclared = true;
 	while (1) { /* for each block we are inside... */
 		/* OPTIM: only hash once */
 		Identifier translated = ident_translate(i, b ? &b->idents : tr->globals);
-		if (translated && translated->decl_kind == IDECL_NONE)
-			translated = NULL;
-		/* TODO: use */
-		if (translated) {
+		if (ident_is_declared(translated)) {
 #if 0
 			printf("translated %s from\n", ident_to_str(i));
 			print_block_location(i->idents->body);
@@ -595,12 +593,29 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 			print_block_location(translated->idents->body);
 #endif			
 			i = *ident = translated;
-			break;
+			undeclared = false;
 		}
+		Use **uses = b ? b->uses : tr->uses;
+
+		Use *previous_use_which_uses_i = NULL;
+		(void)previous_use_which_uses_i;
+		arr_foreach(uses, UsePtr, usep) {
+			Use *use = *usep;
+			Expression *e = &use->expr;
+			if (type_is_builtin(&e->type, BUILTIN_NMS)) {
+				
+			} else {
+				/* it's a struct */
+				Type *struct_type = &e->type;
+				if (struct_type->kind == TYPE_PTR)
+					struct_type = struct_type->ptr;
+				assert(struct_type->kind == TYPE_STRUCT);
+			}
+		}
+		if (!undeclared) break;
 		if (b) {
 			b = b->parent;
 		} else {
-			undeclared = true;
 			break;
 		}
 	}
@@ -1570,6 +1585,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		ForExpr *fo = e->for_;
 		bool in_header = true;
 		*(ForExpr **)typer_arr_add(tr, &tr->in_fors) = fo;
+		fo->body.uses = NULL;
 		typer_block_enter(tr, &fo->body); /* while this block is being typed, fo->body will be in tr->blocks twice. hopefully that doesn't mess anything up! */
 		if (fo->flags & FOR_IS_RANGE) {
 			if (!types_expr(tr, fo->range.from)) goto for_fail;
@@ -3132,6 +3148,10 @@ static Status types_block(Typer *tr, Block *b) {
 	}
 	b->flags |= BLOCK_FINDING_TYPES;
 	
+	/* for and fn need to deal with their own useds, because you can use stuff in the header */
+	if (b->kind != BLOCK_FOR && b->kind != BLOCK_FN)
+		b->uses = NULL;
+	
 	typer_block_enter(tr, b);
 	bool success = true;
 	arr_foreach(b->stmts, Statement, s) {
@@ -3499,7 +3519,8 @@ static Status types_stmt(Typer *tr, Statement *s) {
 		}
 		break;
 	case STMT_USE: {
-		Expression *e = s->use;
+		Use *u = s->use;
+		Expression *e = &u->expr;
 		if (!types_expr(tr, e))
 			return false;
 		if (e->type.kind != TYPE_STRUCT && !type_is_builtin(&e->type, BUILTIN_NMS)) {
@@ -3512,8 +3533,8 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			err_print(e->where, "You can't use this value. You should probably assign it to a variable.");
 			return false;
 		}
-		Statement **sp = arr_add(&tr->block->used);
-		*sp = s;
+		Use **up = arr_add(&tr->block->uses);
+		*up = u;
 	} break;
 	}
 	s->flags |= STMT_TYPED;
@@ -3539,11 +3560,13 @@ static void typer_create(Typer *tr, Evaluator *ev, File *file, ErrCtx *err_ctx, 
 static Status types_file(Typer *tr, ParsedFile *f) {
 	bool ret = true;
 	tr->parsed_file = f;
+	tr->uses = NULL;
 	arr_foreach(f->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {
 			ret = false;
 		}
 	}
 	assert(tr->block == NULL);
+	assert(arr_len(tr->blocks) && tr->blocks[0] == NULL);
 	return ret;
 }
