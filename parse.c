@@ -797,6 +797,7 @@ static Status parse_block(Parser *p, Block *b, U8 flags) {
 	Tokenizer *t = p->tokr;
 	Block *prev_block = p->block;
 	b->flags = 0;
+	b->kind = BLOCK_OTHER;
 	b->ret_expr = NULL;
 	assert(p->block != b);
 	b->parent = p->block;
@@ -947,7 +948,7 @@ static Status parse_fn_expr(Parser *p, FnExpr *f) {
 	if (!parse_block(p, &f->body, PARSE_BLOCK_DONT_CREATE_IDENTS))
 		success = false;
  ret:
-	f->body.flags |= BLOCK_IS_FN;
+	f->body.kind = BLOCK_FN;
 	p->block = prev_block;
 	return success;
 }
@@ -1378,7 +1379,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 						return false;
 				}
 				if (!parse_block(p, &w->body, 0)) return false;
-				w->body.flags |= BLOCK_IS_LOOP;
+				w->body.kind = BLOCK_WHILE;
 				goto success;
 			}
 			case KW_FOR: {
@@ -1492,7 +1493,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				p->block = prev_block;
 				if (!parse_block(p, &fo->body, PARSE_BLOCK_DONT_CREATE_IDENTS))
 					goto for_fail;
-				fo->body.flags |= BLOCK_IS_LOOP;
+				fo->body.kind = BLOCK_FOR;
 				goto success;
 				for_fail:
 				p->block = prev_block;
@@ -2453,7 +2454,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				e->where = s->where;
 				e->nms->associated_ident = ident;
 				Block *body = &e->nms->body;
-				body->flags |= BLOCK_IS_NMS;
+				body->kind = BLOCK_NMS;
 				body->where = s->where;
 				body->parent = p->block;
 				idents_create(&body->idents, p->allocr, body);

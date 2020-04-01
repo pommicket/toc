@@ -256,7 +256,7 @@ static inline void cgen_writeln(CGenerator *g, const char *fmt, ...) {
 
 /* should this declaration be a direct function declaration C? (as opposed to using a function pointer or not being a function) */
 static bool cgen_fn_is_direct(CGenerator *g, Declaration *d) {
-	return (g->block == NULL || (g->block->flags & BLOCK_IS_NMS)) && (d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_FN && arr_len(d->idents) == 1;
+	return g->fn == NULL && (d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_FN && arr_len(d->idents) == 1;
 }
 
 static bool fn_has_instances(FnExpr *f) {

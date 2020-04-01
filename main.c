@@ -8,9 +8,11 @@
 
 /* 
 TODO:
+figure out why we're not getting redecl errors
 use
  - note: just keep an array of useds on the block
  - use with a decl, e.g. use p : Point;
+ - make sure use works with functions and for, e.g. for use p := points
 local structs should not be named in C
 for some reason forgetting a ; after #include causes a misleading unrecognized expression
 simplify eval macros with val_to_u/i64

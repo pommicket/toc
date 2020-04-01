@@ -340,7 +340,8 @@ static void cgen_decls_decl(CGenerator *g, Declaration *d) {
 		if (d->flags & DECL_HAS_EXPR) {
 			cgen_decls_expr(g, &d->expr);
 		}
-		if ((g->block == NULL || (g->block->flags & BLOCK_IS_NMS)) && g->fn == NULL) {
+		if (g->fn == NULL) {
+			/* global variables */
 			for (int i = 0, n_idents = (int)arr_len(d->idents); i < n_idents; ++i) {
 				Identifier ident = d->idents[i];
 				Type *type = decl_type_at_index(d, i);

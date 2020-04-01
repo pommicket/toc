@@ -488,15 +488,21 @@ typedef struct Field {
 
 
 enum {
-	BLOCK_IS_FN = 0x01,
-	BLOCK_IS_NMS = 0x02,
-	BLOCK_FINDING_TYPES = 0x04,
-	BLOCK_FOUND_TYPES = 0x08,
-	BLOCK_IS_LOOP = 0x10 /* can we break/continue in this block? */
+	BLOCK_FINDING_TYPES = 0x01,
+	BLOCK_FOUND_TYPES = 0x02,
 };
+typedef enum {
+	BLOCK_OTHER,
+	BLOCK_FN,
+	BLOCK_NMS,
+	BLOCK_FOR,
+	BLOCK_WHILE
+} BlockKind;
+
 typedef U8 BlockFlags;
 typedef struct Block {
 	BlockFlags flags;
+	BlockKind kind;
 	struct {
 		IdentID break_lbl, cont_lbl; /* initially 0, set to non-zero values if needed (++g->lbl_counter); set by sdecls_cgen. */
 	} c;
@@ -506,6 +512,7 @@ typedef struct Block {
 	struct Expression *ret_expr; /* the return expression of this block, e.g. {foo(); 3} => 3  NULL for no expression. */
 	struct Block *parent;
 	struct Statement **deferred; /* deferred stuff from this block; used by both eval and cgen */
+	struct Statement **used; /* use statements (for types.c) */
 } Block;
 
 enum {
@@ -1038,16 +1045,6 @@ typedef struct Evaluator {
 	ForeignFnManager ffmgr;
 } Evaluator;
 
-/*
-Keeps track of use stmts.
-We need to keep track of the block so that 
-it can be removed when we exit the block.
-*/
-typedef struct {
-	Statement *stmt;
-	Block *scope;
-} UsedExpr;
-
 typedef struct Typer {
 	Allocator *allocr;
 	Evaluator *evalr;
@@ -1061,7 +1058,6 @@ typedef struct Typer {
 	ParsedFile *parsed_file;
 	Namespace *nms;
 	StrHashTable included_files; /* maps to IncludedFile */
-	UsedExpr *used; /* things which are currently being `use`d. dynamic array NOT on the allocator. */
 	File *file;
 } Typer;
 

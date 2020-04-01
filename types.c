@@ -613,13 +613,14 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 	switch (i->decl_kind) {
 	case IDECL_DECL: {
 		Declaration *d = i->decl;
+		/* check for trying to capture a variable into a function */
 		bool captured = false;
-		if (ident_scope(i) != NULL && !(ident_scope(i)->flags & BLOCK_IS_NMS)) {
+		if (ident_scope(i) != NULL && ident_scope(i)->kind != BLOCK_NMS) {
 			Block *decl_scope = ident_scope(i);
-			if (!(decl_scope->flags & BLOCK_IS_NMS)) {
+			if (decl_scope->kind != BLOCK_NMS) {
 				/* go back through scopes */
 				for (Block **block = arr_last(tr->blocks); *block && *block != decl_scope; --block) {
-					if ((*block)->flags & BLOCK_IS_FN) {
+					if ((*block)->kind == BLOCK_FN) {
 						captured = true;
 						break;
 					}
@@ -3100,11 +3101,11 @@ static Status types_expr(Typer *tr, Expression *e) {
 		Namespace *prev_nms = tr->nms;
 		Namespace *n = tr->nms = e->nms;
 		n->points_to = NULL;
-		n->body.flags |= BLOCK_IS_NMS;
 		if (!types_block(tr, &n->body)) {
 			tr->nms = prev_nms;
 			return false;
 		}
+		n->body.kind = BLOCK_NMS;
 		tr->nms = prev_nms;
 		n->associated_ident = NULL; /* set when we type the declaration which contains this namespace */
 		t->kind = TYPE_BUILTIN;
@@ -3218,8 +3219,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 			d->type = d->expr.type;
 			d->type.flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE; /* x := 5; => x is not flexible */
 		}
-		bool need_value = (d->flags & DECL_IS_CONST) ||
-			((tr->block == NULL || (tr->block->flags & BLOCK_IS_NMS)) && tr->fn == NULL);
+		bool need_value = (d->flags & DECL_IS_CONST) || tr->fn == NULL;
 		
 		if (need_value) {
 			if (!(d->flags & DECL_FOUND_VAL)) {
@@ -3299,7 +3299,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 		bool is_at_top_level = true;
 		typedef Block *BlockPtr;
 		arr_foreach(tr->blocks, BlockPtr, b) {
-			if (*b && !((*b)->flags & BLOCK_IS_NMS)) {
+			if (*b && (*b)->kind != BLOCK_NMS) {
 				is_at_top_level = false;
 				break;
 			}
@@ -3476,7 +3476,7 @@ static Status types_stmt(Typer *tr, Statement *s) {
 		/* make sure we are actually in a loop */
 		Block *block;
 		for (block = tr->block; block; block = block->parent) {
-			if (block->flags & BLOCK_IS_LOOP) {
+			if (block->kind == BLOCK_FOR || block->kind == BLOCK_WHILE) {
 				s->referring_to = block;
 				break;
 			}
@@ -3512,9 +3512,8 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			err_print(e->where, "You can't use this value. You should probably assign it to a variable.");
 			return false;
 		}
-		UsedExpr *u = arr_add(&tr->used);
-		u->scope = tr->block;
-		u->stmt = s;
+		Statement **sp = arr_add(&tr->block->used);
+		*sp = s;
 	} break;
 	}
 	s->flags |= STMT_TYPED;
@@ -3522,7 +3521,6 @@ static Status types_stmt(Typer *tr, Statement *s) {
 }
 
 static void typer_create(Typer *tr, Evaluator *ev, File *file, ErrCtx *err_ctx, Allocator *allocr, Identifiers *idents) {
-	tr->used = NULL;
 	tr->block = NULL;
 	tr->blocks = NULL;
 	tr->fn = NULL;
