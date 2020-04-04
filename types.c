@@ -388,6 +388,13 @@ static char *eval_expr_as_cstr(Typer *tr, Expression *e, const char *what_is_thi
 	return str;
 }
 
+static char *slice_to_cstr(Slice s) {
+	char *ret = malloc((size_t)s.n + 1);
+	memcpy(ret, s.data, (size_t)s.n);
+	ret[s.n] = 0;
+	return ret;
+}
+
 enum {
 	  /* is f an instance? (changes behaviour a bit) */
 	  TYPE_OF_FN_IS_INSTANCE = 0x01
@@ -2926,6 +2933,12 @@ static Status types_expr(Typer *tr, Expression *e) {
 					e->binary.op = BINARY_DOT;
 					e->binary.rhs->kind = EXPR_IDENT;
 					e->binary.rhs->ident = ident_get_with_len(&nms->body.idents, member_name.slice.data, (size_t)member_name.slice.n);
+					if (!ident_is_declared(e->binary.rhs->ident)) {
+						char *s = slice_to_cstr(member_name.slice);
+						err_print(e->where, "\"%s\" is not a member of this namespace.", s);
+						free(s);
+						return false;
+					}
 					if (!type_of_ident(tr, rhs->where, &e->binary.rhs->ident, t, TYPE_OF_IDENT_BLOCK_IS_CORRECT)) {
 						return false;
 					}
@@ -3053,7 +3066,14 @@ static Status types_expr(Typer *tr, Expression *e) {
 				Namespace *nms = nms_val.nms;
 				lhs->kind = EXPR_VAL;
 				lhs->val.nms = nms;
-				rhs->ident = ident_translate(rhs->ident, &nms->body.idents);
+				Identifier original = rhs->ident;
+				rhs->ident = ident_translate(original, &nms->body.idents);
+				if (!ident_is_declared(rhs->ident)) {
+					char *s = ident_to_str(original);
+					err_print(e->where, "\"%s\" is not a member of this namespace.", s);
+					free(s);
+					return false;
+				}
 				if (!type_of_ident(tr, rhs->where, &rhs->ident, t, TYPE_OF_IDENT_BLOCK_IS_CORRECT)) {
 					return false;
 				}

@@ -7,5 +7,5 @@ main ::= fn() {
 	p ::= nms {
 		y := 5;
 	}
-	puti(p.y);
+	puti(p["y"]);
 }
