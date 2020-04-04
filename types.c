@@ -382,16 +382,16 @@ static char *eval_expr_as_cstr(Typer *tr, Expression *e, const char *what_is_thi
 	if (!eval_expr(tr->evalr, e, &e_val))
 		return NULL;
 	Slice e_slice = e_val.slice;
-	char *str = typer_malloc(tr, (size_t)e_slice.n + 1);
-	str[e_slice.n] = 0;
-	memcpy(str, e_slice.data, (size_t)e_slice.n);
+	char *str = typer_malloc(tr, (size_t)e_slice.len + 1);
+	str[e_slice.len] = 0;
+	memcpy(str, e_slice.data, (size_t)e_slice.len);
 	return str;
 }
 
 static char *slice_to_cstr(Slice s) {
-	char *ret = malloc((size_t)s.n + 1);
-	memcpy(ret, s.data, (size_t)s.n);
-	ret[s.n] = 0;
+	char *ret = err_malloc((size_t)s.len + 1);
+	memcpy(ret, s.data, (size_t)s.len);
+	ret[s.len] = 0;
 	return ret;
 }
 
@@ -2884,7 +2884,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 
 				/* get the field, if it exists */
 				Identifier ident = ident_get_with_len(&lhs_type->struc->body.idents,
-						field_name.slice.data, (size_t)field_name.slice.n);
+						field_name.slice.data, (size_t)field_name.slice.len);
 				if (ident_is_declared(ident)) {
 					assert(ident->decl_kind == IDECL_DECL);
 					Declaration *decl = ident->decl;
@@ -2903,9 +2903,9 @@ static Status types_expr(Typer *tr, Expression *e) {
 						*t = *f->type;
 					}
 				} else {
-					char *fstr = err_malloc((size_t)(field_name.slice.n + 1));
-					memcpy(fstr, field_name.slice.data, (size_t)field_name.slice.n);
-					fstr[field_name.slice.n] = 0; /* null-terminate */
+					char *fstr = err_malloc((size_t)(field_name.slice.len + 1));
+					memcpy(fstr, field_name.slice.data, (size_t)field_name.slice.len);
+					fstr[field_name.slice.len] = 0; /* null-terminate */
 					char *typestr = type_to_str(lhs_type);
 					err_print(e->where, "%s is not a field of structure %s.", fstr, typestr);
 					free(fstr); free(typestr);
@@ -2932,7 +2932,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					if (!eval_expr(tr->evalr, rhs, &member_name)) return false;
 					e->binary.op = BINARY_DOT;
 					e->binary.rhs->kind = EXPR_IDENT;
-					e->binary.rhs->ident = ident_get_with_len(&nms->body.idents, member_name.slice.data, (size_t)member_name.slice.n);
+					e->binary.rhs->ident = ident_get_with_len(&nms->body.idents, member_name.slice.data, (size_t)member_name.slice.len);
 					if (!ident_is_declared(e->binary.rhs->ident)) {
 						char *s = slice_to_cstr(member_name.slice);
 						err_print(e->where, "\"%s\" is not a member of this namespace.", s);

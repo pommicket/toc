@@ -182,7 +182,7 @@ static U64 val_ptr_hash(void *v, Type *t) {
 		U64 hash = 0;
 		Slice *s = v;
 		U64 size = (U64)compiler_sizeof(t->slice);
-		for (U64 i = 0; i < (U64)s->n; ++i) {
+		for (U64 i = 0; i < (U64)s->len; ++i) {
 			hash += (U64)x * val_ptr_hash((char *)s->data + i * size, t->slice);
 			x = rand_u32(x);
 		}
@@ -275,9 +275,9 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 		U64 size = (U64)compiler_sizeof(t->arr.of);
 		Slice *r = u;
 		Slice *s = v;
-		if (r->n != s->n) return false;
+		if (r->len != s->len) return false;
 		char *sptr = r->data, *tptr = s->data;
-		for (U64 i = 0; i < (U64)s->n; ++i) {
+		for (I64 i = 0; i < s->len; ++i) {
 			if (!val_ptr_eq(sptr, tptr, t->slice))
 				return false;
 			sptr += size;

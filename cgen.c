@@ -505,14 +505,14 @@ static void cgen_val_ptr_pre(CGenerator *g, void *v, Type *t) {
 	switch (t->kind) {
 	case TYPE_SLICE: {
 		Slice *s = (Slice *)v;
-		for (I64 i = 0; i < s->n; ++i) {
+		for (I64 i = 0; i < s->len; ++i) {
 			cgen_val_ptr_pre(g, (char *)s->data + (U64)i * compiler_sizeof(t->slice), t->slice);
 		}
 		cgen_type_pre(g, t->slice);
 		cgen_write(g, "(d%p_[])", v); /* TODO: improve this somehow? */
 		cgen_type_post(g, t->slice);
 		cgen_write(g, " = {");
-		for (I64 i = 0; i < s->n; ++i) {
+		for (I64 i = 0; i < s->len; ++i) {
 			if (i) cgen_write(g, ", ");
 			cgen_val_ptr(g, (char *)s->data + (U64)i * compiler_sizeof(t->slice), t->slice);
 		}
@@ -557,7 +557,7 @@ static void cgen_val_ptr(CGenerator *g, void *v, Type *t) {
 		cgen_write(g, "}");
 		break;
 	case TYPE_SLICE:
-		cgen_write(g, "{d%p_, %lu}", v, ((Slice *)v)->n);
+		cgen_write(g, "{d%p_, %lu}", v, ((Slice *)v)->len);
 		break;
 	case TYPE_STRUCT:
 		cgen_write(g, "{");
@@ -1651,7 +1651,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		Expression *code = e->c.code;
 		assert(code->kind == EXPR_VAL);
 		cgen_indent(g);
-		fwrite(code->val.slice.data, 1, (size_t)code->val.slice.n, cgen_writing_to(g));
+		fwrite(code->val.slice.data, 1, (size_t)code->val.slice.len, cgen_writing_to(g));
 	} break;
 	case EXPR_BUILTIN:
 		switch (e->builtin.which.val) {

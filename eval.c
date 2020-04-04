@@ -57,8 +57,8 @@ static bool val_truthiness(Value v, Type *t) {
 	case TYPE_BUILTIN: return builtin_truthiness(v, t->builtin);
 	case TYPE_PTR: return v.ptr != NULL;
 	case TYPE_FN: return v.fn != NULL;
-	case TYPE_ARR: return t->arr.n > 0;
-	case TYPE_SLICE: return v.slice.n > 0;
+	case TYPE_ARR: return t->arr.n != 0;
+	case TYPE_SLICE: return v.slice.len != 0;
 	case TYPE_TUPLE:
 	case TYPE_STRUCT:
 	case TYPE_EXPR:
@@ -227,13 +227,13 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 	case TYPE_SLICE: {
 		fprintf(f, "["); /* TODO: change? when slice initializers are added */
 		Slice slice = *(Slice *)p;
-		I64 n = slice.n;
+		I64 n = slice.len;
 		if (n > 5) n = 5;
 		for (I64 i = 0; i < n; ++i) {
 			if (i) fprintf(f, ", ");
 			fprint_val_ptr(f, (char *)slice.data + i * (I64)compiler_sizeof(t->arr.of), t->arr.of);
 		}
-		if (slice.n > n) {
+		if (slice.len > n) {
 			fprintf(f, ", ...");
 		}
 		fprintf(f, "]");
@@ -603,7 +603,7 @@ static Status eval_val_ptr_at_index(Location where, Value *arr, U64 i, Type *arr
 		if (type) *type = arr_type->arr.of;
 	} break;
 	case TYPE_SLICE: {
-		U64 slice_sz = (U64)arr->slice.n;
+		U64 slice_sz = (U64)arr->slice.len;
 		if (i >= slice_sz) {
 			err_print(where, "Slice out of bounds (index = %lu, slice size = %lu)\n", (unsigned long)i, (unsigned long)slice_sz);
 			return false;
@@ -772,7 +772,7 @@ static Status eval_address_of(Evaluator *ev, Expression *e, void **ptr) {
 		case UNARY_LEN: {
 			Value slice;
 			if (!eval_expr(ev, e, &slice)) return false;
-			*ptr = &slice.slice.n;
+			*ptr = &slice.slice.len;
 		} break;
 		default: assert(0); return false;
 		}
@@ -824,13 +824,13 @@ static Status eval_set(Evaluator *ev, Expression *set, Value *to) {
 				/* if it's a pointer, we can just eval it and set its length */
 				Value of;
 				if (!eval_expr(ev, set->unary.of, &of)) return false;
-				((Slice *)of.ptr)->n = to->i64;
+				((Slice *)of.ptr)->len = to->i64;
 			} else {
 				/* otherwise, we need a pointer to the slice */
 				void *p;
 				if (!eval_address_of(ev, set->unary.of, &p))
 					return false;
-				((Slice *)p)->n = to->i64;
+				((Slice *)p)->len = to->i64;
 			}
 		} break;
 		default: assert(0); break;
@@ -1139,7 +1139,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			}
 			switch (of_type->kind) {
 			case TYPE_SLICE:
-				v->i64 = of.slice.n;
+				v->i64 = of.slice.len;
 				break;
 			case TYPE_ARR:
 				v->i64 = (I64)of_type->arr.n;
@@ -1356,7 +1356,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				if (uses_ptr) {
 					of.slice = *(Slice *)of.ptr;
 				}
-				len = of.slice.n;
+				len = of.slice.len;
 				break;
 			default: assert(0); return false;
 			}
@@ -1399,7 +1399,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		break;
 	case EXPR_LITERAL_STR:
 		v->slice.data = e->strl.str;
-		v->slice.n = (I64)e->strl.len;
+		v->slice.len = (I64)e->strl.len;
 		break;
 	case EXPR_CAST: {
 		Value casted;
@@ -1556,7 +1556,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		Type *of_type = &s->of->type;
 		if (!eval_expr(ev, s->of, &ofv))
 			return false;
-		U64 n = of_type->kind == TYPE_ARR ? of_type->arr.n : (U64)ofv.slice.n;
+		U64 n = of_type->kind == TYPE_ARR ? of_type->arr.n : (U64)ofv.slice.len;
 		U64 from, to;
 		if (s->from) {
 			Value fromv;
@@ -1586,10 +1586,10 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (!eval_val_ptr_at_index(e->where, &ofv, from, of_type, &ptr_start, NULL))
 				return false;
 			v->slice.data = ptr_start;
-			v->slice.n = (I64)(to - from);
+			v->slice.len = (I64)(to - from);
 		} else {
 			v->slice.data = NULL;
-			v->slice.n = 0;
+			v->slice.len = 0;
 		}
 	} break;
 	case EXPR_TYPE:

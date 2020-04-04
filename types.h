@@ -148,7 +148,7 @@ typedef struct HashTable {
 } HashTable;
 
 typedef struct Slice {
-	I64 n;
+	I64 len;
 	void *data;
 } Slice;
 
