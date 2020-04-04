@@ -340,7 +340,7 @@ static void cgen_decls_decl(CGenerator *g, Declaration *d) {
 		if (d->flags & DECL_HAS_EXPR) {
 			cgen_decls_expr(g, &d->expr);
 		}
-		if (g->fn == NULL) {
+		if (!g->block || g->block->kind == BLOCK_NMS) {
 			/* global variables */
 			for (int i = 0, n_idents = (int)arr_len(d->idents); i < n_idents; ++i) {
 				Identifier ident = d->idents[i];
@@ -353,6 +353,7 @@ static void cgen_decls_decl(CGenerator *g, Declaration *d) {
 					cgen_ident(g, ident);
 					cgen_type_post(g, type);
 					if (d->flags & DECL_HAS_EXPR) {
+						assert(d->flags & DECL_FOUND_VAL);
 						Value *val = decl_val_at_index(d, i);
 						cgen_write(g, " = ");
 						cgen_val(g, val, type);

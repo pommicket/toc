@@ -1292,6 +1292,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				++t->token;
 				if (!parse_block(p, &n->body, 0))
 					return false;
+				n->body.kind = BLOCK_NMS;
  				goto success;
 			}
 			case KW_IF:

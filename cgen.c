@@ -39,13 +39,16 @@ static void cgen_defs_decl(CGenerator *g, Declaration *d);
 #define cgen_recurse_subexprs_fn_simple(fn, decl_f, block_f)	\
 	if (!(fn->flags & FN_EXPR_FOREIGN)) {						\
 		FnExpr *prev_fn = g->f##n;								\
+		Block *prev_block = g->block;                           \
 		g->f##n = fn;											\
-		arr_foreach(fn->params, Declaration, param)				\
+		g->block = &fn->body;                                   \
+		arr_foreach(fn->params, Declaration, param)             \
 			decl_f(g, param);									\
 		arr_foreach(fn->ret_decls, Declaration, r)				\
 			decl_f(g, r);										\
 		block_f(g, &fn->body);									\
 		g->f##n = prev_fn;										\
+		g->block = prev_block;                                  \
 	}
 
 /* calls f on every sub-expression of e, block_f on every sub-block, and decl_f on every sub-declaration. */
@@ -256,7 +259,7 @@ static inline void cgen_writeln(CGenerator *g, const char *fmt, ...) {
 
 /* should this declaration be a direct function declaration C? (as opposed to using a function pointer or not being a function) */
 static bool cgen_fn_is_direct(CGenerator *g, Declaration *d) {
-	return g->fn == NULL && (d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_FN && arr_len(d->idents) == 1;
+	return (!g->block || g->block->kind == BLOCK_NMS) && (d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_FN && arr_len(d->idents) == 1;
 }
 
 static bool fn_has_instances(FnExpr *f) {
@@ -1812,12 +1815,14 @@ static void cgen_fn(CGenerator *g, FnExpr *f, Value *compile_time_args) {
 	if (f->flags & FN_EXPR_FOREIGN)
 		return; /* handled by decls_cgen */
 	/* see also cgen_defs_expr */
-	FnExpr *prev_fn = g->fn;
 	U64 which_are_const = compile_time_args ? compile_time_args->u64 : 0;
 	if (!cgen_should_gen_fn(f))
 		return;
-	cgen_fn_header(g, f, which_are_const);
+	FnExpr *prev_fn = g->fn;
+	Block *prev_block = g->block;
 	g->fn = f;
+	g->block = &f->body;
+	cgen_fn_header(g, f, which_are_const);
 	cgen_write(g, " {");
 	cgen_nl(g);
 	if (compile_time_args) {
@@ -1874,20 +1879,16 @@ static void cgen_fn(CGenerator *g, FnExpr *f, Value *compile_time_args) {
 	}
 	
 	cgen_block(g, &f->body, NULL, CGEN_BLOCK_NOBRACES);
-	Block *prev = g->block;
-	g->block = &f->body;
-	/* cgen_ret needs to think it's in the function body */
 	cgen_ret(g, &f->body, f->body.ret_expr);
-	g->block = prev;
 	cgen_writeln(g, "}");
-	
+	g->block = prev_block;
 	g->fn = prev_fn;
 	cgen_nl(g);
 	cgen_nl(g);
 }
 
 static void cgen_decl(CGenerator *g, Declaration *d) {
-	if (g->block == NULL && g->fn == NULL)
+	if (!g->block || (g->block->kind == BLOCK_NMS))
 		return; /* already dealt with */
 	int has_expr = d->flags & DECL_HAS_EXPR;
 	if (cgen_fn_is_direct(g, d))
