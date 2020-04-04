@@ -583,64 +583,11 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	return success;
 }
 
-/* may modify ident */
-enum {
-	TYPE_OF_IDENT_BLOCK_IS_CORRECT = 0x01 /* *ident is already from the right block (it doesn't need translation) */
-};
-static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *t, U16 flags) {
-	t->flags = 0;
-	Identifier i = *ident;
-	Block *b = tr->block;
-	bool undeclared = true;
-	if (flags & TYPE_OF_IDENT_BLOCK_IS_CORRECT) {
-		undeclared = !ident_is_declared(*ident);
-	} else {
-		while (1) { /* for each block we are inside... */
-			/* OPTIM: only hash once */
-			Identifier translated = ident_translate(i, b ? &b->idents : tr->globals);
-			if (ident_is_declared(translated)) {
-#if 0
-				printf("translated %s from\n", ident_to_str(i));
-				print_block_location(i->idents->body);
-				printf(" to \n");
-				print_block_location(translated->idents->body);
-#endif			
-				i = *ident = translated;
-				undeclared = false;
-			}
-			Use **uses = b ? b->uses : tr->uses;
-
-			Use *previous_use_which_uses_i = NULL;
-			(void)previous_use_which_uses_i;
-			arr_foreach(uses, UsePtr, usep) {
-				Use *use = *usep;
-				Expression *e = &use->expr;
-				if (type_is_builtin(&e->type, BUILTIN_NMS)) {
-
-				} else {
-					/* it's a struct */
-					Type *struct_type = &e->type;
-					if (struct_type->kind == TYPE_PTR)
-						struct_type = struct_type->ptr;
-					assert(struct_type->kind == TYPE_STRUCT);
-				}
-			}
-			if (!undeclared) break;
-			if (b) {
-				b = b->parent;
-			} else {
-				break;
-			}
-		}
-	}
-	if (undeclared) {
-		char *s = ident_to_str(i);
-		err_print(where, "Undeclared identifier: %s", s);
-		free(s);
-		return false;
-	}
+/* doesn't do any translation on ident or anything, so make sure it's in the right scope */
+static Status type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 	switch (i->decl_kind) {
-	case IDECL_DECL: {
+	case IDECL_DECL: 
+	top: {
 		Declaration *d = i->decl;
 		/* check for trying to capture a variable into a function */
 		bool captured = false;
@@ -713,7 +660,7 @@ static Status type_of_ident(Typer *tr, Location where, Identifier *ident, Type *
 					}
 					/* let's type the declaration, and redo this (for evaling future functions) */
 					if (!types_decl(tr, d)) return false;
-					return type_of_ident(tr, where, ident, t, flags);
+					goto top;
 				}
 			}
 		}
@@ -1839,7 +1786,55 @@ static Status types_expr(Typer *tr, Expression *e) {
 		return false;
 	};
 	case EXPR_IDENT: {
-		if (!type_of_ident(tr, e->where, &e->ident, t, 0)) return false;
+		Block *b = tr->block;
+		Identifier i = e->ident;
+		bool undeclared = true;
+		while (1) { /* for each block we are inside... */
+			/* OPTIM: only hash once */
+			Identifier translated = ident_translate(i, b ? &b->idents : tr->globals);
+			if (ident_is_declared(translated)) {
+#if 0
+				printf("translated %s from\n", ident_to_str(i));
+				print_block_location(i->idents->body);
+				printf(" to \n");
+				print_block_location(translated->idents->body);
+#endif			
+				i = e->ident = translated;
+				undeclared = false;
+			}
+			Use **uses = b ? b->uses : tr->uses;
+
+			Use *previous_use_which_uses_i = NULL;
+			(void)previous_use_which_uses_i;
+			arr_foreach(uses, UsePtr, usep) {
+				Use *use = *usep;
+				Expression *used = &use->expr;
+				if (type_is_builtin(&used->type, BUILTIN_NMS)) {
+
+				} else {
+					/* it's a struct */
+					Type *struct_type = &used->type;
+					if (struct_type->kind == TYPE_PTR)
+						struct_type = struct_type->ptr;
+					assert(struct_type->kind == TYPE_STRUCT);
+				}
+			}
+			if (!undeclared) break;
+			if (b) {
+				b = b->parent;
+			} else {
+				break;
+			}
+		}
+		if (undeclared) {
+			char *s = ident_to_str(e->ident);
+			err_print(e->where, "Undeclared identifier \"%s\".", s);
+			free(s);
+			return false;
+		}
+		if (!type_of_ident(tr, e->where, e->ident, t)) {
+			return false;
+		}
 	} break;
 	case EXPR_CAST: {
 		CastExpr *c = &e->cast;
@@ -2939,7 +2934,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 						free(s);
 						return false;
 					}
-					if (!type_of_ident(tr, rhs->where, &e->binary.rhs->ident, t, TYPE_OF_IDENT_BLOCK_IS_CORRECT)) {
+					if (!type_of_ident(tr, rhs->where, e->binary.rhs->ident, t)) {
 						return false;
 					}
 					break;
@@ -3074,7 +3069,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					free(s);
 					return false;
 				}
-				if (!type_of_ident(tr, rhs->where, &rhs->ident, t, TYPE_OF_IDENT_BLOCK_IS_CORRECT)) {
+				if (!type_of_ident(tr, rhs->where, rhs->ident, t)) {
 					return false;
 				}
 			} else {

@@ -9,7 +9,6 @@
 /* 
 TODO:
 use
- - note: just keep an array of useds on the block
  - use with a decl, e.g. use p : Point;
  - make sure use works with functions and for, e.g. for use p := points
  - exceptions (so that if you accidentally use something but have a function with the same 

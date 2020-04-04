@@ -1,11 +1,16 @@
+/*
 #include "std/io.toc";
+*/
+Point ::= struct {
+	x, y: int;
+}
 
-x ::= 3;
-
+f ::= fn() p: Point {
+	p.x = 13;
+}
 
 main ::= fn() {
-	p ::= nms {
-		y := 5;
-	}
-	puti(p["y"]);
+	p := f();
+	use p;
 }
+
