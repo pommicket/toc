@@ -1799,24 +1799,54 @@ static Status types_expr(Typer *tr, Expression *e) {
 				printf(" to \n");
 				print_block_location(translated->idents->body);
 #endif			
-				i = e->ident = translated;
+				i = translated;
 				undeclared = false;
 			}
 			Use **uses = b ? b->uses : tr->uses;
 
 			Use *previous_use_which_uses_i = NULL;
-			(void)previous_use_which_uses_i;
 			arr_foreach(uses, UsePtr, usep) {
 				Use *use = *usep;
 				Expression *used = &use->expr;
+				Identifier translated_use;
 				if (type_is_builtin(&used->type, BUILTIN_NMS)) {
-
+					Value val;
+					if (!eval_expr(tr->evalr, used, &val))
+						return 0;
+					Namespace *nms = val.nms;
+					Block *body = &nms->body;
+					/* look up identifier in namespace */
+					translated_use = ident_translate(i, &body->idents);
 				} else {
 					/* it's a struct */
 					Type *struct_type = &used->type;
 					if (struct_type->kind == TYPE_PTR)
 						struct_type = struct_type->ptr;
 					assert(struct_type->kind == TYPE_STRUCT);
+					translated_use = NULL;
+					err_print(e->where, "not implemented yet");
+					return false;
+				}
+				if (ident_is_declared(translated_use)) {
+					if (undeclared) {
+						previous_use_which_uses_i = use;
+						undeclared = false;
+						i = translated_use;
+					} else {
+						char *s = ident_to_str(i);
+						err_print(e->where, "Conflicting declarations for identifier %s.", s);
+						char *also = "";
+						if (previous_use_which_uses_i) {
+							/* i was use'd twice */
+							info_print(previous_use_which_uses_i->expr.where, "%s was imported by this use statement.", s);
+							also = "also ";
+						} else {
+							/* i was declared then used. */
+							info_print(ident_decl_location(tr->file, translated), "%s was declared here.", s);
+						}
+						info_print(use->expr.where, "...and %simported by this use statement.", also);
+						return false;
+					}
 				}
 			}
 			if (!undeclared) break;
@@ -1826,6 +1856,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				break;
 			}
 		}
+		e->ident = i;
 		if (undeclared) {
 			char *s = ident_to_str(e->ident);
 			err_print(e->where, "Undeclared identifier \"%s\".", s);
@@ -3467,6 +3498,7 @@ static Status types_stmt(Typer *tr, Statement *s) {
 		file->filename = filename;
 		file->contents = contents;
 		file->ctx = tr->err_ctx;
+		
 		if (!tokenize_file(&tokr, file))
 			return false;
 		Parser parser;
@@ -3481,11 +3513,15 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			inc_f->stmts = stmts_inc;
 		}
 		inc->stmts = stmts_inc;
+		File *prev = tr->file;
+		tr->file = file;
 		arr_foreach(stmts_inc, Statement, s_incd) {
-			if (!types_stmt(tr, s_incd))
+			if (!types_stmt(tr, s_incd)) {
+				tr->file = prev;
 				return false;
+			}
 		}
-		
+		tr->file = prev;
 	} break;
 	case STMT_MESSAGE: {
 		Message *m = s->message;

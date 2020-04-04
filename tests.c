@@ -30,7 +30,6 @@ static void allocr_test(void) {
 static void test_all(void) {
 	allocr_test();
 	arr_test();
-	block_arr_test();
 	str_hash_table_test();
 	idents_test();
 }
