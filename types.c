@@ -1809,6 +1809,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				Use *use = *usep;
 				Expression *used = &use->expr;
 				Identifier translated_use;
+				bool was_a_struct = false;
 				if (type_is_builtin(&used->type, BUILTIN_NMS)) {
 					Value val;
 					if (!eval_expr(tr->evalr, used, &val))
@@ -1819,13 +1820,13 @@ static Status types_expr(Typer *tr, Expression *e) {
 					translated_use = ident_translate(i, &body->idents);
 				} else {
 					/* it's a struct */
+					was_a_struct = true;
 					Type *struct_type = &used->type;
 					if (struct_type->kind == TYPE_PTR)
 						struct_type = struct_type->ptr;
 					assert(struct_type->kind == TYPE_STRUCT);
-					translated_use = NULL;
-					err_print(e->where, "not implemented yet");
-					return false;
+					StructDef *struc = struct_type->struc;
+					translated_use = ident_translate(i, &struc->body.idents);
 				}
 				if (ident_is_declared(translated_use)) {
 					if (undeclared) {
@@ -1846,6 +1847,20 @@ static Status types_expr(Typer *tr, Expression *e) {
 						}
 						info_print(use->expr.where, "...and %simported by this use statement.", also);
 						return false;
+					}
+					if (was_a_struct) {
+						/* change to BINARY_DOT */
+						e->kind = EXPR_BINARY_OP;
+						e->flags = 0;
+						e->binary.op = BINARY_DOT;
+						e->binary.lhs = used;
+						e->binary.rhs = typer_calloc(tr, 1, sizeof *e->binary.rhs);
+						e->binary.rhs->kind = EXPR_IDENT;
+						e->binary.rhs->ident = i;
+						/* re-type */
+						if (!types_expr(tr, e))
+							return false;
+						return true;
 					}
 				}
 			}

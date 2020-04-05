@@ -8,6 +8,8 @@
 
 /* 
 TODO:
+for accessing struct members (and other things, potentially) with struct["member"], just replace e with 
+	a BINARY_DOT
 use
  - use with a decl, e.g. use p : Point;
  - make sure use works with functions and for, e.g. for use p := points
