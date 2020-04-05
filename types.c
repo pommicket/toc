@@ -3371,7 +3371,22 @@ static Status types_decl(Typer *tr, Declaration *d) {
 			goto ret;
 		}
 	}
-	
+		
+	if (d->flags & DECL_USE) {
+		int idx = 0;
+		arr_foreach(d->idents, Identifier, ip) {
+			Identifier i = *ip;
+			/* add to uses */
+			Use **usep = arr_add(tr->block ? &tr->block->uses : &tr->uses);
+			Use *use = *usep = typer_calloc(tr, 1, sizeof *use);
+			Expression *used = &use->expr;
+			used->kind = EXPR_IDENT;
+			used->flags = EXPR_FOUND_TYPE;
+			used->type = *decl_type_at_index(d, idx++);
+			used->ident = i;
+		}
+	}
+
 	if (n_idents == 1 && (d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_NMS) {
 		bool is_at_top_level = true;
 		typedef Block *BlockPtr;
@@ -3597,7 +3612,7 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			err_print(e->where, "You can't use this value. You should probably assign it to a variable.");
 			return false;
 		}
-		Use **up = arr_add(&tr->block->uses);
+		Use **up = arr_add(tr->block ? &tr->block->uses : &tr->uses);
 		*up = u;
 	} break;
 	}
@@ -3630,6 +3645,7 @@ static Status types_file(Typer *tr, ParsedFile *f) {
 			ret = false;
 		}
 	}
+	arr_clear(&tr->uses);
 	assert(tr->block == NULL);
 	assert(arr_len(tr->blocks) && tr->blocks[0] == NULL);
 	return ret;

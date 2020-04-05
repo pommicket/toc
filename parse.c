@@ -2154,6 +2154,11 @@ static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 f
 		++t->token;
 	}
 	
+	if (token_is_kw(t->token, KW_USE)) {
+		d->flags |= DECL_USE;
+		++t->token;
+	}
+
 	while (1) {
 		Identifier *ident = parser_arr_add(p, &d->idents);
 		if (t->token->kind != TOKEN_IDENT) {
@@ -2314,6 +2319,10 @@ static bool is_decl(Tokenizer *t) {
 	if (token_is_direct(token, DIRECT_EXPORT))
 		return true;	
 	
+	/* use decls, e.g. use p: Point */
+	if (token_is_kw(token, KW_USE))
+		++token;
+
 	while (1) {
 		if (token->kind != TOKEN_IDENT) return false;
 		++token;
@@ -2335,12 +2344,17 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 	s->where = parser_mk_loc(p);
 	s->flags = 0;
 	*was_a_statement = true;
-	if (t->token->kind == TOKEN_KW) {
+	if (is_decl(t)) {
+		s->kind = STMT_DECL;
+		if (!parse_decl(p, s->decl = parser_malloc(p, sizeof *s->decl), DECL_END_SEMICOLON, PARSE_DECL_ALLOW_EXPORT)) {
+			return false;
+		}
+	} else if (t->token->kind == TOKEN_KW) {
 		switch (t->token->kw) {
 		case KW_SEMICOLON:
 			*was_a_statement = false;
 			++t->token;
-			goto success;
+			break;
 		case KW_RETURN: {
 			s->kind = STMT_RET;
 			++t->token;
@@ -2349,7 +2363,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			if (token_is_kw(t->token, KW_SEMICOLON)) {
 				/* return with no expr */
 				++t->token;
-				goto success;
+				break;
 			}
 			r->flags |= RET_HAS_EXPR;
 			Token *end = expr_find_end(p, 0);
@@ -2365,7 +2379,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			bool parsed = parse_expr(p, &r->expr, end);
 			t->token = end + 1;
 			if (!parsed) return false;
-			goto success;
+			break;
 		}
 		case KW_BREAK:
 			s->kind = STMT_BREAK;
@@ -2375,7 +2389,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				tokr_skip_semicolon(t);
 				return false;
 			}
-			goto success;
+			break;
 		case KW_CONTINUE:
 			s->kind = STMT_CONT;
 			++t->token;
@@ -2384,7 +2398,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				tokr_skip_semicolon(t);
 				return false;
 			}
-			goto success;
+			break;
 		case KW_DEFER: {
 			if (p->block == NULL) {
 				tokr_err(t, "You can't defer something at global scope.");
@@ -2400,7 +2414,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				err_print(token_location(p->file, deferred_start), "Empty defer");
 				return false;
 			}
-			goto success;
+			break;
 		}
 		case KW_USE: {
 			++t->token;
@@ -2408,9 +2422,9 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			s->use = parser_malloc(p, sizeof *s->use);
 			if (!parse_expr(p, &s->use->expr, expr_find_end(p, 0)))
 				return false;
-			goto success;
+			break;
 		}
-		default: break;
+		default: goto stmt_expr;
 		}
 	} else if (t->token->kind == TOKEN_DIRECT) {
 		switch (t->token->direct) {
@@ -2482,7 +2496,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				return false;
 			}
 			++t->token;
-			goto success;
+			break;
 		} break;
 		case DIRECT_ERROR:
 		case DIRECT_WARN:
@@ -2508,18 +2522,13 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				tokr_skip_semicolon(t);
 				return false;
 			}
-		    goto success;
+		    break;
 		}
 		default:
-			break;
-		}
-	}
-	if (is_decl(t)) {
-		s->kind = STMT_DECL;
-		if (!parse_decl(p, s->decl = parser_malloc(p, sizeof *s->decl), DECL_END_SEMICOLON, PARSE_DECL_ALLOW_EXPORT)) {
-			return false;
+			goto stmt_expr;
 		}
 	} else {
+	stmt_expr:
 		s->kind = STMT_EXPR;
 		Token *end = expr_find_end(p, 0);
 		if (!end) {
@@ -2539,7 +2548,6 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 		
 		if (!valid) return false;
 	}
- success:
 	parser_put_end(p, &s->where);
 	return true;
 }

@@ -8,8 +8,11 @@
 
 /* 
 TODO:
+fix tcc warnings about dubious pointer conversions
+just use MaxAlign and remove long double--now we're using less memory
 use
  - use with a decl, e.g. use p : Point;
+ - use with struct members
  - make sure use works with functions and for, e.g. for use p := points
  - exceptions (so that if you accidentally use something but have a function with the same 
  	name you can still use the function)
@@ -27,6 +30,7 @@ unions
 switch to / add as an alternative: libffi
 X ::= newtype(int); or something
 any odd number of "s for a string
+optional -Wshadow
 ---
 make sure that floating point literals are exact as possible
 	have some way of doing Infinity and s/qNaN (you can

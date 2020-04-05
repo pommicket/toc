@@ -887,7 +887,8 @@ enum {
 	DECL_FOUND_VAL = 0x0040,
 	DECL_INFER = 0x0080, /* infer the value (e.g. fn(t::Type=, x:t)) */
 	DECL_EXPORT = 0x0100,
-	DECL_IS_PARAM = 0x0200
+	DECL_IS_PARAM = 0x0200,
+	DECL_USE = 0x0400 /* e.g. use p: Point */
 };
 
 typedef U16 DeclFlags;
