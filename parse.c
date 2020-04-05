@@ -2422,8 +2422,10 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				i->flags |= INC_FORCED;
 				++t->token;
 			}
-			if (!parse_expr(p, &i->filename, expr_find_end(p, EXPR_CAN_END_WITH_COMMA)))
+			if (!parse_expr(p, &i->filename, expr_find_end(p, EXPR_CAN_END_WITH_COMMA))) {
+				tokr_skip_semicolon(t);
 				return false;
+			}
 			if (token_is_kw(t->token, KW_COMMA)) {
 				Expression filename = i->filename;
 				++t->token;
@@ -2466,6 +2468,12 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				inc_stmt->where = s->where;
 				inc_stmt->inc = parser_calloc(p, 1, sizeof *inc_stmt->inc);
 				inc_stmt->inc->filename = filename;
+			} else if (i->flags & INC_FORCED) {
+				/* go back to #forced */
+				while (!token_is_direct(t->token, DIRECT_FORCE)) --t->token;
+				err_print(token_location(p->file, t->token), "You don't need to specify #force if you're not including into a namespace (this is the default behaviour).");
+				tokr_skip_semicolon(t);
+				return false;
 			}
 			if (!token_is_kw(t->token, KW_SEMICOLON)) {
 				tokr_err(t, "Expected ; after #include directive");

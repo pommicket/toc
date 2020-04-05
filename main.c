@@ -16,7 +16,6 @@ use
 for accessing struct members (and other things, potentially) with struct["member"], just replace e with 
 	a BINARY_DOT
 local structs should not be named in C
-for some reason forgetting a ; after #include causes a misleading unrecognized expression
 simplify eval macros with val_to_u/i64
 &&, ||
 start making a standard library... (printf; stringbuilder would be nice to have)
