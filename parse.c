@@ -2297,7 +2297,8 @@ static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 f
 	}
 	
 	parser_put_end(p, &d->where);
-
+	if (ends_with != DECL_END_SEMICOLON)
+		--d->where.end; /* e.g., in fn(x: float), the param decl does not contain the ) */
 	return true;
 	
  ret_false:

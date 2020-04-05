@@ -653,7 +653,7 @@ static Status eval_expr_ptr_at_index(Evaluator *ev, Expression *e, void **ptr, T
 	return eval_val_ptr_at_index(e->where, &arr, i, ltype, ptr, type);
 }
 
-static Value *ident_val(Evaluator *ev, Identifier i) {
+static Value *ident_val(Evaluator *ev, Identifier i, Location where) {
 	switch (i->decl_kind) {
 	case IDECL_FOR: {
 		ForExpr *fo = i->decl_for;
@@ -671,7 +671,7 @@ static Value *ident_val(Evaluator *ev, Identifier i) {
 		Declaration *decl = i->decl;
 		int idx = decl_ident_index(decl, i);
 		if (decl->type.kind == TYPE_UNKNOWN && ev->typer->err_ctx->have_errored)
-			return false; /* silently fail (something went wrong when we typed this decl) */
+			return NULL; /* silently fail (something went wrong when we typed this decl) */
 		if (decl->flags & DECL_IS_PARAM) {
 			if (decl->val_stack) {
 				Value *valp = *(Value **)arr_last(decl->val_stack);
@@ -681,6 +681,11 @@ static Value *ident_val(Evaluator *ev, Identifier i) {
 					return valp;
 			} else {
 				if (!(decl->flags & DECL_FOUND_VAL)) {
+					/* trying to access parameter, e.g. fn(y: int) { x ::= y; } */
+					char *s = ident_to_str(i);
+					err_print(where, "You can't access non-constant parameter %s at compile time.", s);
+					info_print(decl->where, "%s was declared here.", s);
+					free(s);
 					return NULL;
 				}
 				/* struct parameter */
@@ -697,8 +702,13 @@ static Value *ident_val(Evaluator *ev, Identifier i) {
 				return &valp->tuple[idx];
 			else
 				return valp;
-		} else
+		} else {
+			char *s = ident_to_str(i);
+			err_print(where, "You can't access non-constant variable %s at compile time.", s);
+			info_print(decl->where, "%s was declared here.", s);
+			free(s);
 			return NULL; /* uh oh... this is a runtime-only variable */
+		}
 	}
 	case IDECL_NONE: break;
 	}
@@ -708,12 +718,8 @@ static Value *ident_val(Evaluator *ev, Identifier i) {
 }
 
 static inline bool eval_address_of_ident(Evaluator *ev, Identifier i, Location where, Type *type, void **ptr) {
-	Value *val = ident_val(ev, i);
-	if (!val) {
-		char *s = ident_to_str(i);
-		err_print(where, "Cannot access value of variable %s at compile time.", s);
-		return false;
-	}
+	Value *val = ident_val(ev, i, where);
+	if (!val) return false;
 	*ptr = val_get_ptr(val, type);
 	return true;
 }
@@ -805,9 +811,8 @@ static Status eval_set(Evaluator *ev, Expression *set, Value *to) {
 	switch (set->kind) {
 	case EXPR_IDENT: {
 		Identifier i = set->ident;
-		Value *ival = ident_val(ev, i);
+		Value *ival = ident_val(ev, i, set->where);
 		if (!ival) {
-			err_print(set->where, "Cannot set value of run time variable at compile time.");
 			return false;
 		}
 		*ival = *to;
@@ -1043,16 +1048,9 @@ static Status eval_ident(Evaluator *ev, Identifier ident, Value *v, Location whe
 			assert(d->type.flags & TYPE_IS_RESOLVED);
 		}
 	}
-	Value *ival = ident_val(ev, ident);
-	if (ival) {
-		*v = *ival;
-	} else {
-		char *s = ident_to_str(ident);
-			
-		err_print(where, "Cannot evaluate non-constant '%s' at compile time.", s);
-		free(s);
-		return false;
-	}
+	Value *ival = ident_val(ev, ident, where);
+	if (!ival) return false;
+	*v = *ival;
 	return true;
 }
 

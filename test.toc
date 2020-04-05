@@ -6,6 +6,8 @@ Point ::= struct {
 }
 
 sqrt ::= fn(x: float) a := x/2 {
+	q ::= x;
+	y ::= a;
 	for _ := 0..20 {
 		a = (x + a * a) / (2 * a);
 	}
