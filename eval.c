@@ -15,7 +15,6 @@ static Value get_builtin_val(BuiltinVal val);
 static void evalr_create(Evaluator *ev, Typer *tr, Allocator *allocr) {
 	ev->returning = NULL;
 	ev->typer = tr;
-	ev->enabled = true;
 	ev->allocr = allocr;
 	ffmgr_create(&ev->ffmgr, ev->allocr);
 }
@@ -654,7 +653,7 @@ static Status eval_expr_ptr_at_index(Evaluator *ev, Expression *e, void **ptr, T
 	return eval_val_ptr_at_index(e->where, &arr, i, ltype, ptr, type);
 }
 
-static Value *ident_val(Identifier i) {
+static Value *ident_val(Evaluator *ev, Identifier i) {
 	switch (i->decl_kind) {
 	case IDECL_FOR: {
 		ForExpr *fo = i->decl_for;
@@ -671,6 +670,8 @@ static Value *ident_val(Identifier i) {
 	case IDECL_DECL: {
 		Declaration *decl = i->decl;
 		int idx = decl_ident_index(decl, i);
+		if (decl->type.kind == TYPE_UNKNOWN && ev->typer->err_ctx->have_errored)
+			return false; /* silently fail (something went wrong when we typed this decl) */
 		if (decl->flags & DECL_IS_PARAM) {
 			if (decl->val_stack) {
 				Value *valp = *(Value **)arr_last(decl->val_stack);
@@ -706,8 +707,8 @@ static Value *ident_val(Identifier i) {
 	
 }
 
-static inline bool eval_address_of_ident(Identifier i, Location where, Type *type, void **ptr) {
-	Value *val = ident_val(i);
+static inline bool eval_address_of_ident(Evaluator *ev, Identifier i, Location where, Type *type, void **ptr) {
+	Value *val = ident_val(ev, i);
 	if (!val) {
 		char *s = ident_to_str(i);
 		err_print(where, "Cannot access value of variable %s at compile time.", s);
@@ -749,7 +750,7 @@ static Status eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr, void
 		void *ptr;
 		Identifier ident = dot_expr->binary.rhs->ident;
 		assert(type_is_builtin(struct_type, BUILTIN_NMS));
-		if (!eval_address_of_ident(ident, dot_expr->where, &dot_expr->type, &ptr))
+		if (!eval_address_of_ident(ev, ident, dot_expr->where, &dot_expr->type, &ptr))
 			return false;
 		*p = ptr;
 	}
@@ -759,7 +760,7 @@ static Status eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr, void
 static Status eval_address_of(Evaluator *ev, Expression *e, void **ptr) {
 	switch (e->kind) {
 	case EXPR_IDENT: {
-		if (!eval_address_of_ident(e->ident, e->where, &e->type, ptr))
+		if (!eval_address_of_ident(ev, e->ident, e->where, &e->type, ptr))
 			return false;
 	} break;
 	case EXPR_UNARY_OP:
@@ -804,7 +805,7 @@ static Status eval_set(Evaluator *ev, Expression *set, Value *to) {
 	switch (set->kind) {
 	case EXPR_IDENT: {
 		Identifier i = set->ident;
-		Value *ival = ident_val(i);
+		Value *ival = ident_val(ev, i);
 		if (!ival) {
 			err_print(set->where, "Cannot set value of run time variable at compile time.");
 			return false;
@@ -1042,7 +1043,7 @@ static Status eval_ident(Evaluator *ev, Identifier ident, Value *v, Location whe
 			assert(d->type.flags & TYPE_IS_RESOLVED);
 		}
 	}
-	Value *ival = ident_val(ident);
+	Value *ival = ident_val(ev, ident);
 	if (ival) {
 		*v = *ival;
 	} else {
@@ -1097,7 +1098,6 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	eval_unary_op_one(f32, F32, op);			\
 	eval_unary_op_one(f64, F64, op);
 	
-	if (!ev->enabled) return false; /* silently fail */	
 	switch (e->kind) {
 	case EXPR_UNARY_OP: {
 		Value of;

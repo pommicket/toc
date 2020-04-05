@@ -589,23 +589,25 @@ static Status type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 	case IDECL_DECL: 
 	top: {
 		Declaration *d = i->decl;
-		/* check for trying to capture a variable into a function */
-		bool captured = false;
-		if (ident_scope(i) != NULL && ident_scope(i)->kind != BLOCK_NMS) {
-			Block *decl_scope = ident_scope(i);
-			if (decl_scope->kind != BLOCK_NMS) {
-				/* go back through scopes */
-				for (Block **block = arr_last(tr->blocks); *block && *block != decl_scope; --block) {
-					if ((*block)->kind == BLOCK_FN) {
-						captured = true;
-						break;
+		if (!(d->flags & DECL_IS_CONST)) {
+			/* check for trying to capture a variable into a function */
+			bool captured = false;
+			if (ident_scope(i) != NULL && ident_scope(i)->kind != BLOCK_NMS) {
+				Block *decl_scope = ident_scope(i);
+				if (decl_scope->kind != BLOCK_NMS) {
+					/* go back through scopes */
+					for (Block **block = arr_last(tr->blocks); *block && *block != decl_scope; --block) {
+						if ((*block)->kind == BLOCK_FN) {
+							captured = true;
+							break;
+						}
 					}
 				}
 			}
-		}
-		if (captured && !(d->flags & DECL_IS_CONST)) {
-			err_print(where, "Variables cannot be captured into inner functions (but constants can).");
-			return false;
+			if (captured) {
+				err_print(where, "Variables cannot be captured into inner functions (but constants can).");
+				return false;
+			}
 		}
 		if ((d->flags & DECL_HAS_EXPR) && (d->expr.kind == EXPR_TYPE)) {
 			/* allow using a type before declaring it */
@@ -2437,12 +2439,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 					if (!order || order[i] != -1) {
 						Expression *expr = &arg_exprs[i];
 						Value arg_val = {0};
-						if (!eval_expr(tr->evalr, expr, &arg_val)) {
-							if (tr->evalr->enabled) {
-								info_print(arg_exprs[i].where, "(error occured while trying to evaluate compile-time argument, argument #%lu)", 1+(unsigned long)i);
-							}
+						if (!eval_expr(tr->evalr, expr, &arg_val))
 							return false;
-						}
 						Type *type = &expr->type;
 						arg_exprs[i].kind = EXPR_VAL;
 						arg_exprs[i].flags = EXPR_FOUND_TYPE;
@@ -3402,7 +3400,6 @@ static Status types_decl(Typer *tr, Declaration *d) {
 		d->type.flags = TYPE_IS_RESOLVED;
 		d->type.was_expr = NULL;
 		d->type.kind = TYPE_UNKNOWN;
-		tr->evalr->enabled = false; /* disable evaluator completely so that it doesn't accidentally try to access this declaration */
 	}
 	arr_remove_lasta(&tr->in_decls, tr->allocr);
 	return success;
@@ -3585,13 +3582,16 @@ static Status types_stmt(Typer *tr, Statement *s) {
 	case STMT_USE: {
 		Use *u = s->use;
 		Expression *e = &u->expr;
+		Type *t = &e->type;
 		if (!types_expr(tr, e))
 			return false;
-		if (e->type.kind != TYPE_STRUCT && !type_is_builtin(&e->type, BUILTIN_NMS)) {
-			char *str = type_to_str(&e->type);
-			err_print(s->where, "You cannot use something of type %s (only Namespaces and structs).", str);
-			free(str);
-			return false;
+		if (t->kind != TYPE_STRUCT && !type_is_builtin(t, BUILTIN_NMS)) {
+			if (!(t->kind == TYPE_PTR && t->ptr->kind == TYPE_STRUCT)) {
+				char *str = type_to_str(&e->type);
+				err_print(s->where, "You cannot use something of type %s (only Namespaces and structs).", str);
+				free(str);
+				return false;
+			}
 		}
 		if (!expr_is_usable(e)) {
 			err_print(e->where, "You can't use this value. You should probably assign it to a variable.");

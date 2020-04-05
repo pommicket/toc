@@ -8,13 +8,13 @@
 
 /* 
 TODO:
-for accessing struct members (and other things, potentially) with struct["member"], just replace e with 
-	a BINARY_DOT
 use
  - use with a decl, e.g. use p : Point;
  - make sure use works with functions and for, e.g. for use p := points
  - exceptions (so that if you accidentally use something but have a function with the same 
  	name you can still use the function)
+for accessing struct members (and other things, potentially) with struct["member"], just replace e with 
+	a BINARY_DOT
 local structs should not be named in C
 for some reason forgetting a ; after #include causes a misleading unrecognized expression
 simplify eval macros with val_to_u/i64
@@ -36,7 +36,7 @@ once you have a bunch of test code, try making more Expression members pointers
 error on x ::= {return; 3}
 #returns_code (struct body is a block, to be evaluated at compile time, which returns the actual statements)
 	- struct varargs
-macros
+macros (specifically, passing untyped expressions to functions)
 */
 
 #if defined __unix__ || (defined __APPLE__ && defined __MACH__)

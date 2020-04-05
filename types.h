@@ -1046,7 +1046,6 @@ typedef struct Evaluator {
     Block *returning; /* function body from which we are returning OR loop body in which we are continuing/breaking */
 	bool is_break; /* is returning because of a break, as opposed to a continue? */
 	Value ret_val;
-	bool enabled;
 	ForeignFnManager ffmgr;
 } Evaluator;
 
