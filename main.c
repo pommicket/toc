@@ -8,10 +8,12 @@
 
 /* 
 TODO:
+fix "Could not open file" error
 use
  - use with struct members (e.g. SuperPoint ::= struct { use p: Point; })
 for accessing struct members (and other things, potentially) with struct["member"], just replace e with 
 	a BINARY_DOT
+EXPR_IDENT should be a string before typing
 local structs should not be named in C
 simplify eval macros with val_to_u/i64
 consider replacing weird EXPR_FOR system with just a declaration- would make "for use p := points" easier
@@ -33,9 +35,11 @@ make sure that floating point literals are exact as possible
 	have them be in std/math.toc)
 once you have a bunch of test code, try making more Expression members pointers
 error on x ::= {return; 3}
+maybe macros are just inline functions
 #returns_code (struct body is a block, to be evaluated at compile time, which returns the actual statements)
 	- struct varargs
-macros (specifically, passing untyped expressions to functions)
+	- also use with functions for macros
+passing untyped expressions to macros
 */
 
 #if defined __unix__ || (defined __APPLE__ && defined __MACH__)
