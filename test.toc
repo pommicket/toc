@@ -25,4 +25,11 @@ main ::= fn() {
 	normalize(&p);
 	fmt := "%f %f\n\0";
 	printf(&fmt[0], p.x, p.y);
+	ps: [10]Point;
+	ps[0].x = 12;
+	ps[7].y = 13;
+	for p := &ps {
+		use p;
+		printf(&fmt[0], x, y);
+	}
 }

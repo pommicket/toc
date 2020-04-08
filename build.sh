@@ -16,9 +16,9 @@ ADDITIONAL_FLAGS="$CFLAGS -Wno-unused-function"
 if [ "$CC" = "clang" ]; then
 	WARNINGS='-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wimplicit-fallthrough -Wno-missing-braces'
 elif [ "$CC" = "gcc" ]; then
-	WARNINGS='-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wno-pointer-to-int-cast'
+	WARNINGS='-Wall -Wextra -Wpedantic -Wshadow -Wconversion'
 elif [ "$CC" = "tcc" ]; then
-	WARNINGS='-w'
+	WARNINGS='-Wall'
 elif [ "$CC" = "g++" ]; then
 	WARNINGS='-w -fpermissive'
 else

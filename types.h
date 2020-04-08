@@ -37,17 +37,13 @@ typedef long longlong;
 #endif
 
 
-#if __STDC_VERSION__ < 201112
 /* try to find the type with the strictest alignment */
 typedef union {
-	long double floating;
+	double floating;
 	void *ptr;
 	longlong integer;
 	void (*fn_ptr)(void);
 } MaxAlign;
-#else
-typedef max_align_t MaxAlign;
-#endif
 
 typedef uint8_t U8;
 #define U8_MAX UINT8_MAX

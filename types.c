@@ -448,6 +448,7 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	Type *ret_type = typer_arr_add(tr, &t->fn.types);
 	tr->fn = f;
 	typer_block_enter(tr, &f->body);
+	f->body.uses = NULL;
 	size_t nparams = arr_len(f->params);
 	entered_fn = true;
 	for (param_idx = 0; param_idx < nparams; ++param_idx) {
@@ -541,7 +542,6 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 		}
 	}
 	if (!generic) {
-		f->body.uses = NULL;
 		if (!type_resolve(tr, &f->ret_type, f->where)) {
 			success = false;
 			goto ret;

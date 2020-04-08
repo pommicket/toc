@@ -8,18 +8,13 @@
 
 /* 
 TODO:
-fix tcc warnings about dubious pointer conversions
-just use MaxAlign and remove long double--now we're using less memory
 use
- - use with a decl, e.g. use p : Point;
- - use with struct members
- - make sure use works with functions and for, e.g. for use p := points
- - exceptions (so that if you accidentally use something but have a function with the same 
- 	name you can still use the function)
+ - use with struct members (e.g. SuperPoint ::= struct { use p: Point; })
 for accessing struct members (and other things, potentially) with struct["member"], just replace e with 
 	a BINARY_DOT
 local structs should not be named in C
 simplify eval macros with val_to_u/i64
+consider replacing weird EXPR_FOR system with just a declaration- would make "for use p := points" easier
 &&, ||
 start making a standard library... (printf; stringbuilder would be nice to have)
 switch
@@ -30,6 +25,7 @@ unions
 switch to / add as an alternative: libffi
 X ::= newtype(int); or something
 any odd number of "s for a string
+use point #except x;
 optional -Wshadow
 ---
 make sure that floating point literals are exact as possible

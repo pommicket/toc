@@ -120,18 +120,27 @@ static void i64_to_val(Value *v, BuiltinType v_type, I64 x) {
 
 static void u64_to_val(Value *v, BuiltinType v_type, U64 x) {
 	switch (v_type) {
+	case BUILTIN_I8:
+		v->i8 = (I8)x; break;
+	case BUILTIN_I16:
+		v->i16 = (I16)x; break;
+	case BUILTIN_I32:
+		v->i32 = (I32)x; break;
+	case BUILTIN_I64:
+		v->i64 = (I64)x; break;
+	case BUILTIN_U8:
+		v->u8 = (U8)x; break;
+	case BUILTIN_U16:
+		v->u16 = (U16)x; break;
+	case BUILTIN_U32:
+		v->u32 = (U32)x; break;
 	case BUILTIN_U64:
-		v->u64 = x;
-		break;
+		v->u64 = (U64)x; break;
 	case BUILTIN_F32:
-		v->f32 = (F32)x;
-		break;
+		v->f32 = (F32)x; break;
 	case BUILTIN_F64:
-		v->f64 = (F64)x;
-		break;
-	default:
-		i64_to_val(v, v_type, (I64)x);
-		break;
+		v->f64 = (F64)x; break;
+	default: assert(0); break;
 	}
 }
 
@@ -299,19 +308,19 @@ static inline void val_free_ptr(Value *v, Type *t) {
 
 #define builtin_casts_to_int(x)					\
 	case BUILTIN_I8:							\
-	vout->i8 = (I8)vin->x; break;				\
+	vout->i8 = (I8)(I64)vin->x; break;			\
 	case BUILTIN_I16:							\
-	vout->i16 = (I16)vin->x; break;				\
+	vout->i16 = (I16)(I64)vin->x; break;		\
 	case BUILTIN_I32:							\
-	vout->i32 = (I32)vin->x; break;				\
+	vout->i32 = (I32)(I64)vin->x; break;		\
 	case BUILTIN_I64:							\
 	vout->i64 = (I64)vin->x; break;				\
 	case BUILTIN_U8:							\
-	vout->u8 = (U8)vin->x; break;				\
+	vout->u8 = (U8)(U64)vin->x; break;			\
 	case BUILTIN_U16:							\
-	vout->u16 = (U16)vin->x; break;				\
+	vout->u16 = (U16)(U64)vin->x; break;		\
 	case BUILTIN_U32:							\
-	vout->u32 = (U32)vin->x; break;				\
+	vout->u32 = (U32)(U64)vin->x; break;		\
 	case BUILTIN_U64:							\
 	vout->u64 = (U64)vin->x; break
 

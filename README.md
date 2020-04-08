@@ -64,10 +64,9 @@ Here are all the C99 features which `toc` depends on (I might have forgotten som
 - Flexible array members
 - `snprintf`
 
-And here are all of its C11 features:
+And here are all of its (mandatory) C11 features:
 
 - Anonymous structures/unions
-- `max_align_t` - It can still compile without this, and will almost definitely work, but it won't technically be standard-compliant
 
 #### More
 
