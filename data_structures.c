@@ -111,7 +111,7 @@ static void arr_set_lena_(void **arr, size_t n, size_t item_sz, Allocator *a) {
 static void *arr_add_(void **arr, size_t item_sz) {
 	ArrHeader *hdr;
 	if (*arr == NULL) {
-		arr_resv_(arr, 10, item_sz);
+		arr_resv_(arr, 1, item_sz);
 		hdr = arr_hdr(*arr);
 	} else {
 		hdr = arr_hdr(*arr);

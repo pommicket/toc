@@ -69,11 +69,26 @@ static void print_pos_highlight(FILE *out, ErrCtx *ctx, File *file, U32 start_po
 	fprintf(out, "\n");
 }
 
+static FILE *err_ctx_file(ErrCtx *ctx) {
+	(void)ctx;
+	return stderr;
+}
+
+
+static void err_fprint(ErrCtx *ctx, const char *fmt, ...) {
+	va_list args;
+	va_start(args, fmt);
+	vfprintf(err_ctx_file(ctx), fmt, args);
+	va_end(args);
+}
+
 static void print_location_highlight(FILE *out, Location where) {
 	File *f = where.file;
 	ErrCtx *ctx = f->ctx;
+	if (where.start == 0 && where.end == 0) { err_fprint(ctx, "\n"); return; } /* null location */
 	Token *first = &f->tokens[where.start];
 	Token *last = &f->tokens[where.end-1];
+	
 	print_pos_highlight(out, ctx, f, first->pos.start, last->pos.end);
 }
 
@@ -96,18 +111,6 @@ static inline const char *ordinals(size_t x) {
 	case 3: return "rd";
 	default: return "th";
 	}
-}
-
-static FILE *err_ctx_file(ErrCtx *ctx) {
-	(void)ctx;
-	return stderr;
-}
-
-static void err_fprint(ErrCtx *ctx, const char *fmt, ...) {
-	va_list args;
-	va_start(args, fmt);
-	vfprintf(err_ctx_file(ctx), fmt, args);
-	va_end(args);
 }
 
 static void err_text_err(ErrCtx *ctx, const char *s) {
@@ -150,18 +153,21 @@ static void err_print_line_file(Location where) {
 static void err_print_header_(Location where) {
 	ErrCtx *ctx = where.file->ctx;
 	err_text_err(ctx, "error");
+	if (where.start == 0 && where.end == 0) { err_fprint(ctx, ": "); return; }
 	err_print_line_file(where);
 }
 
 static void info_print_header_(Location where) {
 	ErrCtx *ctx = where.file->ctx;
 	err_text_info(ctx, "info");
+	if (where.start == 0 && where.end == 0) { err_fprint(ctx, ": "); return; }
 	err_print_line_file(where);
 }
 
 static void warn_print_header_(Location where) {
 	ErrCtx *ctx = where.file->ctx;
 	err_text_warn(ctx, "warning");
+	if (where.start == 0 && where.end == 0) { err_fprint(ctx, ": "); return; }
 	err_print_line_file(where);
 }
 

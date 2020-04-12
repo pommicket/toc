@@ -130,11 +130,6 @@ typedef struct Allocator {
 	Page *last;
 } Allocator;
 
-typedef struct ArrBlock {
-	void *data;
-	size_t n; /* number of things in this block so far */
-} ArrBlock;
-
 /* initialize to 0 */
 typedef struct HashTable {
 	void *data;
