@@ -55,15 +55,20 @@ static inline bool ident_eq_str(Identifier i, const char *s) {
 	return ident_str_eq_str(i->str, s);
 }
 
+
+static inline Identifier ident_insert_with_len(Identifiers *ids, char *s, size_t len) {
+	IdentSlot *slot = (IdentSlot *)str_hash_table_insert_(&ids->table, s, len);
+	slot->idents = ids;
+	return slot;
+}
+
 /* moves s to the char after the identifier */
 /* inserts if does not exist. reads until non-ident char is found. */
 /* advances past identifier */
-static Identifier ident_insert(Identifiers *ids, char **s) {
+static inline Identifier ident_insert(Identifiers *ids, char **s) {
 	char *original = *s;
 	size_t len = ident_str_len_advance(s);
-	IdentSlot *slot = (IdentSlot *)str_hash_table_insert_(&ids->table, original, len);
-	slot->idents = ids;
-	return slot;
+	return ident_insert_with_len(ids, original, len);
 }
 
 static char *ident_to_str(Identifier i) {

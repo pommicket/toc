@@ -1,35 +1,17 @@
+#include "std/io.toc";
 
 Point ::= struct {
-	x, y: float;
+	x, y: int;
 }
 
-sqrt ::= fn(x: float) a := x/2 {
-	for _ := 0..20 {
-		a = (x + a * a) / (2 * a);
-	}
+foo ::= fn() []char {
+	return "y";
 }
-
-normalize ::= fn(use p: &Point) {
-	sqdist := x * x + y * y;
-	one_over_dist := 1/sqrt(sqdist);
-	x *= one_over_dist;
-	y *= one_over_dist;
-}
-
-printf ::= #foreign("printf", "libc.so.6") fn(#C &"const char", #C ..);
 
 main ::= fn() {
-	use p: Point;
-	x = 10;
-	y = 20;
-	normalize(&p);
-	fmt := "%f %f\n\0";
-	printf(&fmt[0], p.x, p.y);
-	ps: [10]Point;
-	ps[0].x = 12;
-	ps[7].y = 13;
-	for p := &ps {
-		use p;
-		printf(&fmt[0], x, y);
-	}
+	p: Point;
+	p["x"] = 5;
+	p[foo()] = 17;
+	puti(p["x"]);
+	puti(p.y);
 }

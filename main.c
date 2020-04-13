@@ -8,12 +8,9 @@
 
 /* 
 TODO:
-fix "Could not open file" error
+EXPR_IDENT should be a string before typing, also struct member accesses
 use
  - use with struct members (e.g. SuperPoint ::= struct { use p: Point; })
-for accessing struct members (and other things, potentially) with struct["member"], just replace e with 
-	a BINARY_DOT
-EXPR_IDENT should be a string before typing
 local structs should not be named in C
 simplify eval macros with val_to_u/i64
 consider replacing weird EXPR_FOR system with just a declaration- would make "for use p := points" easier

@@ -7,6 +7,10 @@ static Status types_stmt(Typer *tr, Statement *s);
 static Status type_resolve(Typer *tr, Type *t, Location where);
 
 
+static inline Identifiers *typer_get_idents(Typer *tr) {
+	return tr->block == NULL ? tr->globals : &tr->block->idents;
+}
+
 static inline void *typer_malloc(Typer *tr, size_t bytes) {
 	return allocr_malloc(tr->allocr, bytes);
 }
@@ -2893,16 +2897,25 @@ static Status types_expr(Typer *tr, Expression *e) {
 			break;
 		}
 		case BINARY_AT_INDEX:
-			if ((lhs_type->kind == TYPE_ARR || lhs_type->kind == TYPE_SLICE || type_is_builtin(lhs_type, BUILTIN_VARARGS)) &&
-				(rhs_type->kind != TYPE_BUILTIN || !type_builtin_is_numerical(rhs_type->builtin))) {
+			if (type_is_slicechar(rhs_type)) {
+				/* switch to BINARY_DOT (point["x"] => point.x) */
+				e->binary.op = BINARY_DOT;
+				Value val;
+				if (!eval_expr(tr->evalr, rhs, &val)) {
+					return false;
+				}
+				rhs->kind = EXPR_IDENT;
+				rhs->ident = ident_insert_with_len(typer_get_idents(tr), val.slice.data, (size_t)val.slice.len);
+				/* re-type with new expression */
+				e->flags = (ExprFlags)~(ExprFlags)EXPR_FOUND_TYPE;
+				return types_expr(tr, e);
+			}
+			if (rhs_type->kind != TYPE_BUILTIN || !type_builtin_is_numerical(rhs_type->builtin)) {
 				err_print(e->where, "The index of an array must be a builtin numerical type.");
 				return false;
 			}
 			if (lhs_type->kind == TYPE_PTR) {
-				if (lhs_type->ptr->kind == TYPE_STRUCT
-					|| type_is_builtin(lhs_type->ptr, BUILTIN_NMS)) {
-					lhs_type = lhs_type->ptr;
-				}
+				lhs_type = lhs_type->ptr;
 			}
 			switch (lhs_type->kind) {
 			case TYPE_ARR:
@@ -2911,108 +2924,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 			case TYPE_SLICE:
 				*t = *lhs_type->slice;
 				break;
-			case TYPE_STRUCT: {
-				/* allow accessing struct members with a string */
-				if (!type_is_slicechar(rhs_type)) {
-					char *s = type_to_str(rhs_type);
-					err_print(e->where, "Expected a string for struct member access with [], but got type %s.", s);
-					return false;
-				}
-				Value field_name;
-				if (!eval_expr(tr->evalr, rhs, &field_name)) return false;
-
-				/* get the field, if it exists */
-				Identifier ident = ident_get_with_len(&lhs_type->struc->body.idents,
-						field_name.slice.data, (size_t)field_name.slice.len);
-				if (ident_is_declared(ident)) {
-					assert(ident->decl_kind == IDECL_DECL);
-					Declaration *decl = ident->decl;
-					if (decl->flags & DECL_IS_CONST) {
-						/* replace with value of struct constant */
-						e->kind = EXPR_VAL;
-						assert(decl->flags & DECL_FOUND_VAL);
-						int idx = ident_index_in_decl(ident, decl);
-						*t = *decl_type_at_index(decl, idx);
-						copy_val(tr->allocr, &e->val, *decl_val_at_index(decl, idx), t);
-					} else {
-						/* replace with BINARY_DOT */
-						e->binary.op = BINARY_DOT;
-						Field *f = decl->field + ident_index_in_decl(ident, decl);
-						e->binary.dot.field = f;
-						*t = *f->type;
-					}
-				} else {
-					char *fstr = err_malloc((size_t)(field_name.slice.len + 1));
-					memcpy(fstr, field_name.slice.data, (size_t)field_name.slice.len);
-					fstr[field_name.slice.len] = 0; /* null-terminate */
-					char *typestr = type_to_str(lhs_type);
-					err_print(e->where, "%s is not a field of structure %s.", fstr, typestr);
-					free(fstr); free(typestr);
-					return false;
-				}
-			} break;
-			case TYPE_BUILTIN:
-				if (lhs_type->builtin == BUILTIN_NMS) {
-					/* allow accessing namespace members with a string */
-					if (!type_is_slicechar(rhs_type)) {
-						char *s = type_to_str(rhs_type);
-						err_print(e->where, "Expected a string for namsepace member access with [], but got type %s.", s);
-						return false;
-					}
-
-					Value nms_val;
-					if (!eval_expr(tr->evalr, lhs, &nms_val))
-						return false;
-					Namespace *nms = nms_val.nms;
-					lhs->kind = EXPR_VAL;
-					lhs->val.nms = nms;
-				
-					Value member_name;
-					if (!eval_expr(tr->evalr, rhs, &member_name)) return false;
-					e->binary.op = BINARY_DOT;
-					e->binary.rhs->kind = EXPR_IDENT;
-					e->binary.rhs->ident = ident_get_with_len(&nms->body.idents, member_name.slice.data, (size_t)member_name.slice.len);
-					if (!ident_is_declared(e->binary.rhs->ident)) {
-						char *s = slice_to_cstr(member_name.slice);
-						err_print(e->where, "\"%s\" is not a member of this namespace.", s);
-						free(s);
-						return false;
-					}
-					if (!type_of_ident(tr, rhs->where, e->binary.rhs->ident, t)) {
-						return false;
-					}
-					break;
-				} else if (lhs_type->builtin == BUILTIN_VARARGS) {
-					assert(lhs->kind == EXPR_IDENT);
-					assert(lhs->ident->decl_kind == IDECL_DECL);
-					Declaration *decl = lhs->ident->decl;
-					assert(decl->flags & DECL_IS_PARAM);
-					Value index_val;
-					if (!eval_expr(tr->evalr, rhs, &index_val))
-						return false;
-					/* NOTE: rhs->type was checked above */
-					I64 i = val_to_i64(index_val, rhs->type.builtin);
-					VarArg *varargs = decl->val.varargs;
-					if (i < 0 || i >= (I64)arr_len(varargs)) {
-						err_print(e->where, "Index out of bounds for varargs access (index = " I64_FMT ", length = %lu).", i, (unsigned long)arr_len(varargs));
-						return 0;
-					}
-					VarArg *vararg = &varargs[i];
-					if (decl->flags & DECL_IS_CONST) {
-						/* replace with value */
-						e->kind = EXPR_VAL;
-						e->type = *vararg->type;
-						copy_val(tr->allocr, &e->val, vararg->val, &e->type);
-					} else {
-						/* just use vararg's type */
-						rhs->kind = EXPR_VAL;
-						rhs->val.i64 = i;
-						rhs->type.builtin = BUILTIN_I64;
-						*t = *vararg->type;
-					}
-					break;
-				}
-				/* fallthrough */
 			default: {
 				char *s = type_to_str(lhs_type);
 				err_print(e->where, "Cannot subscript type %s", s);
