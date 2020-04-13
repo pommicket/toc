@@ -8,12 +8,13 @@
 
 /* 
 TODO:
+replace weird EXPR_FOR system with just a declaration- would make "for use p := points" easier
+	-> rewrite for copying
 EXPR_IDENT should be a string before typing, also struct member accesses
 use
  - use with struct members (e.g. SuperPoint ::= struct { use p: Point; })
 local structs should not be named in C
 simplify eval macros with val_to_u/i64
-consider replacing weird EXPR_FOR system with just a declaration- would make "for use p := points" easier
 &&, ||
 start making a standard library... (printf; stringbuilder would be nice to have)
 switch
@@ -32,6 +33,7 @@ make sure that floating point literals are exact as possible
 	have them be in std/math.toc)
 once you have a bunch of test code, try making more Expression members pointers
 error on x ::= {return; 3}
+struct param inference
 maybe macros are just inline functions
 #returns_code (struct body is a block, to be evaluated at compile time, which returns the actual statements)
 	- struct varargs

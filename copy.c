@@ -275,38 +275,7 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		copy_block(c, &wout->body, &win->body, 0);
 	} break;
 	case EXPR_FOR: {
-		ForExpr *fin = in->for_;
-		ForExpr *fout = allocr_malloc(a, sizeof *fout);
-		out->for_ = fout;
-		*fout = *fin;
-		
-		Block *prev = c->block;
-		idents_create(&fout->body.idents, c->allocr, &fout->body);
-		c->block = &fout->body;
-
-		if (fout->index) {
-			copier_ident_translate(c, &fout->index);
-			fout->index->decl_kind = IDECL_FOR;
-			fout->index->decl_for = fout;
-		}
-		if (fout->value) {
-			copier_ident_translate(c, &fout->value);
-			fout->value->decl_kind = IDECL_FOR;
-			fout->value->decl_for = fout;
-		}
-		if (fin->flags & FOR_ANNOTATED_TYPE)
-			copy_type(c, &fout->type, &fin->type);
-		if (fin->flags & FOR_IS_RANGE) {
-			fout->range.from = copy_expr_(c, fin->range.from);
-			if (fin->range.to)
-				fout->range.to = copy_expr_(c, fin->range.to);
-			if (fin->range.step)
-				fout->range.step = copy_expr_(c, fin->range.step);
-		} else {
-			fout->of = copy_expr_(c, fin->of);
-		}
-		c->block = prev;
-		copy_block(c, &fout->body, &fin->body, COPY_BLOCK_DONT_CREATE_IDENTS);
+		/* TODO */
 	} break;
 	case EXPR_FN:
 		copy_fn_expr(c, out->fn = allocr_malloc(a, sizeof *out->fn), in->fn, 0);

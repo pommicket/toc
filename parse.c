@@ -6,20 +6,25 @@
 static Status parse_expr(Parser *p, Expression *e, Token *end);
 static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement);
 enum {
-	  PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR = 0x01,
-	  PARSE_DECL_ALLOW_SEMI_CONST = 0x02,
-	  PARSE_DECL_ALLOW_INFER = 0x04,
-	  PARSE_DECL_ALLOW_EXPORT = 0x08,
-	  PARSE_DECL_DONT_SET_IDECLS = 0x10
+	  PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR = 0x0001,
+	  PARSE_DECL_ALLOW_SEMI_CONST = 0x0002,
+	  PARSE_DECL_ALLOW_INFER = 0x0004,
+	  PARSE_DECL_ALLOW_EXPORT = 0x0008,
+	  PARSE_DECL_DONT_SET_IDECLS = 0x0010,
+	  PARSE_DECL_IGNORE_EXPR = 0x0020, /* NOTE: if you pass this to parse_decl, you must set d->where.end */
+	  DECL_CAN_END_WITH_SEMICOLON = 0x0100,
+	  DECL_CAN_END_WITH_RPAREN = 0x0200,
+	  DECL_CAN_END_WITH_LBRACE = 0x0400,
+	  DECL_CAN_END_WITH_COMMA = 0x0800
 };
-static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 flags);
-static Status parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end);
+static Status parse_decl(Parser *p, Declaration *d, U16 flags);
+static Status parse_decl_list(Parser *p, Declaration **decls, U16 flags);
 enum {
 	  PARSE_BLOCK_DONT_CREATE_IDENTS = 0x01
 };
 static bool parse_block(Parser *p, Block *b, U8 flags);
 static bool is_decl(Tokenizer *t);
-static inline bool ends_decl(Token *t, DeclEndKind ends_with);
+static inline bool ends_decl(Token *t, U16 flags);
 
 static bool fn_has_any_const_params(FnExpr *f) {
 	arr_foreach(f->params, Declaration, param)
@@ -605,7 +610,8 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 					tokr_err(t, "Empty struct parameter lists are not allowed.");
 					goto struct_fail;
 				}
-				if (!parse_decl_list(p, &struc->params, DECL_END_RPAREN_COMMA))
+				if (!parse_decl_list(p, &struc->params, DECL_CAN_END_WITH_RPAREN | DECL_CAN_END_WITH_COMMA |
+					PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR))
 					goto struct_fail;
 
 				arr_foreach(struc->params, Declaration, param) {
@@ -616,11 +622,6 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 					if ((param->flags & DECL_ANNOTATES_TYPE) && type_is_builtin(&param->type, BUILTIN_VARARGS)) {
 						/* TODO(eventually) */
 						err_print(param->where, "structs cannot have varargs parameters (yet).");
-						goto struct_fail;
-					}
-					if (param->flags & DECL_INFER) {
-						/* TODO(eventually) */
-						err_print(param->where, "Struct parameters cannot be inferred (yet).");
 						goto struct_fail;
 					}
 					param->flags |= DECL_IS_PARAM;
@@ -847,7 +848,7 @@ static Status parse_block(Parser *p, Block *b, U8 flags) {
 }
 
 /* does NOT handle empty declaration lists */
-static Status parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_end) {
+static Status parse_decl_list(Parser *p, Declaration **decls, U16 flags) {
 	Tokenizer *t = p->tokr;
 	bool ret = true;
 	bool first = true;
@@ -858,10 +859,10 @@ static Status parse_decl_list(Parser *p, Declaration **decls, DeclEndKind decl_e
 					  !token_is_kw(t->token - 1, KW_LBRACE)))) {
 		first = false;
 		Declaration *decl = parser_arr_add(p, decls);
-		if (!parse_decl(p, decl, decl_end, PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR | PARSE_DECL_ALLOW_SEMI_CONST | PARSE_DECL_ALLOW_INFER)) {
+		if (!parse_decl(p, decl, flags)) {
 			ret = false;
 			/* skip to end of list */
-			while (t->token->kind != TOKEN_EOF && !ends_decl(t->token, decl_end))
+			while (t->token->kind != TOKEN_EOF && !ends_decl(t->token, flags))
 				++t->token;
 			break;
 		}
@@ -904,7 +905,9 @@ static Status parse_fn_expr(Parser *p, FnExpr *f) {
 	if (token_is_kw(t->token, KW_RPAREN)) {
 		++t->token;
 	} else {
-		if (!parse_decl_list(p, &f->params, DECL_END_RPAREN_COMMA))
+		if (!parse_decl_list(p, &f->params, DECL_CAN_END_WITH_RPAREN
+			| DECL_CAN_END_WITH_COMMA | PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR 
+			| PARSE_DECL_ALLOW_SEMI_CONST | PARSE_DECL_ALLOW_INFER))
 			return false;
 		arr_foreach(f->params, Declaration, param) {
 			param->flags |= DECL_IS_PARAM;
@@ -921,15 +924,11 @@ static Status parse_fn_expr(Parser *p, FnExpr *f) {
 		f->ret_type.kind = TYPE_VOID;
 		f->ret_type.flags = 0;
 	} else if (is_decl(t)) {
-		if (!parse_decl_list(p, &f->ret_decls, DECL_END_LBRACE_COMMA))
+		if (!parse_decl_list(p, &f->ret_decls, DECL_CAN_END_WITH_LBRACE | DECL_CAN_END_WITH_COMMA))
 			return false;
 		arr_foreach(f->ret_decls, Declaration, d) {
-			if ((d->flags & DECL_IS_CONST) || (d->flags & DECL_SEMI_CONST)) {
+			if (d->flags & DECL_IS_CONST) {
 				err_print(d->where, "Named return values cannot be constant.");
-				success = false; goto ret;
-			}
-			if (d->flags & DECL_INFER) {
-				err_print(d->where, "Can't infer the value of a named return value!");
 				success = false; goto ret;
 			}
 		}
@@ -1006,7 +1005,7 @@ static Status check_ident_redecl(Parser *p, Identifier i) {
 		if (i->decl_kind != IDECL_NONE) { /* declared */
 			char *s = ident_to_str(i);
 			tokr_err(t, "Redeclaration of identifier %s.", s);
-			info_print(ident_decl_location(p->file, i), "Previous declaration was here.");
+			info_print(ident_decl_location(i), "Previous declaration was here.");
 			free(s);
 			return false;
 		}
@@ -1386,71 +1385,20 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			case KW_FOR: {
 				e->kind = EXPR_FOR;
 				ForExpr *fo = e->for_ = parser_malloc(p, sizeof *fo);
-				fo->val_stack = NULL;
 				fo->flags = 0;
-				fo->value = NULL;
-				fo->index = NULL;
+				fo->type = NULL;
 				Block *prev_block = p->block;
 				fo->body.parent = p->block;
 				p->block = &fo->body;
 				idents_create(&p->block->idents, p->allocr, p->block);
 				++t->token;
-				if (token_is_kw(t->token, KW_COLON)
-					|| (t->token->kind == TOKEN_IDENT
-						&& (token_is_kw(t->token + 1, KW_COLON)
-							|| (token_is_kw(t->token + 1, KW_COMMA)
-								&& t->token[2].kind == TOKEN_IDENT
-								&& token_is_kw(t->token + 3, KW_COLON))))) {
-					if (t->token->kind == TOKEN_IDENT) {
-						fo->value = parser_ident_insert(p, t->token->ident);
-						if (!check_ident_redecl(p, fo->value))
-							goto for_fail;
-						if (ident_eq_str(fo->value, "_")) { /* ignore value */
-							fo->value = NULL;
-						} else {
-							fo->value->decl_kind = IDECL_FOR;
-							fo->value->decl_for = fo;
-						}
-						++t->token;
-						if (token_is_kw(t->token, KW_COMMA)) {
-							++t->token;
-							if (t->token->kind == TOKEN_IDENT) {
-								fo->index = parser_ident_insert(p, t->token->ident);
-								if (!check_ident_redecl(p, fo->index))
-									goto for_fail;
-								if (ident_eq_str(fo->index, "_")) { /* ignore index */
-									fo->index = NULL;
-								} else {
-									fo->index->decl_kind = IDECL_FOR;
-									fo->index->decl_for = fo;
-								}
-								++t->token;
-							} else {
-								tokr_err(t, "Expected identifier after , in for loop.");
-								goto for_fail;
-							}
-						}
-					}
-					if (!token_is_kw(t->token, KW_COLON)) {
-						tokr_err(t, "Expected : following identifiers in for loop.");
-						goto for_fail;
-					}
-					++t->token;
-					if (token_is_kw(t->token, KW_COLON)) {
-						tokr_err(t, "The variable(s) in a for loop cannot be constant.");
-						goto for_fail;
-					}
-					if (!token_is_kw(t->token, KW_EQ)) {
-						fo->flags |= FOR_ANNOTATED_TYPE;
-						if (!parse_type(p, &fo->type, NULL))
-							goto for_fail;
-						if (!token_is_kw(t->token, KW_EQ)) {
-							tokr_err(t, "Expected = in for statement.");
-							goto for_fail;
-						}
-					}
-					++t->token;
+				if (!parse_decl(p, &fo->header, PARSE_DECL_IGNORE_EXPR | DECL_CAN_END_WITH_LBRACE))
+					goto for_fail;
+				if (!token_is_kw(t->token, KW_EQ)) {
+					tokr_err(t, "Expected = to follow for declaration.");
+					goto for_fail;
 				}
+				++t->token;
 				Token *first_end; first_end = expr_find_end(p, EXPR_CAN_END_WITH_COMMA|EXPR_CAN_END_WITH_DOTDOT|EXPR_CAN_END_WITH_LBRACE);
 				Expression *first; first = parser_new_expr(p);
 				if (!parse_expr(p, first, first_end))
@@ -2127,20 +2075,23 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 	return true;
 }
 
-static inline bool ends_decl(Token *t, DeclEndKind ends_with) {
+static inline bool ends_decl(Token *t, U16 flags) {
 	if (t->kind != TOKEN_KW) return false;
-	switch (ends_with) {
-	case DECL_END_SEMICOLON:
-		return t->kw == KW_SEMICOLON;
-	case DECL_END_RPAREN_COMMA:
-		return t->kw == KW_RPAREN || t->kw == KW_COMMA;
-	case DECL_END_LBRACE_COMMA:
-		return t->kw == KW_LBRACE || t->kw == KW_COMMA;
-	default: assert(0); return false;
+	switch (t->kw) {
+	case KW_SEMICOLON:
+		return (flags & DECL_CAN_END_WITH_SEMICOLON) != 0;
+	case KW_RPAREN:
+		return (flags & DECL_CAN_END_WITH_RPAREN) != 0;
+	case KW_COMMA:
+		return (flags & DECL_CAN_END_WITH_COMMA) != 0;
+	case KW_LBRACE:
+		return (flags & DECL_CAN_END_WITH_LBRACE) != 0;
+	default: break;
 	}
+	return false;
 }
 
-static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 flags) {
+static Status parse_decl(Parser *p, Declaration *d, U16 flags) {
 	Tokenizer *t = p->tokr;
 	d->where = parser_mk_loc(p);
 	d->idents = NULL;
@@ -2234,17 +2185,31 @@ static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 f
 		}
 	}
 	{
-		const char *end_str = NULL;
-		switch (ends_with) {
-		case DECL_END_SEMICOLON: end_str = "';'"; break;
-		case DECL_END_RPAREN_COMMA: end_str = "')' or ','"; break;
-		case DECL_END_LBRACE_COMMA: end_str = "'{' or ','"; break;
+		if (flags & PARSE_DECL_IGNORE_EXPR) {
+			if (token_is_kw(t->token, KW_EQ))
+				return true;
+			if (ends_decl(t->token, flags))
+				return true;
 		}
-		assert(end_str);
-			
+
+		char end_str[32] = {0};
+		if (flags & DECL_CAN_END_WITH_SEMICOLON)
+			strcat(end_str, "';'/");
+		if (flags & DECL_CAN_END_WITH_RPAREN)
+			strcat(end_str, "')'/");
+		if (flags & DECL_CAN_END_WITH_LBRACE)
+			strcat(end_str, "'{'/");
+		if (flags & DECL_CAN_END_WITH_COMMA)
+			strcat(end_str, "','/");
+		{
+			size_t len = strlen(end_str);
+			assert(len && end_str[len-1] == '/');
+			end_str[len-1] = 0;
+		}
+
 		if (token_is_kw(t->token, KW_EQ)) {
 			++t->token;
-			if ((flags & PARSE_DECL_ALLOW_INFER) && ends_decl(t->token, ends_with)) {
+			if ((flags & PARSE_DECL_ALLOW_INFER) && ends_decl(t->token, flags)) {
 				/* inferred expression */
 				d->flags |= DECL_INFER;
 				if (!(d->flags & DECL_IS_CONST)) {
@@ -2259,10 +2224,10 @@ static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 f
 			} else {
 				d->flags |= DECL_HAS_EXPR;
 				uint16_t expr_flags = 0;
-				if (ends_with == DECL_END_RPAREN_COMMA)
+				if (flags & DECL_CAN_END_WITH_COMMA)
 					expr_flags |= EXPR_CAN_END_WITH_COMMA;
-				if (ends_with == DECL_END_LBRACE_COMMA)
-					expr_flags |= EXPR_CAN_END_WITH_LBRACE | EXPR_CAN_END_WITH_COMMA;
+				if (flags & DECL_CAN_END_WITH_LBRACE)
+					expr_flags |= EXPR_CAN_END_WITH_LBRACE;
 				if (is_varargs) {
 					tokr_err(t, "Default varargs are not allowed.");
 					goto ret_false;
@@ -2277,16 +2242,16 @@ static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 f
 					t->token = end; /* move to ; */
 					goto ret_false;
 				}
-				if (ends_with == DECL_END_SEMICOLON && end > t->tokens && token_is_kw(end - 1, KW_RBRACE)) {
+				if ((flags & DECL_CAN_END_WITH_SEMICOLON) && end > t->tokens && token_is_kw(end - 1, KW_RBRACE)) {
 					/* allow semicolon to be ommitted, e.g. f ::= fn() {} */
-				} else if (ends_decl(t->token, ends_with)) {
+				} else if (ends_decl(t->token, flags)) {
 					++t->token;
 				} else {
 					tokr_err(t, "Expected %s at end of declaration.", end_str);
 					goto ret_false;
 				}
 			}
-		} else if (ends_decl(t->token, ends_with)) {
+		} else if (ends_decl(t->token, flags)) {
 			++t->token;
 		} else {
 			tokr_err(t, "Expected %s or '=' at end of delaration.", end_str);
@@ -2302,7 +2267,7 @@ static Status parse_decl(Parser *p, Declaration *d, DeclEndKind ends_with, U16 f
 	}
 	
 	parser_put_end(p, &d->where);
-	if (ends_with != DECL_END_SEMICOLON)
+	if (!token_is_kw(t->token, KW_SEMICOLON))
 		--d->where.end; /* e.g., in fn(x: float), the param decl does not contain the ) */
 	return true;
 	
@@ -2346,7 +2311,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 	*was_a_statement = true;
 	if (is_decl(t)) {
 		s->kind = STMT_DECL;
-		if (!parse_decl(p, s->decl = parser_malloc(p, sizeof *s->decl), DECL_END_SEMICOLON, PARSE_DECL_ALLOW_EXPORT)) {
+		if (!parse_decl(p, s->decl = parser_malloc(p, sizeof *s->decl), DECL_CAN_END_WITH_SEMICOLON | PARSE_DECL_ALLOW_EXPORT)) {
 			return false;
 		}
 	} else if (t->token->kind == TOKEN_KW) {

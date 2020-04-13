@@ -638,28 +638,6 @@ enum {
 	FOR_ANNOTATED_TYPE = 0x02,
 };
 
-typedef struct ForExpr {
-	U8 flags;
-	Type type; /* uninitialized unless typed or flags & FOR_ANNOTATED_TYPE */
-	Identifier index; /* NULL = no index */
-	Identifier value; /* NULL = no value */
-	Token *index_token, *value_token; /* used for errors */
-	Block body;
-	union {
-		struct {
-			struct Expression *from; /* can't be null */
-			struct Expression *to; /* can be null */
-			union {
-				/* (either) can be null */
-				struct Expression *step; /* before typing */
-				Value *stepval; /* after typing */
-			};
-		} range;
-		struct Expression *of;
-	};
-	Value **val_stack; /* see Declaration for comments */
-} ForExpr;
-
 
 enum {
 	FN_EXPR_FOREIGN = 0x01,
@@ -850,7 +828,7 @@ typedef struct Expression {
 		} del;
 		IfExpr *if_;
 		WhileExpr *while_;
-		ForExpr *for_;
+		struct ForExpr *for_;
 		FnExpr *fn;
 		CastExpr cast;
 		SliceExpr slice;
@@ -912,6 +890,25 @@ typedef struct Declaration {
 	Value **val_stack;
 } Declaration;
 typedef Declaration *DeclarationPtr;
+
+typedef struct ForExpr {
+	U8 flags;
+	Type *type; /* NULL before typing */
+	Declaration header;
+	Block body;
+	union {
+		struct {
+			struct Expression *from; /* can't be null */
+			struct Expression *to; /* can be null */
+			union {
+				/* (either) can be null */
+				struct Expression *step; /* before typing */
+				Value *stepval; /* after typing */
+			};
+		} range;
+		struct Expression *of;
+	};
+} ForExpr;
 
 typedef enum {
 	STMT_DECL,
@@ -1011,12 +1008,6 @@ typedef struct Parser {
 	Block *block; /* which block are we in? NULL = file scope */
 	ParsedFile *parsed_file;
 } Parser;
-
-typedef enum {
-	DECL_END_SEMICOLON,
-	DECL_END_RPAREN_COMMA,
-	DECL_END_LBRACE_COMMA
-} DeclEndKind;
 
 #if COMPILE_TIME_FOREIGN_FN_SUPPORT
 typedef struct {
