@@ -1,11 +1,5 @@
-Point ::= struct {	
-	x, y: int;
-}
-
 main ::= fn() {
-	use p: Point;
-	p.x = 15;
-	p.y = 18;
-	x += 5;
-	x := 18;
+	for i := 1..10 {
+
+	}
 }

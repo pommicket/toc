@@ -1392,6 +1392,12 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				++t->token;
 				if (!parse_decl(p, &fo->header, PARSE_DECL_IGNORE_EXPR | DECL_CAN_END_WITH_LBRACE))
 					goto for_fail;
+				if (arr_len(fo->header.idents) > 2) {
+					parser_put_end(p, &fo->header.where);
+					err_print(fo->header.where, "Expected at most 2 identifiers in for declaration (index and value) but got %lu.", 
+						(unsigned long)arr_len(fo->header.idents));
+					goto for_fail;
+				}
 				if (!token_is_kw(t->token, KW_EQ)) {
 					tokr_err(t, "Expected = to follow for declaration.");
 					goto for_fail;
@@ -1437,6 +1443,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					err_print(token_location(p->file, first_end), "Expected { or .. to follow expression in for statement.");
 					goto for_fail;
 				}
+				parser_put_end(p, &fo->header.where);
 				p->block = prev_block;
 				if (!parse_block(p, &fo->body, PARSE_BLOCK_DONT_CREATE_IDENTS))
 					goto for_fail;

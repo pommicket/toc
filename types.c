@@ -1519,17 +1519,26 @@ static Status types_expr(Typer *tr, Expression *e) {
 		t->builtin = BUILTIN_CHAR;
 		break;
 	case EXPR_FOR: {
-		/* TODO */
-#if 0
 		ForExpr *fo = e->for_;
+		Declaration *header = &fo->header;
+		*(Declaration **)typer_arr_add(tr, &tr->in_decls) = header;
 		bool in_header = true;
-		*(ForExpr **)typer_arr_add(tr, &tr->in_fors) = fo;
+
+		if (header->flags & DECL_ANNOTATES_TYPE) {
+			fo->type = &header->type;
+			if (!type_resolve(tr, fo->type, header->where))
+				goto for_fail;
+		} else {
+			fo->type = NULL;
+		}
+
 		fo->body.uses = NULL;
-		typer_block_enter(tr, &fo->body); /* while this block is being typed, fo->body will be in tr->blocks twice. hopefully that doesn't mess anything up! */
+		typer_block_enter(tr, &fo->body);
 		if (fo->flags & FOR_IS_RANGE) {
 			if (!types_expr(tr, fo->range.from)) goto for_fail;
 			{
 				Type *ft = &fo->range.from->type;
+
 				if (ft->kind != TYPE_BUILTIN || !type_builtin_is_numerical(ft->builtin)) {
 					char *s = type_to_str(ft);
 					err_print(e->where, "from expression of for loop must be a builtin numerical type, not %s", s);
@@ -1558,40 +1567,43 @@ static Status types_expr(Typer *tr, Expression *e) {
 				}
 			}
 
-			if (!(fo->flags & FOR_ANNOTATED_TYPE)) {
+			if (fo->type) {
+				if (!type_eq(fo->type, &fo->range.from->type)) {
+					char *exp = type_to_str(fo->type);
+					char *got = type_to_str(&fo->range.from->type);
+					err_print(e->where, "Type of for loop does not match the type of the from expression. Expected %s, but got %s.", exp, got);
+					free(exp); free(got);
+					goto for_fail;
+				}
+				if ((fo->type->flags & TYPE_IS_FLEXIBLE))
+					fo->type = &fo->range.from->type;
+			} else {
 				fo->type = &fo->range.from->type;
 			}
-			
-			if (!type_eq(&fo->type, &fo->range.from->type)) {
-				char *exp = type_to_str(&fo->type);
-				char *got = type_to_str(&fo->range.from->type);
-				err_print(e->where, "Type of for loop does not match the type of the from expression. Expected %s, but got %s.", exp, got);
-				free(exp); free(got);
-				goto for_fail;
-			}
-			
-			if (fo->range.step && !type_eq(&fo->type, &fo->range.step->type)) {
-				char *exp = type_to_str(&fo->type);
+
+			if (fo->range.step && !type_eq(fo->type, &fo->range.step->type)) {
+				char *exp = type_to_str(fo->type);
 				char *got = type_to_str(&fo->range.step->type);
 				err_print(e->where, "Type of for loop does not match the type of the step expression. Expected %s, but got %s.", exp, got);
 				free(exp); free(got);
 				goto for_fail;
 			}
 			
-			if ((fo->type.flags & TYPE_IS_FLEXIBLE) && fo->range.step)
-				fo->type = fo->range.step->type;
+			if ((fo->type->flags & TYPE_IS_FLEXIBLE) && fo->range.step)
+				fo->type = &fo->range.step->type;
 			
-			if (fo->range.to && !type_eq(&fo->type, &fo->range.to->type)) {
-				char *exp = type_to_str(&fo->type);
+			if (fo->range.to && !type_eq(fo->type, &fo->range.to->type)) {
+				char *exp = type_to_str(fo->type);
 				char *got = type_to_str(&fo->range.to->type);
 				err_print(e->where, "Type of for loop does not match the type of the to expression. Expected %s, but got %s.", exp, got);
 				free(exp); free(got);
 				goto for_fail;
 			}
-			
-			if ((fo->type.flags & TYPE_IS_FLEXIBLE) && fo->range.to)
-				fo->type = fo->range.to->type;
-			fo->type.flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE;
+			if (fo->type->flags & TYPE_IS_FLEXIBLE) {
+				if (fo->range.to)
+					fo->type = &fo->range.to->type;
+				fo->type->flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE;
+			}
 		} else {
 			if (!types_expr(tr, fo->of))
 				goto for_fail;
@@ -1614,12 +1626,11 @@ static Status types_expr(Typer *tr, Expression *e) {
 				case BUILTIN_VARARGS: {
 					/* exit for body */
 					typer_block_exit(tr);
-					arr_remove_lasta(&tr->in_fors, tr->allocr);
+					arr_remove_lasta(&tr->in_decls, tr->allocr);
 					/* create one block, containing a block for each vararg */
 					/* e.g. for x := varargs { total += x; } => { { x := varargs[0]; total += x; } { x := varargs[0]; total += x; } } */
 					assert(fo->of->kind == EXPR_IDENT);
 					Identifier varargs_ident = fo->of->ident;
-					assert(varargs_ident->decl_kind == IDECL_DECL);
 					Declaration *idecl = varargs_ident->decl;
 					VarArg *varargs = idecl->val.varargs;
 					size_t nvarargs = arr_len(varargs);
@@ -1728,8 +1739,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 				ptr_type.ptr = iter_type;
 				iter_type = &ptr_type;
 			}
-			if (fo->flags & FOR_ANNOTATED_TYPE) {
-				if (!type_eq(iter_type, &fo->type)) {
+			if (header->flags & DECL_ANNOTATES_TYPE) {
+				if (!type_eq(iter_type, fo->type)) {
 					char *exp = type_to_str(iter_type);
 					char *got = type_to_str(&fo->type);
 					err_print(e->where, "Expected to iterate over type %s, but it was annotated as iterating over type %s.");
@@ -1765,7 +1776,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 			arr_remove_lasta(&tr->in_fors, tr->allocr);
 		typer_block_exit(tr);
 		return false;
-	#endif
 	};
 	case EXPR_IDENT: {
 		Block *b = tr->block;

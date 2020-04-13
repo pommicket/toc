@@ -622,8 +622,7 @@ typedef struct WhileExpr {
 
 
 enum {
-	FOR_IS_RANGE = 0x01,
-	FOR_ANNOTATED_TYPE = 0x02,
+	FOR_IS_RANGE = 0x01
 };
 
 
@@ -1025,7 +1024,6 @@ typedef struct Typer {
 	Evaluator *evalr;
 	Identifiers *globals;
 	Use **uses; /* global used things */
-	ForExpr **in_fors; /* array of for loop headers we are currently inside */
 	Declaration **in_decls; /* array of declarations we are currently inside */
 	Block *block;
 	Block **blocks; /* dyn array of all the block's we're in ([0] = NULL for global scope) */
