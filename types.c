@@ -268,23 +268,20 @@ static Status expr_must_lval(Expression *e) {
 	switch (e->kind) {
 	case EXPR_IDENT: {
 		Identifier i = e->ident;
-		if (i->decl_kind == IDECL_DECL) {
-			Declaration *d = i->decl;
-			if (d->flags & DECL_IS_CONST) {
-				char *istr = ident_to_str(i);
-				err_print(e->where, "Use of constant %s as a non-constant expression.", istr);
-				info_print(d->where, "%s was declared here.", istr);
-				free(istr);
-				return false;
-			}
-			if (type_is_builtin(&d->type, BUILTIN_VARARGS)) {
-				char *istr = ident_to_str(i);
-				err_print(e->where, "varargs cannot be set or pointed to.");
-				info_print(d->where, "%s was declared here.", istr);
-				free(istr);
-				return false;
-			}
-
+		Declaration *d = i->decl;
+		if (d->flags & DECL_IS_CONST) {
+			char *istr = ident_to_str(i);
+			err_print(e->where, "Use of constant %s as a non-constant expression.", istr);
+			info_print(d->where, "%s was declared here.", istr);
+			free(istr);
+			return false;
+		}
+		if (type_is_builtin(&d->type, BUILTIN_VARARGS)) {
+			char *istr = ident_to_str(i);
+			err_print(e->where, "varargs cannot be set or pointed to.");
+			info_print(d->where, "%s was declared here.", istr);
+			free(istr);
+			return false;
 		}
 		return true;
 	}
@@ -587,114 +584,87 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	return success;
 }
 
-/* doesn't do any translation on ident or anything, so make sure it's in the right scope */
+/* doesn't do any translation on ident or check if it's declared or anything, so make sure it's in the right scope */
 static Status type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
-	switch (i->decl_kind) {
-	case IDECL_DECL: 
-	top: {
-		Declaration *d = i->decl;
-		if (!(d->flags & DECL_IS_CONST)) {
-			/* check for trying to capture a variable into a function */
-			bool captured = false;
-			if (ident_scope(i) != NULL && ident_scope(i)->kind != BLOCK_NMS) {
-				Block *decl_scope = ident_scope(i);
-				if (decl_scope->kind != BLOCK_NMS) {
-					/* go back through scopes */
-					for (Block **block = arr_last(tr->blocks); *block && *block != decl_scope; --block) {
-						if ((*block)->kind == BLOCK_FN) {
-							captured = true;
-							break;
-						}
+top:;
+	Declaration *d = i->decl;
+	assert(d);
+	if (!(d->flags & DECL_IS_CONST)) {
+		/* check for trying to capture a variable into a function */
+		bool captured = false;
+		if (ident_scope(i) != NULL && ident_scope(i)->kind != BLOCK_NMS) {
+			Block *decl_scope = ident_scope(i);
+			if (decl_scope->kind != BLOCK_NMS) {
+				/* go back through scopes */
+				for (Block **block = arr_last(tr->blocks); *block && *block != decl_scope; --block) {
+					if ((*block)->kind == BLOCK_FN) {
+						captured = true;
+						break;
 					}
 				}
 			}
-			if (captured) {
-				err_print(where, "Variables cannot be captured into inner functions (but constants can).");
+		}
+		if (captured) {
+			err_print(where, "Variables cannot be captured into inner functions (but constants can).");
+			return false;
+		}
+	}
+	if ((d->flags & DECL_HAS_EXPR) && (d->expr.kind == EXPR_TYPE)) {
+		/* allow using a type before declaring it */
+		t->kind = TYPE_BUILTIN;
+		t->builtin = BUILTIN_TYPE;
+		t->flags = TYPE_IS_RESOLVED;
+		return true;
+	}
+	 
+	/* are we inside this declaration? */
+	arr_foreach(tr->in_decls, DeclarationPtr, in_decl) {
+		if (d == *in_decl) {
+			/* d needn't have an expression, because it could be its type that refers to itself */
+			if ((d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_FN) {
+				/* it's okay if a function references itself */
+			} else {
+				/* if we've complained about it before when we were figuring out the type, don't complain again */
+				if (!(d->flags & DECL_ERRORED_ABOUT_SELF_REFERENCE)) {
+					char *s = ident_to_str(i);
+					err_print(where, "Use of identifier %s in its own declaration.", s);
+					free(s);
+					info_print(d->where, "Declaration was here.");
+					d->flags |= DECL_ERRORED_ABOUT_SELF_REFERENCE;
+				}
 				return false;
 			}
 		}
-		if ((d->flags & DECL_HAS_EXPR) && (d->expr.kind == EXPR_TYPE)) {
-			/* allow using a type before declaring it */
-			t->kind = TYPE_BUILTIN;
-			t->builtin = BUILTIN_TYPE;
-			t->flags = TYPE_IS_RESOLVED;
-			return true;
-		}
-		 
-		/* are we inside this declaration? */
-		arr_foreach(tr->in_decls, DeclarationPtr, in_decl) {
-			if (d == *in_decl) {
-				/* d needn't have an expression, because it could be its type that refers to itself */
-				if ((d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_FN) {
-					/* it's okay if a function references itself */
-				} else {
-					/* if we've complained about it before when we were figuring out the type, don't complain again */
-					if (!(d->flags & DECL_ERRORED_ABOUT_SELF_REFERENCE)) {
-						char *s = ident_to_str(i);
-						err_print(where, "Use of identifier %s in its own declaration.", s);
-						free(s);
-						info_print(d->where, "Declaration was here.");
-						d->flags |= DECL_ERRORED_ABOUT_SELF_REFERENCE;
-					}
-					return false;
-				}
-			}
-		}
-	
-		if (d->flags & DECL_FOUND_TYPE) {
-			*t = *decl_type_at_index(d, decl_ident_index(d, i));
-			assert(t->flags & TYPE_IS_RESOLVED);
+	}
+
+	if (d->flags & DECL_FOUND_TYPE) {
+		*t = *decl_type_at_index(d, decl_ident_index(d, i));
+		assert(t->flags & TYPE_IS_RESOLVED);
+		return true;
+	} else {
+		if ((d->flags & DECL_HAS_EXPR) && (d->expr.kind == EXPR_FN)) {
+			/* allow using a function before declaring it */
+			if (!type_of_fn(tr, d->expr.fn, &d->expr.type, 0)) return false;
+			*t = d->expr.type;
+			t->flags |= TYPE_IS_RESOLVED; /* for function templates */
 			return true;
 		} else {
-			if ((d->flags & DECL_HAS_EXPR) && (d->expr.kind == EXPR_FN)) {
-				/* allow using a function before declaring it */
-				if (!type_of_fn(tr, d->expr.fn, &d->expr.type, 0)) return false;
-				*t = d->expr.type;
-				t->flags |= TYPE_IS_RESOLVED; /* for function templates */
-				return true;
-			} else {
-				if (where.start <= d->where.end) {
-					char *s = ident_to_str(i);
-					err_print(where, "Use of identifier %s before its declaration.", s);
-					info_print(d->where, "%s will be declared here.", s);
-					free(s);
-					return false;
-				} else {
-					if (d->flags & DECL_INFER) {
-						err_print(where, "Use of identifier before it has been inferred. You are trying to do stuff with inference which toc doesn't support.");
-						return false;
-					}
-					/* let's type the declaration, and redo this (for evaling future functions) */
-					if (!types_decl(tr, d)) return false;
-					goto top;
-				}
-			}
-		}
-	} break;
-	case IDECL_FOR: {
-		ForExpr *fo = i->decl_for;
-		/* are we inside this for loop? */
-		typedef ForExpr *ForExprPtr;
-		arr_foreach(tr->in_fors, ForExprPtr, in_f) {
-			if (*in_f == fo) {
+			if (where.start <= d->where.end) {
 				char *s = ident_to_str(i);
-				err_print(where, "Use of identifier %s in its own declaration.", s);
+				err_print(where, "Use of identifier %s before its declaration.", s);
+				info_print(d->where, "%s will be declared here.", s);
 				free(s);
 				return false;
+			} else {
+				if (d->flags & DECL_INFER) {
+					err_print(where, "Use of identifier before it has been inferred. You are trying to do stuff with inference which toc doesn't support.");
+					return false;
+				}
+				/* let's type the declaration, and redo this (for evaling future functions) */
+				if (!types_decl(tr, d)) return false;
+				goto top;
 			}
 		}
-		if (i == fo->index) {
-			t->kind = TYPE_BUILTIN;
-			t->builtin = BUILTIN_I64;
-			t->flags = TYPE_IS_RESOLVED;
-		} else {
-			assert(i == fo->value);
-			*t = fo->type;
-		}
-	} break;
-	case IDECL_NONE: 
-		assert(0);
-		return false;
 	}
 	return true;
 }
@@ -749,15 +719,14 @@ static Status add_block_to_struct(Typer *tr, Block *b, StructDef *s, Statement *
 			/* we need to translate d's identifiers to s's scope */
 			arr_foreach(d->idents, Identifier, ip) {
 				Identifier redeclared = ident_get(&s->body.idents, (*ip)->str);
-				if (redeclared && redeclared->decl_kind != IDECL_NONE) {
+				if (ident_is_declared(redeclared)) {
 					char *str = ident_to_str(*ip);
 					err_print(d->where, "Redeclaration of struct member %s", str);
-					info_print(ident_decl_location(d->where.file, redeclared), "Previous declaration was here.");
+					info_print(ident_decl_location(redeclared), "Previous declaration was here.");
 					free(str);
 					return false;
 				}
 				*ip = ident_translate_forced(*ip, &s->body.idents);
-				(*ip)->decl_kind = IDECL_DECL;
 				(*ip)->decl = d;
 			}
 		}
@@ -1468,7 +1437,7 @@ static Status get_struct_constant(StructDef *struc, Identifier member, Expressio
 		return false;
 	}
 	Identifier i = ident_translate(member, &struc->body.idents);
-	if (!i || i->decl_kind == IDECL_NONE) {
+	if (!i) {
 		char *member_s = ident_to_str(member);
 		char *struc_s = struc->name ? ident_to_str(struc->name) : "anonymous struct";
 		err_print(e->where, "%s is not a member of structure %s.", member_s, struc_s);
@@ -1477,7 +1446,11 @@ static Status get_struct_constant(StructDef *struc, Identifier member, Expressio
 		if (struc->name) free(struc_s);
 		return false;
 	}
-	assert((i->decl_kind == IDECL_DECL) && (i->decl->flags & DECL_IS_CONST));
+	if (!(i->decl->flags & DECL_IS_CONST)) {
+		err_print(e->where, "Struct field being used as if it were a constant.");
+		info_print(i->decl->where, "Field was declared here.");
+		return false;
+	}
 	if (i->decl->flags & DECL_FOUND_VAL) {
 		/* replace with decl value */
 		int ident_idx = decl_ident_index(i->decl, i);
@@ -1546,6 +1519,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 		t->builtin = BUILTIN_CHAR;
 		break;
 	case EXPR_FOR: {
+		/* TODO */
+#if 0
 		ForExpr *fo = e->for_;
 		bool in_header = true;
 		*(ForExpr **)typer_arr_add(tr, &tr->in_fors) = fo;
@@ -1584,7 +1559,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 			}
 
 			if (!(fo->flags & FOR_ANNOTATED_TYPE)) {
-				fo->type = fo->range.from->type;
+				fo->type = &fo->range.from->type;
 			}
 			
 			if (!type_eq(&fo->type, &fo->range.from->type)) {
@@ -1790,6 +1765,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 			arr_remove_lasta(&tr->in_fors, tr->allocr);
 		typer_block_exit(tr);
 		return false;
+	#endif
 	};
 	case EXPR_IDENT: {
 		Block *b = tr->block;
@@ -1849,7 +1825,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 							also = "also ";
 						} else {
 							/* i was declared then used. */
-							info_print(ident_decl_location(tr->file, translated), "%s was declared here.", s);
+							info_print(ident_decl_location(translated), "%s was declared here.", s);
 						}
 						info_print(use->expr.where, "...and %simported by this use statement.", also);
 						return false;
@@ -2260,7 +2236,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 					/* add each vararg separately */
 					assert(arg->kind == EXPR_IDENT);
 					Identifier ident = arg->ident;
-					assert(ident->decl_kind == IDECL_DECL);
 					Declaration *decl = ident->decl;
 					VarArg *varargs_here = decl->val.varargs;
 					size_t nvarargs_here = arr_len(varargs_here);
@@ -2966,7 +2941,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 				StructDef *struc = struct_type->struc;
 				Identifier struct_ident = ident_translate(rhs->ident, &struc->body.idents);
 				if (ident_is_declared(struct_ident)) {
-					assert(struct_ident->decl_kind == IDECL_DECL);
 					Field *field = struct_ident->decl->field;
 					field += ident_index_in_decl(struct_ident, struct_ident->decl);
 					e->binary.dot.field = field;
@@ -2999,7 +2973,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 					/* replace with val */
 					assert(of->kind == EXPR_IDENT);
 					Identifier ident = of->ident;
-					assert(ident->decl_kind == IDECL_DECL);
 					Declaration *decl = ident->decl;
 					e->kind = EXPR_VAL;
 					e->val.i64 = (I64)arr_len(decl->val.varargs);
@@ -3295,6 +3268,8 @@ static Status types_decl(Typer *tr, Declaration *d) {
 			used->flags = EXPR_FOUND_TYPE;
 			used->type = *decl_type_at_index(d, idx++);
 			used->ident = i;
+			used->where = d->where;
+			
 		}
 	}
 

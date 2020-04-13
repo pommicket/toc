@@ -8,9 +8,15 @@
 
 /* 
 TODO:
-replace weird EXPR_FOR system with just a declaration- would make "for use p := points" easier
-	-> rewrite for copying
+replace weird EXPR_FOR system with just a declaration- would make "for use p := points" easier.
+	need to fix:
+	- types.c
+	- cgen.c
+	- eval.c
+	- copy.c
+do we need the possibility that IdentSlot.decl is NULL?
 EXPR_IDENT should be a string before typing, also struct member accesses
+make sure we set Expression.where in stuff like the EXPR_FOR for varargs (i.e. places where we construct expressions)
 use
  - use with struct members (e.g. SuperPoint ::= struct { use p: Point; })
 local structs should not be named in C

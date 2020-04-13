@@ -663,67 +663,48 @@ static Status eval_expr_ptr_at_index(Evaluator *ev, Expression *e, void **ptr, T
 }
 
 static Value *ident_val(Evaluator *ev, Identifier i, Location where) {
-	switch (i->decl_kind) {
-	case IDECL_FOR: {
-		ForExpr *fo = i->decl_for;
-		Value *v = *(Value **)arr_last(fo->val_stack);
-		if (i == fo->index) {
-			if (fo->value)
-				v = &v->tuple[0];
-		} else {
-			if (fo->index)
-				v = &v->tuple[1];
-		}
-		return v;
-	}
-	case IDECL_DECL: {
-		Declaration *decl = i->decl;
-		int idx = decl_ident_index(decl, i);
-		if (decl->type.kind == TYPE_UNKNOWN && ev->typer->err_ctx->have_errored)
-			return NULL; /* silently fail (something went wrong when we typed this decl) */
-		if (decl->flags & DECL_IS_PARAM) {
-			if (decl->val_stack) {
-				Value *valp = *(Value **)arr_last(decl->val_stack);
-				if (arr_len(decl->idents) > 1)
-					return &valp->tuple[idx];
-				else
-					return valp;
-			} else {
-				if (!(decl->flags & DECL_FOUND_VAL)) {
-					/* trying to access parameter, e.g. fn(y: int) { x ::= y; } */
-					char *s = ident_to_str(i);
-					err_print(where, "You can't access non-constant parameter %s at compile time.", s);
-					info_print(decl->where, "%s was declared here.", s);
-					free(s);
-					return NULL;
-				}
-				/* struct parameter */
-				if (arr_len(decl->idents) > 1)
-					return &decl->val.tuple[idx];
-				else
-					return &decl->val;
-			}
-		} else if (decl->flags & DECL_IS_CONST) {
-			return decl_val_at_index(decl, idx);
-		} else if (decl->val_stack) {
+	assert(ident_is_declared(i));
+	Declaration *decl = i->decl;
+	int idx = decl_ident_index(decl, i);
+	if (decl->type.kind == TYPE_UNKNOWN && ev->typer->err_ctx->have_errored)
+		return NULL; /* silently fail (something went wrong when we typed this decl) */
+	if (decl->flags & DECL_IS_PARAM) {
+		if (decl->val_stack) {
 			Value *valp = *(Value **)arr_last(decl->val_stack);
 			if (arr_len(decl->idents) > 1)
 				return &valp->tuple[idx];
 			else
 				return valp;
 		} else {
-			char *s = ident_to_str(i);
-			err_print(where, "You can't access non-constant variable %s at compile time.", s);
-			info_print(decl->where, "%s was declared here.", s);
-			free(s);
-			return NULL; /* uh oh... this is a runtime-only variable */
+			if (!(decl->flags & DECL_FOUND_VAL)) {
+				/* trying to access parameter, e.g. fn(y: int) { x ::= y; } */
+				char *s = ident_to_str(i);
+				err_print(where, "You can't access non-constant parameter %s at compile time.", s);
+				info_print(decl->where, "%s was declared here.", s);
+				free(s);
+				return NULL;
+			}
+			/* struct parameter */
+			if (arr_len(decl->idents) > 1)
+				return &decl->val.tuple[idx];
+			else
+				return &decl->val;
 		}
+	} else if (decl->flags & DECL_IS_CONST) {
+		return decl_val_at_index(decl, idx);
+	} else if (decl->val_stack) {
+		Value *valp = *(Value **)arr_last(decl->val_stack);
+		if (arr_len(decl->idents) > 1)
+			return &valp->tuple[idx];
+		else
+			return valp;
+	} else {
+		char *s = ident_to_str(i);
+		err_print(where, "You can't access non-constant variable %s at compile time.", s);
+		info_print(decl->where, "%s was declared here.", s);
+		free(s);
+		return NULL; /* uh oh... this is a runtime-only variable */
 	}
-	case IDECL_NONE: break;
-	}
-	assert(0);
-	return NULL;
-	
 }
 
 static inline bool eval_address_of_ident(Evaluator *ev, Identifier i, Location where, Type *type, void **ptr) {
@@ -1036,26 +1017,22 @@ static bool val_is_nonnegative(Value v, Type *t) {
 }
 
 static Status eval_ident(Evaluator *ev, Identifier ident, Value *v, Location where) {
-	if (ident->decl_kind == IDECL_NONE) {
+	if (!ident_is_declared(ident)) {
 		char *s = ident_to_str(ident);
 		err_print(where, "Undeclared identifier: %s.", s);
 		free(s);
 		return false;
 	}
-	bool is_decl = ident->decl_kind == IDECL_DECL;
-	Declaration *d = NULL;
-	if (is_decl) {
-		d = ident->decl;
-		if ((d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_TYPE && d->expr.typeval->kind == TYPE_STRUCT) {
-			v->type = allocr_malloc(ev->allocr, sizeof *v->type);
-			v->type->flags = TYPE_IS_RESOLVED;
-			v->type->kind = TYPE_STRUCT;
-			v->type->struc = d->expr.typeval->struc;
-			return true;
-		} else {
-			if (!types_decl(ev->typer, d)) return false;
-			assert(d->type.flags & TYPE_IS_RESOLVED);
-		}
+	Declaration *d = ident->decl;
+	if ((d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_TYPE && d->expr.typeval->kind == TYPE_STRUCT) {
+		v->type = allocr_malloc(ev->allocr, sizeof *v->type);
+		v->type->flags = TYPE_IS_RESOLVED;
+		v->type->kind = TYPE_STRUCT;
+		v->type->struc = d->expr.typeval->struc;
+		return true;
+	} else {
+		if (!types_decl(ev->typer, d)) return false;
+		assert(d->type.flags & TYPE_IS_RESOLVED);
 	}
 	Value *ival = ident_val(ev, ident, where);
 	if (!ival) return false;
@@ -1273,6 +1250,8 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		}
 	} break;
 	case EXPR_FOR: {
+		/* TODO */
+#if 0
 		ForExpr *fo = e->for_;
 		Value *index_val;
 		Value *value_val;
@@ -1394,6 +1373,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			free(for_valp->tuple);
 		}
 		free(for_valp);
+#endif
 	} break;
 	case EXPR_BLOCK:
 		if (!eval_block(ev, e->block, v)) return false;

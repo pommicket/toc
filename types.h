@@ -172,23 +172,11 @@ typedef struct VarArg {
 	Value val;
 } VarArg;
 
-
-typedef enum {
-	IDECL_NONE,
-	IDECL_DECL,
-	IDECL_FOR
-} IdentDeclKind;
-
-
 typedef struct IdentSlot {
 	char *str;
 	size_t len;
 	/* where this identifier was declared */
-	IdentDeclKind decl_kind;	
-	union {
-		struct Declaration *decl;
-		struct ForExpr *decl_for;
-	};
+	struct Declaration *decl; /* if NULL, a declaration hasn't been found for it yet */
 	struct Identifiers *idents;
 	struct Namespace *nms; /* only exists after typing, and only for namespace-level declarations (i.e. not local variables) */
 } IdentSlot;

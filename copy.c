@@ -364,7 +364,6 @@ static void copy_decl(Copier *c, Declaration *out, Declaration *in) {
 		assert(c->block);
 		copier_ident_translate(c, &out->idents[i]);
 		
-		out->idents[i]->decl_kind = IDECL_DECL;
 		out->idents[i]->decl = out;
 	}
 	

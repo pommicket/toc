@@ -233,7 +233,7 @@ static void cgen_ident(CGenerator *g, Identifier i) {
 	if (i->nms) {
 		cgen_write(g, "%s", i->nms->c.prefix);
 	}
-	if (i == g->main_ident && i->decl_kind == IDECL_DECL && ident_scope(i) == NULL) {
+	if (i == g->main_ident && ident_scope(i) == NULL) {
 		/* don't conflict with C's main! */
 		cgen_write(g, "main_");
 	} else {
@@ -1239,24 +1239,22 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		if (e->type.kind == TYPE_FN) {
 			/* generate the right function name, because it might be anonymous */
 			Identifier i = e->ident;
-			if (i->decl_kind == IDECL_DECL) {
-				Declaration *d = i->decl;
-				if (d->flags & DECL_IS_CONST) {
-					int index = decl_ident_index(d, i);
-					Value fn_val = *decl_val_at_index(d, index);
-					FnExpr *fn = fn_val.fn;
-					Expression fn_expr;
-					/* TODO: is this all really necessary? */
-					
-					fn_expr.kind = EXPR_FN;
-					fn_expr.fn = allocr_malloc(g->allocr, sizeof *fn_expr.fn);
-					*fn_expr.fn = *fn;
-					fn_expr.flags = EXPR_FOUND_TYPE;
-					fn_expr.type = *decl_type_at_index(d, index);
-					
-					cgen_expr(g, &fn_expr);
-					handled = true;
-				}
+			Declaration *d = i->decl;
+			if (d->flags & DECL_IS_CONST) {
+				int index = decl_ident_index(d, i);
+				Value fn_val = *decl_val_at_index(d, index);
+				FnExpr *fn = fn_val.fn;
+				Expression fn_expr;
+				/* TODO: is this all really necessary? */
+				
+				fn_expr.kind = EXPR_FN;
+				fn_expr.fn = allocr_malloc(g->allocr, sizeof *fn_expr.fn);
+				*fn_expr.fn = *fn;
+				fn_expr.flags = EXPR_FOUND_TYPE;
+				fn_expr.type = *decl_type_at_index(d, index);
+				
+				cgen_expr(g, &fn_expr);
+				handled = true;
 			}
 		}
 		if (!handled) {
@@ -1437,6 +1435,8 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		cgen_block(g, &w->body, NULL, 0);
 	} break;
 	case EXPR_FOR: {
+		/* TODO */
+#if 0
 		ForExpr *fo = e->for_;
 		int is_range = fo->flags & FOR_IS_RANGE;
 		if (is_range) {
@@ -1450,9 +1450,9 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		if (is_range) {
 			if (fo->range.to) {
 				/* pre generate to */
-				cgen_type_pre(g, &fo->type);
+				cgen_type_pre(g, fo->type);
 				cgen_write(g, " to_");
-				cgen_type_post(g, &fo->type);
+				cgen_type_post(g, fo->type);
 				cgen_write(g, " = ");
 				cgen_expr(g, fo->range.to);
 				cgen_write(g, "; ");
@@ -1612,6 +1612,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			cgen_lbl(g, fo->body.c.break_lbl);
 			cgen_writeln(g, ":;");
 		}
+#endif
 	} break;
 	case EXPR_BLOCK:
 	case EXPR_IF:

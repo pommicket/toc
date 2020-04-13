@@ -75,19 +75,17 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identi
 		
 		while (to->kind == EXPR_IDENT) {
 			Identifier i = to->ident;
-			if (i->decl_kind == IDECL_DECL) {
-				Declaration *decl = i->decl;
-				int index = ident_index_in_decl(i, decl);
-				Expression *expr = NULL;
-				if (decl->type.kind == TYPE_TUPLE) {
-					if (decl->expr.kind == EXPR_TUPLE) {
-						expr = &decl->expr.tuple[index];
-					}
-				} else {
-					expr = &decl->expr;
+			Declaration *decl = i->decl;
+			int index = ident_index_in_decl(i, decl);
+			Expression *expr = NULL;
+			if (decl->type.kind == TYPE_TUPLE) {
+				if (decl->expr.kind == EXPR_TUPLE) {
+					expr = &decl->expr.tuple[index];
 				}
-				if (expr) to = expr;
-			} else break;
+			} else {
+				expr = &decl->expr;
+			}
+			if (expr) to = expr;
 		}
 		if (to->kind != EXPR_CALL) {
 			if (to->kind == EXPR_TYPE) {
@@ -104,7 +102,7 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identi
 		I16 *order = NULL;
 		Expression *f = match->call.fn;
 		Identifier ident = f->ident;
-		bool is_direct_fn = f->kind == EXPR_IDENT && ident->decl_kind == IDECL_DECL && (ident->decl->flags & DECL_HAS_EXPR) && ident->decl->expr.kind == EXPR_FN;
+		bool is_direct_fn = f->kind == EXPR_IDENT && (ident->decl->flags & DECL_HAS_EXPR) && ident->decl->expr.kind == EXPR_FN;
 		if (!types_expr(tr, f))
 			return false;
 		if (f->type.kind != TYPE_FN) {

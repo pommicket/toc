@@ -1,17 +1,11 @@
-#include "std/io.toc";
-
-Point ::= struct {
+Point ::= struct {	
 	x, y: int;
 }
 
-foo ::= fn() []char {
-	return "y";
-}
-
 main ::= fn() {
-	p: Point;
-	p["x"] = 5;
-	p[foo()] = 17;
-	puti(p["x"]);
-	puti(p.y);
+	use p: Point;
+	p.x = 15;
+	p.y = 18;
+	x += 5;
+	x := 18;
 }

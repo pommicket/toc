@@ -1001,14 +1001,12 @@ static Identifier parser_ident_insert(Parser *p, char *str) {
 
 static Status check_ident_redecl(Parser *p, Identifier i) {
 	Tokenizer *t = p->tokr;
-	if (i->idents == (p->block ? &p->block->idents : p->globals)) { /* in the same scope */
-		if (i->decl_kind != IDECL_NONE) { /* declared */
-			char *s = ident_to_str(i);
-			tokr_err(t, "Redeclaration of identifier %s.", s);
-			info_print(ident_decl_location(i), "Previous declaration was here.");
-			free(s);
-			return false;
-		}
+	if (ident_is_declared(i)) {
+		char *s = ident_to_str(i);
+		tokr_err(t, "Redeclaration of identifier %s.", s);
+		info_print(ident_decl_location(i), "Previous declaration was here.");
+		free(s);
+		return false;
 	}
 	return true;
 }
@@ -2121,7 +2119,6 @@ static Status parse_decl(Parser *p, Declaration *d, U16 flags) {
 			Identifier i = *ident;
 			if (!check_ident_redecl(p, i))
 				goto ret_false;
-			i->decl_kind = IDECL_DECL;
 			i->decl = d;
 		}
 		++t->token;
@@ -2429,7 +2426,6 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 					tokr_skip_semicolon(t);
 					return false;
 				}
-				ident->decl_kind = IDECL_DECL;
 				ident->decl = d;
 			
 				Expression *e = &d->expr;
@@ -2701,23 +2697,14 @@ static void fprint_expr(FILE *out, Expression *e) {
 	case EXPR_FOR: {
 		ForExpr *fo = e->for_;
 		fprintf(out, "for ");
-		if (fo->index) {
-			fprint_ident_debug(out, fo->index);
-		} else fprintf(out, "_");
-		fprintf(out, ", ");
-		if (fo->value) {
-			fprint_ident_debug(out, fo->value);
-		} else fprintf(out, "_");
-		fprintf(out, " :");
-		if (fo->flags & FOR_ANNOTATED_TYPE)
-			fprint_type(out, &fo->type);
+		fprint_decl(out, &fo->header);
 		fprintf(out, "= ");
 		if (fo->flags & FOR_IS_RANGE) {
 			fprint_expr(out, fo->range.from);
 			if (found_type) {
 				if (fo->range.stepval) {
 					fprintf(out, ",");
-					fprint_val(out, *fo->range.stepval, &fo->type);
+					fprint_val(out, *fo->range.stepval, fo->type);
 				}
 			} else {
 				if (fo->range.step) {
@@ -2923,9 +2910,10 @@ static inline Type *decl_type_at_index(Declaration *d, int i) {
 	return ret;
 }
 
-static bool ident_is_definitely_const(Identifier i) {
+static inline bool ident_is_definitely_const(Identifier i) {
+	assert(ident_is_declared(i));
 	Declaration *decl = i->decl;
-	if (i->decl_kind != IDECL_DECL || !(decl->flags & DECL_IS_CONST))
+	if (!(decl->flags & DECL_IS_CONST))
 		return false;
 	
 	return true;
