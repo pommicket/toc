@@ -1522,7 +1522,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 		ForExpr *fo = e->for_;
 		Declaration *header = &fo->header;
 		*(Declaration **)typer_arr_add(tr, &tr->in_decls) = header;
-		bool in_header = true;
 
 		if (header->flags & DECL_ANNOTATES_TYPE) {
 			fo->type = &header->type;
@@ -1644,8 +1643,14 @@ static Status types_expr(Typer *tr, Expression *e) {
 					arr_set_lena(&b->stmts, nvarargs, tr->allocr);
 					Statement *stmt = b->stmts;
 					size_t nstmts = arr_len(fo->body.stmts);
-					bool has_val = fo->value != NULL;
-					bool has_index = fo->index != NULL;
+					Declaration *header_decl = &fo->header;
+					
+					assert(arr_len(header_decl->idents) == 2);
+					Identifier val_ident = header_decl->idents[0];
+					Identifier index_ident = header_decl->idents[1];
+					bool has_val = !ident_eq_str(val_ident, "_");
+					bool has_index = !ident_eq_str(index_ident, "_");
+					
 					for (size_t i = 0; i < nvarargs; ++i, ++stmt) {
 						/* create sub-block #i */
 						memset(stmt, 0, sizeof *stmt);
@@ -1670,9 +1675,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 							/* declare value */
 							Declaration *decl = s->decl = typer_calloc(tr, 1, sizeof *decl);
 							decl->where = fo->of->where;
-							Identifier ident = ident_translate_forced(fo->value, &sub->idents);
+							Identifier ident = ident_translate_forced(val_ident, &sub->idents);
 							*(Identifier *)arr_adda(&decl->idents, tr->allocr) = ident;
-							ident->decl_kind = IDECL_DECL;
 							ident->decl = decl;
 							
 							decl->flags |= DECL_HAS_EXPR;
@@ -1695,9 +1699,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 							/* declare value */
 							Declaration *decl = s->decl = typer_calloc(tr, 1, sizeof *decl);
 							decl->where = fo->of->where;
-							Identifier ident = ident_translate_forced(fo->index, &sub->idents);
+							Identifier ident = ident_translate_forced(index_ident, &sub->idents);
 							*(Identifier *)arr_adda(&decl->idents, tr->allocr) = ident;
-							ident->decl_kind = IDECL_DECL;
 							ident->decl = decl;
 							
 							decl->flags |= DECL_HAS_EXPR;
@@ -1742,12 +1745,12 @@ static Status types_expr(Typer *tr, Expression *e) {
 			if (header->flags & DECL_ANNOTATES_TYPE) {
 				if (!type_eq(iter_type, fo->type)) {
 					char *exp = type_to_str(iter_type);
-					char *got = type_to_str(&fo->type);
+					char *got = type_to_str(fo->type);
 					err_print(e->where, "Expected to iterate over type %s, but it was annotated as iterating over type %s.");
 					free(exp); free(got);
 					goto for_fail;
 				}
-			} else fo->type = *iter_type;
+			} else fo->type = iter_type;
 		}
 		if ((fo->flags & FOR_IS_RANGE) && fo->range.step) {
 			Value *stepval = typer_malloc(tr, sizeof *fo->range.stepval);
@@ -1755,12 +1758,10 @@ static Status types_expr(Typer *tr, Expression *e) {
 				info_print(fo->range.step->where, "Note that the step of a for loop must be a compile-time constant.");
 				goto for_fail;
 			}
-			val_cast(stepval, &fo->range.step->type, stepval, &fo->type);
+			val_cast(stepval, &fo->range.step->type, stepval, fo->type);
 			fo->range.stepval = stepval;
 		}
 		
-		arr_remove_lasta(&tr->in_fors, tr->allocr);
-		in_header = false;
 		if (!types_block(tr, &fo->body)) goto for_fail;
 		if (fo->body.ret_expr) {
 			err_print(fo->body.ret_expr->where, "for loops can't return values -- you're missing a semicolon (;)");
@@ -1772,8 +1773,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 		typer_block_exit(tr);
 		break;
 		for_fail:
-		if (in_header)
-			arr_remove_lasta(&tr->in_fors, tr->allocr);
 		typer_block_exit(tr);
 		return false;
 	};
@@ -2760,8 +2759,9 @@ static Status types_expr(Typer *tr, Expression *e) {
 			   
 		BinaryOp o = e->binary.op;
 		if (o != BINARY_DOT) {
-			if (!types_expr(tr, lhs)
-				|| !types_expr(tr, rhs))
+			bool lhs_success = types_expr(tr, lhs);
+			bool rhs_success = types_expr(tr, rhs);
+			if (!(lhs_success && rhs_success))
 				return false;
 			if (lhs_type->kind == TYPE_UNKNOWN || rhs_type->kind == TYPE_UNKNOWN) {
 				return true;
@@ -2792,7 +2792,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 			bool valid = false;
 			assert(lhs_type->flags & TYPE_IS_RESOLVED);
 			assert(rhs_type->flags & TYPE_IS_RESOLVED);
-			
 			
 			if (o == BINARY_SET) {
 				valid = type_eq(lhs_type, rhs_type);
@@ -3525,7 +3524,6 @@ static void typer_create(Typer *tr, Evaluator *ev, File *file, ErrCtx *err_ctx, 
 	tr->file = file;
 	tr->err_ctx = err_ctx;
 	tr->in_decls = NULL;
-	tr->in_fors = NULL;
 	tr->allocr = allocr;
 	tr->globals = idents;
 	*(Block **)arr_adda(&tr->blocks, allocr) = NULL;

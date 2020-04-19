@@ -10,15 +10,17 @@
 TODO:
 replace weird EXPR_FOR system with just a declaration- would make "for use p := points" easier.
 	need to fix:
-	- types.c
 	- cgen.c
 	- eval.c
 	- copy.c
-do we need the possibility that IdentSlot.decl is NULL?
 EXPR_IDENT should be a string before typing, also struct member accesses
-make sure we set Expression.where in stuff like the EXPR_FOR for varargs (i.e. places where we construct expressions)
+do we need the possibility that IdentSlot.decl is NULL?
 use
  - use with struct members (e.g. SuperPoint ::= struct { use p: Point; })
+maybe change to #define check(x) do { if_unlikely(x) return 0; } while (0);
+is there a problem where we can get TYPE_UNKNOWN in cgen, triggering an assert(0)?
+	-simple example, but maybe try other stuff: x := #C("5"); 
+	-also make sure you can't do x:#C("5");
 local structs should not be named in C
 simplify eval macros with val_to_u/i64
 &&, ||

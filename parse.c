@@ -1388,15 +1388,25 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				Block *prev_block = p->block;
 				fo->body.parent = p->block;
 				p->block = &fo->body;
+				Declaration *header_decl = &fo->header;
 				idents_create(&p->block->idents, p->allocr, p->block);
 				++t->token;
-				if (!parse_decl(p, &fo->header, PARSE_DECL_IGNORE_EXPR | DECL_CAN_END_WITH_LBRACE))
+				if (!parse_decl(p, header_decl, PARSE_DECL_IGNORE_EXPR | DECL_CAN_END_WITH_LBRACE))
 					goto for_fail;
-				if (arr_len(fo->header.idents) > 2) {
-					parser_put_end(p, &fo->header.where);
-					err_print(fo->header.where, "Expected at most 2 identifiers in for declaration (index and value) but got %lu.", 
-						(unsigned long)arr_len(fo->header.idents));
-					goto for_fail;
+
+				{
+					size_t nidents = arr_len(header_decl->idents);
+					if (nidents > 2) {
+						parser_put_end(p, &header_decl->where);
+						err_print(header_decl->where, "Expected at most 2 identifiers in for declaration (index and value) but got %lu.", 
+							(unsigned long)nidents);
+						goto for_fail;
+					}
+					if (nidents < 2) {
+						assert(nidents == 1);
+						/* turn value := arr to value, _ := arr to simplify things */
+						*(Identifier *)arr_add(&header_decl->idents) = parser_ident_insert(p, "_");
+					}
 				}
 				if (!token_is_kw(t->token, KW_EQ)) {
 					tokr_err(t, "Expected = to follow for declaration.");
