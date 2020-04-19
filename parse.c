@@ -1394,20 +1394,6 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				if (!parse_decl(p, header_decl, PARSE_DECL_IGNORE_EXPR | DECL_CAN_END_WITH_LBRACE))
 					goto for_fail;
 
-				{
-					size_t nidents = arr_len(header_decl->idents);
-					if (nidents > 2) {
-						parser_put_end(p, &header_decl->where);
-						err_print(header_decl->where, "Expected at most 2 identifiers in for declaration (index and value) but got %lu.", 
-							(unsigned long)nidents);
-						goto for_fail;
-					}
-					if (nidents < 2) {
-						assert(nidents == 1);
-						/* turn value := arr to value, _ := arr to simplify things */
-						*(Identifier *)arr_add(&header_decl->idents) = parser_ident_insert(p, "_");
-					}
-				}
 				if (!token_is_kw(t->token, KW_EQ)) {
 					tokr_err(t, "Expected = to follow for declaration.");
 					goto for_fail;
@@ -2916,12 +2902,19 @@ static int decl_ident_index(Declaration *d, Identifier i) {
 }
 
 static inline Value *decl_val_at_index(Declaration *d, int i) {
+	assert(i >= 0);
 	return d->type.kind == TYPE_TUPLE ? &d->val.tuple[i] : &d->val;
 }
 
 static inline Type *decl_type_at_index(Declaration *d, int i) {
-	if (d->type.kind == TYPE_TUPLE)
-		assert(i < (int)arr_len(d->type.tuple));
+	assert(i >= 0);
+	if (d->type.kind == TYPE_TUPLE) {
+		int tuple_len = (int)arr_len(d->type.tuple);
+#if 0
+		printf("decl_type_at_index: tuple_len:%d i:%d\n", tuple_len, i);
+#endif
+		assert(i < tuple_len);
+	}
 	Type *ret = d->type.kind == TYPE_TUPLE ? &d->type.tuple[i] : &d->type;
 	assert(ret->kind != TYPE_TUPLE);
 	return ret;

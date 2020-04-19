@@ -1,0 +1,18 @@
+#!/bin/sh
+if [ "$2" = "" ]; then
+	tocf=test.toc
+else
+	tocf="$2"
+fi
+if [ "$1" = "noq" ]; then
+	FLAGS=
+else
+	FLAGS="-q"
+fi
+
+./toc $tocf || exit 1
+if [ "$1" = "c" ]; then
+	gcc out.c -g -Wno-builtin-declaration-mismatch && ./a.out
+elif [ "$1" = "pc" ]; then
+	cat out.c
+fi

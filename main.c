@@ -8,6 +8,11 @@
 
 /* 
 TODO:
+allow annotating index type
+things to check:
+	for x := x {}
+	for x: x = "hey" {}
+	for x:3+"foo" { a := x; }
 replace weird EXPR_FOR system with just a declaration- would make "for use p := points" easier.
 	need to fix:
 	- cgen.c
@@ -22,7 +27,10 @@ is there a problem where we can get TYPE_UNKNOWN in cgen, triggering an assert(0
 	-simple example, but maybe try other stuff: x := #C("5"); 
 	-also make sure you can't do x:#C("5");
 local structs should not be named in C
+do we consistently handle x := &some_array_or_slice; x.len
+arr_add_val => doesn't return a pointer; takes a value!
 simplify eval macros with val_to_u/i64
+consider: don't do inference for function calls; get rid of was_expr -- now that we have struct params
 &&, ||
 start making a standard library... (printf; stringbuilder would be nice to have)
 switch

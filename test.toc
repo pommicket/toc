@@ -1,5 +1,11 @@
+#include "std/io.toc";
+
 main ::= fn() {
 	a : [5]int;
-	for x := a {
+	for x, i := &a {
+		*x = i;
+	}
+	for y := a {
+		puti(y);
 	}
 }

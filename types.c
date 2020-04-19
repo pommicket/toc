@@ -1522,7 +1522,22 @@ static Status types_expr(Typer *tr, Expression *e) {
 		ForExpr *fo = e->for_;
 		Declaration *header = &fo->header;
 		*(Declaration **)typer_arr_add(tr, &tr->in_decls) = header;
-
+		bool in_header = true;
+		bool annotated_index = true;
+		{
+			size_t nidents = arr_len(header->idents);
+			if (nidents > 2) {
+				err_print(header->where, "Expected at most 2 identifiers in for declaration (index and value) but got %lu.", 
+					(unsigned long)nidents);
+				goto for_fail;
+			}
+			if (nidents < 2) {
+				annotated_index = false;
+				assert(nidents == 1);
+				/* turn value := arr to value, _ := arr to simplify things */
+				*(Identifier *)arr_add(&header->idents) = ident_insert_with_len(typer_get_idents(tr), "_", 1);
+			}
+		}
 		if (header->flags & DECL_ANNOTATES_TYPE) {
 			fo->type = &header->type;
 			if (!type_resolve(tr, fo->type, header->where))
@@ -1709,7 +1724,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 							decl->expr.where = fo->of->where;
 						}
 						
-						
 						size_t start = total_nstmts - nstmts;
 						for (size_t s = start; s < total_nstmts; ++s) {
 							copy_stmt(&copier, &sub->stmts[s], &fo->body.stmts[s-start]);
@@ -1735,12 +1749,12 @@ static Status types_expr(Typer *tr, Expression *e) {
 				goto for_fail;
 			}
 			}
-			Type ptr_type = {0};
+			Type *ptr_type = typer_calloc(tr, 1, sizeof *ptr_type);
 			if (uses_ptr) {
-				ptr_type.flags = TYPE_IS_RESOLVED;
-				ptr_type.kind = TYPE_PTR;
-				ptr_type.ptr = iter_type;
-				iter_type = &ptr_type;
+				ptr_type->flags = TYPE_IS_RESOLVED;
+				ptr_type->kind = TYPE_PTR;
+				ptr_type->ptr = iter_type;
+				iter_type = ptr_type;
 			}
 			if (header->flags & DECL_ANNOTATES_TYPE) {
 				if (!type_eq(iter_type, fo->type)) {
@@ -1761,10 +1775,33 @@ static Status types_expr(Typer *tr, Expression *e) {
 			val_cast(stepval, &fo->range.step->type, stepval, fo->type);
 			fo->range.stepval = stepval;
 		}
+		arr_remove_lasta(&tr->in_decls, tr->allocr);
+		in_header = false;
 		
+		/* now we need to fix the type of the declaration to (fo->type, i64) */
+		if ((header->flags & DECL_ANNOTATES_TYPE) && annotated_index) {
+			/* we're good; they fully annotated this */
+		} else {
+			Type *type = &header->type;
+			if (fo->type == type) fo->type = &fo->of->type; /* make sure we don't point to something that's about to be overriden */
+			type->kind = TYPE_TUPLE;
+			type->flags = TYPE_IS_RESOLVED;
+			type->was_expr = NULL;
+			type->tuple = NULL;
+			arr_set_lena(&type->tuple, 2, tr->allocr);
+			assert(fo->type->flags & TYPE_IS_RESOLVED);
+			type->tuple[0] = *fo->type;
+			Type *index_type = &type->tuple[1];
+			index_type->flags = TYPE_IS_RESOLVED;
+			index_type->was_expr = NULL;
+			index_type->kind = TYPE_BUILTIN;
+			index_type->builtin = BUILTIN_I64;
+		}
+		header->flags |= DECL_FOUND_TYPE;
+
 		if (!types_block(tr, &fo->body)) goto for_fail;
 		if (fo->body.ret_expr) {
-			err_print(fo->body.ret_expr->where, "for loops can't return values -- you're missing a semicolon (;)");
+			err_print(fo->body.ret_expr->where, "for loops can't return values -- you're missing a semicolon (;).");
 			goto for_fail;
 		}
 		
@@ -1773,9 +1810,11 @@ static Status types_expr(Typer *tr, Expression *e) {
 		typer_block_exit(tr);
 		break;
 		for_fail:
+		if (in_header)
+			arr_remove_lasta(&tr->in_decls, tr->allocr);
 		typer_block_exit(tr);
 		return false;
-	};
+	}
 	case EXPR_IDENT: {
 		Block *b = tr->block;
 		Identifier i = e->ident;
