@@ -1250,55 +1250,40 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		}
 	} break;
 	case EXPR_FOR: {
-		/* TODO */
-#if 0
 		ForExpr *fo = e->for_;
-		Value *index_val;
-		Value *value_val;
-		Value **for_valpp = arr_add(&fo->val_stack);
+		Declaration *header = &fo->header;
+		Value **for_valpp = arr_add(&header->val_stack);
 		Value *for_valp = *for_valpp = err_malloc(sizeof *for_valp);
-		if (fo->index && fo->value) {
-			/* make a tuple */
-			for_valp->tuple = err_malloc(2 * sizeof *for_valp->tuple);
-		}
-		if (fo->index) {
-			index_val = fo->value ? &for_valp->tuple[0] : for_valp;
-		} else {
-			index_val = NULL;
-		}
-		if (fo->value) {
-			value_val = fo->index ? &for_valp->tuple[1] : for_valp;
-		} else {
-			value_val = NULL;
-		}
+		/* make a tuple */
+		Value for_val_tuple[2];
+		for_valp->tuple = for_val_tuple;
+		Value *value_val = &for_val_tuple[0];
+		Value *index_val = &for_val_tuple[1];
+		Type *value_type = &header->type.tuple[0];
 		if (fo->flags & FOR_IS_RANGE) {
+			assert(value_type->kind == TYPE_BUILTIN);
 			Value from, to;
 			Value stepval;
-			stepval.i64 = 1;
-			Type i64t = {0};
-			i64t.flags = TYPE_IS_RESOLVED;
-			i64t.kind = TYPE_BUILTIN;
-			i64t.builtin = BUILTIN_I64;
+			i64_to_val(&stepval, value_type->builtin, 1);
 			if (!eval_expr(ev, fo->range.from, &from)) return false;
 			if (fo->range.to && !eval_expr(ev, fo->range.to, &to)) return false;
 			if (fo->range.stepval)
 				stepval = *fo->range.stepval;
 			Value x = from;
-			bool step_is_negative = fo->range.stepval && !val_is_nonnegative(stepval, &fo->type);
+			bool step_is_negative = fo->range.stepval && !val_is_nonnegative(stepval, value_type);
 			if (index_val) index_val->i64 = 0;
 			while (1) {
 				if (fo->range.to) {
 					/* check if loop has ended */
 					Value lhs = x;
 					Value rhs = to;
-					assert(fo->type.kind == TYPE_BUILTIN);
 					Type boolt = {0};
 					boolt.flags = TYPE_IS_RESOLVED;
 					boolt.kind = TYPE_BUILTIN;
 					boolt.builtin = BUILTIN_BOOL;
 					Value cont;
 					
-					eval_numerical_bin_op(lhs, &fo->type, step_is_negative ? BINARY_GE : BINARY_LE, rhs, &fo->range.to->type, &cont, &boolt);
+					eval_numerical_bin_op(lhs, value_type, step_is_negative ? BINARY_GE : BINARY_LE, rhs, &fo->range.to->type, &cont, &boolt);
 					if (!cont.boolv) break;
 				}
 				if (value_val) *value_val = x;
@@ -1315,7 +1300,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				if (index_val) {
 					++index_val->i64;
 				}
-				eval_numerical_bin_op(x, &fo->type, BINARY_ADD, stepval, fo->range.stepval ? &fo->type : &i64t, &x, &fo->type);
+				eval_numerical_bin_op(x, value_type, BINARY_ADD, stepval, value_type, &x, value_type);
 			}
 				
 		} else {
@@ -1355,7 +1340,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				if (uses_ptr)
 					value_val->ptr = ptr;
 				else
-					eval_deref(value_val, ptr, &fo->type);
+					eval_deref(value_val, ptr, value_type);
 				if (!eval_block(ev, &fo->body, v))
 					return false;
 				if (ev->returning) {
@@ -1368,12 +1353,8 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				++index->i64;
 			}
 		}
-		arr_remove_last(&fo->val_stack);
-		if (fo->index && fo->value) {
-			free(for_valp->tuple);
-		}
+		arr_remove_last(&header->val_stack);
 		free(for_valp);
-#endif
 	} break;
 	case EXPR_BLOCK:
 		if (!eval_block(ev, e->block, v)) return false;
