@@ -856,7 +856,9 @@ static Status type_resolve(Typer *tr, Type *t, Location where) {
 				}
 			}
 			if (!is_tuple_of_types) {
-				err_print(expr->where, "This expression is not a type, but it's being used as one.");
+				char *s = type_to_str(&expr->type);
+				err_print(expr->where, "This expression is not a type (it's %s %s), but it's being used as a type.", indefinite_article(s), s);
+				free(s);
 				return false;
 			}
 		}
@@ -1583,7 +1585,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		if (header->flags & DECL_ANNOTATES_TYPE) {
 			Type *header_type = &header->type;
 			if (!type_resolve(tr, header_type, header->where))
-				return false;
+				goto for_fail;
 			if (annotated_index) {
 				if (header_type->kind != TYPE_TUPLE || arr_len(header_type->tuple) != 2) {
 					char *s = type_to_str(header_type);

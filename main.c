@@ -8,14 +8,8 @@
 
 /* 
 TODO:
-allow annotating index type
-things to check:
-	for x := x {}
-	for x: x = "hey" {}
-	for x:3+"foo" { a := x; }
 replace weird EXPR_FOR system with just a declaration- would make "for use p := points" easier.
 	need to fix:
-	- cgen.c
 	- eval.c
 	- copy.c
 consider: don't do inference for function calls; get rid of was_expr -- now that we have struct params

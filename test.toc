@@ -1,15 +1,6 @@
 #include "std/io.toc";
 
 main ::= fn() {
-	a : [5][]char;
-	for x, i : (&[]char, u8) = &a {
-		*x = "foo";
-	}
-	for y : []char = a {
-		puts(y);
-	}
-	for x, i := a {
-		puti(i);
-		puts(x);
-	}
+	for x : 3 = "foo" { a := x; }
+
 }

@@ -59,4 +59,9 @@ static inline bool strs_equal(const char *a, const char *b) {
 }
 
 #define plural_suffix(x) ((x) == 1 ? "" : "s")
-
+static char const *indefinite_article(char const *s) {
+	/* usually, words starting with "u" use "a" - "a unique thing", "a u64" */
+	if (*s == 'a' || *s == 'e' || *s == 'i' || *s == 'o')
+		return "an";
+	return "a";
+}
