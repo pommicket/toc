@@ -33,6 +33,12 @@ static inline void typer_block_exit(Typer *tr) {
 	tr->block = *(Block **)arr_last(tr->blocks);
 }
 
+static inline void construct_resolved_builtin_type(Type *t, BuiltinType builtin) {
+	t->kind = TYPE_BUILTIN;
+	t->builtin = builtin;
+	t->was_expr = NULL;
+	t->flags = TYPE_IS_RESOLVED;
+}
 
 static size_t compiler_sizeof_builtin(BuiltinType b) {
 	switch (b) {
@@ -820,16 +826,41 @@ static Status type_resolve(Typer *tr, Type *t, Location where) {
 	} break;
 	case TYPE_EXPR: {
 		Value typeval;
-		if (!types_expr(tr, t->expr))
-			return false;
-		if (t->expr->type.kind == TYPE_UNKNOWN && tr->err_ctx->have_errored)
-			return false; /* silently fail (e.g. if a function couldn't be typed) */
-		if (!type_is_builtin(&t->expr->type, BUILTIN_TYPE)) {
-			err_print(t->expr->where, "This expression is not a type, but it's being used as one.");
-			return false;
-		}
 		Expression *expr = t->expr;
-		if (!eval_expr(tr->evalr, t->expr, &typeval))
+		if (!types_expr(tr, expr))
+			return false;
+		if (expr->type.kind == TYPE_UNKNOWN && tr->err_ctx->have_errored)
+			return false; /* silently fail (e.g. if a function couldn't be typed) */
+		if (!type_is_builtin(&expr->type, BUILTIN_TYPE)) {
+			/* ok maybe it's a tuple of types, which we'll convert to a TYPE_TUPLE */
+			bool is_tuple_of_types = false;
+			if (expr->kind == EXPR_TUPLE) {
+				Type *tuple = NULL;
+				is_tuple_of_types = true;
+				arr_foreach(expr->tuple, Expression, sub) {
+					if (!type_is_builtin(&sub->type, BUILTIN_TYPE)) {
+						is_tuple_of_types = false;
+						break;
+					}
+					if (!eval_expr(tr->evalr, sub, &typeval))
+						return false;
+					Type *subtype = typer_arr_add(tr, &tuple);
+					*subtype = *typeval.type;
+				}
+				if (is_tuple_of_types) {
+					t->kind = TYPE_TUPLE;
+					t->was_expr = expr;
+					t->flags = TYPE_IS_RESOLVED;
+					t->tuple = tuple;
+					break;
+				}
+			}
+			if (!is_tuple_of_types) {
+				err_print(expr->where, "This expression is not a type, but it's being used as one.");
+				return false;
+			}
+		}
+		if (!eval_expr(tr->evalr, expr, &typeval))
 			return false;
 		*t = *typeval.type;
 		if (t->kind == TYPE_STRUCT) {
@@ -1521,7 +1552,10 @@ static Status types_expr(Typer *tr, Expression *e) {
 	case EXPR_FOR: {
 		ForExpr *fo = e->for_;
 		Declaration *header = &fo->header;
+
 		*(Declaration **)typer_arr_add(tr, &tr->in_decls) = header;
+		fo->body.uses = NULL;
+		typer_block_enter(tr, &fo->body);
 		bool in_header = true;
 		bool annotated_index = true;
 		{
@@ -1538,16 +1572,50 @@ static Status types_expr(Typer *tr, Expression *e) {
 				*(Identifier *)arr_add(&header->idents) = ident_insert_with_len(typer_get_idents(tr), "_", 1);
 			}
 		}
+		
+		Type *fo_type_tuple = NULL;
+		/* fo_type is (val_type, index_type) */
+		arr_set_lena(&fo_type_tuple, 2, tr->allocr);
+		memset(fo_type_tuple, 0, 2*sizeof *fo_type_tuple);
+		Type *val_type = &fo_type_tuple[0];
+		Type *index_type = &fo_type_tuple[1];
+
 		if (header->flags & DECL_ANNOTATES_TYPE) {
-			fo->type = &header->type;
-			if (!type_resolve(tr, fo->type, header->where))
-				goto for_fail;
-		} else {
-			fo->type = NULL;
+			Type *header_type = &header->type;
+			if (!type_resolve(tr, header_type, header->where))
+				return false;
+			if (annotated_index) {
+				if (header_type->kind != TYPE_TUPLE || arr_len(header_type->tuple) != 2) {
+					char *s = type_to_str(header_type);
+					err_print(header->where, "Expected annotated for loop type to be (val_type, index_type), but got %s instead.", s);
+					free(s);
+					goto for_fail;
+				}
+				fo_type_tuple = header_type->tuple;
+				val_type = &fo_type_tuple[0];
+				index_type = &fo_type_tuple[1];
+				if (!type_is_int(index_type)) {
+					char *s = type_to_str(index_type);
+					err_print(header->where, "Expected index type of for loop to be a builtin integer type, but it's %s.", s);
+					free(s);
+					goto for_fail;
+				}
+			} else {
+				*val_type = header->type;
+			}
+		}
+		Type *fo_type = &header->type;
+		fo_type->flags = TYPE_IS_RESOLVED;
+		fo_type->was_expr = NULL;
+		fo_type->kind = TYPE_TUPLE;
+		fo_type->tuple = fo_type_tuple;
+
+		assert(fo_type->flags & TYPE_IS_RESOLVED);
+		
+		if (!index_type->flags) {
+			construct_resolved_builtin_type(index_type, BUILTIN_I64);
 		}
 
-		fo->body.uses = NULL;
-		typer_block_enter(tr, &fo->body);
 		if (fo->flags & FOR_IS_RANGE) {
 			if (!types_expr(tr, fo->range.from)) goto for_fail;
 			{
@@ -1581,46 +1649,54 @@ static Status types_expr(Typer *tr, Expression *e) {
 				}
 			}
 
-			if (fo->type) {
-				if (!type_eq(fo->type, &fo->range.from->type)) {
-					char *exp = type_to_str(fo->type);
+			if (val_type->flags) {
+				if (!type_eq(val_type, &fo->range.from->type)) {
+					char *exp = type_to_str(val_type);
 					char *got = type_to_str(&fo->range.from->type);
 					err_print(e->where, "Type of for loop does not match the type of the from expression. Expected %s, but got %s.", exp, got);
 					free(exp); free(got);
 					goto for_fail;
 				}
-				if ((fo->type->flags & TYPE_IS_FLEXIBLE))
-					fo->type = &fo->range.from->type;
 			} else {
-				fo->type = &fo->range.from->type;
+				*val_type = fo->range.from->type;
 			}
 
-			if (fo->range.step && !type_eq(fo->type, &fo->range.step->type)) {
-				char *exp = type_to_str(fo->type);
-				char *got = type_to_str(&fo->range.step->type);
-				err_print(e->where, "Type of for loop does not match the type of the step expression. Expected %s, but got %s.", exp, got);
-				free(exp); free(got);
-				goto for_fail;
-			}
+			if (fo->range.step) {
+				if (!type_eq(val_type, &fo->range.step->type)) {
+					char *exp = type_to_str(val_type);
+					char *got = type_to_str(&fo->range.step->type);
+					err_print(e->where, "Type of for loop does not match the type of the step expression. Expected %s, but got %s.", exp, got);
+					free(exp); free(got);
+					goto for_fail;
+				}
+				if (val_type->flags & TYPE_IS_FLEXIBLE)
+					*val_type = fo->range.step->type;
 			
-			if ((fo->type->flags & TYPE_IS_FLEXIBLE) && fo->range.step)
-				fo->type = &fo->range.step->type;
-			
-			if (fo->range.to && !type_eq(fo->type, &fo->range.to->type)) {
-				char *exp = type_to_str(fo->type);
-				char *got = type_to_str(&fo->range.to->type);
-				err_print(e->where, "Type of for loop does not match the type of the to expression. Expected %s, but got %s.", exp, got);
-				free(exp); free(got);
-				goto for_fail;
+				Value *stepval = typer_malloc(tr, sizeof *fo->range.stepval);
+				if (!eval_expr(tr->evalr, fo->range.step, stepval)) {
+					info_print(fo->range.step->where, "Note that the step of a for loop must be a compile-time constant.");
+					goto for_fail;
+				}
+				val_cast(stepval, &fo->range.step->type, stepval, val_type);
+				fo->range.stepval = stepval;
 			}
-			if (fo->type->flags & TYPE_IS_FLEXIBLE) {
-				if (fo->range.to)
-					fo->type = &fo->range.to->type;
-				fo->type->flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE;
+
+			if (fo->range.to) {
+				if (!type_eq(val_type, &fo->range.to->type)) {
+					char *exp = type_to_str(val_type);
+					char *got = type_to_str(&fo->range.to->type);
+					err_print(e->where, "Type of for loop does not match the type of the to expression. Expected %s, but got %s.", exp, got);
+					free(exp); free(got);
+					goto for_fail;
+				}
+				if (val_type->flags & TYPE_IS_FLEXIBLE)
+					*val_type = fo->range.to->type;
 			}
+			val_type->flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE;
 		} else {
 			if (!types_expr(tr, fo->of))
 				goto for_fail;
+
 			Type *iter_type = &fo->of->type;
 
 			bool uses_ptr = false;
@@ -1757,46 +1833,23 @@ static Status types_expr(Typer *tr, Expression *e) {
 				iter_type = ptr_type;
 			}
 			if (header->flags & DECL_ANNOTATES_TYPE) {
-				if (!type_eq(iter_type, fo->type)) {
+				if (!type_eq(iter_type, val_type)) {
 					char *exp = type_to_str(iter_type);
-					char *got = type_to_str(fo->type);
-					err_print(e->where, "Expected to iterate over type %s, but it was annotated as iterating over type %s.");
+					char *got = type_to_str(val_type);
+					err_print(e->where, "Expected to iterate over type %s, but it was annotated as iterating over type %s.", exp, got);
 					free(exp); free(got);
 					goto for_fail;
 				}
-			} else fo->type = iter_type;
+			} else *val_type = *iter_type;
 		}
-		if ((fo->flags & FOR_IS_RANGE) && fo->range.step) {
-			Value *stepval = typer_malloc(tr, sizeof *fo->range.stepval);
-			if (!eval_expr(tr->evalr, fo->range.step, stepval)) {
-				info_print(fo->range.step->where, "Note that the step of a for loop must be a compile-time constant.");
-				goto for_fail;
-			}
-			val_cast(stepval, &fo->range.step->type, stepval, fo->type);
-			fo->range.stepval = stepval;
-		}
+
 		arr_remove_lasta(&tr->in_decls, tr->allocr);
 		in_header = false;
 		
-		/* now we need to fix the type of the declaration to (fo->type, i64) */
-		if ((header->flags & DECL_ANNOTATES_TYPE) && annotated_index) {
-			/* we're good; they fully annotated this */
-		} else {
-			Type *type = &header->type;
-			if (fo->type == type) fo->type = &fo->of->type; /* make sure we don't point to something that's about to be overriden */
-			type->kind = TYPE_TUPLE;
-			type->flags = TYPE_IS_RESOLVED;
-			type->was_expr = NULL;
-			type->tuple = NULL;
-			arr_set_lena(&type->tuple, 2, tr->allocr);
-			assert(fo->type->flags & TYPE_IS_RESOLVED);
-			type->tuple[0] = *fo->type;
-			Type *index_type = &type->tuple[1];
-			index_type->flags = TYPE_IS_RESOLVED;
-			index_type->was_expr = NULL;
-			index_type->kind = TYPE_BUILTIN;
-			index_type->builtin = BUILTIN_I64;
-		}
+		assert(header->type.flags & TYPE_IS_RESOLVED);
+		assert(index_type->flags & TYPE_IS_RESOLVED);
+		assert(val_type->flags & TYPE_IS_RESOLVED);
+
 		header->flags |= DECL_FOUND_TYPE;
 
 		if (!types_block(tr, &fo->body)) goto for_fail;

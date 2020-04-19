@@ -18,6 +18,7 @@ replace weird EXPR_FOR system with just a declaration- would make "for use p := 
 	- cgen.c
 	- eval.c
 	- copy.c
+consider: don't do inference for function calls; get rid of was_expr -- now that we have struct params
 EXPR_IDENT should be a string before typing, also struct member accesses
 do we need the possibility that IdentSlot.decl is NULL?
 use
@@ -30,7 +31,6 @@ local structs should not be named in C
 do we consistently handle x := &some_array_or_slice; x.len
 arr_add_val => doesn't return a pointer; takes a value!
 simplify eval macros with val_to_u/i64
-consider: don't do inference for function calls; get rid of was_expr -- now that we have struct params
 &&, ||
 start making a standard library... (printf; stringbuilder would be nice to have)
 switch

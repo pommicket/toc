@@ -146,6 +146,9 @@ static bool type_builtin_is_numerical(BuiltinType b) {
 	return type_builtin_is_int(b) || type_builtin_is_float(b);
 }
 
+static bool type_is_int(Type *t) {
+	return t->kind == TYPE_BUILTIN && type_builtin_is_int(t->builtin);
+}
 
 /* returns -1 on failure */
 static int kw_to_builtin_type(Keyword kw) {
@@ -1384,7 +1387,6 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				e->kind = EXPR_FOR;
 				ForExpr *fo = e->for_ = parser_malloc(p, sizeof *fo);
 				fo->flags = 0;
-				fo->type = NULL;
 				Block *prev_block = p->block;
 				fo->body.parent = p->block;
 				p->block = &fo->body;
@@ -2707,7 +2709,7 @@ static void fprint_expr(FILE *out, Expression *e) {
 			if (found_type) {
 				if (fo->range.stepval) {
 					fprintf(out, ",");
-					fprint_val(out, *fo->range.stepval, fo->type);
+					fprint_val(out, *fo->range.stepval, &fo->header.type.tuple[0]);
 				}
 			} else {
 				if (fo->range.step) {

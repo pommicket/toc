@@ -880,7 +880,6 @@ typedef Declaration *DeclarationPtr;
 
 typedef struct ForExpr {
 	U8 flags;
-	Type *type; /* NULL before typing */
 	Declaration header;
 	Block body;
 	union {
