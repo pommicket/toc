@@ -235,6 +235,7 @@ static inline void copier_ident_translate(Copier *c, Identifier *i) {
 	*i = ident_translate_forced(*i, &c->block->idents);
 }
 
+/* in must be untyped! */
 static void copy_expr(Copier *c, Expression *out, Expression *in) {
 	Allocator *a = c->allocr;
 	*out = *in;
@@ -275,7 +276,22 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		copy_block(c, &wout->body, &win->body, 0);
 	} break;
 	case EXPR_FOR: {
-		/* TODO */
+		ForExpr *fin = in->for_;
+		ForExpr *fout = out->for_ = allocr_malloc(a, sizeof *fout);
+		*fout = *fin;
+		Block *prev = c->block;
+		c->block = &fout->body;
+		idents_create(&fout->body.idents, c->allocr, &fout->body);
+		copy_decl(c, &fout->header, &fin->header);
+		if (fin->flags & FOR_IS_RANGE) {
+			fout->range.from = copy_expr_(c, fin->range.from);
+			if (fin->range.to) fout->range.to = copy_expr_(c, fin->range.to);
+			if (fin->range.step) fout->range.step = copy_expr_(c, fin->range.step);
+		} else {
+			fout->of = copy_expr_(c, fin->of);
+		}
+		c->block = prev;
+		copy_block(c, &fout->body, &fin->body, COPY_BLOCK_DONT_CREATE_IDENTS);
 	} break;
 	case EXPR_FN:
 		copy_fn_expr(c, out->fn = allocr_malloc(a, sizeof *out->fn), in->fn, 0);

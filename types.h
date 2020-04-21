@@ -889,7 +889,8 @@ typedef struct ForExpr {
 			union {
 				/* (either) can be null */
 				struct Expression *step; /* before typing */
-				Value *stepval; /* after typing */
+				Value *stepval; /* after typing. the type of this is header.type.tuple[0] (i.e. the value type for this for loop),
+					NOTE: this might be different from the original ForExpr.step.type, because of implicit type conversions. */
 			};
 		} range;
 		struct Expression *of;

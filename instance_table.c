@@ -19,7 +19,7 @@
 static void *val_get_ptr(Value *v, Type *t);
 static U64 val_hash(Value v, Type *t);
 static bool val_eq(Value u, Value v, Type *t);
-static bool type_eq(Type *t1, Type *t2);
+static bool type_eq_exact(Type *t1, Type *t2);
 
 static U64 f32_hash(F32 f) {
 	/* OPTIM */
@@ -230,7 +230,7 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 			if (arr_len(vs) != n)
 				return false;
 			for (size_t i = 0; i < n; ++i) {
-				if (!type_eq(us[i].type, vs[i].type))
+				if (!type_eq_exact(us[i].type, vs[i].type))
 					return false;
 				if (!val_eq(vs[i].val, us[i].val, us[i].type))
 					return false;
@@ -238,7 +238,7 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 			return true;
 		}	
 		case BUILTIN_TYPE:
-			return type_eq(*(Type **)u, *(Type **)v);
+			return type_eq_exact(*(Type **)u, *(Type **)v);
 		case BUILTIN_NMS:
 			return *(Namespace **)u == *(Namespace **)v;
 		}

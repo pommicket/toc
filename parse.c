@@ -1085,7 +1085,7 @@ static Status ctype_to_type(Allocator *a, CType *ctype, Type *type, Location whe
 	case CTYPE_PTR:
 		type->kind = TYPE_PTR;
 		type->ptr = allocr_calloc(a, 1, sizeof *type->ptr);
-		type->ptr->kind = TYPE_UNKNOWN;
+		type->ptr->kind = TYPE_VOID;
 		break;
 	case CTYPE_UNSIGNED: assert(0); break;
 	}
@@ -2912,6 +2912,7 @@ static inline Type *decl_type_at_index(Declaration *d, int i) {
 	assert(i >= 0);
 	if (d->type.kind == TYPE_TUPLE) {
 		int tuple_len = (int)arr_len(d->type.tuple);
+		(void)tuple_len;
 #if 0
 		printf("decl_type_at_index: tuple_len:%d i:%d\n", tuple_len, i);
 #endif

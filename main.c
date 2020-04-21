@@ -8,21 +8,24 @@
 
 /* 
 TODO:
-replace weird EXPR_FOR system with just a declaration- would make "for use p := points" easier.
-	need to fix:
-	- copy.c
+arr_add_val
+arr_last_val
+test for use ...
+test used ret decls
 consider: don't do inference for function calls; get rid of was_expr -- now that we have struct params
 EXPR_IDENT should be a string before typing, also struct member accesses
 do we need the possibility that IdentSlot.decl is NULL?
 use
  - use with struct members (e.g. SuperPoint ::= struct { use p: Point; })
 maybe change to #define check(x) do { if_unlikely(x) return 0; } while (0);
+always use pointers in cgen'd non-range for loops (sometimes also indices)
 is there a problem where we can get TYPE_UNKNOWN in cgen, triggering an assert(0)?
 	-simple example, but maybe try other stuff: x := #C("5"); 
 	-also make sure you can't do x:#C("5");
 local structs should not be named in C
+make sure you can do a[i] where a is &[5]int or &[]char or something
 do we consistently handle x := &some_array_or_slice; x.len
-arr_add_val => doesn't return a pointer; takes a value!
+&void
 simplify eval macros with val_to_u/i64
 &&, ||
 start making a standard library... (printf; stringbuilder would be nice to have)
@@ -41,6 +44,7 @@ make sure that floating point literals are exact as possible
 	have some way of doing Infinity and s/qNaN (you can
 	have them be in std/math.toc)
 once you have a bunch of test code:
+- analyze memory usage by secretly passing __FILE__, __LINE__ to allocr_m/c/realloc
 - try making more Expression members pointers
 - branch data: #define if(x) bool join(cond, __LINE__) = x; register_branch(__FILE__, __LINE__, cond); if (join(cond, __LINE__))
 error on x ::= {return; 3}

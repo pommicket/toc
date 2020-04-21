@@ -1,15 +1,12 @@
-#include "std/io.toc";
+#include "std/io.toc", io;
 
 main ::= fn() {
-	foo : [5][]char;
-	for x := &foo {
-		*x = "hello";
+	s ::= struct {
+		foo, e: int;
+		bar ::= 3;
+		baz: float;
 	}
-	for x := foo {
-		puts(x);
-	}
-	for c := "foobar" { 
-		puti(c as int);
-	}
+
+	p: s;
+	io.puti(p["bar"]);
 }
-main();

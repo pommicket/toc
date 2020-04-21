@@ -184,33 +184,15 @@ static size_t compiler_sizeof(Type *t) {
 
 
 #define typer_arr_add(tr, a) typer_arr_add_(tr, (void **)(a), sizeof **(a))
-
-static bool type_eq(Type *a, Type *b) {
-	if (a->kind == TYPE_UNKNOWN || b->kind == TYPE_UNKNOWN)
-		return true; /* allow things such as 3 + #C("5") */
+/* are a and b EXACTLY equal (not counting flags)? */
+static bool type_eq_exact(Type *a, Type *b) {
 	assert(a->flags & TYPE_IS_RESOLVED);
 	assert(b->flags & TYPE_IS_RESOLVED);
 	
 	if (a->kind != b->kind) return false;
-	if (b->flags & TYPE_IS_FLEXIBLE) {
-		Type *tmp = a;
-		a = b;
-		b = tmp;
-	}
-
-	if (a->flags & TYPE_IS_FLEXIBLE) {
-		if (b->flags & TYPE_IS_FLEXIBLE) return true;
-		assert(a->kind == TYPE_BUILTIN);
-		
-		if (type_builtin_is_float(a->builtin)) {
-			return type_builtin_is_float(b->builtin);
-		}
-		assert(a->builtin == BUILTIN_I64);
-		return type_builtin_is_numerical(b->builtin);
-	}
 	switch (a->kind) {
 	case TYPE_VOID: return true;
-	case TYPE_UNKNOWN: assert(0); return false;
+	case TYPE_UNKNOWN: return true;
 	case TYPE_BUILTIN:
 		return a->builtin == b->builtin;
 	case TYPE_STRUCT:
@@ -228,7 +210,7 @@ static bool type_eq(Type *a, Type *b) {
 			if ((const_a == CONSTNESS_NO && const_b == CONSTNESS_YES)
 				|| (const_a == CONSTNESS_YES && const_b == CONSTNESS_NO))
 				return false;
-			if (!type_eq(&a_types[i], &b_types[i]))
+			if (!type_eq_exact(&a_types[i], &b_types[i]))
 				return false;
 			
 		}
@@ -238,18 +220,18 @@ static bool type_eq(Type *a, Type *b) {
 		if (arr_len(a->tuple) != arr_len(b->tuple)) return false;
 		Type *a_types = a->tuple, *b_types = b->tuple;
 		for (size_t i = 0; i < arr_len(a->tuple); ++i) {
-			if (!type_eq(&a_types[i], &b_types[i]))
+			if (!type_eq_exact(&a_types[i], &b_types[i]))
 				return false;
 		}
 		return true;
 	}
 	case TYPE_ARR:
 		if (a->arr.n != b->arr.n) return false;
-		return type_eq(a->arr.of, b->arr.of);
+		return type_eq_exact(a->arr.of, b->arr.of);
 	case TYPE_SLICE:
-		return type_eq(a->slice, b->slice);
+		return type_eq_exact(a->slice, b->slice);
 	case TYPE_PTR:
-		return type_eq(a->ptr, b->ptr);
+		return type_eq_exact(a->ptr, b->ptr);
 	case TYPE_EXPR:
 		break;
 	}
@@ -257,15 +239,50 @@ static bool type_eq(Type *a, Type *b) {
 	return false;
 }
 
-/* expected must equal got, or an error will be produced */
-static Status type_must_eq(Location where, Type *expected, Type *got) {
-	if (!type_eq(expected, got)) {
-		char *str_ex = type_to_str(expected);
-		char *str_got = type_to_str(got);
-		err_print(where, "Type mismatch: expected %s, but got %s.", str_ex, str_got);
-		return false;
+/* are a and b equal, allowing implicit conversions? */
+static bool type_eq_implicit(Type *a, Type *b) {
+	if (a->kind == TYPE_UNKNOWN || b->kind == TYPE_UNKNOWN)
+		return true;
+	if (a->kind != b->kind) return false;
+	if (b->flags & TYPE_IS_FLEXIBLE) {
+		Type *tmp = b;
+		b = a;
+		a = tmp;
 	}
-	return true;
+	if (a->flags & TYPE_IS_FLEXIBLE) {
+		assert(a->kind == TYPE_BUILTIN);
+		if (b->flags & TYPE_IS_FLEXIBLE) return true;
+
+		if (type_builtin_is_float(a->builtin)) {
+			return type_builtin_is_float(b->builtin);
+		}
+		assert(a->builtin == BUILTIN_I64);
+		return type_builtin_is_numerical(b->builtin);
+	}
+	if (a->kind == TYPE_PTR) {
+		/* &void casts to &anything */
+		if (a->ptr->kind == TYPE_VOID || b->ptr->kind == TYPE_VOID)
+			return true;
+	}
+	return type_eq_exact(a, b);
+}
+
+/* which is the "overriding" type? i.e. which type should the other one convert to? */
+static Type *overriding_type(Type *a, Type *b) {
+	if (a->kind == TYPE_UNKNOWN) return b;
+	if (b->kind == TYPE_UNKNOWN) return a;
+	if (a->flags & TYPE_IS_FLEXIBLE) {
+		assert(a->kind == TYPE_BUILTIN);
+		if (b->flags & TYPE_IS_FLEXIBLE) {
+			if (type_builtin_is_float(a->builtin))
+				return a;
+		}
+		return b;
+	}
+	if (b->flags & TYPE_IS_FLEXIBLE)
+		return a;
+	/* doesn't matter */
+	return a;
 }
 
 /* prints an error and returns false if the given expression is not an l-value */
@@ -1046,7 +1063,7 @@ static CastStatus type_cast_status(Type *from, Type *to) {
 	case TYPE_ARR:
 		return CAST_STATUS_ERR;
 	case TYPE_SLICE:
-		if (to->kind == TYPE_PTR && type_eq(from->slice, to->ptr))
+		if (to->kind == TYPE_PTR && type_eq_exact(from->slice, to->ptr))
 			return CAST_STATUS_NONE;
 		return CAST_STATUS_ERR;
 	case TYPE_EXPR:
@@ -1092,7 +1109,7 @@ static Status types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 	ret_type = t->fn.types;
 	has_named_ret_vals = f->ret_decls != NULL;
 	if (ret_expr) {
-		if (!type_eq(ret_type, &ret_expr->type)) {
+		if (!type_eq_implicit(&ret_expr->type, ret_type)) {
 			char *got = type_to_str(&ret_expr->type);
 			char *expected = type_to_str(ret_type);
 			err_print(ret_expr->where, "Returning type %s, but function returns type %s.", got, expected);
@@ -1552,13 +1569,13 @@ static Status types_expr(Typer *tr, Expression *e) {
 		t->builtin = BUILTIN_CHAR;
 		break;
 	case EXPR_FOR: {
+		bool in_header = true;{ /* additional block because c++ */
 		ForExpr *fo = e->for_;
 		Declaration *header = &fo->header;
 
 		*(Declaration **)typer_arr_add(tr, &tr->in_decls) = header;
 		fo->body.uses = NULL;
 		typer_block_enter(tr, &fo->body);
-		bool in_header = true;
 		bool annotated_index = true;
 		{
 			size_t nidents = arr_len(header->idents);
@@ -1652,10 +1669,12 @@ static Status types_expr(Typer *tr, Expression *e) {
 			}
 
 			if (val_type->flags) {
-				if (!type_eq(val_type, &fo->range.from->type)) {
+				if (type_eq_implicit(&fo->range.from->type, val_type)) {
+					*val_type = *overriding_type(&fo->range.from->type, val_type);
+				} else {
 					char *exp = type_to_str(val_type);
 					char *got = type_to_str(&fo->range.from->type);
-					err_print(e->where, "Type of for loop does not match the type of the from expression. Expected %s, but got %s.", exp, got);
+					err_print(e->where, "Type of from expression does not match type of for loop. Expected %s, but got %s.", exp, got);
 					free(exp); free(got);
 					goto for_fail;
 				}
@@ -1664,16 +1683,33 @@ static Status types_expr(Typer *tr, Expression *e) {
 			}
 
 			if (fo->range.step) {
-				if (!type_eq(val_type, &fo->range.step->type)) {
+				if (type_eq_implicit(&fo->range.step->type, val_type)) {
+					*val_type = *overriding_type(&fo->range.step->type, val_type);
+				} else {
 					char *exp = type_to_str(val_type);
 					char *got = type_to_str(&fo->range.step->type);
-					err_print(e->where, "Type of for loop does not match the type of the step expression. Expected %s, but got %s.", exp, got);
+					err_print(e->where, "Type of step expression does not match type of for loop. Expected %s, but got %s.", exp, got);
 					free(exp); free(got);
 					goto for_fail;
 				}
-				if (val_type->flags & TYPE_IS_FLEXIBLE)
-					*val_type = fo->range.step->type;
+			}
+
+			if (fo->range.to) {
+				if (type_eq_implicit(&fo->range.to->type, val_type)) {
+					*val_type = *overriding_type(&fo->range.to->type, val_type);
+				} else {
+					char *exp = type_to_str(val_type);
+					char *got = type_to_str(&fo->range.to->type);
+					err_print(e->where, "Type of to expression does not match type of for loop. Expected %s, but got %s.", exp, got);
+					free(exp); free(got);
+					goto for_fail;
+				}
+			}
 			
+			val_type->flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE;
+			
+			if (fo->range.step) {
+				/* we can't put this above because *val_type might have changed. */
 				Value *stepval = typer_malloc(tr, sizeof *fo->range.stepval);
 				if (!eval_expr(tr->evalr, fo->range.step, stepval)) {
 					info_print(fo->range.step->where, "Note that the step of a for loop must be a compile-time constant.");
@@ -1682,19 +1718,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 				val_cast(stepval, &fo->range.step->type, stepval, val_type);
 				fo->range.stepval = stepval;
 			}
-
-			if (fo->range.to) {
-				if (!type_eq(val_type, &fo->range.to->type)) {
-					char *exp = type_to_str(val_type);
-					char *got = type_to_str(&fo->range.to->type);
-					err_print(e->where, "Type of for loop does not match the type of the to expression. Expected %s, but got %s.", exp, got);
-					free(exp); free(got);
-					goto for_fail;
-				}
-				if (val_type->flags & TYPE_IS_FLEXIBLE)
-					*val_type = fo->range.to->type;
-			}
-			val_type->flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE;
 		} else {
 			if (!types_expr(tr, fo->of))
 				goto for_fail;
@@ -1835,7 +1858,9 @@ static Status types_expr(Typer *tr, Expression *e) {
 				iter_type = ptr_type;
 			}
 			if (header->flags & DECL_ANNOTATES_TYPE) {
-				if (!type_eq(iter_type, val_type)) {
+				if (type_eq_implicit(iter_type, val_type)) {
+					*val_type = *overriding_type(iter_type, val_type);
+				} else {
 					char *exp = type_to_str(iter_type);
 					char *got = type_to_str(val_type);
 					err_print(e->where, "Expected to iterate over type %s, but it was annotated as iterating over type %s.", exp, got);
@@ -1863,7 +1888,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		t->kind = TYPE_VOID;
 		
 		typer_block_exit(tr);
-		break;
+		}break;
 		for_fail:
 		if (in_header)
 			arr_remove_lasta(&tr->in_decls, tr->allocr);
@@ -2059,7 +2084,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					next_type->flags = TYPE_IS_RESOLVED;
 					next_type->was_expr = NULL;
 				}
-				if (!type_eq(curr_type, next_type)) {
+				if (!type_eq_implicit(next_type, curr_type)) {
 					char *currstr = type_to_str(curr_type);
 					char *nextstr = type_to_str(next_type);
 					err_print(curr->next_elif->where, "Mismatched types in if/elif/else chain. Previous block was of type %s, but this one is of type %s.", currstr, nextstr);
@@ -2176,7 +2201,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 							Argument *arg = &c->args[order[p]];
 							assert(arg->val.type.flags & TYPE_IS_RESOLVED);
 							assert(type->flags & TYPE_IS_RESOLVED);
-							if (!type_eq(&arg->val.type, type)) {
+							if (!type_eq_implicit(&arg->val.type, type)) {
 								char *expected = type_to_str(type),
 									*got = type_to_str(&arg->val.type);
 								err_print(arg->where, "Wrong struct parameter type. Expected %s, but got %s.", expected, got);
@@ -2580,7 +2605,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				Expression *arg = &arg_exprs[p];
 				Type *expected = &param_types[p];
 				Type *got = &arg->type;
-				if (!type_eq(expected, got)) {
+				if (!type_eq_implicit(got, expected)) {
 					char *estr = type_to_str(expected);
 					char *gstr = type_to_str(got);
 					err_print(arg->where, "Expected type %s as argument to function, but got %s.", estr, gstr);
@@ -2888,10 +2913,10 @@ static Status types_expr(Typer *tr, Expression *e) {
 			assert(rhs_type->flags & TYPE_IS_RESOLVED);
 			
 			if (o == BINARY_SET) {
-				valid = type_eq(lhs_type, rhs_type);
+				valid = type_eq_implicit(lhs_type, rhs_type);
 			} else {
 				/* numerical binary ops */
-				if (lhs_type->kind == TYPE_BUILTIN && type_eq(lhs_type, rhs_type)) {
+				if (lhs_type->kind == TYPE_BUILTIN && type_eq_implicit(lhs_type, rhs_type)) {
 					/* int + int, etc. */
 					valid = true;
 				}
@@ -2905,7 +2930,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				if (o == BINARY_LT || o == BINARY_GT || o == BINARY_LE || o == BINARY_GE
 					|| o == BINARY_EQ || o == BINARY_NE) {
 					/* comparable types */
-					if (type_eq(lhs_type, rhs_type)) {
+					if (type_eq_implicit(lhs_type, rhs_type)) {
 						switch (lhs_type->kind) {
 						case TYPE_PTR:
 						case TYPE_BUILTIN: /* all builtins are comparable */
@@ -2932,23 +2957,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					t->builtin = BUILTIN_BOOL;
 					break;
 				default: {
-					int lhs_is_flexible = lhs_type->flags & TYPE_IS_FLEXIBLE;
-					int rhs_is_flexible = rhs_type->flags & TYPE_IS_FLEXIBLE;
-					if (lhs_is_flexible && rhs_is_flexible) {
-						/* both flexible */
-						*t = *lhs_type;
-						if (rhs_type->builtin == BUILTIN_F32) {
-							/* promote to float */
-							t->builtin = BUILTIN_F32;
-						}
-						
-					} else if (!lhs_is_flexible) {
-						/* lhs inflexible, rhs ? */
-						*t = *lhs_type;
-					} else {
-						/* lhs flexible, rhs ? */
-						*t = *rhs_type;
-					}
+					*t = *overriding_type(lhs_type, rhs_type);
 					if ((o == BINARY_MOD || o == BINARY_SET_MOD)
 						&& type_builtin_is_float(t->builtin)) {
 						err_print(e->where, "Cannot use operator % on floating-point numbers.");
@@ -3002,6 +3011,37 @@ static Status types_expr(Typer *tr, Expression *e) {
 			case TYPE_SLICE:
 				*t = *lhs_type->slice;
 				break;
+			case TYPE_BUILTIN:
+				if (lhs_type->builtin == BUILTIN_VARARGS) {
+					assert(lhs->kind == EXPR_IDENT);
+					Declaration *decl = lhs->ident->decl;
+					assert(decl->flags & DECL_IS_PARAM);
+					Value index_val;
+					if (!eval_expr(tr->evalr, rhs, &index_val))
+						return false;
+					/* NOTE: rhs->type was checked above */
+					I64 i = val_to_i64(index_val, rhs->type.builtin);
+					VarArg *varargs = decl->val.varargs;
+					if (i < 0 || i >= (I64)arr_len(varargs)) {
+						err_print(e->where, "Index out of bounds for varargs access (index = " I64_FMT ", length = %lu).", i, (unsigned long)arr_len(varargs));
+						return 0;
+					}
+					VarArg *vararg = &varargs[i];
+					if (decl->flags & DECL_IS_CONST) {
+						/* replace with value */
+						e->kind = EXPR_VAL;
+						e->type = *vararg->type;
+						copy_val(tr->allocr, &e->val, vararg->val, &e->type);
+					} else {
+						/* just use vararg's type */
+						rhs->kind = EXPR_VAL;
+						rhs->val.i64 = i;
+						rhs->type.builtin = BUILTIN_I64;
+						*t = *vararg->type;
+					}
+					break;
+				}
+				/* fallthrough */
 			default: {
 				char *s = type_to_str(lhs_type);
 				err_print(e->where, "Cannot subscript type %s", s);
@@ -3043,8 +3083,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 			} else if (struct_type->kind == TYPE_STRUCT) {
 				StructDef *struc = struct_type->struc;
 				Identifier struct_ident = ident_translate(rhs->ident, &struc->body.idents);
-				if (ident_is_declared(struct_ident)) {
-					Field *field = struct_ident->decl->field;
+				Field *field = NULL;
+				if (ident_is_declared(struct_ident) && (field = struct_ident->decl->field)) {
 					field += ident_index_in_decl(struct_ident, struct_ident->decl);
 					e->binary.dot.field = field;
 					*t = *field->type;
@@ -3270,11 +3310,14 @@ static Status types_decl(Typer *tr, Declaration *d) {
 		}
 		assert(d->expr.type.flags & TYPE_IS_RESOLVED);
 		if (d->flags & DECL_ANNOTATES_TYPE) {
-			if (!type_must_eq(d->expr.where, &d->type, &d->expr.type)) {
+			if (!type_eq_implicit(&d->expr.type, &d->type)) {
+				char *decl_type = type_to_str(&d->type),
+					*expr_type = type_to_str(&d->expr.type);
+				err_print(d->expr.where, "Declaration type %s does not match expression type %s.", decl_type, expr_type);
+				free(decl_type); free(expr_type);
 				success = false;
 				goto ret;
 			}
-			d->expr.type = d->type;
 		} else {
 			if (d->expr.type.kind == TYPE_VOID) {
 				/* e.g. x := (fn(){})(); */
@@ -3468,7 +3511,7 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			}
 			if (!types_expr(tr, &r->expr))
 				return false;
-			if (!type_eq(&tr->fn->ret_type, &r->expr.type)) {
+			if (!type_eq_implicit(&tr->fn->ret_type, &r->expr.type)) {
 				char *got = type_to_str(&r->expr.type);
 				char *expected = type_to_str(&tr->fn->ret_type);
 				err_print(s->where, "Returning type %s in function which returns %s.", got, expected);
