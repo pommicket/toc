@@ -55,7 +55,7 @@ static const char *expr_kind_to_str(ExprKind k) {
 	case EXPR_IDENT: return "identifier";
 	case EXPR_SLICE: return "slice";
 	case EXPR_TYPE: return "type";
-	case EXPR_VAL: return "value";
+	case EXPR_VAL: return "constant value";
 	case EXPR_NMS: return "namespace";
 	}
 	assert(0);

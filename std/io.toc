@@ -2,16 +2,19 @@ putchar ::= #foreign("putchar", "libc.so.6") fn(#C int) #C int;
 toc_putchar ::= fn(x: char) {
 	putchar(x as #C int);
 }
+printf ::= #foreign("printf", "libc.so.6") fn(#C &"char const", #C ..) #C int; 
 
+writes ::= fn(x: []char) {
+	printf_strfmt := "%s\0";
+	printf(&printf_strfmt[0], &x[0]);
+}
 
 puts ::= fn(x: []char) {
-	for c := x {
-		toc_putchar(c);
-	}
+	writes(x);
 	toc_putchar('\n');
 }
 
-puti ::= fn(x: int) {
+writei ::= fn(x: int) {
 	if x < 0 {
 	   toc_putchar('-');
 	   // NOTE: don't do x = -x; here to make sure I64_MIN works
@@ -31,5 +34,10 @@ puti ::= fn(x: int) {
 			scan_digit /= 10;
 		}
 	}
+}
+
+puti ::= fn(x: int) {
+	writei(x);
 	toc_putchar('\n');
 }
+

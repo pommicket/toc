@@ -8,8 +8,6 @@
 
 /* 
 @TODO:
-arr_add-val
-test for use ...
 test used ret decls
 consider: don't do inference for function calls; get rid of was_expr -- now that we have struct params
 EXPR_IDENT should be a string before typing, also struct member accesses
@@ -25,6 +23,9 @@ is there a problem where we can get TYPE_UNKNOWN in cgen, triggering an assert(0
 	-simple example, but maybe try other stuff: x := #C("5"); 
 	-also make sure you can't do x:#C("5");
 local structs should not be named in C
+make sure global slices work
+allow use ??? if an error has already occurred
+if something gets included into a namespace, and its typing fails, the namespace should still be of type namespace, not ???
 make sure you can do a[i] where a is &[5]int or &[]char or something
 do we consistently handle x := &some_array_or_slice; x.len
 &void
@@ -35,6 +36,7 @@ switch
  - #fallthrough
 enums
 unions
+compile to a temp file, then move it if compilation succeeds
 ---
 switch to / add as an alternative: libffi
 X ::= newtype(int); or something

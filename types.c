@@ -283,8 +283,11 @@ static Type *overriding_type(Type *a, Type *b) {
 	return a;
 }
 
-/* prints an error and returns false if the given expression is not an l-value */
-static Status expr_must_lval(Expression *e) {
+/* 
+prints an error and returns false if the given expression is not an l-value 
+purpose is something like "take address of"
+*/
+static Status expr_must_lval(Expression *e, char const *purpose) {
 	/* NOTE: make sure you update eval when you change this */
 	switch (e->kind) {
 	case EXPR_IDENT: {
@@ -292,14 +295,14 @@ static Status expr_must_lval(Expression *e) {
 		Declaration *d = i->decl;
 		if (d->flags & DECL_IS_CONST) {
 			char *istr = ident_to_str(i);
-			err_print(e->where, "Use of constant %s as a non-constant expression.", istr);
+			err_print(e->where, "Cannot %s constant %s.", purpose, istr);
 			info_print(d->where, "%s was declared here.", istr);
 			free(istr);
 			return false;
 		}
 		if (type_is_builtin(&d->type, BUILTIN_VARARGS)) {
 			char *istr = ident_to_str(i);
-			err_print(e->where, "varargs cannot be set or pointed to.");
+			err_print(e->where, "Cannot %s varargs.", purpose);
 			info_print(d->where, "%s was declared here.", istr);
 			free(istr);
 			return false;
@@ -310,7 +313,7 @@ static Status expr_must_lval(Expression *e) {
 		if (e->unary.op == UNARY_DEREF) return true;
 		if (e->unary.op == UNARY_LEN) {
 			Type *of_type = &e->unary.of->type;
-			if (of_type->kind != TYPE_PTR && !expr_must_lval(e->unary.of)) { /* can't set length of a non-lvalue slice */
+			if (of_type->kind != TYPE_PTR && !expr_must_lval(e->unary.of, purpose)) { /* can't set length of a non-lvalue slice */
 				return false;
 			}
 			
@@ -318,12 +321,12 @@ static Status expr_must_lval(Expression *e) {
 				|| (of_type->kind == TYPE_PTR
 					&& of_type->kind == TYPE_SLICE);
 		}
-		err_print(e->where, "Cannot use operator %s as l-value.", unary_op_to_str(e->unary.op));
+		err_print(e->where, "Cannot %s operator %s.", purpose, unary_op_to_str(e->unary.op));
 		return false;
 	case EXPR_BINARY_OP:
 		switch (e->binary.op) {
 		case BINARY_AT_INDEX:
-			if (!expr_must_lval(e->binary.lhs))
+			if (!expr_must_lval(e->binary.lhs, purpose))
 				return false;
 			if (type_is_builtin(&e->binary.lhs->type, BUILTIN_VARARGS)) {
 				err_print(e->where, "Cannot set or take address of vararg.");
@@ -333,17 +336,17 @@ static Status expr_must_lval(Expression *e) {
 		case BINARY_DOT: return true;
 		default: break;
 		}
-		err_print(e->where, "Cannot use operator %s as l-value.", binary_op_to_str(e->binary.op));
+		err_print(e->where, "Cannot %s operator %s.", purpose, binary_op_to_str(e->binary.op));
 		return false;
 	case EXPR_TUPLE:
 		/* x, y is an lval, but 3, "hello" is not. */
 		arr_foreach(e->tuple, Expression, x) {
-			if (!expr_must_lval(x)) 
+			if (!expr_must_lval(x, purpose)) 
 				return false;
 		}
 		return true;
 	default: {
-		err_print(e->where, "Cannot use %s as l-value.", expr_kind_to_str(e->kind));
+		err_print(e->where, "Cannot %s %s.", purpose, expr_kind_to_str(e->kind));
 		return false;
 	}
 	}
@@ -1524,6 +1527,46 @@ static bool fn_type_has_varargs(FnType *f) {
 	return type_is_builtin(arr_last_ptr(f->types), BUILTIN_VARARGS);
 }
 
+static Status expr_must_usable_(Expression *e) {
+	if (e->kind == EXPR_IDENT) return true;
+	if (e->kind == EXPR_BINARY_OP && e->binary.op == BINARY_DOT)
+		return expr_must_usable_(e->binary.lhs);
+	return false;
+}
+
+static Status expr_must_usable(Expression *e) {
+	Type *t = &e->type;
+	if (t->kind != TYPE_STRUCT && !type_is_builtin(t, BUILTIN_NMS)) {
+		if (!(t->kind == TYPE_PTR && t->ptr->kind == TYPE_STRUCT)) {
+			char *str = type_to_str(&e->type);
+			err_print(e->where, "You cannot use something of type %s (only Namespaces and structs).", str);
+			free(str);
+			return false;
+		}
+	}
+	return expr_must_usable_(e);
+}
+
+
+static Status use_ident(Typer *tr, Identifier i, Type *t, Location where) {
+	/* add to uses */
+	Use **usep;
+	if (tr->block)
+		usep = typer_arr_add_ptr(tr, tr->block->uses);
+	else
+		usep = typer_arr_add_ptr(tr, tr->uses);
+	Use *use = *usep = typer_calloc(tr, 1, sizeof *use);
+	Expression *used = &use->expr;
+	used->kind = EXPR_IDENT;
+	used->flags = EXPR_FOUND_TYPE;
+	used->type = *t;
+	used->ident = i;
+	used->where = where;
+	if (!expr_must_usable(used))
+		return false;
+	return true;
+}
+
 static Status types_expr(Typer *tr, Expression *e) {
 	if (e->flags & EXPR_FOUND_TYPE) return true;
 	Type *t = &e->type;
@@ -1575,7 +1618,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		bool in_header = true;{ /* additional block because c++ */
 		ForExpr *fo = e->for_;
 		Declaration *header = &fo->header;
-
+		U32 is_range = fo->flags & FOR_IS_RANGE;
 		typer_arr_add(tr, tr->in_decls, header);
 		fo->body.uses = NULL;
 		typer_block_enter(tr, &fo->body);
@@ -1638,7 +1681,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 			construct_resolved_builtin_type(index_type, BUILTIN_I64);
 		}
 
-		if (fo->flags & FOR_IS_RANGE) {
+		if (is_range) {
 			if (!types_expr(tr, fo->range.from)) goto for_fail;
 			{
 				Type *ft = &fo->range.from->type;
@@ -1872,7 +1915,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				}
 			} else *val_type = *iter_type;
 		}
-
+		
 		arr_remove_lasta(tr->in_decls, tr->allocr);
 		in_header = false;
 		
@@ -1881,6 +1924,16 @@ static Status types_expr(Typer *tr, Expression *e) {
 		assert(val_type->flags & TYPE_IS_RESOLVED);
 
 		header->flags |= DECL_FOUND_TYPE;
+			
+		if (header->flags & DECL_USE) {
+			if (ident_eq_str(header->idents[0], "_")) {
+				err_print(header->where, "You have to name your for loop variable in order to use it (sorry).");
+				return false;
+			}
+			if (!use_ident(tr, header->idents[0], val_type, header->where)) {
+				return false;
+			}
+		}
 
 		if (!types_block(tr, &fo->body)) goto for_fail;
 		if (fo->body.ret_expr) {
@@ -2779,7 +2832,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				t->builtin = BUILTIN_TYPE;
 				break;
 			}
-			if (!expr_must_lval(of)) {
+			if (!expr_must_lval(of, "take address of")) {
 				return false;
 			}
 			if (of_type->kind == TYPE_TUPLE) {
@@ -2893,7 +2946,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		case BINARY_SET_MUL:
 		case BINARY_SET_DIV:
 		case BINARY_SET_MOD:
-			if (!expr_must_lval(e->binary.lhs)) {
+			if (!expr_must_lval(e->binary.lhs, "set value of")) {
 				return false;
 			}
 			/* fallthrough */
@@ -3402,23 +3455,13 @@ static Status types_decl(Typer *tr, Declaration *d) {
 		
 	if (d->flags & DECL_USE) {
 		int idx = 0;
-		arr_foreach(d->idents, Identifier, ip) {
-			Identifier i = *ip;
-			/* add to uses */
-			Use **usep;
-			if (tr->block)
-				usep = typer_arr_add_ptr(tr, tr->block->uses);
-			else
-				usep = typer_arr_add_ptr(tr, tr->uses);
-			Use *use = *usep = typer_calloc(tr, 1, sizeof *use);
-			Expression *used = &use->expr;
-			used->kind = EXPR_IDENT;
-			used->flags = EXPR_FOUND_TYPE;
-			used->type = *decl_type_at_index(d, idx++);
-			used->ident = i;
-			used->where = d->where;
-			
+		if (arr_len(d->idents) > 1) {
+			err_print(d->where, "Used declarations cannot have more than one identifier (you're trying to use two things at once).");
+			return false;
 		}
+		Identifier i = d->idents[0];
+		if (!use_ident(tr, i, decl_type_at_index(d, idx++), d->where))
+			return false;
 	}
 
 	if (n_idents == 1 && (d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_NMS) {
@@ -3451,13 +3494,6 @@ static Status types_decl(Typer *tr, Declaration *d) {
 	}
 	arr_remove_lasta(tr->in_decls, tr->allocr);
 	return success;
-}
-
-static bool expr_is_usable(Expression *e) {
-	if (e->kind == EXPR_IDENT) return true;
-	if (e->kind == EXPR_BINARY_OP && e->binary.op == BINARY_DOT)
-		return expr_is_usable(e->binary.lhs);
-	return false;
 }
 
 static Status types_stmt(Typer *tr, Statement *s) {
@@ -3630,19 +3666,9 @@ static Status types_stmt(Typer *tr, Statement *s) {
 	case STMT_USE: {
 		Use *u = s->use;
 		Expression *e = &u->expr;
-		Type *t = &e->type;
 		if (!types_expr(tr, e))
 			return false;
-		if (t->kind != TYPE_STRUCT && !type_is_builtin(t, BUILTIN_NMS)) {
-			if (!(t->kind == TYPE_PTR && t->ptr->kind == TYPE_STRUCT)) {
-				char *str = type_to_str(&e->type);
-				err_print(s->where, "You cannot use something of type %s (only Namespaces and structs).", str);
-				free(str);
-				return false;
-			}
-		}
-		if (!expr_is_usable(e)) {
-			err_print(e->where, "You can't use this value. You should probably assign it to a variable.");
+		if (!expr_must_usable(e)) {
 			return false;
 		}
 		if (tr->block)

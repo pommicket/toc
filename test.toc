@@ -1,12 +1,34 @@
 #include "std/io.toc", io;
+#include "std/mem.toc", mem;
+
+use mem;
 
 main ::= fn() {
-	s ::= struct {
-		foo, e: int;
-		bar ::= 3;
-		baz: float;
+	Point ::= struct {	
+		x: int;
+		y: int;
+		a ::= 3;
 	}
 
-	p: s;
-	io.puti(p["bar"]);
+	use io;
+
+	{
+		use p: Point;
+		use io;
+		x = 5;
+		puti(x);
+	}
+
+	ps := news(Point, 5);
+	for use p, i := &ps {
+		x = i;
+		y = 2*i;
+	}
+	for use p := ps {
+		writei(x);
+		writes(" ");
+		writei(y);
+		puts("");
+	}
+	dels(ps);
 }
