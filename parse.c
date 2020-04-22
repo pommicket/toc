@@ -253,7 +253,7 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 			if (def->params) {
 				written += str_copy(buffer + written, bufsize - written, "(");
 				arr_foreach(def->params, Declaration, param) {
-					/* TODO: val to str */
+					/* @TODO: val to str */
 					if (param != def->params)
 						written += str_copy(buffer + written, bufsize - written, ", ");
 					written += str_copy(buffer + written, bufsize - written, "<argument>");
@@ -297,7 +297,7 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 		return written;
 	}
 	case TYPE_EXPR:
-		/* TODO: improve this... we're gonna need expr_to_str ): */
+		/* @TODO: improve this... we're gonna need expr_to_str ): */
 		return str_copy(buffer, bufsize, "<type expression>");
 	}
 
@@ -330,11 +330,10 @@ static inline void parser_put_end(Parser *p, Location *l) {
 	parser_set_end_to_token(p, l, p->tokr->token);
 }
 
-static inline void *parser_arr_add_(Parser *p, void **a, size_t sz) {
-	return arr_adda_(a, sz, p->allocr);
-}
-
-#define parser_arr_add(p, a) parser_arr_add_(p, (void **)(a), sizeof **(a))
+#define parser_arr_add_ptr(p, a) arr_adda_ptr(a, p->allocr)
+#define parser_arr_add(p, a, x) arr_adda(a, x, p->allocr)
+#define parser_arr_set_len(p, a, l) arr_set_lena(a, l, p->allocr)
+#define parser_arr_remove_last(p, a) arr_remove_lasta(a, p->allocr)
 
 static inline void *parser_malloc(Parser *p, size_t bytes) {
 	return allocr_malloc(p->allocr, bytes);
@@ -424,14 +423,14 @@ static Token *expr_find_end(Parser *p, ExprEndFlags flags)  {
 		}
 		if (token->kind == TOKEN_EOF) {
 			if (brace_level > 0) {
-				tokr_err(t, "Opening brace { was never closed."); /* TODO: Find out where this is */
+				tokr_err(t, "Opening brace { was never closed."); /* @TODO: Find out where this is */
 			} else if (paren_level > 0) {
 				tokr_err(t, "Opening parenthesis ( was never closed.");
 			} else if (square_level > 0) {
 				tokr_err(t, "Opening square bracket [ was never closed.");
 			} else {
 				tokr_err(t, "Could not find end of expression (did you forget a semicolon?).");
-				/* TODO: ? improve err message */
+				/* @TODO: ? improve err message */
 			}
 			t->token = token; /* don't try to continue */
 			return NULL;
@@ -455,7 +454,7 @@ static Status parse_args(Parser *p, Argument **args) {
 				info_print(token_location(p->file, start), "This is where the argument list starts.");
 				return false;
 			}
-			Argument *arg = parser_arr_add(p, args);
+			Argument *arg = parser_arr_add_ptr(p, *args);
 			arg->where = parser_mk_loc(p);
 			/* named arguments */
 			if (t->token->kind == TOKEN_IDENT && token_is_kw(t->token + 1, KW_EQ)) {
@@ -485,7 +484,7 @@ static void correct_ret_type(Parser *p, Type *ret_type) {
 		size_t ntuple_members = arr_len(tuple_members);
 		ret_type->kind = TYPE_TUPLE;
 		ret_type->tuple = NULL;
-		arr_set_lena(&ret_type->tuple, ntuple_members, p->allocr);
+		parser_arr_set_len(p, ret_type->tuple, ntuple_members);
 		for (size_t i = 0; i < ntuple_members; ++i) {
 			Type *out_type = &ret_type->tuple[i];
 			out_type->flags = 0;
@@ -525,11 +524,11 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 				tokr_err(t, "Expected ( to follow fn.");
 				return false;
 			}
-			parser_arr_add(p, &type->fn.types); /* add return type */
+			parser_arr_add_ptr(p, type->fn.types); /* add return type */
 			++t->token;
 			if (!token_is_kw(t->token, KW_RPAREN)) {
 				while (1) {
-					Type *param_type = parser_arr_add(p, &type->fn.types);
+					Type *param_type = parser_arr_add_ptr(p, type->fn.types);
 					Location type_where;
 					if (!parse_type(p, param_type, &type_where)) return false;
 					if (token_is_kw(t->token, KW_RPAREN))
@@ -623,7 +622,7 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 						goto struct_fail;
 					}
 					if ((param->flags & DECL_ANNOTATES_TYPE) && type_is_builtin(&param->type, BUILTIN_VARARGS)) {
-						/* TODO(eventually) */
+						/* @TODO(eventually) */
 						err_print(param->where, "structs cannot have varargs parameters (yet).");
 						goto struct_fail;
 					}
@@ -823,14 +822,14 @@ static Status parse_block(Parser *p, Block *b, U8 flags) {
 	if (!token_is_kw(t->token, KW_RBRACE)) {
 		/* non-empty block */
 		while (1) {
-			Statement *stmt = parser_arr_add(p, &b->stmts);
+			Statement *stmt = parser_arr_add_ptr(p, b->stmts);
 			bool was_a_statement;
 			bool success = parse_stmt(p, stmt, &was_a_statement);
 			if (!success) {
 				ret = false;
 			}
 			if (!was_a_statement) {
-				arr_remove_lasta(&b->stmts, p->allocr);
+				parser_arr_remove_last(p, b->stmts);
 			}
 			if (token_is_kw(t->token, KW_RBRACE)) {
 				break;
@@ -861,7 +860,7 @@ static Status parse_decl_list(Parser *p, Declaration **decls, U16 flags) {
 					  !token_is_kw(t->token - 1, KW_RPAREN) &&
 					  !token_is_kw(t->token - 1, KW_LBRACE)))) {
 		first = false;
-		Declaration *decl = parser_arr_add(p, decls);
+		Declaration *decl = parser_arr_add_ptr(p, *decls);
 		if (!parse_decl(p, decl, flags)) {
 			ret = false;
 			/* skip to end of list */
@@ -873,13 +872,19 @@ static Status parse_decl_list(Parser *p, Declaration **decls, U16 flags) {
 			/* split this declaration */
 			size_t nidents = arr_len(decl->idents);
 			for (size_t i = 1; i < nidents; ++i) {
-				Declaration *new_decl = parser_arr_add(p, decls);
+				Declaration *new_decl = parser_arr_add_ptr(p, *decls);
 				*new_decl = *decl;
 				new_decl->idents = NULL;
-				arr_set_lena(&new_decl->idents, 1, p->allocr);
+				parser_arr_set_len(p, new_decl->idents, 1);
 				new_decl->idents[0] = decl->idents[i];
 			}
-			arr_set_lena(&decl->idents, 1, p->allocr);
+			parser_arr_set_len(p, decl->idents, 1);
+		}
+	}
+	/* correct ident decls because the pointers to declarations might have changed */
+	arr_foreach(*decls, Declaration, decl) {
+		arr_foreach(decl->idents, Identifier, ident) {
+			(*ident)->decl = decl;
 		}
 	}
 	return ret;
@@ -1470,8 +1475,10 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			FnType *fn_type = &fn_t->fn;
 			fn_type->constness = NULL;
 			fn_type->types = NULL;
-			Type *ret_type = parser_arr_add(p, &fn_type->types);
-			CType *ret_ctype = parser_arr_add(p, &fn->foreign.ctypes);
+			/* reserve space for return type (Type + CType) */
+			parser_arr_add_ptr(p, fn_type->types);
+			parser_arr_add_ptr(p, fn->foreign.ctypes);
+			
 			Expression *name = fn->foreign.name_expr = parser_new_expr(p);
 					
 			if (!parse_expr(p, name, expr_find_end(p, EXPR_CAN_END_WITH_COMMA)))
@@ -1506,8 +1513,8 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			}
 			++t->token;
 			while (!token_is_kw(t->token, KW_RPAREN)) {
-				Type *type = parser_arr_add(p, &fn_type->types);
-				CType *ctype = parser_arr_add(p, &fn->foreign.ctypes);
+				Type *type = parser_arr_add_ptr(p, fn_type->types);
+				CType *ctype = parser_arr_add_ptr(p, fn->foreign.ctypes);
 				if (!parse_c_type(p, ctype, type)) {
 					return false;
 				}
@@ -1521,6 +1528,9 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					return false;
 				}
 			}
+
+			Type *ret_type = &fn_type->types[0];
+			CType *ret_ctype = &fn->foreign.ctypes[0];
 			if (t->token == end) {
 				/* void */
 				ret_ctype->kind = CTYPE_NONE;
@@ -1765,14 +1775,14 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				if (lhs.kind == EXPR_TUPLE) {
 					e->tuple = lhs.tuple;
 				} else {
-					*(Expression *)parser_arr_add(p, &e->tuple) = lhs;
+					parser_arr_add(p, e->tuple, lhs);
 				}
 				if (rhs.kind == EXPR_TUPLE) {
 					arr_foreach(rhs.tuple, Expression, r) {
-						*(Expression *)parser_arr_add(p, &e->tuple) = *r;
+						parser_arr_add(p, e->tuple, *r);
 					}
 				} else {
-					*(Expression *)parser_arr_add(p, &e->tuple) = rhs;
+					parser_arr_add(p, e->tuple, rhs);
 				}
 				goto success;
 			}
@@ -2042,7 +2052,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				e->kind = EXPR_BLOCK;
 				if (!parse_block(p, e->block = parser_malloc(p, sizeof *e->block), 0)) return false;
 				if (t->token != end) {
-					tokr_err(t, "Expression continues after end of block."); /* TODO: improve this err message */
+					tokr_err(t, "Expression continues after end of block."); /* @TODO: improve this err message */
 					return false;
 				}
 				goto success;
@@ -2114,14 +2124,13 @@ static Status parse_decl(Parser *p, Declaration *d, U16 flags) {
 	}
 
 	while (1) {
-		Identifier *ident = parser_arr_add(p, &d->idents);
 		if (t->token->kind != TOKEN_IDENT) {
 			tokr_err(t, "Cannot declare non-identifier (%s).", token_kind_to_str(t->token->kind));
 			goto ret_false;
 		}
-		*ident = parser_ident_insert(p, t->token->ident);
-		if (!(flags & PARSE_DECL_DONT_SET_IDECLS) && !ident_eq_str(*ident, "_")) {
-			Identifier i = *ident;
+		Identifier i = parser_ident_insert(p, t->token->ident);
+		parser_arr_add(p, d->idents, i);
+		if (!(flags & PARSE_DECL_DONT_SET_IDECLS) && !ident_eq_str(i, "_")) {
 			if (!check_ident_redecl(p, i))
 				goto ret_false;
 			i->decl = d;
@@ -2425,7 +2434,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				d->where = s->where;
 				parser_put_end(p, &d->where); /* we haven't set s->where.end, so... */
 				d->flags |= DECL_HAS_EXPR|DECL_IS_CONST;
-				*(Identifier *)parser_arr_add(p, &d->idents) = ident;
+				parser_arr_add(p, d->idents, ident);
 				
 				if (!check_ident_redecl(p, ident)) {
 					tokr_skip_semicolon(t);
@@ -2443,7 +2452,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				body->where = s->where;
 				body->parent = p->block;
 				idents_create(&body->idents, p->allocr, body);
-				Statement *inc_stmt = parser_arr_add(p, &body->stmts);
+				Statement *inc_stmt = parser_arr_add_ptr(p, body->stmts);
 				inc_stmt->kind = STMT_INCLUDE;
 				inc_stmt->flags = STMT_INC_TO_NMS;
 				inc_stmt->where = s->where;
@@ -2533,11 +2542,11 @@ static Status parse_file(Parser *p, ParsedFile *f) {
 	bool ret = true;
 	while (t->token->kind != TOKEN_EOF) {
 		bool was_a_statement;
-		Statement *stmt = parser_arr_add(p, &f->stmts);
+		Statement *stmt = parser_arr_add_ptr(p, f->stmts);
 		if (!parse_stmt(p, stmt, &was_a_statement))
 			ret = false;
 		if (!was_a_statement)
-			arr_remove_lasta(&f->stmts, p->allocr);
+			parser_arr_remove_last(p, f->stmts);
 		if (token_is_kw(t->token, KW_RBRACE)) {
 			tokr_err(t, "} without a matching {.");
 			return false;

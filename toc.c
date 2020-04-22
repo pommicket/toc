@@ -138,7 +138,7 @@ static void cgen_sdecls_file(CGenerator *g, ParsedFile *f);
 #include "cgen.c"
 #include "decls_cgen.c"
 
-#ifdef RUN_TESTS
+#if RUN_TESTS
 #include "tests.c"
 #endif
 

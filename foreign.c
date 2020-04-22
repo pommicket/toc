@@ -200,7 +200,7 @@ static bool arg_list_add(av_alist *arg_list, Value val, Type *type, Location whe
 	case TYPE_VOID:
 	case TYPE_TUPLE:
 	case TYPE_UNKNOWN:
-	case TYPE_ARR: { /* TODO: maybe just pass pointer for arr? */
+	case TYPE_ARR: { /* @TODO: maybe just pass pointer for arr? */
 		char *s = type_to_str(type);
 		err_print(where, "Cannot pass type %s to foreign function.", s);
 		free(s);

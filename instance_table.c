@@ -4,7 +4,7 @@
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
 /* 
-   TODO: better hash functions, especially for integers 
+   @TODO: better hash functions, especially for integers 
    (right now, nearby integers are close together in hash 
    space, which is bad with the way these hash tables
    are designed)
@@ -22,7 +22,7 @@ static bool val_eq(Value u, Value v, Type *t);
 static bool type_eq_exact(Type *t1, Type *t2);
 
 static U64 f32_hash(F32 f) {
-	/* OPTIM */
+	/* @OPTIM */
 	U64 hash = 0;
 	if (f < 0) {
 		hash = 0x9a6db29edcba8af4;
@@ -48,7 +48,7 @@ static U64 f32_hash(F32 f) {
 }
 
 static U64 f64_hash(F64 f) {
-	/* OPTIM */
+	/* @OPTIM */
 	U64 hash = 0;
 	if (f < 0) {
 		hash = 0x9a6db29edcba8af4;
@@ -306,7 +306,7 @@ static bool val_eq(Value u, Value v, Type *t) {
   and set already_exists accordingly
   make sure v's data remains valid
 */
-/* OPTIM: store instances in a block array (remember that the pointers need to stay valid!) */
+/* @OPTIM: store instances in a block array (remember that the pointers need to stay valid!) */
 static Instance *instance_table_adda(Allocator *a, HashTable *h, Value v, Type *t,
 									 bool *already_exists) {	
 	if (h->n * 2 >= h->cap) {
@@ -318,7 +318,7 @@ static Instance *instance_table_adda(Allocator *a, HashTable *h, Value v, Type *
 		for (U64 i = 0; i < h->cap; ++i) {
 			/* re-hash */
 			if (old_occupied[i]) {
-				/* OPTIM: keep hashes around */
+				/* @OPTIM: keep hashes around */
 				U64 index = val_hash(old_data[i]->val, t) % new_cap;
 				while (new_occupied[index]) {
 					++index;

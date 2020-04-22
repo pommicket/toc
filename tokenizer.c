@@ -7,7 +7,7 @@
 static inline const char *kw_to_str(Keyword k) { return keywords[k]; }
 
 /* Returns KW_COUNT if it's not a keyword */
-/* OPTIM: don't use strncmp so much */
+/* @OPTIM: don't use strncmp so much */
 static Keyword tokenize_kw(char **s) {
 	for (Keyword k = 0; k < KW_COUNT; k = k + 1) {
 		size_t len = strlen(keywords[k]);
@@ -127,7 +127,7 @@ static inline int char_as_hex_digit(char c) {
 
 /* returns -1 if escape sequence is invalid */
 static int tokr_esc_seq(Tokenizer *t) {
-	/* TODO: octal (\032)? */
+	/* @TODO: octal (\032)? */
 	switch (*t->s) {
 	case '\'':
 		tokr_nextchar(t);
@@ -251,7 +251,7 @@ until everything is done
 */
 static void tokr_create(Tokenizer *t, ErrCtx *err_ctx, Allocator *allocr) {
 	t->tokens = NULL;
-	arr_resva(&t->tokens, 256, allocr);
+	arr_resva(t->tokens, 256, allocr);
 	t->allocr = allocr;
 	t->err_ctx = err_ctx;
 }
@@ -261,7 +261,7 @@ static inline void *tokr_malloc(Tokenizer *t, size_t bytes) {
 }
 
 static Token *tokr_add(Tokenizer *t) {
-	Token *token = arr_adda(&t->tokens, t->allocr);
+	Token *token = arr_adda_ptr(t->tokens, t->allocr);
 	tokr_put_start_pos(t, token);
 	return token;
 }
@@ -328,7 +328,7 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 				tokr_put_end_pos(t, &token);
 				token.kind = TOKEN_DIRECT;
 				token.direct = direct;
-				*(Token *)arr_adda(&t->tokens, t->allocr) = token;
+				arr_adda(t->tokens, token, t->allocr);
 				continue;
 			}
 			--t->s; /* go back to # */
@@ -345,7 +345,7 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 				tokr_put_end_pos(t, &token);
 				token.kind = TOKEN_KW;
 				token.kw = kw;
-				*(Token *)arr_adda(&t->tokens, t->allocr) = token;
+				arr_adda(t->tokens, token, t->allocr);
 				continue;
 			}
 		}
@@ -407,7 +407,7 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 						n->kind = NUM_LITERAL_FLOAT;
 						n->floatval = (Floating)n->intval;
 					}
-					/* TODO: check if exceeding maximum exponent */
+					/* @TODO: check if exceeding maximum exponent */
 					int exponent = 0;
 					if (*t->s == '+')
 						tokr_nextchar(t); /* ignore + after e */
@@ -421,7 +421,7 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 						exponent *= 10;
 						exponent += *t->s - '0';
 					}
-					/* OPTIM: Slow for very large exponents (unlikely to happen) */
+					/* @OPTIM: Slow for very large exponents (unlikely to happen) */
 					for (int i = 0; i < exponent; ++i) {
 						if (negative_exponent)
 							n->floatval /= 10;

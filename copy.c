@@ -41,7 +41,7 @@ static void copy_val(Allocator *a, Value *out, Value in, Type *t) {
 		if (t->builtin == BUILTIN_VARARGS) {
 			size_t n = arr_len(in.varargs);
 			out->varargs = NULL;
-			arr_set_lena(&out->varargs, n, a);
+			arr_set_lena(out->varargs, n, a);
 			for (size_t i = 0; i < n; ++i) {
 				Copier c = copier_create(a, NULL); /* since the type is resolved, it doesn't matter that the block is wrong */
 				out->varargs[i].type = copy_type_(&c, in.varargs[i].type);
@@ -100,7 +100,7 @@ static void copy_struct(Copier *c, StructDef *out, StructDef *in) {
 		size_t nfields = arr_len(in->fields);
 		out->fields = NULL;
 
-		arr_set_lena(&out->fields, nfields, c->allocr);
+		arr_set_lena(out->fields, nfields, c->allocr);
 		for (size_t i = 0; i < nfields; ++i) {
 			Field *fout = &out->fields[i];
 			Field *fin = &in->fields[i];
@@ -110,7 +110,7 @@ static void copy_struct(Copier *c, StructDef *out, StructDef *in) {
 	}
 	size_t nparams = arr_len(in->params);
 	out->params = NULL;
-	arr_set_lena(&out->params, nparams, c->allocr);
+	arr_set_lena(out->params, nparams, c->allocr);
 	for (size_t i = 0; i < nparams; ++i) {
 		copy_decl(c, &out->params[i], &in->params[i]);
 	}
@@ -131,7 +131,7 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 	case TYPE_FN: {
 		size_t ntypes = arr_len(in->fn.types);
 		out->fn.types = NULL;
-		arr_set_lena(&out->fn.types, ntypes, c->allocr);
+		arr_set_lena(out->fn.types, ntypes, c->allocr);
 		for (size_t i = 0; i < ntypes; ++i) {
 			copy_type(c, &out->fn.types[i], &in->fn.types[i]);
 		}
@@ -139,7 +139,7 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 	case TYPE_TUPLE: {
 		size_t ntypes = arr_len(in->tuple);
 		out->tuple = NULL;
-		arr_set_lena(&out->tuple, ntypes, c->allocr);
+		arr_set_lena(out->tuple, ntypes, c->allocr);
 		for (size_t i = 0; i < ntypes; ++i) {
 			copy_type(c, &out->tuple[i], &in->tuple[i]);
 		}
@@ -210,13 +210,13 @@ static void copy_fn_expr(Copier *c, FnExpr *fout, FnExpr *fin, U8 flags) {
 			size_t i;
 			size_t nparam_decls = arr_len(fin->params);
 			fout->params = NULL;
-			arr_set_lena(&fout->params, nparam_decls, c->allocr);
+			arr_set_lena(fout->params, nparam_decls, c->allocr);
 			for (i = 0; i < nparam_decls; ++i)
 				copy_decl(c, fout->params + i, fin->params + i);
 			size_t nret_decls = arr_len(fin->ret_decls);
 			if (fin->ret_decls) {
 				fout->ret_decls = NULL;
-				arr_set_lena(&fout->ret_decls, nret_decls, c->allocr);
+				arr_set_lena(fout->ret_decls, nret_decls, c->allocr);
 				for (i = 0; i < nret_decls; ++i)
 					copy_decl(c, fout->ret_decls + i, fin->ret_decls + i);
 			}
@@ -308,7 +308,7 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		copy_expr(c, cout->fn = allocr_malloc(a, sizeof *cout->fn), cin->fn);
 		size_t nargs = arr_len(cin->args);
 		cout->arg_exprs = NULL;
-		arr_set_lena(&cout->args, nargs, a);
+		arr_set_lena(cout->args, nargs, a);
 		for (size_t i = 0; i < nargs; ++i) {
 			Argument *arg_in = &cin->args[i];
 			Argument *arg_out = &cout->args[i];
@@ -322,7 +322,7 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 	case EXPR_TUPLE: {
 		size_t nexprs = arr_len(in->tuple);
 		out->tuple = NULL;
-		arr_set_lena(&out->tuple, nexprs, a);
+		arr_set_lena(out->tuple, nexprs, a);
 		for (size_t i = 0; i < nexprs; ++i)
 			copy_expr(c, out->tuple + i, in->tuple + i);
 	} break;
@@ -374,7 +374,7 @@ static void copy_decl(Copier *c, Declaration *out, Declaration *in) {
 		copy_type(c, &out->type, &in->type);
 	out->idents = NULL;
 	size_t nidents = arr_len(in->idents);
-	arr_set_lena(&out->idents, nidents, c->allocr);
+	arr_set_lena(out->idents, nidents, c->allocr);
 	for (size_t i = 0; i < nidents; ++i) {
 		out->idents[i] = in->idents[i];
 		assert(c->block);
@@ -399,7 +399,7 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 		*out->inc = *in->inc;
 		if (in->flags & STMT_TYPED) {
 			size_t nstmts = arr_len(in->inc->stmts);
-			arr_set_lena(&out->inc->stmts, nstmts, c->allocr);
+			arr_set_lena(out->inc->stmts, nstmts, c->allocr);
 			for (size_t i = 0; i < nstmts; ++i) {
 				copy_stmt(c, &out->inc->stmts[i], &in->inc->stmts[i]);
 			}
@@ -448,7 +448,7 @@ static void copy_block(Copier *c, Block *out, Block *in, U8 flags) {
 		out->ret_expr = copy_expr_(c, in->ret_expr);
 	if (!(flags & COPY_BLOCK_DONT_CREATE_IDENTS))
 		idents_create(&out->idents, c->allocr, out);
-	arr_set_lena(&out->stmts, nstmts, c->allocr);
+	arr_set_lena(out->stmts, nstmts, c->allocr);
 	for (size_t i = 0; i < nstmts; ++i) {
 		copy_stmt(c, &out->stmts[i], &in->stmts[i]);
 	}

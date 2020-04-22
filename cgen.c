@@ -265,7 +265,7 @@ static bool cgen_fn_is_direct(CGenerator *g, Declaration *d) {
 static bool fn_has_instances(FnExpr *f) {
 	if (fn_has_any_const_params(f)) return true;
 	if (!arr_len(f->params)) return false;
-	return type_is_builtin(&((Declaration *)arr_last(f->params))->type, BUILTIN_VARARGS);
+	return type_is_builtin(&arr_last(f->params).type, BUILTIN_VARARGS);
 }
 
 static bool cgen_uses_ptr(Type *t) {
@@ -392,7 +392,7 @@ static void cgen_type_post(CGenerator *g, Type *t) {
 					cgen_type_pre(g, x);
 					cgen_write(g, "(*)");
 					cgen_type_post(g, x);
-					if (x != arr_last(ret_type->tuple)) {
+					if (x != arr_last_ptr(ret_type->tuple)) {
 						cgen_write(g, ", ");
 					}
 				}
@@ -509,7 +509,7 @@ static void cgen_val_ptr_pre(CGenerator *g, void *v, Type *t) {
 			cgen_val_ptr_pre(g, (char *)s->data + (U64)i * compiler_sizeof(t->slice), t->slice);
 		}
 		cgen_type_pre(g, t->slice);
-		cgen_write(g, "(d%p_[])", v); /* TODO: improve this somehow? */
+		cgen_write(g, "(d%p_[])", v); /* @TODO: improve this somehow? */
 		cgen_type_post(g, t->slice);
 		cgen_write(g, " = {");
 		for (I64 i = 0; i < s->len; ++i) {
@@ -865,7 +865,7 @@ static void cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 					cgen_ident_id(g, id);
 					cgen_type_post(g, type);
 					cgen_write(g, "; ");
-					*(IdentID *)arr_add(&underscore_ids) = id;
+					arr_add(underscore_ids, id);
 				}
 			}
 		}
@@ -912,7 +912,7 @@ static void cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 				cgen_write(g, "&(%s%d_)", prefix, i);
 			}
 		}
-		arr_clear(&underscore_ids);
+		arr_clear(underscore_ids);
 		cgen_writeln(g, "); ");
 	} break;
 	case EXPR_IF:
@@ -1155,7 +1155,7 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 		cgen_nl(g);
 	} break;
 	case EXPR_VAL:
-		/* TODO: don't make a variable for this if it's not needed */
+		/* @TODO: don't make a variable for this if it's not needed */
 		if (type_is_compileonly(&e->type))
 			break;
 		if (!cgen_is_type_simple(&e->type)) {
@@ -1245,7 +1245,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 				Value fn_val = *decl_val_at_index(d, index);
 				FnExpr *fn = fn_val.fn;
 				Expression fn_expr;
-				/* TODO: is this all really necessary? */
+				/* @TODO: is this all really necessary? */
 				
 				fn_expr.kind = EXPR_FN;
 				fn_expr.fn = allocr_malloc(g->allocr, sizeof *fn_expr.fn);
@@ -1784,7 +1784,7 @@ static void cgen_block(CGenerator *g, Block *b, const char *ret_name, U16 flags)
 	--g->indent_lvl;
 	if (!(flags & CGEN_BLOCK_NOBRACES)) {
 		cgen_deferred_from_block(g, b);
-		arr_clear(&b->deferred);
+		arr_clear(b->deferred);
 		cgen_write(g, "}");
 		if (b->c.break_lbl) {
 			cgen_lbl(g, b->c.break_lbl);
@@ -2019,7 +2019,7 @@ static void cgen_ret(CGenerator *g, Block *returning_from, Expression *ret_expr)
 			tuple_expr.type = f->ret_type;
 			tuple_expr.kind = EXPR_TUPLE;
 			tuple_expr.tuple = NULL;
-			arr_set_len(&tuple_expr.tuple, arr_len(f->ret_type.tuple));
+			arr_set_len(tuple_expr.tuple, arr_len(f->ret_type.tuple));
 			int idx = 0;
 			arr_foreach(f->ret_decls, Declaration, d) {
 				arr_foreach(d->idents, Identifier, ident) {
@@ -2032,7 +2032,7 @@ static void cgen_ret(CGenerator *g, Block *returning_from, Expression *ret_expr)
 				}
 			}
 			cgen_set_tuple(g, NULL, NULL, "*ret__", &tuple_expr);
-			arr_clear(&tuple_expr.tuple);
+			arr_clear(tuple_expr.tuple);
 		} else if (cgen_uses_ptr(&f->ret_type)) {
 			Expression expr = {0};
 			expr.flags = EXPR_FOUND_TYPE;
@@ -2068,7 +2068,7 @@ static void cgen_ret(CGenerator *g, Block *returning_from, Expression *ret_expr)
 static void cgen_stmt(CGenerator *g, Statement *s) {
 
 #ifdef CGEN_EMIT_LINE_NUMBER_COMMENTS
-	/* TODO: add compiler option for this */
+	/* @TODO: add compiler option for this */
 	cgen_write(g, "/* %s:%d */", s->where.ctx->filename, s->where.line);
 #endif
 	switch (s->kind) {
@@ -2114,7 +2114,7 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 		cgen_writeln(g, ";");
 	} break;
 	case STMT_DEFER:
-		*(Statement **)arr_add(&g->block->deferred) = s->defer;
+		arr_add(g->block->deferred, s->defer);
 		break;
 	case STMT_USE:
 	case STMT_MESSAGE:

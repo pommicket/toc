@@ -68,10 +68,12 @@ typedef U8 bool;
 #endif
 
 #if defined __GNUC__ && !defined NO_WARN_UNUSED_RESULT
-#define Status bool __attribute__((warn_unused_result)) 
+#define WarnUnusedResult __attribute__((warn_unused_result)) 
 #else
-#define Status bool
+#define WarnUnusedResult
 #endif
+
+#define Status bool WarnUnusedResult
 
 typedef int8_t I8;
 #define I8_MAX INT8_MAX
@@ -493,6 +495,7 @@ typedef struct Block {
 	struct Statement **deferred; /* deferred stuff from this block; used by both eval and cgen */
 	struct Use **uses; /* use statements (for types.c) */
 } Block;
+typedef Block *BlockPtr;
 
 enum {
 	STRUCT_DEF_FOUND_OFFSETS = 0x01,
@@ -873,7 +876,7 @@ typedef struct Declaration {
 
 	/* for eval, for non-constant local decls: */
 	/* the pointers to values need to be fixed, which is why this isn't just Value *.  */
-	/* OPTIM: some block array of values somewhere which we can just use a pointer to, which is freed when the block is exited? */
+	/* @OPTIM: some block array of values somewhere which we can just use a pointer to, which is freed when the block is exited? */
 	Value **val_stack;
 } Declaration;
 typedef Declaration *DeclarationPtr;

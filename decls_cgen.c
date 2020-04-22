@@ -81,14 +81,14 @@ static void cgen_sdecls_expr(CGenerator *g, Expression *e) {
 	case EXPR_NMS: {
 		char *prefix_part = cgen_nms_prefix_part(g, e->nms);
 		size_t prefix_part_len = strlen(prefix_part);
-		char const *prev_prefix = g->nms_prefixes ? *(char const **)arr_last(g->nms_prefixes)
+		char const *prev_prefix = g->nms_prefixes ? arr_last(g->nms_prefixes)
 			: "";
 		size_t prev_prefix_len = strlen(prev_prefix);
 		char *new_prefix = cgen_malloc(g, prev_prefix_len + prefix_part_len + 1);
 		memcpy(new_prefix, prev_prefix, prev_prefix_len);
 		memcpy(new_prefix + prev_prefix_len, prefix_part, prefix_part_len);
 		free(prefix_part);
-		*(char const **)arr_add(&g->nms_prefixes) = new_prefix;
+		arr_add(g->nms_prefixes, new_prefix);
 		new_prefix[prev_prefix_len + prefix_part_len] = 0;
 		e->nms->c.prefix = new_prefix;
 	} break;
@@ -98,7 +98,7 @@ static void cgen_sdecls_expr(CGenerator *g, Expression *e) {
 		cgen_recurse_subexprs(g, e, cgen_sdecls_expr, cgen_sdecls_block, cgen_sdecls_decl);
 	}
 	if (e->kind == EXPR_NMS) {
-		arr_remove_last(&g->nms_prefixes);
+		arr_remove_last(g->nms_prefixes);
 	}
 }
 

@@ -74,7 +74,7 @@ static void *allocr_calloc(Allocator *a, size_t n, size_t sz) {
 #endif
 	if (n == 0 || sz == 0) return NULL;
 	if (a == NULL) return err_calloc(n, sz);
-	/* OPTIM: use calloc */
+	/* @OPTIM: use calloc */
 	size_t bytes = n * sz;
 	void *data = allocr_malloc(a, bytes);
 	memset(data, 0, bytes);
@@ -88,11 +88,11 @@ static void allocr_free(Allocator *a, void *data, size_t size) {
 	if (a == NULL) {
 		free(data);
 	}
-	/* OPTIM */
+	/* @OPTIM */
 	(void)size;
 }
 
-/* OPTIM */
+/* @OPTIM */
 static void *allocr_realloc(Allocator *a, void *data, size_t old_size, size_t new_size) {
 #if NO_ALLOCATOR
 	a = NULL;

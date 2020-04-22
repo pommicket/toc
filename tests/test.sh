@@ -51,7 +51,7 @@ do_tests() {
 			printf '\x1b[92mpassed!\x1b[0m\n'
 		else
 			printf '\x1b[91mfailed!\x1b[0m\n'
-			failed=true
+			exit 1
 		fi
 	done
 }
@@ -60,6 +60,3 @@ for x in $tests; do
 done
 
 rm got a.out out.c
-if $failed; then
-	exit 1
-fi

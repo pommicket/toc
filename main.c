@@ -7,9 +7,8 @@
 /* see development.md for development information */
 
 /* 
-TODO:
-arr_add_val
-arr_last_val
+@TODO:
+arr_add-val
 test for use ...
 test used ret decls
 consider: don't do inference for function calls; get rid of was_expr -- now that we have struct params
@@ -19,6 +18,9 @@ use
  - use with struct members (e.g. SuperPoint ::= struct { use p: Point; })
 maybe change to #define check(x) do { if_unlikely(x) return 0; } while (0);
 always use pointers in cgen'd non-range for loops (sometimes also indices)
+test:
+	_ := 5;
+	_ := 6;
 is there a problem where we can get TYPE_UNKNOWN in cgen, triggering an assert(0)?
 	-simple example, but maybe try other stuff: x := #C("5"); 
 	-also make sure you can't do x:#C("5");
@@ -39,6 +41,7 @@ X ::= newtype(int); or something
 any odd number of "s for a string
 use point #except x;
 optional -Wshadow
+format errors so that vim/emacs can jump to them
 ---
 make sure that floating point literals are exact as possible
 	have some way of doing Infinity and s/qNaN (you can
@@ -46,6 +49,8 @@ make sure that floating point literals are exact as possible
 once you have a bunch of test code:
 - analyze memory usage by secretly passing __FILE__, __LINE__ to allocr_m/c/realloc
 - try making more Expression members pointers
+- should val_stack be on the allocator? what about temporary arrays?
+	-->on the contrary, should in_decls be off the allocator?
 - branch data: #define if(x) bool join(cond, __LINE__) = x; register_branch(__FILE__, __LINE__, cond); if (join(cond, __LINE__))
 error on x ::= {return; 3}
 struct param inference
@@ -65,9 +70,9 @@ passing untyped expressions to macros
 #include "toc.c"
 
 #if defined TOC_DEBUG && defined __GNU_LIBRARY__ && defined UNISTD_AVAILABLE
-#define BACKTRACE
+#define BACKTRACE 1
 #endif
-#ifdef BACKTRACE
+#if BACKTRACE
 #include <signal.h>
 #include <execinfo.h>
 
@@ -104,12 +109,12 @@ static void signal_handler(int num) {
 }
 #endif
 int main(int argc, char **argv) {
-#ifdef BACKTRACE
+#if BACKTRACE
 	program_name = argv[0];
 	signal(SIGABRT, signal_handler);
 	signal(SIGSEGV, signal_handler);
 #endif
-#ifdef RUN_TESTS	
+#if RUN_TESTS	
 	printf("running tests...\n");
 	test_all();
 #endif
@@ -233,4 +238,3 @@ int main(int argc, char **argv) {
 	fclose(out);
 	return 0;
 }
-

@@ -205,7 +205,7 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		}
 		break;
 	case TYPE_FN:
-		fprintf(f, "<function @ %p>", (void *)*(FnExpr **)p);
+		fprintf(f, "<function %p>", (void *)*(FnExpr **)p);
 		break;
 	case TYPE_TUPLE: {
 		Value *tuple = *(Value **)p;
@@ -217,7 +217,7 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		fprintf(f, ")");
 	} break;
 	case TYPE_ARR: {
-		fprintf(f, "["); /* TODO: change? when array initializers are added */
+		fprintf(f, "["); /* @TODO: change? when array initializers are added */
 		size_t n = t->arr.n;
 		if (n > 5) n = 5;
 		for (size_t i = 0; i < n; ++i) {
@@ -233,7 +233,7 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		fprintf(f, "<pointer: %p>", *(void **)p);
 		break;
 	case TYPE_SLICE: {
-		fprintf(f, "["); /* TODO: change? when slice initializers are added */
+		fprintf(f, "["); /* @TODO: change? when slice initializers are added */
 		Slice slice = *(Slice *)p;
 		I64 n = slice.len;
 		if (n > 5) n = 5;
@@ -247,7 +247,7 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		fprintf(f, "]");
 	} break;
 	case TYPE_STRUCT:
-		fprintf(f, "["); /* TODO: change? when struct initializers are added */
+		fprintf(f, "["); /* @TODO: change? when struct initializers are added */
 		arr_foreach(t->struc->fields, Field, fi) {
 			if (fi != t->struc->fields)
 				fprintf(f, ", ");
@@ -670,7 +670,7 @@ static Value *ident_val(Evaluator *ev, Identifier i, Location where) {
 		return NULL; /* silently fail (something went wrong when we typed this decl) */
 	if (decl->flags & DECL_IS_PARAM) {
 		if (decl->val_stack) {
-			Value *valp = *(Value **)arr_last(decl->val_stack);
+			Value *valp = arr_last(decl->val_stack);
 			if (arr_len(decl->idents) > 1)
 				return &valp->tuple[idx];
 			else
@@ -693,7 +693,7 @@ static Value *ident_val(Evaluator *ev, Identifier i, Location where) {
 	} else if (decl->flags & DECL_IS_CONST) {
 		return decl_val_at_index(decl, idx);
 	} else if (decl->val_stack) {
-		Value *valp = *(Value **)arr_last(decl->val_stack);
+		Value *valp = arr_last(decl->val_stack);
 		if (arr_len(decl->idents) > 1)
 			return &valp->tuple[idx];
 		else
@@ -1041,8 +1041,8 @@ static Status eval_ident(Evaluator *ev, Identifier ident, Value *v, Location whe
 }
 
 static Value *decl_add_val(Declaration *d) {
-	Value **valpp = arr_add(&d->val_stack);
-	Value *valp = *valpp = err_malloc(sizeof *valp);
+	Value *valp = err_malloc(sizeof *valp);
+	arr_add(d->val_stack, valp);
 	if (arr_len(d->idents) > 1) {
 		valp->tuple = err_malloc(arr_len(d->idents) * sizeof *valp->tuple);
 	}
@@ -1051,8 +1051,7 @@ static Value *decl_add_val(Declaration *d) {
 	
 static void decl_remove_val(Declaration *d) {
 	assert(arr_len(d->val_stack));
-	Value **valpp = arr_last(d->val_stack);
-	Value *valp = *valpp;
+	Value *valp = arr_last(d->val_stack);
 	if (arr_len(d->idents) == 1 || d->type.kind == TYPE_TUPLE) {
 		val_free_ptr(valp, &d->type);
 	} else {
@@ -1062,7 +1061,7 @@ static void decl_remove_val(Declaration *d) {
 		free(valp->tuple);
 		free(valp);
 	}
-	arr_remove_last(&d->val_stack);
+	arr_remove_last(d->val_stack);
 }
 
 static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
@@ -1252,8 +1251,8 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	case EXPR_FOR: {
 		ForExpr *fo = e->for_;
 		Declaration *header = &fo->header;
-		Value **for_valpp = arr_add(&header->val_stack);
-		Value *for_valp = *for_valpp = err_malloc(sizeof *for_valp);
+		Value *for_valp = err_malloc(sizeof *for_valp);
+		arr_add(header->val_stack, for_valp);
 		/* make a tuple */
 		Value for_val_tuple[2];
 		for_valp->tuple = for_val_tuple;
@@ -1353,7 +1352,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				++index->i64;
 			}
 		}
-		arr_remove_last(&header->val_stack);
+		arr_remove_last(header->val_stack);
 		free(for_valp);
 	} break;
 	case EXPR_BLOCK:
@@ -1435,7 +1434,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				/* set varargs */
 				pval->varargs = NULL;
 				for (; arg != args_end; ++arg) {
-					VarArg *varg = arr_add(&pval->varargs);
+					VarArg *varg = arr_add_ptr(pval->varargs);
 					if (!eval_expr(ev, arg, &varg->val))
 						return false;
 					varg->type = &arg->type;
@@ -1495,7 +1494,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 					expr.ident = *ident;
 					if (!eval_expr(ev, &expr, &this_one))
 						return false;
-					Value *element = arr_add(&tuple);
+					Value *element = arr_add_ptr(tuple);
 					Type *type = decl_type_at_index(d, i);
 					copy_val(NULL, element, this_one, type);
 					++i;
@@ -1503,7 +1502,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			}
 			if (arr_len(tuple) == 1) {
 				*v = tuple[0];
-				arr_clear(&tuple);
+				arr_clear(tuple);
 			} else {
 				v->tuple = tuple;
 			}
@@ -1544,7 +1543,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		} else {
 			to = n;
 		}
-		/* TODO: is this the best check? (Go also checks if from > to) */
+		/* @TODO: is this the best check? (Go also checks if from > to) */
 		if (to > n) {
 			err_print(e->where, "Slice index out of bounds (to = %lu, length = %lu).", (unsigned long)to, (unsigned long)n);
 			return false;
@@ -1665,7 +1664,7 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 		break;
 	case STMT_INCLUDE: {
 		Include *i = stmt->inc;
-		Statement *last_reached = arr_last(i->stmts);
+		Statement *last_reached = arr_last_ptr(i->stmts);
 		arr_foreach(i->stmts, Statement, sub) {
 			if (!eval_stmt(ev, sub))
 				return false;
@@ -1679,7 +1678,7 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 	case STMT_MESSAGE:
 		break;
 	case STMT_DEFER:
-		*(Statement **)arr_add(&ev->typer->block->deferred) = stmt->defer;
+		arr_add(ev->typer->block->deferred, stmt->defer);
 		break;
 	case STMT_USE:
 		break;
@@ -1692,7 +1691,7 @@ static Status eval_block(Evaluator *ev, Block *b, Value *v) {
 	ev->typer->block = b;
 	b->deferred = NULL;
 	bool success = true;
-	Statement *last_reached = arr_last(b->stmts);
+	Statement *last_reached = arr_last_ptr(b->stmts);
 	arr_foreach(b->stmts, Statement, stmt) {
 		if (!eval_stmt(ev, stmt)) {
 			success = false;
@@ -1735,7 +1734,7 @@ static Status eval_block(Evaluator *ev, Block *b, Value *v) {
 			if (!eval_stmt(ev, stmt))
 				return false;
 		}
-		arr_clear(&b->deferred);
+		arr_clear(b->deferred);
 		ev->returning = return_block;
 		ev->ret_val = return_val;
 	}

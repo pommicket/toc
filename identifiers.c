@@ -181,7 +181,7 @@ static inline Block *ident_scope(Identifier i) {
 	return i->idents->scope;
 }
 
-#ifdef RUN_TESTS
+#if RUN_TESTS
 static void idents_test(void) {
 	Identifiers ids;
 	char b[] = "foo_variable bar";

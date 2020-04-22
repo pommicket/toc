@@ -19,18 +19,17 @@ static inline void *typer_calloc(Typer *tr, size_t n, size_t sz) {
 	return allocr_calloc(tr->allocr, n, sz);
 }
 
-static inline void *typer_arr_add_(Typer *tr, void **arr, size_t sz) {
-	return arr_adda_(arr, sz, tr->allocr);
-}
+#define typer_arr_add(tr, a, x) arr_adda(a, x, tr->allocr)
+#define typer_arr_add_ptr(tr, a) arr_adda_ptr(a, tr->allocr)
 
 static inline void typer_block_enter(Typer *tr, Block *b) {
-	*(Block **)arr_adda(&tr->blocks, tr->allocr) = b;
+	typer_arr_add(tr, tr->blocks, b);
 	tr->block = b;
 }
 
 static inline void typer_block_exit(Typer *tr) {
-	arr_remove_lasta(&tr->blocks, tr->allocr);
-	tr->block = *(Block **)arr_last(tr->blocks);
+	arr_remove_lasta(tr->blocks, tr->allocr);
+	tr->block = arr_last(tr->blocks);
 }
 
 static inline void construct_resolved_builtin_type(Type *t, BuiltinType builtin) {
@@ -183,7 +182,6 @@ static size_t compiler_sizeof(Type *t) {
 }
 
 
-#define typer_arr_add(tr, a) typer_arr_add_(tr, (void **)(a), sizeof **(a))
 /* are a and b EXACTLY equal (not counting flags)? */
 static bool type_eq_exact(Type *a, Type *b) {
 	assert(a->flags & TYPE_IS_RESOLVED);
@@ -448,7 +446,7 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 
 	t->kind = TYPE_FN;
 	t->fn.types = NULL;
-	t->fn.constness = NULL; /* OPTIM: constness doesn't need to be a dynamic array */
+	t->fn.constness = NULL; /* @OPTIM: constness doesn't need to be a dynamic array */
 	t->flags = 0;
 	bool success = true;
 	bool entered_fn = false;
@@ -456,7 +454,7 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	FnExpr *prev_fn = tr->fn;
 	FnExpr fn_copy = {0};
 
-	Declaration *last_param = arr_last(f->params);
+	Declaration *last_param = arr_last_ptr(f->params);
 	bool has_varargs = last_param && (last_param->flags & DECL_ANNOTATES_TYPE) && type_is_builtin(&last_param->type, BUILTIN_VARARGS);
 	if (has_varargs)
 		f->flags |= FN_EXPR_HAS_VARARGS;
@@ -469,7 +467,8 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	}
 	size_t idx = 0;
 	bool has_constant_params = false;
-	Type *ret_type = typer_arr_add(tr, &t->fn.types);
+	/* reserve space for return type */
+	typer_arr_add_ptr(tr, t->fn.types);
 	tr->fn = f;
 	typer_block_enter(tr, &f->body);
 	f->body.uses = NULL;
@@ -516,12 +515,12 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 			if (!t->fn.constness) {
 				has_constant_params = true;
 				for (size_t i = 0; i < idx; ++i) {
-					*(Constness *)typer_arr_add(tr, &t->fn.constness) = CONSTNESS_NO;
+					typer_arr_add(tr, t->fn.constness, CONSTNESS_NO);
 				}
 			}
 		}
 		for (size_t i = 0; i < arr_len(param->idents); ++i) {
-			Type *param_type = typer_arr_add(tr, &t->fn.types);
+			Type *param_type = typer_arr_add_ptr(tr, t->fn.types);
 			if (param->flags & (DECL_ANNOTATES_TYPE|DECL_FOUND_TYPE))
 				*param_type = param->type;
 			else
@@ -535,7 +534,7 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 				} else {
 					constn = CONSTNESS_NO;
 				}
-				*(Constness *)typer_arr_add(tr, &t->fn.constness) = constn;
+				typer_arr_add(tr, t->fn.constness, constn);
 			}
 			++idx;
 		}
@@ -560,7 +559,7 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 			f->ret_type.tuple = NULL;
 			arr_foreach(f->ret_decls, Declaration, d) {
 				arr_foreach(d->idents, Identifier, i) {
-					*(Type *)arr_add(&f->ret_type.tuple) = d->type;
+					typer_arr_add(tr, f->ret_type.tuple, d->type);
 				}
 			}
 		}
@@ -596,7 +595,11 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 		}
 		t->flags |= TYPE_IS_RESOLVED;
 	}
-	*ret_type = f->ret_type;
+	
+	{
+		Type *ret_type = &t->fn.types[0];
+		*ret_type = f->ret_type;
+	}
 
  ret:
 	/* cleanup */
@@ -619,7 +622,8 @@ top:;
 			Block *decl_scope = ident_scope(i);
 			if (decl_scope->kind != BLOCK_NMS) {
 				/* go back through scopes */
-				for (Block **block = arr_last(tr->blocks); *block && *block != decl_scope; --block) {
+				arr_foreach_reversed(tr->blocks, BlockPtr, block) {
+					if (*block == NULL || *block == decl_scope) break;
 					if ((*block)->kind == BLOCK_FN) {
 						captured = true;
 						break;
@@ -717,7 +721,7 @@ static Status add_block_to_struct(Typer *tr, Block *b, StructDef *s, Statement *
 				err_print(d->where, "struct members can't be inferred.");
 				return false;
 			}
-			*(Statement *)typer_arr_add(tr, new_stmts) = *stmt;
+			typer_arr_add(tr, *new_stmts, *stmt);
 		} else {
 			if (flags & DECL_SEMI_CONST) {
 				err_print(d->where, "struct members can't be semi-constant.");
@@ -729,14 +733,14 @@ static Status add_block_to_struct(Typer *tr, Block *b, StructDef *s, Statement *
 			}
 			int i = 0;
 			arr_foreach(d->idents, Identifier, ident) {
-				Field *field = typer_arr_add(tr, &s->fields);
+				Field *field = typer_arr_add_ptr(tr, s->fields);
 				field->where = d->where;
 				field->name = *ident;
 				field->type = decl_type_at_index(d, i);
 				++i;
 			}
 			
-			*(Statement *)typer_arr_add(tr, new_stmts) = *stmt;
+			typer_arr_add(tr, *new_stmts, *stmt);
 		}
 		if (b != &s->body) {
 			/* we need to translate d's identifiers to s's scope */
@@ -861,8 +865,7 @@ static Status type_resolve(Typer *tr, Type *t, Location where) {
 					}
 					if (!eval_expr(tr->evalr, sub, &typeval))
 						return false;
-					Type *subtype = typer_arr_add(tr, &tuple);
-					*subtype = *typeval.type;
+					typer_arr_add(tr, tuple, *typeval.type);
 				}
 				if (is_tuple_of_types) {
 					t->kind = TYPE_TUPLE;
@@ -1058,7 +1061,7 @@ static CastStatus type_cast_status(Type *from, Type *to) {
 			return CAST_STATUS_NONE;
 		if (to->kind == TYPE_FN)
 			return CAST_STATUS_WARN;
-		/* TODO: Cast from ptr to arr */
+		/* @TODO: Cast from ptr to arr */
 		return CAST_STATUS_ERR;
 	case TYPE_ARR:
 		return CAST_STATUS_ERR;
@@ -1239,7 +1242,7 @@ static Status call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Lo
 				}
 			}
 			this_param = param;
-			if (param > (Declaration *)arr_last(fn->params)) {
+			if (param > (Declaration *)arr_last_ptr(fn->params)) {
 				err_print(arg->where, "Too many arguments to function!");
 				info_print(fn->where, "Declaration is here.");
 				return false;
@@ -1411,7 +1414,7 @@ static Value get_builtin_val(BuiltinVal val) {
 	case BUILTIN_SIZEOF_SIZE_T:
 		v.i64 = (I64)sizeof(size_t);
 		break;
-		/* TODO(eventually): fix these for cross compilation */
+		/* @TODO(eventually): fix these for cross compilation */
 	case BUILTIN_TSIZEOF_SHORT:
 		v.i64 = (I64)sizeof(short);
 		break;
@@ -1518,7 +1521,7 @@ static Status get_struct_constant(StructDef *struc, Identifier member, Expressio
 }
 
 static bool fn_type_has_varargs(FnType *f) {
-	return type_is_builtin(arr_last(f->types), BUILTIN_VARARGS);
+	return type_is_builtin(arr_last_ptr(f->types), BUILTIN_VARARGS);
 }
 
 static Status types_expr(Typer *tr, Expression *e) {
@@ -1573,7 +1576,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		ForExpr *fo = e->for_;
 		Declaration *header = &fo->header;
 
-		*(Declaration **)typer_arr_add(tr, &tr->in_decls) = header;
+		typer_arr_add(tr, tr->in_decls, header);
 		fo->body.uses = NULL;
 		typer_block_enter(tr, &fo->body);
 		bool annotated_index = true;
@@ -1588,13 +1591,13 @@ static Status types_expr(Typer *tr, Expression *e) {
 				annotated_index = false;
 				assert(nidents == 1);
 				/* turn value := arr to value, _ := arr to simplify things */
-				*(Identifier *)arr_add(&header->idents) = ident_insert_with_len(typer_get_idents(tr), "_", 1);
+				typer_arr_add(tr, header->idents, ident_insert_with_len(typer_get_idents(tr), "_", 1));
 			}
 		}
 		
 		Type *fo_type_tuple = NULL;
 		/* fo_type is (val_type, index_type) */
-		arr_set_lena(&fo_type_tuple, 2, tr->allocr);
+		arr_set_lena(fo_type_tuple, 2, tr->allocr);
 		memset(fo_type_tuple, 0, 2*sizeof *fo_type_tuple);
 		Type *val_type = &fo_type_tuple[0];
 		Type *index_type = &fo_type_tuple[1];
@@ -1741,7 +1744,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				case BUILTIN_VARARGS: {
 					/* exit for body */
 					typer_block_exit(tr);
-					arr_remove_lasta(&tr->in_decls, tr->allocr);
+					arr_remove_lasta(tr->in_decls, tr->allocr);
 					/* create one block, containing a block for each vararg */
 					/* e.g. for x := varargs { total += x; } => { { x := varargs[0]; total += x; } { x := varargs[0]; total += x; } } */
 					assert(fo->of->kind == EXPR_IDENT);
@@ -1756,7 +1759,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					b->stmts = NULL;
 					b->parent = tr->block;
 					b->where = e->where;
-					arr_set_lena(&b->stmts, nvarargs, tr->allocr);
+					arr_set_lena(b->stmts, nvarargs, tr->allocr);
 					Statement *stmt = b->stmts;
 					size_t nstmts = arr_len(fo->body.stmts);
 					Declaration *header_decl = &fo->header;
@@ -1779,10 +1782,10 @@ static Status types_expr(Typer *tr, Expression *e) {
 						sub->stmts = NULL;
 						sub->where = e->where;
 						size_t total_nstmts = nstmts + has_val + has_index;
-						arr_set_lena(&sub->stmts, total_nstmts, tr->allocr);
+						arr_set_lena(sub->stmts, total_nstmts, tr->allocr);
 						Copier copier = copier_create(tr->allocr, sub);
 						if (has_val) {
-							/* TODO(eventually): don't put a decl in each block, just put one at the start */
+							/* @TODO(eventually): don't put a decl in each block, just put one at the start */
 							Statement *s = &sub->stmts[0];
 							s->flags = 0;
 							s->kind = STMT_DECL;
@@ -1792,7 +1795,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 							Declaration *decl = s->decl = typer_calloc(tr, 1, sizeof *decl);
 							decl->where = fo->of->where;
 							Identifier ident = ident_translate_forced(val_ident, &sub->idents);
-							*(Identifier *)arr_adda(&decl->idents, tr->allocr) = ident;
+							typer_arr_add(tr, decl->idents, ident);
 							ident->decl = decl;
 							
 							decl->flags |= DECL_HAS_EXPR;
@@ -1806,7 +1809,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 							index->where = fo->of->where;
 						}
 						if (has_index) {
-							/* TODO(eventually): don't put a decl in each block, just put one at the start */
+							/* @TODO(eventually): don't put a decl in each block, just put one at the start */
 							Statement *s = &sub->stmts[has_val];
 							s->flags = 0;
 							s->kind = STMT_DECL;
@@ -1816,7 +1819,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 							Declaration *decl = s->decl = typer_calloc(tr, 1, sizeof *decl);
 							decl->where = fo->of->where;
 							Identifier ident = ident_translate_forced(index_ident, &sub->idents);
-							*(Identifier *)arr_adda(&decl->idents, tr->allocr) = ident;
+							typer_arr_add(tr, decl->idents, ident);
 							ident->decl = decl;
 							
 							decl->flags |= DECL_HAS_EXPR;
@@ -1870,7 +1873,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 			} else *val_type = *iter_type;
 		}
 
-		arr_remove_lasta(&tr->in_decls, tr->allocr);
+		arr_remove_lasta(tr->in_decls, tr->allocr);
 		in_header = false;
 		
 		assert(header->type.flags & TYPE_IS_RESOLVED);
@@ -1891,7 +1894,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		}break;
 		for_fail:
 		if (in_header)
-			arr_remove_lasta(&tr->in_decls, tr->allocr);
+			arr_remove_lasta(tr->in_decls, tr->allocr);
 		typer_block_exit(tr);
 		return false;
 	}
@@ -1900,7 +1903,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		Identifier i = e->ident;
 		bool undeclared = true;
 		while (1) { /* for each block we are inside... */
-			/* OPTIM: only hash once */
+			/* @OPTIM: only hash once */
 			Identifier translated = ident_translate(i, b ? &b->idents : tr->globals);
 			if (ident_is_declared(translated)) {
 #if 0
@@ -2175,7 +2178,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					return false;
 				}
 				Type *arg_types = NULL;
-				arr_set_len(&arg_types, nparams);
+				arr_set_len(arg_types, nparams);
 				Value *arg_vals = typer_malloc(tr, nparams * sizeof *arg_vals);
 				ErrCtx *err_ctx = tr->err_ctx;
 				size_t p = 0;
@@ -2184,10 +2187,10 @@ static Status types_expr(Typer *tr, Expression *e) {
 					bool is_tuple = arr_len(param->idents) > 1;
 					int ident_idx = 0;
 					/* temporarily add this instance to the stack, while we type the decl, in case you, e.g., pass t = float to struct(t::Type, u::t = "hello") */
-					*(Location *)arr_add(&err_ctx->instance_stack) = e->where;
+					arr_add(err_ctx->instance_stack, e->where);
 					typer_block_enter(tr, &struc.body);
 					bool success = types_decl(tr, param);
-					arr_remove_last(&err_ctx->instance_stack);
+					arr_remove_last(err_ctx->instance_stack);
 					typer_block_exit(tr);
 					if (!success) return false;
 					
@@ -2211,7 +2214,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 								return false;
 						}
 						if (is_tuple)
-							*(Value *)arr_adda(&param_val.tuple, tr->allocr) = ident_val;
+							typer_arr_add(tr, param_val.tuple, ident_val);
 						else
 							param_val = ident_val;
 						arg_vals[p] = ident_val;
@@ -2249,12 +2252,12 @@ static Status types_expr(Typer *tr, Expression *e) {
 					Type struct_t = {0};
 					struct_t.kind = TYPE_STRUCT;
 					struct_t.struc = &inst->struc;
-					*(Location *)arr_add(&err_ctx->instance_stack) = e->where;
+					arr_add(err_ctx->instance_stack, e->where);
 					Block *prev_block = tr->block;
 					tr->block = &inst->struc.body;
 					bool success = type_resolve(tr, &struct_t, e->where); /* resolve the struct */
 					tr->block = prev_block;
-					arr_remove_last(&err_ctx->instance_stack);
+					arr_remove_last(err_ctx->instance_stack);
 					if (!success) return false;
 						
 					inst->struc.instance_id = table->n;
@@ -2269,7 +2272,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				e->typeval->struc = &inst->struc;
 				t->kind = TYPE_BUILTIN;
 				t->builtin = BUILTIN_TYPE;
-				arr_clear(&arg_types);
+				arr_clear(arg_types);
 				goto ret;
 			}
 			fn_decl = val.fn;
@@ -2302,11 +2305,11 @@ static Status types_expr(Typer *tr, Expression *e) {
 		}
 
 		arg_exprs = NULL;
-		arr_set_lena(&arg_exprs, narg_exprs, tr->allocr);
+		arr_set_lena(arg_exprs, narg_exprs, tr->allocr);
 		
 		if (fn_decl && !is_foreign) {
 			size_t i = 0;
-			Declaration *last_param = arr_last(fn_decl->params);
+			Declaration *last_param = arr_last_ptr(fn_decl->params);
 			arr_foreach(fn_decl->params, Declaration, param) {
 				if (has_varargs && param == last_param) continue;
 				arr_foreach(param->idents, Identifier, ident) { 
@@ -2375,7 +2378,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 						
 					long arg_out_idx = arg_out - arg_exprs; /* save and restore arg_out to prevent realloc from causing problems */
 					/* add more room (or if nvarargs_here == 0, remove room) for more varargs */
-					arr_set_lena(&arg_exprs, narg_exprs, tr->allocr);
+					arr_set_lena(arg_exprs, narg_exprs, tr->allocr);
 					arg_out = arg_exprs + arg_out_idx;
 					for (size_t i = 0; i < nvarargs_here; ++i) {
 						VarArg *vararg = &varargs_here[i];
@@ -2431,8 +2434,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 			if (has_varargs) {
 				/* set value of varargs param decl */
 				VarArg *varargs = NULL;
-				arr_set_lena(&varargs, nvarargs, tr->allocr);
-				Declaration *varargs_param = arr_last(fn_copy->params);
+				arr_set_lena(varargs, nvarargs, tr->allocr);
+				Declaration *varargs_param = arr_last_ptr(fn_copy->params);
 				DeclFlags is_const = varargs_param->flags & DECL_IS_CONST;
 				varargs_param->val.varargs = varargs;
 				for (int v = 0; v < (int)nvarargs; ++v) {
@@ -2469,16 +2472,13 @@ static Status types_expr(Typer *tr, Expression *e) {
 			arr_foreach(fn->params, Declaration, param) {
 				arr_foreach(param->idents, Identifier, ident) {
 					if (param->flags & DECL_INFER) {
-						*(Identifier *)arr_add(&inferred_idents) = *ident;
+						arr_add(inferred_idents, *ident);
 					} else if ((param->flags & DECL_ANNOTATES_TYPE)
 							   && !type_is_builtin(&param->type, BUILTIN_VARARGS)) {
 						/* add to stuff infer can use */
-						Type **p = arr_add(&decl_types);
-						*p = &param->type;
-						Type **q = arr_add(&arg_types);
-						*q = &arg_exprs[i].type;
-						Location *l = arr_add(&arg_wheres);
-						*l = arg_exprs[i].where;
+						arr_add(decl_types, &param->type);
+						arr_add(arg_types, &arg_exprs[i].type);
+						arr_add(arg_wheres, arg_exprs[i].where);
 					}
 					++i;
 				}
@@ -2496,9 +2496,9 @@ static Status types_expr(Typer *tr, Expression *e) {
 				}
 				tr->block = prev;
 				
-				arr_clear(&inferred_idents);
-				arr_clear(&arg_types);
-				arr_clear(&decl_types);
+				arr_clear(inferred_idents);
+				arr_clear(arg_types);
+				arr_clear(decl_types);
 				
 				{
 					Type *type = inferred_types;
@@ -2628,13 +2628,13 @@ static Status types_expr(Typer *tr, Expression *e) {
 			table_index_type.flags = TYPE_IS_RESOLVED;
 			table_index_type.kind = TYPE_TUPLE;
 			table_index_type.tuple = NULL;
-			Type *u64t = typer_arr_add(tr, &table_index_type.tuple);
+			Type *u64t = typer_arr_add_ptr(tr, table_index_type.tuple);
 			u64t->was_expr = NULL;
 			u64t->flags = TYPE_IS_RESOLVED;
 			u64t->kind = TYPE_BUILTIN;
 			u64t->builtin = BUILTIN_U64;
 			table_index.tuple = NULL;
-			Value *which_are_const_val = typer_arr_add(tr, &table_index.tuple);
+			Value *which_are_const_val = typer_arr_add_ptr(tr, table_index.tuple);
 			U64 *which_are_const = &which_are_const_val->u64;
 			*which_are_const = 0;
 			int semi_const_index = 0;
@@ -2645,8 +2645,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 				Copier cop = copier_create(tr->allocr, tr->block);
 				if (is_vararg) {
 					/* create one additional table index member for varargs */
-					Value *varargs_val = typer_arr_add(tr, &table_index.tuple);
-					Type *varargs_type = typer_arr_add(tr, &table_index_type.tuple);
+					Value *varargs_val = typer_arr_add_ptr(tr, table_index.tuple);
+					Type *varargs_type = typer_arr_add_ptr(tr, table_index_type.tuple);
 					memset(varargs_type, 0, sizeof *varargs_type);
 					varargs_type->flags = TYPE_IS_RESOLVED;
 					varargs_type->kind = TYPE_BUILTIN;
@@ -2654,7 +2654,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					varargs_val->varargs = NULL;
 					for (; i < narg_exprs; ++i) {
 						arg = &arg_exprs[i];
-						VarArg *varg = typer_arr_add(tr, &varargs_val->varargs);
+						VarArg *varg = typer_arr_add_ptr(tr, varargs_val->varargs);
 						varg->type = copy_type_(&cop, &arg->type);
 						if (is_const) {
 							copy_val(tr->allocr, &varg->val, arg->val, varg->type);
@@ -2673,8 +2673,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 						*which_are_const |= ((U64)1) << semi_const_index;
 						++semi_const_index;
 					}
-					Value *v = typer_arr_add(tr, &table_index.tuple);
-					Type *type = typer_arr_add(tr, &table_index_type.tuple);
+					Value *v = typer_arr_add_ptr(tr, table_index.tuple);
+					Type *type = typer_arr_add_ptr(tr, table_index_type.tuple);
 					copy_type(&cop, type, &arg->type);
 					copy_val(tr->allocr, v, arg->val, type);
 				}
@@ -2682,8 +2682,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 			bool instance_already_exists;
 			c->instance = instance_table_adda(tr->allocr, original_fn->instances, table_index, &table_index_type, &instance_already_exists);
 			if (instance_already_exists) {
-				arr_cleara(&table_index_type.tuple, tr->allocr);
-				arr_cleara(&table_index.tuple, tr->allocr);
+				arr_cleara(table_index_type.tuple, tr->allocr);
+				arr_cleara(table_index.tuple, tr->allocr);
 			} else {
 				c->instance->fn = fn_copy;
 				/* fix parameter and return types (they were kind of problematic before, because we didn't know about the instance) */
@@ -2692,12 +2692,12 @@ static Status types_expr(Typer *tr, Expression *e) {
 				
 				/* if anything happens, make sure we let the user know that this happened while generating a fn */
 				ErrCtx *err_ctx = e->where.file->ctx;
-				*(Location *)typer_arr_add(tr, &err_ctx->instance_stack) = e->where;
+				typer_arr_add(tr, err_ctx->instance_stack, e->where);
 				Block *prev_block = tr->block;
 				tr->block = fn_copy->body.parent;
 				bool success = types_fn(tr, c->instance->fn, &f->type, c->instance);
 				tr->block = prev_block;
-				arr_remove_lasta(&err_ctx->instance_stack, tr->allocr);
+				arr_remove_lasta(err_ctx->instance_stack, tr->allocr);
 				if (!success) return false;
 			}
 			
@@ -3156,10 +3156,9 @@ static Status types_expr(Typer *tr, Expression *e) {
 		t->kind = TYPE_TUPLE;
 		t->tuple = NULL;
 		arr_foreach(e->tuple, Expression, x) {
-			Type *x_type = typer_arr_add(tr, &t->tuple);
 			if (!types_expr(tr, x))
 				return false;
-			*x_type = x->type;
+			typer_arr_add(tr, t->tuple, x->type);
 		}
 		break;
 	case EXPR_SLICE: {
@@ -3258,14 +3257,14 @@ static Status types_block(Typer *tr, Block *b) {
 					goto ret;
 				}
 			} else {
-				if (s != (Statement *)arr_last(b->stmts)) {
+				if (s != (Statement *)arr_last_ptr(b->stmts)) {
 					err_print(e->where, "Return value must be the last statement in a block.");
 					success = false;
 					goto ret;
 				}
 				b->ret_expr = typer_malloc(tr, sizeof *b->ret_expr);
 				*b->ret_expr = *e;
-				arr_remove_lasta(&b->stmts, tr->allocr);
+				arr_remove_lasta(b->stmts, tr->allocr);
 			}
 		}
 		
@@ -3293,8 +3292,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 		d->type.flags = 0;
 		return true;
 	}
-	Declaration **dptr = typer_arr_add(tr, &tr->in_decls);
-	*dptr = d;
+	typer_arr_add(tr, tr->in_decls, d);
 	if (d->flags & DECL_ANNOTATES_TYPE) {
 		/* type supplied */
 		assert(d->type.kind != TYPE_VOID); /* there's no way to annotate void */
@@ -3407,7 +3405,11 @@ static Status types_decl(Typer *tr, Declaration *d) {
 		arr_foreach(d->idents, Identifier, ip) {
 			Identifier i = *ip;
 			/* add to uses */
-			Use **usep = arr_add(tr->block ? &tr->block->uses : &tr->uses);
+			Use **usep;
+			if (tr->block)
+				usep = typer_arr_add_ptr(tr, tr->block->uses);
+			else
+				usep = typer_arr_add_ptr(tr, tr->uses);
 			Use *use = *usep = typer_calloc(tr, 1, sizeof *use);
 			Expression *used = &use->expr;
 			used->kind = EXPR_IDENT;
@@ -3421,7 +3423,6 @@ static Status types_decl(Typer *tr, Declaration *d) {
 
 	if (n_idents == 1 && (d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_NMS) {
 		bool is_at_top_level = true;
-		typedef Block *BlockPtr;
 		arr_foreach(tr->blocks, BlockPtr, b) {
 			if (*b && (*b)->kind != BLOCK_NMS) {
 				is_at_top_level = false;
@@ -3448,7 +3449,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 		d->type.was_expr = NULL;
 		d->type.kind = TYPE_UNKNOWN;
 	}
-	arr_remove_lasta(&tr->in_decls, tr->allocr);
+	arr_remove_lasta(tr->in_decls, tr->allocr);
 	return success;
 }
 
@@ -3644,8 +3645,10 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			err_print(e->where, "You can't use this value. You should probably assign it to a variable.");
 			return false;
 		}
-		Use **up = arr_add(tr->block ? &tr->block->uses : &tr->uses);
-		*up = u;
+		if (tr->block)
+			typer_arr_add(tr, tr->block->uses, u);
+		else
+			typer_arr_add(tr, tr->uses, u);
 	} break;
 	}
 	s->flags |= STMT_TYPED;
@@ -3663,7 +3666,7 @@ static void typer_create(Typer *tr, Evaluator *ev, File *file, ErrCtx *err_ctx, 
 	tr->in_decls = NULL;
 	tr->allocr = allocr;
 	tr->globals = idents;
-	*(Block **)arr_adda(&tr->blocks, allocr) = NULL;
+	typer_arr_add(tr, tr->blocks, NULL);
 	str_hash_table_create(&tr->included_files, sizeof(IncludedFile), tr->allocr);
 }
 
@@ -3676,7 +3679,6 @@ static Status types_file(Typer *tr, ParsedFile *f) {
 			ret = false;
 		}
 	}
-	arr_clear(&tr->uses);
 	assert(tr->block == NULL);
 	assert(arr_len(tr->blocks) && tr->blocks[0] == NULL);
 	return ret;
