@@ -1476,14 +1476,14 @@ static void get_builtin_val_type(Allocator *a, BuiltinVal val, Type *t) {
 
 
 /* gets a struct's constant or parameter, and puts it into e->val.  */
-static Status get_struct_constant(StructDef *struc, Identifier member, Expression *e) {
+static Status get_struct_constant(StructDef *struc, String ident, Expression *e) {
 	if (struc->params && !(struc->params[0].flags & DECL_FOUND_VAL)) {
 		err_print(e->where, "To access constants from a parameterized struct, you must supply its arguments.");
 		return false;
 	}
-	Identifier i = ident_translate(member, &struc->body.idents);
+	Identifier i = ident_get_with_len(&struc->body.idents, ident.str, ident.len);
 	if (!i) {
-		char *member_s = ident_to_str(member);
+		char *member_s = cstr(ident.str, ident.len);
 		char *struc_s = struc->name ? ident_to_str(struc->name) : "anonymous struct";
 		err_print(e->where, "%s is not a member of structure %s.", member_s, struc_s);
 		info_print(struc->where, "struct was declared here.");
@@ -1505,9 +1505,10 @@ static Status get_struct_constant(StructDef *struc, Identifier member, Expressio
 		e->type = *decl_type_at_index(i->decl, ident_idx);
 		return true;
 	} else {
-		char *member_s = ident_to_str(member);
+		char *member_s = cstr(ident.str, ident.len);
 		char *struc_s = struc->name ? ident_to_str(struc->name) : "anonymous struct";
 		err_print(e->where, "Cannot get value %s from struct %s. Are you missing parameters to this struct?", member_s, struc_s);
+		free(member_s);
 		return false;
 	}
 }
@@ -1941,11 +1942,13 @@ static Status types_expr(Typer *tr, Expression *e) {
 	}
 	case EXPR_IDENT: {
 		Block *b = tr->block;
-		Identifier i = e->ident;
+		char *i_str = e->ident_str.str;
+		size_t i_len = e->ident_str.len;
+		Identifier final_ident = NULL;
 		bool undeclared = true;
 		while (1) { /* for each block we are inside... */
 			/* @OPTIM: only hash once */
-			Identifier translated = ident_translate(i, b ? &b->idents : tr->globals);
+			Identifier translated = ident_get_with_len(b ? &b->idents : tr->globals, i_str, i_len);
 			if (ident_is_declared(translated)) {
 #if 0
 				printf("translated %s from\n", ident_to_str(i));
@@ -1953,7 +1956,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				printf(" to \n");
 				print_block_location(translated->idents->body);
 #endif			
-				i = translated;
+				final_ident = translated;
 				undeclared = false;
 			}
 			Use **uses = b ? b->uses : tr->uses;
@@ -1971,7 +1974,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					Namespace *nms = val.nms;
 					Block *body = &nms->body;
 					/* look up identifier in namespace */
-					translated_use = ident_translate(i, &body->idents);
+					translated_use = ident_get_with_len(&body->idents, i_str, i_len);
 				} else {
 					/* it's a struct */
 					was_a_struct = true;
@@ -1980,16 +1983,17 @@ static Status types_expr(Typer *tr, Expression *e) {
 						struct_type = struct_type->ptr;
 					assert(struct_type->kind == TYPE_STRUCT);
 					StructDef *struc = struct_type->struc;
-					translated_use = ident_translate(i, &struc->body.idents);
+					translated_use = ident_get_with_len(&struc->body.idents, i_str, i_len);
 				}
 				if (ident_is_declared(translated_use)) {
 					if (undeclared) {
 						previous_use_which_uses_i = use;
 						undeclared = false;
-						i = translated_use;
+						final_ident = translated_use;
 					} else {
-						char *s = ident_to_str(i);
+						char *s = cstr(i_str, i_len);
 						err_print(e->where, "Conflicting declarations for identifier %s.", s);
+						free(s);
 						char *also = "";
 						if (previous_use_which_uses_i) {
 							/* i was use'd twice */
@@ -2010,7 +2014,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 						e->binary.lhs = used;
 						e->binary.rhs = typer_calloc(tr, 1, sizeof *e->binary.rhs);
 						e->binary.rhs->kind = EXPR_IDENT;
-						e->binary.rhs->ident = i;
+						e->binary.rhs->ident_str.str = i_str;
+						e->binary.rhs->ident_str.len = i_len;
 						/* re-type */
 						if (!types_expr(tr, e))
 							return false;
@@ -2025,7 +2030,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				break;
 			}
 		}
-		e->ident = i;
+		e->ident = final_ident;
 		if (undeclared) {
 			char *s = ident_to_str(e->ident);
 			err_print(e->where, "Undeclared identifier \"%s\".", s);
@@ -3029,7 +3034,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 					return false;
 				}
 				rhs->kind = EXPR_IDENT;
-				rhs->ident = ident_insert_with_len(typer_get_idents(tr), val.slice.data, (size_t)val.slice.len);
+				rhs->ident_str.str = val.slice.data;
+				rhs->ident_str.len = (size_t)val.slice.len;
 				/* re-type with new expression */
 				e->flags = (ExprFlags)~(ExprFlags)EXPR_FOUND_TYPE;
 				return types_expr(tr, e);
@@ -3114,25 +3120,25 @@ static Status types_expr(Typer *tr, Expression *e) {
 					free(s);
 					return false;
 				}
-				if (!get_struct_constant(struc->struc, rhs->ident, e))
+				if (!get_struct_constant(struc->struc, rhs->ident_str, e))
 					return false;
 				break;
 			} else if (struct_type->kind == TYPE_STRUCT) {
 				StructDef *struc = struct_type->struc;
 				assert(struc->flags & STRUCT_DEF_RESOLVED);
-				Identifier struct_ident = ident_translate(rhs->ident, &struc->body.idents);
+				Identifier struct_ident = ident_get_with_len(&struc->body.idents, rhs->ident_str.str, rhs->ident_str.len);
 				if (ident_is_declared(struct_ident) && !(struct_ident->decl->flags & DECL_IS_CONST)) {
 					Field *field = struct_ident->decl->field;
 					field += ident_index_in_decl(struct_ident, struct_ident->decl);
-					e->binary.dot.field = field;
+					e->binary.field = field;
 					*t = *field->type;
 				} else {
-					if (!get_struct_constant(struct_type->struc, rhs->ident, e))
+					if (!get_struct_constant(struct_type->struc, rhs->ident_str, e))
 						return false;
 				}
 				break;
 			} else if (struct_type->kind == TYPE_SLICE || struct_type->kind == TYPE_ARR || type_is_builtin(struct_type, BUILTIN_VARARGS)) {
-				if (ident_eq_str(rhs->ident, "data") && struct_type->kind == TYPE_SLICE) {
+				if (str_eq_cstr(rhs->ident_str, "data") && struct_type->kind == TYPE_SLICE) {
 					/* allow access of slice pointer */
 					t->kind = TYPE_PTR;
 					t->ptr = typer_calloc(tr, 1, sizeof *t->ptr);
@@ -3140,7 +3146,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					t->ptr->flags = TYPE_IS_RESOLVED;
 					break;
 				}
-				if (!ident_eq_str(rhs->ident, "len")) {
+				if (!str_eq_cstr(rhs->ident_str, "len")) {
 					char *s = type_to_str(struct_type);
 					err_print(rhs->where, "Field of %s must be .len", s);
 					free(s);
@@ -3170,10 +3176,10 @@ static Status types_expr(Typer *tr, Expression *e) {
 				Namespace *nms = nms_val.nms;
 				lhs->kind = EXPR_VAL;
 				lhs->val.nms = nms;
-				Identifier original = rhs->ident;
-				rhs->ident = ident_translate(original, &nms->body.idents);
+				String str = rhs->ident_str;
+				rhs->ident = ident_get_with_len(&nms->body.idents, str.str, str.len);
 				if (!ident_is_declared(rhs->ident)) {
-					char *s = ident_to_str(original);
+					char *s = cstr(str.str, str.len);
 					err_print(e->where, "\"%s\" is not a member of this namespace.", s);
 					free(s);
 					return false;

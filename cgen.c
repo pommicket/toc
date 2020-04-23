@@ -1349,7 +1349,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 				cgen_expr(g, lhs);
 				bool is_ptr = lhs->type.kind == TYPE_PTR;
 				cgen_write(g, is_ptr ? "->" :".");
-				cgen_ident_simple(g, e->binary.dot.field->name);
+				cgen_ident_simple(g, e->binary.field->name);
 				cgen_write(g, ")");
 			} else if (struct_type->kind == TYPE_SLICE) {
 				/* access slice data */

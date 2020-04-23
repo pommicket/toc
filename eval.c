@@ -734,13 +734,12 @@ static Status eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr, void
 		} else {
 			struc_data = struc.struc;
 		}
-		*p = (char *)struc_data + dot_expr->binary.dot.field->offset;
+		*p = (char *)struc_data + dot_expr->binary.field->offset;
 	} else if (struct_type->kind == TYPE_SLICE) {
 	    void *ptr;
 		if (!eval_address_of(ev, dot_expr->binary.lhs, &ptr))
 			return false;
 		/* access struct data */
-		assert(ident_eq_str(dot_expr->binary.rhs->ident, "data"));
 		*p = &((Slice *)ptr)->data;
 	} else {
 		void *ptr;

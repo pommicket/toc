@@ -8,7 +8,6 @@
 
 /* 
 @TODO:
-EXPR_IDENT should be a string before typing, also struct member accesses
 do we need the possibility that IdentSlot.decl is NULL?
 use
  - use with struct members (e.g. SuperPoint ::= struct { use p: Point; })
@@ -22,12 +21,13 @@ is there a problem where we can get TYPE_UNKNOWN in cgen, triggering an assert(0
 	-also make sure you can't do x:#C("5");
 local structs should not be named in C
 make sure global slices work
-allow use ??? if an error has already occurred
+allow `use ???;` if an error has already occurred
 if something gets included into a namespace, and its typing fails, the namespace should still be of type namespace, not ???
 make sure you can do a[i] where a is &[5]int or &[]char or something
 do we consistently handle x := &some_array_or_slice; x.len
-&void
 simplify eval macros with val_to_u/i64
+#if should not create a block
+&void
 &&, ||
 start making a standard library... (printf; stringbuilder would be nice to have)
 switch

@@ -55,6 +55,11 @@ static inline bool ident_eq_str(Identifier i, const char *s) {
 	return ident_str_eq_str(i->str, s);
 }
 
+static inline bool ident_eq_string(Identifier i, String s) {
+	if (i->len != s.len) return false;
+	if (memcmp(i->str, s.str, s.len) != 0) return false;
+	return true;
+}
 
 static inline Identifier ident_insert_with_len(Identifiers *ids, char *s, size_t len) {
 	IdentSlot *slot = (IdentSlot *)str_hash_table_insert_(&ids->table, s, len);

@@ -336,10 +336,12 @@ typedef struct NumLiteral {
 	};
 } NumLiteral;
 
-typedef struct StrLiteral {
+typedef struct String {
 	char *str;
 	size_t len;
-} StrLiteral;
+} String;
+
+typedef String StrLiteral;
 
 typedef struct {
 	U32 line;
@@ -793,10 +795,10 @@ typedef struct Expression {
 		struct {
 			BinaryOp op;
 			struct Expression *lhs;
-			struct Expression *rhs;
 			union {
-				Field *field; /* for struct. */
-			} dot;
+				struct Expression *rhs;
+				Field *field; /* for struct., after resolving */
+			};
 		} binary;
 		CallExpr call;
 		struct {
@@ -808,7 +810,8 @@ typedef struct Expression {
 				BuiltinVal val;
 			} which;
 		} builtin;
-		Identifier ident;
+		String ident_str; /* before typing */
+		Identifier ident; /* after typing */
 		NewExpr new;
 		Namespace *nms;
 		struct {

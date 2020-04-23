@@ -1241,7 +1241,8 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			} break;
 			case TOKEN_IDENT:
 				e->kind = EXPR_IDENT;
-				e->ident = parser_ident_insert(p, t->token->ident);
+				e->ident_str.str = t->token->ident;
+				e->ident_str.len = ident_str_len(e->ident_str.str);
 				break;
 			case TOKEN_LITERAL_STR:
 				e->kind = EXPR_LITERAL_STR;
@@ -2667,13 +2668,21 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprint_char_literal(out, e->charl);
 		break;
 	case EXPR_IDENT:
-		fprint_ident_debug(out, e->ident);
+		if (found_type) {
+			fprint_ident_debug(out, e->ident);
+		} else {
+			fwrite(e->ident_str.str, 1, e->ident_str.len, out);
+		}
 		break;
 	case EXPR_BINARY_OP: {
 		fprintf(out, "(");
 		fprint_expr(out, e->binary.lhs);
 		fprintf(out, ")%s(", binary_op_to_str(e->binary.op));
-		fprint_expr(out, e->binary.rhs);
+		if (e->binary.op == BINARY_DOT && found_type && e->binary.lhs->type.kind == TYPE_STRUCT) {
+			fprint_ident(out, e->binary.field->name);
+		} else {
+			fprint_expr(out, e->binary.rhs);
+		}
 		fprintf(out, ")");
 	} break;
 	case EXPR_UNARY_OP:

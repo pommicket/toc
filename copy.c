@@ -246,9 +246,7 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 	case EXPR_LITERAL_STR:
 	case EXPR_LITERAL_CHAR:
 	case EXPR_LITERAL_BOOL:
-		break;
 	case EXPR_IDENT:
-		copier_ident_translate(c, &out->ident);
 		break;
 	case EXPR_UNARY_OP:
 		out->unary.of = copy_expr_(c, in->unary.of);

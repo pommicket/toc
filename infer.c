@@ -17,7 +17,7 @@ static bool infer_from_expr(Typer *tr, Expression *match, Value to, Type *to_typ
 	case EXPR_IDENT:
 		/* an identifier! maybe it's one of idents... */
 		arr_foreach(idents, Identifier, ident) {
-			if (*ident == match->ident) {
+			if (ident_eq_string(*ident, match->ident_str)) {
 				long idx = ident - idents;
 				types[idx] = *to_type;
 				vals[idx] = to;

@@ -48,6 +48,17 @@ size_t str_copy(char *dest, size_t destsz, const char *src) {
 	return destsz-1;
 }
 
+static char *cstr(char const *str, size_t len) {
+	char *ret = malloc(len+1);
+	memcpy(ret, str, len);
+	ret[len] = 0;
+	return ret;
+}
+
+static bool str_eq_cstr(String s, char const *str) {
+	return strncmp(s.str, str, s.len) == 0;
+}
+
 static inline U32 rand_u32(U32 seed) {
 	U64 seed64 = (U64)seed;
 	return (U32)((seed64 * 0x832f0fda4e1a8642 + 0x41d49cd5459a2ab4) >> 32);
@@ -65,3 +76,4 @@ static char const *indefinite_article(char const *s) {
 		return "an";
 	return "a";
 }
+

@@ -1,6 +1,5 @@
 #include "std/io.toc";
 /*
-
 sum ::= fn(n::=, t::=, a: [n]t) t {
 	total : t = 0;
 	for x := a {
@@ -16,15 +15,13 @@ main ::= fn() {
 		*x = i;
 	}
 	puti(sum(numbers) as int);
-
 }
 */
-
-ll ::= struct (t::Type) {
-	head: t;
-	next: &ll(t);
+Point ::= struct {
+	x, y : int;
 }
 
 main ::= fn() {
-	x: ll(int);
+	p: Point;
+	p.x = 12;
 }
