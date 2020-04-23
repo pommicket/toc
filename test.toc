@@ -1,11 +1,30 @@
+#include "std/io.toc";
+/*
 
-Point ::= struct {	
-	a ::= 3;
+sum ::= fn(n::=, t::=, a: [n]t) t {
+	total : t = 0;
+	for x := a {
+		total += x;
+	}
+	total
 }
 
+main ::= fn() {
+	t ::= int;
+	numbers : [1000]t;
+	for x, i : (&t, t) = &numbers {
+		*x = i;
+	}
+	puti(sum(numbers) as int);
+
+}
+*/
+
+ll ::= struct (t::Type) {
+	head: t;
+	next: &ll(t);
+}
 
 main ::= fn() {
-	use p: Point;
-	a;
-
+	x: ll(int);
 }

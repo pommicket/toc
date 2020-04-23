@@ -1084,9 +1084,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	switch (e->kind) {
 	case EXPR_UNARY_OP: {
 		Value of;
-		if (e->unary.op != UNARY_ADDRESS) {
-			if (!eval_expr(ev, e->unary.of, &of)) return false;
-		}
+		if (!eval_expr(ev, e->unary.of, &of)) return false;
 		Type *of_type = &e->unary.of->type;
 		switch (e->unary.op) {
 		case UNARY_ADDRESS: {
@@ -1095,7 +1093,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				if (!eval_expr(ev, e->unary.of, &of)) return false;
 				/* "address" of type (pointer to type) */
 				v->type = evalr_malloc(ev, sizeof *v->type);
-				v->type->flags = 0;
+				v->type->flags = TYPE_IS_RESOLVED;
 				v->type->kind = TYPE_PTR;
 				v->type->ptr = of.type;
 				break;

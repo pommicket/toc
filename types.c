@@ -887,7 +887,7 @@ static Status type_resolve(Typer *tr, Type *t, Location where) {
 			}
 		}
 		if (!(t->flags & TYPE_IS_RESOLVED)) {
-			/* this can happen with functions returning parameterized structs */
+			/* this can happen with functions returning parameterized structs or pointers */
 			if (!type_resolve(tr, t, where))
 				return false;
 		}
@@ -1646,6 +1646,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 				fo_type_tuple = header_type->tuple;
 				val_type = &fo_type_tuple[0];
 				index_type = &fo_type_tuple[1];
+				assert(val_type->flags & TYPE_IS_RESOLVED);
+				assert(index_type->flags & TYPE_IS_RESOLVED);
 				if (!type_is_int(index_type)) {
 					char *s = type_to_str(index_type);
 					err_print(header->where, "Expected index type of for loop to be a builtin integer type, but it's %s.", s);
