@@ -1065,7 +1065,7 @@ static void decl_remove_val(Declaration *d) {
 }
 
 static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
-	
+	assert(e->flags & EXPR_FOUND_TYPE);
 #define eval_unary_op_one(low, up, op)			\
 	case BUILTIN_##up:							\
 		v->low = (up)(op of.low); break

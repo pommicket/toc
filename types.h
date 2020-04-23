@@ -437,7 +437,6 @@ enum {
 };
 typedef U8 TypeFlags;
 typedef struct Type {
-	struct Expression *was_expr; /* if non-NULL, indicates that this type used to be an expression (TYPE_EXPR) */
 	TypeKind kind;
 	TypeFlags flags;
 	union {
@@ -507,7 +506,6 @@ enum {
 typedef struct StructDef {
 	/* these two only exist after resolving (before then, it's scope.stmts) */
 	Field *fields;
-	
 	Location where;
 	U8 flags;
 	/* 

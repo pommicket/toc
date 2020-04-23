@@ -2,7 +2,7 @@ static bool call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Loca
 static bool parameterized_struct_arg_order(StructDef *struc, Argument *args, I16 **order, Location where);
 static bool types_expr(Typer *tr, Expression *e);
 
-static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identifier *idents, Value *vals, Type *types) {
+static bool infer_from_expr(Typer *tr, Expression *match, Value to, Type *to_type, Location to_where, Identifier *idents, Value *vals, Type *types) {
 #if 0
 	printf("Matching ");
 	fprint_expr(stdout, match);
@@ -12,20 +12,15 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identi
 #endif
 	
 	assert(!(match->flags & EXPR_FOUND_TYPE));
-	assert(to->flags & EXPR_FOUND_TYPE);
+	assert(to_type->flags & TYPE_IS_RESOLVED);
 	switch (match->kind) {
 	case EXPR_IDENT:
 		/* an identifier! maybe it's one of idents... */
 		arr_foreach(idents, Identifier, ident) {
 			if (*ident == match->ident) {
 				long idx = ident - idents;
-				types[idx] = to->type;
-				if (!eval_expr(tr->evalr, to, &vals[idx]))
-					return false;
-				Copier c = copier_create(tr->allocr, tr->block);
-				Value new_val;
-				copy_val_full(&c, &new_val, vals[idx], &to->type);
-				vals[idx] = new_val;
+				types[idx] = *to_type;
+				vals[idx] = to;
 				break;
 			}
 		}
@@ -35,20 +30,18 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identi
 			return false;
 		if (type_is_builtin(&match->call.fn->type, BUILTIN_TYPE)) {
 			/* it's a parameterized struct */
-			Value fn_val;
-			if (!eval_expr(tr->evalr, to, &fn_val))
-				return false;
-			if (!type_is_builtin(&to->type, BUILTIN_TYPE) || fn_val.type->kind != TYPE_STRUCT) {
-				err_print(to->where, "Wrong argument type. Expected this to be a struct, but it's not.");
+			if (!type_is_builtin(to_type, BUILTIN_TYPE) || to.type->kind != TYPE_STRUCT) {
+				err_print(to_where, "Wrong argument type. Expected this to be a struct, but it's not.");
 				info_print(match->where, "Parameter was declared here.");
 				return false;
 			}
+			Type *fn_type = to.type;
 			I16 *order;
-			if (!parameterized_struct_arg_order(fn_val.type->struc, match->call.args, &order, match->where)) {
+			if (!parameterized_struct_arg_order(fn_type->struc, match->call.args, &order, match->where)) {
 				free(order);
 				return false;
 			}
-			Declaration *params = to->typeval->struc->params;
+			Declaration *params = fn_type->struc->params;
 			int arg_idx = 0;
 			arr_foreach(params, Declaration, param) {
 				int ident_idx = 0;
@@ -56,12 +49,7 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identi
 					if (order[arg_idx] != -1) {
 						Expression *arg = &match->call.args[order[arg_idx]].val;
 						Value val = *decl_val_at_index(param, ident_idx);
-						Expression val_expr = {0};
-						val_expr.kind = EXPR_VAL;
-						val_expr.val = val;
-						val_expr.type = *decl_type_at_index(param, ident_idx);
-						val_expr.flags = EXPR_FOUND_TYPE;
-						if (!infer_from_expr(tr, arg, &val_expr, idents, vals, types)) {
+						if (!infer_from_expr(tr, arg, val, decl_type_at_index(param, ident_idx), param->where, idents, vals, types)) {
 							free(order);
 							return false;
 						}
@@ -72,74 +60,7 @@ static bool infer_from_expr(Typer *tr, Expression *match, Expression *to, Identi
 			}
 			free(order);
 		}
-		
-		while (to->kind == EXPR_IDENT) {
-			Identifier i = to->ident;
-			Declaration *decl = i->decl;
-			int index = ident_index_in_decl(i, decl);
-			Expression *expr = NULL;
-			if (decl->type.kind == TYPE_TUPLE) {
-				if (decl->expr.kind == EXPR_TUPLE) {
-					expr = &decl->expr.tuple[index];
-				}
-			} else {
-				expr = &decl->expr;
-			}
-			if (expr) to = expr;
-		}
-		if (to->kind != EXPR_CALL) {
-			if (to->kind == EXPR_TYPE) {
-				to = to->typeval->was_expr;
-			}
-			if (!to || to->kind != EXPR_CALL) {
-				return true;
-			}
-		}
-		
-		Argument *m_args = match->call.args;
-		size_t nargs = arr_len(m_args);
-		Expression *t_args = to->call.arg_exprs;
-		I16 *order = NULL;
-		Expression *f = match->call.fn;
-		Identifier ident = f->ident;
-		bool is_direct_fn = f->kind == EXPR_IDENT && (ident->decl->flags & DECL_HAS_EXPR) && ident->decl->expr.kind == EXPR_FN;
-		if (!types_expr(tr, f))
-			return false;
-		if (f->type.kind != TYPE_FN) {
-			char *s = type_to_str(&f->type);
-			err_print(f->where, "Calling non-function type %s.", s);
-			return false;
-		}
-		if (is_direct_fn) {
-			FnExpr *fn_decl = ident->decl->expr.fn;
-			if (!call_arg_param_order(fn_decl, &f->type, m_args, match->where, &order)) {
-				free(order);
-				return false;
-			}
-		}
-		size_t nparams = arr_len(f->type.fn.types) - 1;
-		if (!order && nparams != nargs) {
-			/* wrong number of parameters? let typing deal with it... */
-			free(order);
-			return true;
-		}
-		for (size_t i = 0; i < nparams; ++i) {
-			if (!order || order[i] != -1) {
-				Argument *m_arg = &m_args[order ? (size_t)order[i] : i];
-				Expression *t_arg;
-				if (is_direct_fn) {
-					t_arg = &t_args[i];
-				} else {
-					t_arg = &t_args[i];
-				}
-				if (t_arg->kind == EXPR_VAL) {
-					/* was evaluated, because it's const */
-					if (!infer_from_expr(tr, &m_arg->val, t_arg, idents, vals, types))
-						return false;
-				}
-			}
-		}
-		free(order);
+		/* don't try to match other kinds of function calls. it's impossible to get any information out of it. */
 	} break;
 	default: break;
 	}
@@ -200,34 +121,21 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 		   no sane person will ever write something that needs this */
 		break;
 	case TYPE_EXPR: {
-		Expression *to_expr = to->was_expr;
-		Expression e = {0};
-		e.kind = EXPR_TYPE;
-		e.typeval = allocr_malloc(tr->allocr, sizeof *e.typeval);
-		*e.typeval = *to;
-		e.flags = EXPR_FOUND_TYPE;
-		e.where = where;
-		Type *type = &e.type;
-		type->flags = TYPE_IS_RESOLVED;
-		type->kind = TYPE_BUILTIN;
-		type->builtin = BUILTIN_TYPE;
-		if (!to_expr) {
-			to_expr = &e;
-		}
-		if (!infer_from_expr(tr, match->expr, to_expr, idents, vals, types))
+		Type type;
+		construct_resolved_builtin_type(&type, BUILTIN_TYPE);
+		Value val = {0};
+		val.type = to;
+		if (!infer_from_expr(tr, match->expr, val, &type, where, idents, vals, types))
 			return false;
 	} break;
 	case TYPE_ARR: {
 		if (to->kind != TYPE_ARR) return true;
-		Expression to_n_expr = {0};
-		to_n_expr.kind = EXPR_LITERAL_INT;
-		to_n_expr.intl = to->arr.n;
-		to_n_expr.flags = EXPR_FOUND_TYPE;
-		Type *n_type = &to_n_expr.type;
-		n_type->kind = TYPE_BUILTIN;
-		n_type->builtin = BUILTIN_I64;
-		n_type->flags = TYPE_IS_RESOLVED;
-		if (!infer_from_expr(tr, match->arr.n_expr, &to_n_expr, idents, vals, types))
+		Type n_type;
+		construct_resolved_builtin_type(&n_type, BUILTIN_I64);
+		Value val;
+		val.i64 = (I64)to->arr.n;
+		/* try to match match's n expr to to's value */
+		if (!infer_from_expr(tr, match->arr.n_expr, val, &n_type, where, idents, vals, types))
 			return false;
 		if (!infer_from_type(tr, match->arr.of, to->arr.of, idents, vals, types, where))
 			return false;

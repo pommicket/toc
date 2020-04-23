@@ -27,6 +27,8 @@ static bool is_decl(Tokenizer *t);
 static inline bool ends_decl(Token *t, U16 flags);
 
 static bool fn_has_any_const_params(FnExpr *f) {
+	if (f->flags & FN_EXPR_FOREIGN)
+		return false;
 	arr_foreach(f->params, Declaration, param)
 		if (param->flags & (DECL_IS_CONST | DECL_SEMI_CONST))
 			return true;
@@ -633,7 +635,7 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 			p->block = prev_block;
 			if (!parse_block(p, &struc->body, PARSE_BLOCK_DONT_CREATE_IDENTS))
 				return false;
-			struc->where = struc->body.where;
+			parser_put_end(p, &struc->where);
 			break;
 			
 		struct_fail:
@@ -1211,6 +1213,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 	}
 	{
 		Token *before = t->token;
+		/* @OPTIM very few expressions are types */
 		if (parser_is_definitely_type(p, NULL)) {
 			/* it's a type! */
 			e->kind = EXPR_TYPE;
@@ -1536,13 +1539,11 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				ret_ctype->kind = CTYPE_NONE;
 				ret_type->kind = TYPE_VOID;
 				ret_type->flags = 0;
-				ret_type->was_expr = NULL;
 			} else {
 				if (!parse_c_type(p, ret_ctype, ret_type))
 					return false;
 			}
-			parser_put_end(p, &fn->where);
-			return true;
+			goto success;
 		}
 
 		/* NOTE: the . operator is not handled here, but further down, in order to allow some_struct.fn_member() */
@@ -2173,7 +2174,6 @@ static Status parse_decl(Parser *p, Declaration *d, U16 flags) {
 			if (token_is_kw(t->token, KW_DOTDOT)) {
 				d->type.kind = TYPE_BUILTIN;
 				d->type.flags = 0;
-				d->type.was_expr = NULL;
 				d->type.builtin = BUILTIN_VARARGS;
 				is_varargs = true;
 				if (d->flags & DECL_SEMI_CONST) {
@@ -2987,3 +2987,8 @@ static bool expr_is_definitely_const(Expression *e) {
 	return false;
 }
 
+static inline void construct_resolved_builtin_type(Type *t, BuiltinType builtin) {
+	t->kind = TYPE_BUILTIN;
+	t->builtin = builtin;
+	t->flags = TYPE_IS_RESOLVED;
+}

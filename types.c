@@ -32,13 +32,6 @@ static inline void typer_block_exit(Typer *tr) {
 	tr->block = arr_last(tr->blocks);
 }
 
-static inline void construct_resolved_builtin_type(Type *t, BuiltinType builtin) {
-	t->kind = TYPE_BUILTIN;
-	t->builtin = builtin;
-	t->was_expr = NULL;
-	t->flags = TYPE_IS_RESOLVED;
-}
-
 static size_t compiler_sizeof_builtin(BuiltinType b) {
 	switch (b) {
 	case BUILTIN_I8: return sizeof(I8);
@@ -558,7 +551,6 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 		} else {
 			f->ret_type.kind = TYPE_TUPLE;
 			f->ret_type.flags = TYPE_IS_RESOLVED;
-			f->ret_type.was_expr = NULL;
 			f->ret_type.tuple = NULL;
 			arr_foreach(f->ret_decls, Declaration, d) {
 				arr_foreach(d->idents, Identifier, i) {
@@ -768,7 +760,6 @@ static Status add_block_to_struct(Typer *tr, Block *b, StructDef *s, Statement *
 static Status type_resolve(Typer *tr, Type *t, Location where) {
 	Evaluator *ev = tr->evalr;
 	if (t->flags & TYPE_IS_RESOLVED) return true;
-	t->was_expr = NULL;
 	switch (t->kind) {
 	case TYPE_ARR: {
 		/* it's an array */
@@ -872,7 +863,6 @@ static Status type_resolve(Typer *tr, Type *t, Location where) {
 				}
 				if (is_tuple_of_types) {
 					t->kind = TYPE_TUPLE;
-					t->was_expr = expr;
 					t->flags = TYPE_IS_RESOLVED;
 					t->tuple = tuple;
 					break;
@@ -901,7 +891,6 @@ static Status type_resolve(Typer *tr, Type *t, Location where) {
 			if (!type_resolve(tr, t, where))
 				return false;
 		}
-		t->was_expr = expr;
 	} break;
 	case TYPE_UNKNOWN:
 	case TYPE_VOID:
@@ -1571,7 +1560,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 	if (e->flags & EXPR_FOUND_TYPE) return true;
 	Type *t = &e->type;
 	t->flags = TYPE_IS_RESOLVED;
-	t->was_expr = NULL;
 	t->kind = TYPE_UNKNOWN; /* default to unknown type (in the case of an error) */
 	e->flags |= EXPR_FOUND_TYPE; /* even if failed, pretend we found the type */
 	switch (e->kind) {
@@ -1597,7 +1585,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 		t->kind = TYPE_SLICE;
 		t->slice = typer_malloc(tr, sizeof *t->slice);
 		t->slice->flags = TYPE_IS_RESOLVED;
-		t->slice->was_expr = NULL;
 		t->slice->kind = TYPE_BUILTIN;
 		t->slice->builtin = BUILTIN_CHAR;
 		break;
@@ -1671,7 +1658,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 		}
 		Type *fo_type = &header->type;
 		fo_type->flags = TYPE_IS_RESOLVED;
-		fo_type->was_expr = NULL;
 		fo_type->kind = TYPE_TUPLE;
 		fo_type->tuple = fo_type_tuple;
 
@@ -2138,7 +2124,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 				} else {
 					next_type->kind = TYPE_VOID;
 					next_type->flags = TYPE_IS_RESOLVED;
-					next_type->was_expr = NULL;
 				}
 				if (!type_eq_implicit(next_type, curr_type)) {
 					char *currstr = type_to_str(curr_type);
@@ -2682,10 +2667,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 			table_index_type.kind = TYPE_TUPLE;
 			table_index_type.tuple = NULL;
 			Type *u64t = typer_arr_add_ptr(tr, table_index_type.tuple);
-			u64t->was_expr = NULL;
-			u64t->flags = TYPE_IS_RESOLVED;
-			u64t->kind = TYPE_BUILTIN;
-			u64t->builtin = BUILTIN_U64;
+			construct_resolved_builtin_type(u64t, BUILTIN_U64);
 			table_index.tuple = NULL;
 			Value *which_are_const_val = typer_arr_add_ptr(tr, table_index.tuple);
 			U64 *which_are_const = &which_are_const_val->u64;
@@ -3135,9 +3117,10 @@ static Status types_expr(Typer *tr, Expression *e) {
 				break;
 			} else if (struct_type->kind == TYPE_STRUCT) {
 				StructDef *struc = struct_type->struc;
+				assert(struc->flags & STRUCT_DEF_RESOLVED);
 				Identifier struct_ident = ident_translate(rhs->ident, &struc->body.idents);
-				Field *field = NULL;
-				if (ident_is_declared(struct_ident) && (field = struct_ident->decl->field)) {
+				if (ident_is_declared(struct_ident) && !(struct_ident->decl->flags & DECL_IS_CONST)) {
+					Field *field = struct_ident->decl->field;
 					field += ident_index_in_decl(struct_ident, struct_ident->decl);
 					e->binary.dot.field = field;
 					*t = *field->type;
@@ -3489,7 +3472,6 @@ static Status types_decl(Typer *tr, Declaration *d) {
 	if (!success) {
 		/* use unknown type if we didn't get the type */
 		d->type.flags = TYPE_IS_RESOLVED;
-		d->type.was_expr = NULL;
 		d->type.kind = TYPE_UNKNOWN;
 	}
 	arr_remove_lasta(tr->in_decls, tr->allocr);

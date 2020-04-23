@@ -263,6 +263,7 @@ static bool cgen_fn_is_direct(CGenerator *g, Declaration *d) {
 }
 
 static bool fn_has_instances(FnExpr *f) {
+	if (f->flags & FN_EXPR_FOREIGN) return false;
 	if (fn_has_any_const_params(f)) return true;
 	if (!arr_len(f->params)) return false;
 	return type_is_builtin(&arr_last(f->params).type, BUILTIN_VARARGS);

@@ -1,4 +1,11 @@
 
-#include "io.toc", io;
+Point ::= struct {	
+	a ::= 3;
+}
 
-#include "mem.toc", mem;
+
+main ::= fn() {
+	use p: Point;
+	a;
+
+}
