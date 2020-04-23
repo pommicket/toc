@@ -220,7 +220,3 @@ static Location ident_decl_location(Identifier i) {
 	return i->decl->where;
 }
 
-static bool ident_is_declared(Identifier i) {
-	return i && i->decl;
-}
-

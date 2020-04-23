@@ -15,6 +15,7 @@ main ::= fn() {
 		*x = i;
 	}
 	puti(sum(numbers) as int);
+
 }
 */
 Point ::= struct {
@@ -23,5 +24,5 @@ Point ::= struct {
 
 main ::= fn() {
 	p: Point;
-	p.x = 12;
+	p.x = 12 + e;
 }

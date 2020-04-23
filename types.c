@@ -741,7 +741,7 @@ static Status add_block_to_struct(Typer *tr, Block *b, StructDef *s, Statement *
 			/* we need to translate d's identifiers to s's scope */
 			arr_foreach(d->idents, Identifier, ip) {
 				Identifier redeclared = ident_get(&s->body.idents, (*ip)->str);
-				if (ident_is_declared(redeclared)) {
+				if (redeclared) {
 					char *str = ident_to_str(*ip);
 					err_print(d->where, "Redeclaration of struct member %s", str);
 					info_print(ident_decl_location(redeclared), "Previous declaration was here.");
@@ -1949,7 +1949,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		while (1) { /* for each block we are inside... */
 			/* @OPTIM: only hash once */
 			Identifier translated = ident_get_with_len(b ? &b->idents : tr->globals, i_str, i_len);
-			if (ident_is_declared(translated)) {
+			if (translated) {
 #if 0
 				printf("translated %s from\n", ident_to_str(i));
 				print_block_location(i->idents->body);
@@ -1985,7 +1985,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					StructDef *struc = struct_type->struc;
 					translated_use = ident_get_with_len(&struc->body.idents, i_str, i_len);
 				}
-				if (ident_is_declared(translated_use)) {
+				if (translated_use) {
 					if (undeclared) {
 						previous_use_which_uses_i = use;
 						undeclared = false;
@@ -2030,13 +2030,13 @@ static Status types_expr(Typer *tr, Expression *e) {
 				break;
 			}
 		}
-		e->ident = final_ident;
 		if (undeclared) {
-			char *s = ident_to_str(e->ident);
+			char *s = cstr(e->ident_str.str, e->ident_str.len);
 			err_print(e->where, "Undeclared identifier \"%s\".", s);
 			free(s);
 			return false;
 		}
+		e->ident = final_ident;
 		if (!type_of_ident(tr, e->where, e->ident, t)) {
 			return false;
 		}
@@ -3127,7 +3127,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				StructDef *struc = struct_type->struc;
 				assert(struc->flags & STRUCT_DEF_RESOLVED);
 				Identifier struct_ident = ident_get_with_len(&struc->body.idents, rhs->ident_str.str, rhs->ident_str.len);
-				if (ident_is_declared(struct_ident) && !(struct_ident->decl->flags & DECL_IS_CONST)) {
+				if (struct_ident && !(struct_ident->decl->flags & DECL_IS_CONST)) {
 					Field *field = struct_ident->decl->field;
 					field += ident_index_in_decl(struct_ident, struct_ident->decl);
 					e->binary.field = field;
@@ -3178,7 +3178,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				lhs->val.nms = nms;
 				String str = rhs->ident_str;
 				rhs->ident = ident_get_with_len(&nms->body.idents, str.str, str.len);
-				if (!ident_is_declared(rhs->ident)) {
+				if (!rhs->ident) {
 					char *s = cstr(str.str, str.len);
 					err_print(e->where, "\"%s\" is not a member of this namespace.", s);
 					free(s);

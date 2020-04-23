@@ -1011,7 +1011,7 @@ static Identifier parser_ident_insert(Parser *p, char *str) {
 
 static Status check_ident_redecl(Parser *p, Identifier i) {
 	Tokenizer *t = p->tokr;
-	if (ident_is_declared(i)) {
+	if (i->decl) {
 		char *s = ident_to_str(i);
 		tokr_err(t, "Redeclaration of identifier %s.", s);
 		info_print(ident_decl_location(i), "Previous declaration was here.");
@@ -2944,8 +2944,8 @@ static inline Type *decl_type_at_index(Declaration *d, int i) {
 }
 
 static inline bool ident_is_definitely_const(Identifier i) {
-	assert(ident_is_declared(i));
 	Declaration *decl = i->decl;
+	assert(decl);
 	if (!(decl->flags & DECL_IS_CONST))
 		return false;
 	

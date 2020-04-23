@@ -663,8 +663,8 @@ static Status eval_expr_ptr_at_index(Evaluator *ev, Expression *e, void **ptr, T
 }
 
 static Value *ident_val(Evaluator *ev, Identifier i, Location where) {
-	assert(ident_is_declared(i));
 	Declaration *decl = i->decl;
+	assert(decl);
 	int idx = decl_ident_index(decl, i);
 	if (decl->type.kind == TYPE_UNKNOWN && ev->typer->err_ctx->have_errored)
 		return NULL; /* silently fail (something went wrong when we typed this decl) */
@@ -1016,7 +1016,7 @@ static bool val_is_nonnegative(Value v, Type *t) {
 }
 
 static Status eval_ident(Evaluator *ev, Identifier ident, Value *v, Location where) {
-	if (!ident_is_declared(ident)) {
+	if (!ident) {
 		char *s = ident_to_str(ident);
 		err_print(where, "Undeclared identifier: %s.", s);
 		free(s);

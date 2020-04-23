@@ -8,14 +8,14 @@
 
 /* 
 @TODO:
-do we need the possibility that IdentSlot.decl is NULL?
+test:
+	_ := 5;
+	_ := 6;
+don't allow use of the identifier _, e.g. puti(_+5) ok for fields i think
 use
  - use with struct members (e.g. SuperPoint ::= struct { use p: Point; })
 maybe change to #define check(x) do { if_unlikely(x) return 0; } while (0);
 always use pointers in cgen'd non-range for loops (sometimes also indices)
-test:
-	_ := 5;
-	_ := 6;
 is there a problem where we can get TYPE_UNKNOWN in cgen, triggering an assert(0)?
 	-simple example, but maybe try other stuff: x := #C("5"); 
 	-also make sure you can't do x:#C("5");
@@ -25,9 +25,9 @@ allow `use ???;` if an error has already occurred
 if something gets included into a namespace, and its typing fails, the namespace should still be of type namespace, not ???
 make sure you can do a[i] where a is &[5]int or &[]char or something
 do we consistently handle x := &some_array_or_slice; x.len
+&void
 simplify eval macros with val_to_u/i64
 #if should not create a block
-&void
 &&, ||
 start making a standard library... (printf; stringbuilder would be nice to have)
 switch
