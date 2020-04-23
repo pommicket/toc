@@ -83,6 +83,7 @@ static void err_fprint(ErrCtx *ctx, const char *fmt, ...) {
 }
 
 static void print_location_highlight(FILE *out, Location where) {
+	assert(where.end >= where.start);
 	File *f = where.file;
 	ErrCtx *ctx = f->ctx;
 	if (where.start == 0 && where.end == 0) { err_fprint(ctx, "\n"); return; } /* null location */

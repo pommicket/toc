@@ -1,0 +1,45 @@
+#include "io.toc", io;
+#include "mem.toc", mem;
+
+use mem;
+
+Point ::= struct {	
+	x: int;
+	y: int;
+	a ::= 3;
+}
+
+make_point ::= fn (x_: int, y_: int) use p: Point {
+	x = x_+a;
+	y = y_+a;
+}
+
+main ::= fn() {
+
+	use io;
+
+	{
+		use p: Point;
+		use io;
+		x = 5;
+		puti(x);
+	}
+
+
+
+	ps := news(Point, 5);
+	for p := &ps {
+		*p = make_point(3, 5);
+	}
+	for use p, i := &ps {
+		x += i;
+		y += 2*i;
+	}
+	for use p := ps {
+		writei(x);
+		writes(" ");
+		writei(y);
+		puts("");
+	}
+	dels(ps);
+}

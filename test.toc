@@ -1,34 +1,4 @@
-#include "std/io.toc", io;
-#include "std/mem.toc", mem;
 
-use mem;
+#include "io.toc", io;
 
-main ::= fn() {
-	Point ::= struct {	
-		x: int;
-		y: int;
-		a ::= 3;
-	}
-
-	use io;
-
-	{
-		use p: Point;
-		use io;
-		x = 5;
-		puti(x);
-	}
-
-	ps := news(Point, 5);
-	for use p, i := &ps {
-		x = i;
-		y = 2*i;
-	}
-	for use p := ps {
-		writei(x);
-		writes(" ");
-		writei(y);
-		puts("");
-	}
-	dels(ps);
-}
+#include "mem.toc", mem;

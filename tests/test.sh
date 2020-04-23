@@ -13,6 +13,7 @@ params
 nms
 varargs
 printf
+use
 misc'
 
 STARTPWD=$(pwd)

@@ -2450,12 +2450,14 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				Block *body = &e->nms->body;
 				body->kind = BLOCK_NMS;
 				body->where = s->where;
+				parser_put_end(p, &body->where);
+				++body->where.end; /* past semicolon */
 				body->parent = p->block;
 				idents_create(&body->idents, p->allocr, body);
 				Statement *inc_stmt = parser_arr_add_ptr(p, body->stmts);
 				inc_stmt->kind = STMT_INCLUDE;
 				inc_stmt->flags = STMT_INC_TO_NMS;
-				inc_stmt->where = s->where;
+				inc_stmt->where = body->where;
 				inc_stmt->inc = parser_calloc(p, 1, sizeof *inc_stmt->inc);
 				inc_stmt->inc->filename = filename;
 			} else if (i->flags & INC_FORCED) {
@@ -2471,7 +2473,6 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				return false;
 			}
 			++t->token;
-			break;
 		} break;
 		case DIRECT_ERROR:
 		case DIRECT_WARN:
@@ -2523,6 +2524,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 		
 		if (!valid) return false;
 	}
+
 	parser_put_end(p, &s->where);
 	return true;
 }

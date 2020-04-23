@@ -8,7 +8,6 @@
 
 /* 
 @TODO:
-test used ret decls
 consider: don't do inference for function calls; get rid of was_expr -- now that we have struct params
 EXPR_IDENT should be a string before typing, also struct member accesses
 do we need the possibility that IdentSlot.decl is NULL?
