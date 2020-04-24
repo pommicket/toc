@@ -757,6 +757,32 @@ static Status add_block_to_struct(Typer *tr, Block *b, StructDef *s, Statement *
 	return true;
 }
 
+static Status struct_resolve(Typer *tr, StructDef *s) {
+	if (!(s->flags & STRUCT_DEF_RESOLVED)) {
+		if (!types_block(tr, &s->body))
+			return false;
+		s->fields = NULL;
+		Statement *new_stmts = NULL;
+		if (!add_block_to_struct(tr, &s->body, s, &new_stmts))
+			return false;
+		s->body.stmts = new_stmts;
+		/* set the field of each declaration, so that we can lookup struct members quickly */
+		Field *field = s->fields;
+		arr_foreach(new_stmts, Statement, stmt) {
+			assert(stmt->kind == STMT_DECL);
+			Declaration *decl = stmt->decl;
+			if (!(decl->flags & DECL_IS_CONST)) {
+				assert(!(decl->flags & DECL_HAS_EXPR));
+				decl->field = field;
+				field += arr_len(decl->idents);
+			}
+		}
+		s->instance_id = 0;
+		s->flags |= STRUCT_DEF_RESOLVED;
+	}
+	return true;
+}
+
 /* fixes the type (replaces [5+3]int with [8]int, etc.) */
 static Status type_resolve(Typer *tr, Type *t, Location where) {
 	Evaluator *ev = tr->evalr;
@@ -817,28 +843,8 @@ static Status type_resolve(Typer *tr, Type *t, Location where) {
 		break;
 	case TYPE_STRUCT: {
 		StructDef *s = t->struc;
-		if (!(s->flags & STRUCT_DEF_RESOLVED)) {
-			if (!types_block(tr, &s->body))
-				return false;
-			s->fields = NULL;
-			Statement *new_stmts = NULL;
-			if (!add_block_to_struct(tr, &s->body, s, &new_stmts))
-				return false;
-			s->body.stmts = new_stmts;
-			/* set the field of each declaration, so that we can lookup struct members quickly */
-			Field *field = s->fields;
-			arr_foreach(new_stmts, Statement, stmt) {
-				assert(stmt->kind == STMT_DECL);
-				Declaration *decl = stmt->decl;
-				if (!(decl->flags & DECL_IS_CONST)) {
-					assert(!(decl->flags & DECL_HAS_EXPR));
-					decl->field = field;
-					field += arr_len(decl->idents);
-				}
-			}
-			s->instance_id = 0;
-			s->flags |= STRUCT_DEF_RESOLVED;
-		}
+		if (!struct_resolve(tr, s))
+			return false;
 	} break;
 	case TYPE_EXPR: {
 		Value typeval;
@@ -3126,12 +3132,14 @@ static Status types_expr(Typer *tr, Expression *e) {
 					free(s);
 					return false;
 				}
+				if (!struct_resolve(tr, struc->struc)) return false;
 				if (!get_struct_constant(struc->struc, rhs->ident_str, e))
 					return false;
 				break;
 			} else if (struct_type->kind == TYPE_STRUCT) {
 				StructDef *struc = struct_type->struc;
-				assert(struc->flags & STRUCT_DEF_RESOLVED);
+				if (!struct_resolve(tr, struc)) return false;
+
 				Identifier struct_ident = ident_get_with_len(&struc->body.idents, rhs->ident_str.str, rhs->ident_str.len);
 				if (struct_ident && !(struct_ident->decl->flags & DECL_IS_CONST)) {
 					Field *field = struct_ident->decl->field;

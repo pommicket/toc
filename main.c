@@ -17,6 +17,8 @@ do we consistently handle x := &some_array_or_slice; x.len
 use
  - use with struct members (e.g. SuperPoint ::= struct { use p: Point; })
 compile to a temp file, then move it if compilation succeeds
+if you include something twice, it should #define one thing to the other -- it's okay because struct field can't contain __
+	-> allow #force'd includes to namespaces
 &void
 simplify eval macros with val_to_u/i64
 #if should not create a block
