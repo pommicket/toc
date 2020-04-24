@@ -1,28 +1,18 @@
 #include "std/io.toc";
-/*
-sum ::= fn(n::=, t::=, a: [n]t) t {
-	total : t = 0;
-	for x := a {
-		total += x;
-	}
-	total
+
+foo ::= fn() int {
+	puts("Hello");
+	3
+}
+
+bar ::= fn() (int, int) {
+	foo(), foo()
 }
 
 main ::= fn() {
-	t ::= int;
-	numbers : [1000]t;
-	for x, i : (&t, t) = &numbers {
-		*x = i;
-	}
-	puti(sum(numbers) as int);
-
-}
-*/
-Point ::= struct {
-	x, y : int;
-}
-
-main ::= fn() {
-	p: Point;
-	p.x = 12 + e;
+	_ := 5;
+	_ := 6+_;
+	_ := foo();
+	_,_ := bar();
+	_,_ := bar();
 }

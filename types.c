@@ -282,6 +282,7 @@ purpose is something like "take address of"
 */
 static Status expr_must_lval(Expression *e, char const *purpose) {
 	/* NOTE: make sure you update eval when you change this */
+	assert(e->flags & EXPR_FOUND_TYPE);
 	switch (e->kind) {
 	case EXPR_IDENT: {
 		Identifier i = e->ident;
@@ -1942,8 +1943,13 @@ static Status types_expr(Typer *tr, Expression *e) {
 	}
 	case EXPR_IDENT: {
 		Block *b = tr->block;
-		char *i_str = e->ident_str.str;
-		size_t i_len = e->ident_str.len;
+		String i = e->ident_str;
+		char *i_str = i.str;
+		size_t i_len = i.len;
+		if_unlikely (str_eq_cstr(i, "_")) {
+			err_print(e->where, "You cannot use _ as a variable. It is used for ignoring results of function calls, e.g. _, y := function_which_returns_two_things();");
+			return false;
+		}
 		Identifier final_ident = NULL;
 		bool undeclared = true;
 		while (1) { /* for each block we are inside... */

@@ -1911,6 +1911,7 @@ static void cgen_decl(CGenerator *g, Declaration *d) {
 		/* declarations where we use a value */
 		for (int idx = 0, nidents = (int)arr_len(d->idents); idx < nidents; ++idx) {
 			Identifier i = d->idents[idx];
+			if (ident_eq_str(i, "_")) continue;
 			Type *type = decl_type_at_index(d, idx);
 			if (type_is_compileonly(&d->type)) {
 				continue;
@@ -1969,6 +1970,7 @@ static void cgen_decl(CGenerator *g, Declaration *d) {
 				
 					arr_foreach(d->idents, Identifier, i) {
 						Expression e;
+						if (ident_eq_str(*i, "_")) continue;
 						e.flags = EXPR_FOUND_TYPE;
 						e.kind = EXPR_IDENT;
 						e.type = d->type;
@@ -1977,13 +1979,18 @@ static void cgen_decl(CGenerator *g, Declaration *d) {
 					}
 					cgen_write(g, "}");
 				} else {
-					/* set it directly */
-					Expression e = {0};
-					e.kind = EXPR_IDENT;
-					e.type = d->type;
-					e.flags = EXPR_FOUND_TYPE;
-					e.ident = d->idents[0];
-					cgen_set(g, &e, NULL, &d->expr, NULL);
+					if (ident_eq_str(d->idents[0], "_")) {
+						cgen_expr(g, &d->expr);
+						cgen_write(g, ";");
+					} else {
+						/* set it directly */
+						Expression e = {0};
+						e.kind = EXPR_IDENT;
+						e.type = d->type;
+						e.flags = EXPR_FOUND_TYPE;
+						e.ident = d->idents[0];
+						cgen_set(g, &e, NULL, &d->expr, NULL);
+					}
 				}
 			}
 		}
