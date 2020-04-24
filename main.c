@@ -8,10 +8,6 @@
 
 /* 
 @TODO:
-always use pointers in cgen'd non-range for loops (sometimes also indices)
-is there a problem where we can get TYPE_UNKNOWN in cgen, triggering an assert(0)?
-	-simple example, but maybe try other stuff: x := #C("5"); 
-	-also make sure you can't do x:#C("5");
 local structs should not be named in C
 make sure global slices work
 allow `use ???;` if an error has already occurred
@@ -20,6 +16,7 @@ make sure you can do a[i] where a is &[5]int or &[]char or something
 do we consistently handle x := &some_array_or_slice; x.len
 use
  - use with struct members (e.g. SuperPoint ::= struct { use p: Point; })
+compile to a temp file, then move it if compilation succeeds
 &void
 simplify eval macros with val_to_u/i64
 #if should not create a block
@@ -29,9 +26,9 @@ switch
  - #fallthrough
 enums
 unions
-compile to a temp file, then move it if compilation succeeds
 ---
 switch to / add as an alternative: libffi
+don't bother generating ret_ if nothing's deferred
 X ::= newtype(int); or something
 any odd number of "s for a string
 use point #except x;

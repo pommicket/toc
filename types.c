@@ -1105,7 +1105,14 @@ static Status types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 	ret_type = t->fn.types;
 	has_named_ret_vals = f->ret_decls != NULL;
 	if (ret_expr) {
-		if (!type_eq_implicit(&ret_expr->type, ret_type)) {
+		if (ret_expr->type.kind == TYPE_UNKNOWN) {
+			if (ret_type->kind == TYPE_UNKNOWN) {
+				err_print(ret_expr->where, "Can't determine type of return value. Try assigning it to a variable before returning it.");
+				return false;
+			}
+			if (!tr->err_ctx->have_errored) /* if we've had an error, this could be a placeholder because something failed earlier */
+				ret_expr->type = *ret_type;
+		} else if (!type_eq_implicit(&ret_expr->type, ret_type)) {
 			char *got = type_to_str(&ret_expr->type);
 			char *expected = type_to_str(ret_type);
 			err_print(ret_expr->where, "Returning type %s, but function returns type %s.", got, expected);
@@ -1116,14 +1123,6 @@ static Status types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 			free(got); free(expected);
 			success = false;
 			goto ret;
-		}
-		if (ret_expr->type.kind == TYPE_UNKNOWN) { 
-			/* maybe it's just unknown because something messed up (like typing another function), 
-			   and ??? is a placeholder */
-			if (!tr->err_ctx->have_errored) {
-				err_print(ret_expr->where, "Can't determine type of return value. Try assigning it to a variable before returning it.");
-				return false;
-			}
 		}
 	} else if (ret_type->kind != TYPE_VOID && !has_named_ret_vals) {
 		Statement *stmts = f->body.stmts;
@@ -1252,6 +1251,7 @@ static Status call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Lo
 				if (order[param_idx] != -1) {
 					err_print(arg->where, "Parameter #%d set twice.", param_idx+1);
 					info_print(args[order[param_idx]].where, "Parameter was previously set here.");
+					return false;
 				}
 				order[param_idx] = arg_idx;
 			}
@@ -1946,7 +1946,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		String i = e->ident_str;
 		char *i_str = i.str;
 		size_t i_len = i.len;
-		if_unlikely (str_eq_cstr(i, "_")) {
+		if (str_eq_cstr(i, "_")) {
 			err_print(e->where, "You cannot use _ as a variable. It is used for ignoring results of function calls, e.g. _, y := function_which_returns_two_things();");
 			return false;
 		}

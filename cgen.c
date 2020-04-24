@@ -1448,6 +1448,9 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		bool has_val = !ident_eq_str(val_ident, "_");
 		bool has_index = !ident_eq_str(index_ident, "_");
 
+		Type *of_type = NULL;
+		bool uses_ptr = false;
+
 		if (is_range) {
 			cgen_expr_pre(g, fo->range.from);
 			if (fo->range.to)
@@ -1488,31 +1491,73 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 				cgen_set(g, NULL, "val_", fo->range.from, NULL);
 			}
 		} else {
-			/* pre-generate of */
-			cgen_type_pre(g, &fo->of->type);
-			cgen_write(g, " of_");
-			cgen_type_post(g, &fo->of->type);
-			cgen_write(g, "; ");
+			of_type = &fo->of->type;
+			if (of_type->kind == TYPE_PTR) {
+				uses_ptr = true;
+				of_type = of_type->ptr;
+			}
 			
-			cgen_set(g, NULL, "of_", fo->of, NULL);
+			/* pre-generate of */
+			switch (of_type->kind) {
+			case TYPE_SLICE:
+				cgen_type_pre(g, of_type);
+				cgen_write(g, " of_");
+				cgen_type_post(g, of_type);
+				cgen_write(g, " = ");
+				if (uses_ptr) cgen_write(g, "*");
+				cgen_expr(g, fo->of);
+				cgen_write(g, "; ");
+				break;
+			case TYPE_ARR:
+				cgen_type_pre(g, of_type->arr.of);
+				cgen_write(g, " (* of_)");
+				cgen_type_post(g, of_type->arr.of);
+				cgen_write(g, " = ");
+				if (uses_ptr) cgen_write(g, "*");
+				cgen_expr(g, fo->of);
+				cgen_write(g, "; ");
+				break;
+			default: assert(0); break;
+			}
 		}
-		cgen_write(g, "for (");
 
-		bool generate_index = has_index || !is_range;
-
-		if (generate_index) {
+		if (has_index) {
 			cgen_type_pre(g, index_type);
 			cgen_write(g, " ");
-			if (has_index)
-				cgen_ident(g, index_ident);
-			else
-				cgen_write(g, "i_");
+			cgen_ident(g, index_ident);
 			cgen_type_post(g, index_type); /* not needed yet, but keeping it here to prevent potential future problems */
-			cgen_write(g, " = 0");
+			cgen_write(g, " = 0; ");
 		}
+
+		cgen_write(g, "for (");
+		
+		if (!is_range) {
+			cgen_type_pre(g, val_type);
+			cgen_write(g, "(%sp_)", uses_ptr ? "" : "*");
+			cgen_type_post(g, val_type);
+			cgen_write(g, " = ");
+			switch (of_type->kind) {
+			case TYPE_ARR:
+				cgen_write(g, "of_");
+				break;
+			case TYPE_SLICE:
+				cgen_write(g, "of_.data");
+				break;
+			default: assert(0); break;
+			}
+			cgen_write(g, ", (*end_) = p_ + ");
+			switch (of_type->kind) {
+			case TYPE_ARR:
+				cgen_write(g, U64_FMT, (U64)of_type->arr.n);
+				break;
+			case TYPE_SLICE:
+				cgen_write(g, "of_.n");
+				break;
+			default: assert(0); break;
+			}
+		}
+
 		cgen_write(g, "; ");
-		bool uses_ptr = false;
-		Type *of_type = NULL;
 		if (!(is_range && !fo->range.to)) { /* if it's finite */
 			if (is_range) {
 				if (has_val)
@@ -1523,25 +1568,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 					= fo->range.stepval == NULL || val_is_nonnegative(*fo->range.stepval, val_type);
 				cgen_write(g, " %c= to_", positive_step ? '<' : '>');
 			} else {
-				if (has_index)
-					cgen_ident(g, index_ident);
-				else
-					cgen_write(g, "i_");
-				cgen_write(g, " < ");
-				of_type = &fo->of->type;
-				uses_ptr = of_type->kind == TYPE_PTR;
-				if (uses_ptr) {
-					of_type = of_type->ptr;
-				}
-				switch (of_type->kind) {
-				case TYPE_ARR:
-					cgen_write(g, "%lu", (unsigned long)of_type->arr.n);
-					break;
-				case TYPE_SLICE:
-					cgen_write(g, "of_%sn", uses_ptr ? "->" : ".");
-					break;
-				default: assert(0); break;
-				}
+				cgen_write(g, "p_ != end_");
 			}
 		}
 		cgen_write(g, "; ");
@@ -1560,45 +1587,18 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 				cgen_write(g, "1");
 			}
 			if (has_index) cgen_write(g, ", ");
+		} else {
+			cgen_write(g, "++p_");
+			if (has_index) cgen_write(g, ", ");
 		}
-		if (generate_index) {
-			if (has_index)
-				cgen_ident(g, index_ident);
-			else
-				cgen_write(g, "i_");
+		if (has_index) {
 			cgen_write(g, "++");
+			cgen_ident(g, index_ident);
 		}
 		cgen_write(g, ") {");
 		cgen_nl(g);
 		if (has_val) {
 			if (!is_range) {
-				/* necessary for iterating over, e.g., an array of arrays */
-				cgen_type_pre(g, val_type);
-				if (uses_ptr)
-					cgen_write(g, " p_");
-				else
-					cgen_write(g, "(*p_)");
-				cgen_type_post(g, val_type);
-				cgen_write(g, " = ");
-				if (of_type->kind == TYPE_SLICE) {
-					cgen_write(g, "((");
-					cgen_type_pre(g, val_type);
-					if (!uses_ptr) cgen_write(g, "(*)");
-					cgen_type_post(g, val_type);
-					cgen_write(g, ")of_%sdata) + ", uses_ptr ? "->" : ".");
-					if (has_index)
-						cgen_ident(g, index_ident);
-					else
-						cgen_write(g, "i_");
-				} else {
-					cgen_write(g, "&%sof_%s[", uses_ptr ? "(*" : "", uses_ptr ? ")" : "");
-					if (has_index)
-						cgen_ident(g, index_ident);
-					else
-						cgen_write(g, "i_");
-					cgen_write(g, "]");
-				}
-				cgen_write(g, "; ");
 				cgen_type_pre(g, val_type);
 				cgen_write(g, " ");
 				cgen_ident(g, val_ident);

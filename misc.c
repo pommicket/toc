@@ -77,13 +77,3 @@ static char const *indefinite_article(char const *s) {
 	return "a";
 }
 
-#ifdef __GNUC__
-#define if_likely(x) if (__builtin_expect(x, 1))
-#define if_unlikely(x) if (__builtin_expect(x, 0))
-#else
-#define if_likely if
-#define if_unlikely if
-#endif
-
-#define check(x) do { if_unlikely (!x) return false; } while (0);
-

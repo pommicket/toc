@@ -1,18 +1,14 @@
 #include "std/io.toc";
-
-foo ::= fn() int {
-	puts("Hello");
-	3
-}
-
-bar ::= fn() (int, int) {
-	foo(), foo()
+c_add ::= fn(x:int, y:int) int {
+	#C("x+y")
 }
 
 main ::= fn() {
-	_ := 5;
-	_ := 6+_;
-	_ := foo();
-	_,_ := bar();
-	_,_ := bar();
+	xs : [5]int;
+	for x, i := &xs {
+		*x = c_add(i*i, i*i*i);
+	}
+	for x := xs {
+		puti(x);
+	}
 }
