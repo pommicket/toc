@@ -130,9 +130,9 @@ static Location token_location(File *file, Token *t);
 #include "tokenizer.c"
 #include "parse.c"
 #include "foreign.c"
-#include "eval.c"
 #include "infer.c"
 #include "types.c"
+#include "eval.c"
 static void cgen_decls_file(CGenerator *g, ParsedFile *f);
 static void cgen_sdecls_file(CGenerator *g, ParsedFile *f);
 #include "cgen.c"

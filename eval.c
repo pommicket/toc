@@ -4,11 +4,7 @@
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
 
-static Status types_block(Typer *tr, Block *b);
-static Status types_decl(Typer *tr, Declaration *d);
-static Status type_resolve(Typer *tr, Type *t, Location where);
 static Status eval_block(Evaluator *ev, Block *b, Value *v);
-static Status eval_expr(Evaluator *ev, Expression *e, Value *v);
 static Status eval_address_of(Evaluator *ev, Expression *e, void **ptr);
 static Value get_builtin_val(BuiltinVal val);
 

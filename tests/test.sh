@@ -2,6 +2,7 @@
 
 tests='bf
 control_flow
+types
 defer
 sizeof
 new

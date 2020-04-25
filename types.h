@@ -58,6 +58,19 @@ typedef uint64_t U64;
 #define U32_FMT "%" PRIu32
 #define U64_FMT "%" PRIu64
 
+typedef int8_t I8;
+#define I8_MAX INT8_MAX
+typedef int16_t I16;
+#define I16_MAX INT16_MAX
+typedef int32_t I32;
+#define I32_MAX INT32_MAX
+typedef int64_t I64;
+#define I64_MAX INT64_MAX
+#define I8_FMT "%" PRId8
+#define I16_FMT "%" PRId16
+#define I32_FMT "%" PRId32
+#define I64_FMT "%" PRId64
+
 #if __STDC_VERSION__ >= 199901
 #include <stdbool.h>
 #elif defined __cplusplus
@@ -74,19 +87,6 @@ typedef U8 bool;
 #endif
 
 #define Status bool WarnUnusedResult
-
-typedef int8_t I8;
-#define I8_MAX INT8_MAX
-typedef int16_t I16;
-#define I16_MAX INT16_MAX
-typedef int32_t I32;
-#define I32_MAX INT32_MAX
-typedef int64_t I64;
-#define I64_MAX INT64_MAX
-#define I8_FMT "%" PRId8
-#define I16_FMT "%" PRId16
-#define I32_FMT "%" PRId32
-#define I64_FMT "%" PRId64
 
 /* NOTE: if you change these, make sure you change hash_tables.c */
 typedef float F32;
@@ -500,16 +500,17 @@ typedef Block *BlockPtr;
 
 enum {
 	STRUCT_DEF_FOUND_OFFSETS = 0x01,
-	STRUCT_DEF_FINDING_OFFSETS = 0x02,
-	STRUCT_DEF_CGEN_DECLARED = 0x04,
-	STRUCT_DEF_CGEN_DEFINED = 0x08,
-	STRUCT_DEF_RESOLVED = 0x10
+	STRUCT_DEF_CGEN_DECLARED = 0x02,
+	STRUCT_DEF_CGEN_DEFINED = 0x04,
+	STRUCT_DEF_RESOLVED = 0x08,
+	STRUCT_DEF_RESOLVING = 0x10	
 };
+typedef U8 StructFlags;
 typedef struct StructDef {
 	/* these two only exist after resolving (before then, it's scope.stmts) */
 	Field *fields;
 	Location where;
-	U8 flags;
+	StructFlags flags;
 	/* 
 		use this instead of fields when looking up a field, because it will include "use"d things.
 		this only consists of statements which are declarations after typing (and not #ifs,

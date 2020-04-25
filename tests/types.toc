@@ -1,5 +1,5 @@
-#include "std/io.toc", io;
-#include "std/mem.toc";
+#include "io.toc", io;
+#include "mem.toc";
 
 
 main ::= fn() {

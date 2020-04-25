@@ -4,8 +4,17 @@
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
 static Status types_stmt(Typer *tr, Statement *s);
+static Status types_block(Typer *tr, Block *b);
+static Status types_decl(Typer *tr, Declaration *d);
 static Status type_resolve(Typer *tr, Type *t, Location where);
-
+static Status eval_expr(Evaluator *ev, Expression *e, Value *v);
+static void val_cast(Value *vin, Type *from, Value *vout, Type *to);
+static U64 val_to_u64(Value v, BuiltinType v_type);
+static I64 val_to_i64(Value v, BuiltinType v_type);
+static bool val_truthiness(Value v, Type *t);
+static Value val_zero(Type *t); 
+static Status eval_stmt(Evaluator *ev, Statement *stmt); 
+static Status struct_resolve(Typer *tr, StructDef *s);
 
 static inline Identifiers *typer_get_idents(Typer *tr) {
 	return tr->block == NULL ? tr->globals : &tr->block->idents;
@@ -140,64 +149,6 @@ static Status add_block_to_struct(Typer *tr, Block *b, StructDef *s, Statement *
 	return true;
 }
 
-static Status struct_resolve(Typer *tr, StructDef *s) {
-	if (!(s->flags & STRUCT_DEF_RESOLVED)) {
-		{ /* resolving stuff */
-			if (!types_block(tr, &s->body))
-				return false;
-			s->fields = NULL;
-			Statement *new_stmts = NULL;
-			if (!add_block_to_struct(tr, &s->body, s, &new_stmts))
-				return false;
-			s->body.stmts = new_stmts;
-			/* set the field of each declaration, so that we can lookup struct members quickly */
-			Field *field = s->fields;
-			arr_foreach(new_stmts, Statement, stmt) {
-				assert(stmt->kind == STMT_DECL);
-				Declaration *decl = stmt->decl;
-				if (!(decl->flags & DECL_IS_CONST)) {
-					assert(!(decl->flags & DECL_HAS_EXPR));
-					decl->field = field;
-					field += arr_len(decl->idents);
-				}
-			}
-			s->instance_id = 0;
-		}
-		/* find offsets and size */
-		/* assume the align of a struct is the greatest align out of its children's */
-		{
-			if (s->flags & STRUCT_DEF_FINDING_OFFSETS) {
-				err_print(s->where, "Circular dependency in struct!");
-				return false;
-			}
-			s->flags |= STRUCT_DEF_FINDING_OFFSETS;
-			size_t bytes = 0;
-			size_t total_align = 1;
-			arr_foreach(s->fields, Field, f) {
-				size_t size = compiler_sizeof(f->type);
-				if (size == SIZE_MAX) {
-					info_print(f->where, "... while descending into this field of a struct.");
-					return false;
-				}
-				size_t falign = compiler_alignof(f->type);
-				if (falign > total_align)
-					total_align = falign;
-				/* align */
-				bytes += ((falign - bytes) % falign + falign) % falign; /* = -bytes mod falign */
-				assert(bytes % falign == 0);
-				f->offset = bytes;
-				/* add size */
-				bytes += size;
-			}
-			bytes += ((total_align - bytes) % total_align + total_align) % total_align; /* = -bytes mod align */
-			s->size = bytes;
-			s->align = total_align;
-		}
-		s->flags |= STRUCT_DEF_RESOLVED;
-	}
-	return true;
-}
-
 static size_t compiler_alignof(Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
@@ -246,6 +197,11 @@ static size_t compiler_sizeof(Type *t) {
 	case TYPE_SLICE:
 		return sizeof v.slice;
 	case TYPE_STRUCT: {
+		/* these two ifs are purely for struct_resolve, so that it can detect use of future structs in a non-pointery way */
+		if (t->struc->flags & STRUCT_DEF_RESOLVING)
+			return SIZE_MAX-1;
+		if (!(t->struc->flags & STRUCT_DEF_RESOLVED))
+			return SIZE_MAX;
 		return t->struc->size;
 	} break;
 	case TYPE_VOID:
@@ -256,6 +212,65 @@ static size_t compiler_sizeof(Type *t) {
 	}
 	assert(0);
 	return 0;
+}
+
+static Status struct_resolve(Typer *tr, StructDef *s) {
+	if (!(s->flags & STRUCT_DEF_RESOLVED)) {
+		s->flags |= STRUCT_DEF_RESOLVING;
+		{ /* resolving stuff */
+			if (!types_block(tr, &s->body))
+				return false;
+			s->fields = NULL;
+			Statement *new_stmts = NULL;
+			if (!add_block_to_struct(tr, &s->body, s, &new_stmts))
+				return false;
+			s->body.stmts = new_stmts;
+			/* set the field of each declaration, so that we can lookup struct members quickly */
+			Field *field = s->fields;
+			arr_foreach(new_stmts, Statement, stmt) {
+				assert(stmt->kind == STMT_DECL);
+				Declaration *decl = stmt->decl;
+				if (!(decl->flags & DECL_IS_CONST)) {
+					assert(!(decl->flags & DECL_HAS_EXPR));
+					decl->field = field;
+					field += arr_len(decl->idents);
+				}
+			}
+			s->instance_id = 0;
+		}
+		/* find offsets and size */
+		/* assume the align of a struct is the greatest align out of its children's */
+		{
+			size_t bytes = 0;
+			size_t total_align = 1;
+			arr_foreach(s->fields, Field, f) {
+				size_t size = compiler_sizeof(f->type);
+				if (size == SIZE_MAX) {
+					err_print(f->where, "Use of type that hasn't been declared yet (but not as a pointer/slice).\n"
+						"Either make this field a pointer or put the declaration of its type before this struct.");
+					return false;
+				} else if (size == SIZE_MAX-1) {
+					err_print(f->where, "Circular dependency in structs! You will need to make this member a pointer.");
+					return false;
+				}
+				size_t falign = compiler_alignof(f->type);
+				if (falign > total_align)
+					total_align = falign;
+				/* align */
+				bytes += ((falign - bytes) % falign + falign) % falign; /* = -bytes mod falign */
+				assert(bytes % falign == 0);
+				f->offset = bytes;
+				/* add size */
+				bytes += size;
+			}
+			bytes += ((total_align - bytes) % total_align + total_align) % total_align; /* = -bytes mod align */
+			s->size = bytes;
+			s->align = total_align;
+		}
+		s->flags &= (StructFlags)~(StructFlags)STRUCT_DEF_RESOLVING;
+		s->flags |= STRUCT_DEF_RESOLVED;
+	}
+	return true;
 }
 
 
@@ -2000,7 +2015,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 					} else {
 						char *s = cstr(i_str, i_len);
 						err_print(e->where, "Conflicting declarations for identifier %s.", s);
-						free(s);
 						char *also = "";
 						if (previous_use_which_uses_i) {
 							/* i was use'd twice */
@@ -2010,6 +2024,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 							/* i was declared then used. */
 							info_print(ident_decl_location(translated), "%s was declared here.", s);
 						}
+						free(s);
 						info_print(use->expr.where, "...and %simported by this use statement.", also);
 						return false;
 					}
