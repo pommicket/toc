@@ -1,43 +1,50 @@
-#include "mem.toc";
+#include "std/mem.toc";
+
 
 readfile ::= fn(filename: []char) []char {
 #C("extern void *fopen(char *name, char const *mode); extern char *fgets(char *buf, size_t sz, void *f);");
-		 fp : &u8 = #C("fopen(&(((char *)filename.data)[0]), \"r\")");
-		 contents := news(char, 1);
-		 contents_sz : int;
-		 contents_len : int;
-		 buffer : [1024]char;
-		 while #C("fgets(buffer, 1024, fp)") {
-		 	   buffer_len : int;
-			   while buffer[buffer_len] {
-			   		 buffer_len = buffer_len + 1;
-			   }
-			   if contents_sz < contents_len + buffer_len {
-			   	  old_contents := contents;
-				  contents_sz = 2*contents_sz + 1024;
-			   	  contents = news(char, contents_sz);
-				  i := 0;
-				  while i < contents_len {
-				  		contents[i] = old_contents[i];
-				  		i = i + 1;
-				  }
-				  dels(old_contents);
-			   }
-			   i := 0;
-			   while i < buffer_len {
-			   		 contents[contents_len] = buffer[i];
-					 contents_len = contents_len + 1;
-					 i = i + 1;
-			   }
-		 }
-		 contents[contents_len] = 0 as char;
-		 contents
+#C("
+extern int printf(const char *fmt, ...);
+extern void exit(int);
+");
+	fp : &u8 = #C("(u8 *)fopen(&(((char *)filename.data)[0]), \"r\")");
+	if !fp {
+		#C("printf(\"Couldn't open file\\n\"); exit(-1);");
+	}
+	contents := news(char, 1);
+	contents_sz : int;
+	contents_len : int;
+	buffer : [1024]char;
+	while #C("fgets(buffer, 1024, fp)") {
+	      buffer_len : int;
+	      while buffer[buffer_len] {
+	   		 buffer_len = buffer_len + 1;
+	      }
+	      if contents_sz < contents_len + buffer_len {
+	   	  old_contents := contents;
+	   	  contents_sz = 2*contents_sz + 1024;
+	   	  contents = news(char, contents_sz);
+	   	  i := 0;
+	   	  while i < contents_len {
+	   			contents[i] = old_contents[i];
+	   			i = i + 1;
+	   	  }
+	   	  dels(old_contents);
+	      }
+	      i := 0;
+	      while i < buffer_len {
+	   		 contents[contents_len] = buffer[i];
+	   		 contents_len = contents_len + 1;
+	   		 i = i + 1;
+	      }
+	}
+	contents[contents_len] = 0 as char;
+	contents
 };
 
 puti ::= fn(x: int) {
-	 #C("#ifndef __TINYC__
+	 #C("
 extern int printf(const char *fmt, ...);
-#endif
 ");
 	 #C("printf(\"%ld\\n\", x);");
 };

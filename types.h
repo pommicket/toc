@@ -483,6 +483,7 @@ typedef enum {
 
 typedef U8 BlockFlags;
 typedef struct Block {
+	/* NOTE: make sure you check copy.c when you add something to this */
 	BlockFlags flags;
 	BlockKind kind;
 	struct {
@@ -510,7 +511,6 @@ typedef struct StructDef {
 	/* these two only exist after resolving (before then, it's scope.stmts) */
 	Field *fields;
 	Location where;
-	StructFlags flags;
 	/* 
 		use this instead of fields when looking up a field, because it will include "use"d things.
 		this only consists of statements which are declarations after typing (and not #ifs,
@@ -531,6 +531,7 @@ typedef struct StructDef {
 		/* if name is NULL, use this */
 		IdentID id;
 	} c;
+	StructFlags flags;
 } StructDef;
 
 
@@ -624,17 +625,6 @@ typedef struct WhileExpr {
 	Block body;
 } WhileExpr;
 
-
-enum {
-	FOR_IS_RANGE = 0x01
-};
-
-
-enum {
-	FN_EXPR_FOREIGN = 0x01,
-	FN_EXPR_EXPORT = 0x02, /* set by sdecls_cgen.c */
-	FN_EXPR_HAS_VARARGS = 0x04
-};
 
 typedef enum {
 	CTYPE_NONE = 0x00,
@@ -883,6 +873,14 @@ typedef struct Declaration {
 } Declaration;
 typedef Declaration *DeclarationPtr;
 
+enum {
+	FOR_IS_RANGE = 0x01
+};
+enum {
+	FN_EXPR_FOREIGN = 0x01,
+	FN_EXPR_EXPORT = 0x02, /* set by sdecls_cgen.c */
+	FN_EXPR_HAS_VARARGS = 0x04
+};
 typedef struct ForExpr {
 	U8 flags;
 	Declaration header;

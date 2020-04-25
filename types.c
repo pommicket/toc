@@ -548,7 +548,6 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	bool entered_fn = false;
 	size_t param_idx;
 	FnExpr *prev_fn = tr->fn;
-	FnExpr fn_copy = {0};
 
 	Declaration *last_param = arr_last_ptr(f->params);
 	bool has_varargs = last_param && (last_param->flags & DECL_ANNOTATES_TYPE) && type_is_builtin(&last_param->type, BUILTIN_VARARGS);
@@ -556,11 +555,6 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 		f->flags |= FN_EXPR_HAS_VARARGS;
 	/* f has compile time params/varargs, but it's not an instance! */
 	bool generic = !(flags & TYPE_OF_FN_IS_INSTANCE) && (fn_has_any_const_params(f) || has_varargs);
-	if (generic) {
-		Copier cop = copier_create(tr->allocr, &f->body);
-		copy_fn_expr(&cop, &fn_copy, f, COPY_FN_EXPR_DONT_COPY_BODY);
-		f = &fn_copy;
-	}
 	size_t idx = 0;
 	bool has_constant_params = false;
 	/* reserve space for return type */
@@ -2231,6 +2225,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				Copier cop = copier_create(tr->allocr, base->struc->body.parent);
 				HashTable *table = &base->struc->instances;
 				StructDef struc;
+				/* @OPTIM: don't copy struct body */
 				copy_struct(&cop, &struc, base->struc);
 
 				size_t nparams = 0;
@@ -2391,7 +2386,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 								/* param->expr hasn't been typed or evaluated, because we passed type_of_fn a "generic" function */
 								/* we actually need to make a copy of this, so that copy_fn_expr still works later */
 								Expression default_arg;
-								Copier cop = copier_create(tr->allocr, tr->block);
+								Copier cop = copier_create(tr->allocr, &fn_decl->body);
 								copy_expr(&cop, &default_arg, &param->expr);
 								if (!types_expr(tr, &default_arg))
 									return false;
@@ -2496,7 +2491,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 			original_fn = fn;
 			fn_copy = typer_malloc(tr, sizeof *fn_copy);
 			Copier cop = copier_create(tr->allocr, fn->body.parent);
-			copy_fn_expr(&cop, fn_copy, fn, 0);
+			copy_fn_expr(&cop, fn_copy, fn, COPY_FN_EXPR_DONT_COPY_BODY);
 
 			if (has_varargs) {
 				/* set value of varargs param decl */
@@ -2749,6 +2744,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 				arr_cleara(table_index_type.tuple, tr->allocr);
 				arr_cleara(table_index.tuple, tr->allocr);
 			} else {
+				Copier cop = copier_create(tr->allocr, fn_copy->body.parent);
+				copy_block(&cop, &fn_copy->body, &original_fn->body, COPY_BLOCK_DONT_CREATE_IDENTS);
 				c->instance->fn = fn_copy;
 				/* fix parameter and return types (they were kind of problematic before, because we didn't know about the instance) */
 				fn_copy->instance_id = 1+original_fn->instances->n; /* let's help cgen out and assign a non-zero ID to this */

@@ -1,4 +1,4 @@
-#include "io.toc", io;
+#include "std/io.toc", io;
 
 main ::= fn() {
 	x ::= 3;

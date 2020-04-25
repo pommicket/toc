@@ -1,48 +1,27 @@
+#include "std/mem.toc", mem;
 #include "std/io.toc", io;
-#include "std/mem.toc";
 
+calculation ::= fn() int {
+	total := 0;
+	i := mem.new(int);
+	*i = 3;
+	ns := mem.news(int, 10);
+	for n, i := &ns {
+		if i % 2 == 0 {
+			*n = i;
+		}
+	}
+	for n := ns {
+		total += n;
+	}
+	total += *i;
+	mem.del(i);
+	mem.dels(ns);
+	total
+}
 
 main ::= fn() {
-	nums := news(int, 10);
-	for x, i := &nums {
-		*x = i*i;
-	}
-	l := slice_to_ll(nums);
-	p := &l;
-	while p {
-		io.puti(p.head);
-		p = p.tail;
-	}
-	f: Foo;
-	f.k = -173;
-	f.b = new(Bar);
-	f.b.f.b = new(Bar);
-	f.b.f.b.f.k = 9;
-	io.puti(f.k);
-	io.puti(f.b.f.k);
-	io.puti(f.b.f.b.f.k);
-}
-
-slice_to_ll ::= fn(t::=, slice: []t) use ll: LinkedList(t) {
-	head = slice[0];
-	if slice.len == 1 {
-		tail = 0 as &LinkedList(t);
-	} else {
-		tail = new(LinkedList(t));
-		*tail = slice_to_ll(slice[1:]);
-	}
-}
-
-LinkedList ::= struct (of :: Type) {
-	head: of;
-	tail: &LinkedList(of);
-}
-
-Foo ::= struct {
-	k: int;
-	b: &Bar;
-}
-
-Bar ::= struct {
-	f: Foo;
+	 io.puti(calculation());
+	 x ::= calculation();
+	 io.puti(x);
 }

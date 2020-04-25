@@ -1,4 +1,4 @@
-#include "mem.toc";
+#include "std/mem.toc";
 puti ::= fn(x: int) {
 #C("#ifndef __TINYC__
 extern int printf(const char *fmt, ...);

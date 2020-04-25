@@ -184,14 +184,12 @@ static inline void *copier_malloc(Copier *c, size_t n) {
 }
 
 enum {
-	  COPY_FN_EXPR_DONT_COPY_HEADER = 0x01,
-	  COPY_FN_EXPR_DONT_COPY_BODY = 0x02
+	  COPY_FN_EXPR_DONT_COPY_BODY = 0x01
 };
 
 static void copy_fn_expr(Copier *c, FnExpr *fout, FnExpr *fin, U8 flags) {
 	*fout = *fin;
 	bool copy_body = (flags & COPY_FN_EXPR_DONT_COPY_BODY) == 0;
-	bool copy_header = (flags & COPY_FN_EXPR_DONT_COPY_HEADER) == 0;
 	
 	if (fin->flags & FN_EXPR_FOREIGN) {
 		copy_expr(c, fout->foreign.name_expr = copier_malloc(c, sizeof *fin->foreign.name_expr), fin->foreign.name_expr);
@@ -202,29 +200,25 @@ static void copy_fn_expr(Copier *c, FnExpr *fout, FnExpr *fin, U8 flags) {
 		memcpy(fout->foreign.ctypes, fin->foreign.ctypes, nctypes * sizeof(CType));
 	} else {
 		Block *prev = c->block;
-		if (copy_body) {
-			c->block = &fout->body;
-			idents_create(&fout->body.idents, c->allocr, &fout->body);
+		c->block = &fout->body;
+		idents_create(&fout->body.idents, c->allocr, &fout->body);
+		size_t i;
+		size_t nparam_decls = arr_len(fin->params);
+		fout->params = NULL;
+		arr_set_lena(fout->params, nparam_decls, c->allocr);
+		for (i = 0; i < nparam_decls; ++i)
+			copy_decl(c, fout->params + i, fin->params + i);
+		size_t nret_decls = arr_len(fin->ret_decls);
+		if (fin->ret_decls) {
+			fout->ret_decls = NULL;
+			arr_set_lena(fout->ret_decls, nret_decls, c->allocr);
+			for (i = 0; i < nret_decls; ++i)
+				copy_decl(c, fout->ret_decls + i, fin->ret_decls + i);
 		}
-		if (copy_header) {
-			size_t i;
-			size_t nparam_decls = arr_len(fin->params);
-			fout->params = NULL;
-			arr_set_lena(fout->params, nparam_decls, c->allocr);
-			for (i = 0; i < nparam_decls; ++i)
-				copy_decl(c, fout->params + i, fin->params + i);
-			size_t nret_decls = arr_len(fin->ret_decls);
-			if (fin->ret_decls) {
-				fout->ret_decls = NULL;
-				arr_set_lena(fout->ret_decls, nret_decls, c->allocr);
-				for (i = 0; i < nret_decls; ++i)
-					copy_decl(c, fout->ret_decls + i, fin->ret_decls + i);
-			}
-			copy_type(c, &fout->ret_type, &fin->ret_type);
-		}
+		copy_type(c, &fout->ret_type, &fin->ret_type);
 		c->block = prev;
 		if (copy_body) {
-			copy_block(c, &fout->body, &fin->body, copy_body ? COPY_BLOCK_DONT_CREATE_IDENTS : 0);
+			copy_block(c, &fout->body, &fin->body, COPY_BLOCK_DONT_CREATE_IDENTS);
 		}
 	}
 }
@@ -377,7 +371,6 @@ static void copy_decl(Copier *c, Declaration *out, Declaration *in) {
 		out->idents[i] = in->idents[i];
 		assert(c->block);
 		copier_ident_translate(c, &out->idents[i]);
-		
 		out->idents[i]->decl = out;
 	}
 	
@@ -430,14 +423,13 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 	}
 }
 
-/* COPY_BLOCK_DONT_CREATE_IDENTS is for copy_fn_expr */
+/* COPY_BLOCK_DONT_CREATE_IDENTS is for copy_fn_expr, etc. */
 static void copy_block(Copier *c, Block *out, Block *in, U8 flags) {
 	assert(!(in->flags & BLOCK_FINDING_TYPES));
-	Identifiers out_idents = out->idents;
-	*out = *in;
+	out->flags = in->flags;
+	out->kind = in->kind;
 	out->parent = c->block;
-	if (flags & COPY_BLOCK_DONT_CREATE_IDENTS)
-		out->idents = out_idents; /* reset Identifiers */
+	out->where = in->where;
 	size_t nstmts = arr_len(in->stmts);
 	out->stmts = NULL;
 	Block *prev = c->block;

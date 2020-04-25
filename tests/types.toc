@@ -1,6 +1,5 @@
-#include "io.toc", io;
-#include "mem.toc";
-
+#include "std/io.toc", io;
+#include "std/mem.toc";
 
 main ::= fn() {
 	nums := news(int, 10);

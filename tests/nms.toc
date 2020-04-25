@@ -1,5 +1,5 @@
 io ::= nms {
-	#include "io.toc";
+	#include "std/io.toc";
 };
 
 n ::= nms {

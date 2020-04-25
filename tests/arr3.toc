@@ -1,5 +1,5 @@
-#include "io.toc";
-#include "mem.toc";
+#include "std/io.toc";
+#include "std/mem.toc";
 
 
 arr_add ::= fn(t ::=, a : &Arr(t), x : t) {

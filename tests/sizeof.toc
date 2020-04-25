@@ -1,4 +1,4 @@
-#include "io.toc", io;
+#include "std/io.toc", io;
 
 Point3D ::= struct {
 	x, y, z: f32;

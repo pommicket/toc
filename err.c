@@ -172,15 +172,14 @@ static void warn_print_header_(Location where) {
 	err_print_line_file(where);
 }
 
-
+static void info_print(Location where, const char *fmt, ...);
 static void err_print_footer_(Location where, bool show_ctx_stack) {
 	ErrCtx *ctx = where.file->ctx;
 	err_fprint(ctx, "\n\t");
 	print_location_highlight(err_ctx_file(ctx), where);
 	if (ctx && show_ctx_stack) {
 		arr_foreach(ctx->instance_stack, Location, inst) {
-			err_fprint(ctx, "While generating this instance of a function or struct:\n\t");
-			print_location_highlight(err_ctx_file(ctx), *inst);
+			info_print(*inst, "While generating this instance of a function or struct:");
 		}
 	}
 }
