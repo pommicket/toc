@@ -257,6 +257,12 @@ static inline void cgen_writeln(CGenerator *g, const char *fmt, ...) {
 	cgen_nl(g);
 }
 
+static inline void cgen_char(CGenerator *g, char c) {
+	if (isprint(c) && c != '"')
+		cgen_write(g, "%c", c);
+	else
+		cgen_write(g, "\\x%02x", c);
+}
 /* should this declaration be a direct function declaration C? (as opposed to using a function pointer or not being a function) */
 static bool cgen_fn_is_direct(CGenerator *g, Declaration *d) {
 	return (!g->block || g->block->kind == BLOCK_NMS) && (d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_FN && arr_len(d->idents) == 1;
@@ -509,16 +515,25 @@ static void cgen_val_ptr_pre(CGenerator *g, void *v, Type *t) {
 		for (I64 i = 0; i < s->len; ++i) {
 			cgen_val_ptr_pre(g, (char *)s->data + (U64)i * compiler_sizeof(t->slice), t->slice);
 		}
+		cgen_write(g, "static ");
 		cgen_type_pre(g, t->slice);
 		cgen_write(g, "(d%p_[])", v); /* @TODO: improve this somehow? */
 		cgen_type_post(g, t->slice);
-		cgen_write(g, " = {");
-		for (I64 i = 0; i < s->len; ++i) {
-			if (i) cgen_write(g, ", ");
-			cgen_val_ptr(g, (char *)s->data + (U64)i * compiler_sizeof(t->slice), t->slice);
+		cgen_write(g, " = ");
+		if (type_is_builtin(t->slice, BUILTIN_CHAR)) {
+			char *p = s->data;
+			cgen_write(g, "\"");
+			for (I64 i = 0; i < s->len; ++i, ++p)
+				cgen_char(g, *p);
+			cgen_writeln(g, "\";");
+		} else {
+			cgen_write(g, "{");
+			for (I64 i = 0; i < s->len; ++i) {
+				if (i) cgen_write(g, ", ");
+				cgen_val_ptr(g, (char *)s->data + (U64)i * compiler_sizeof(t->slice), t->slice);
+			}
+			cgen_writeln(g, "};");
 		}
-		cgen_write(g, "};");
-		cgen_nl(g);
 	} break;
 	case TYPE_ARR:
 		for (size_t i = 0; i < t->arr.n; ++i) {
@@ -588,7 +603,11 @@ static void cgen_val_ptr(CGenerator *g, void *v, Type *t) {
 		case BUILTIN_U64: cgen_write(g, U64_FMT, *(U64 *)v); break;
 		case BUILTIN_F32: cgen_write(g, F32_FMT "f", *(F32 *)v); break;
 		case BUILTIN_F64: cgen_write(g, F64_FMT, *(F64 *)v); break;
-		case BUILTIN_CHAR: cgen_write(g, "'\\x%02x'", *(char *)v); break;
+		case BUILTIN_CHAR: 
+			cgen_write(g, "'");
+			cgen_char(g, *(char *)v);
+			cgen_write(g, "'");
+			break;
 		case BUILTIN_BOOL: cgen_write(g, "%s", *(bool *)v ? "true" : "false"); break;
 		case BUILTIN_TYPE:
 		case BUILTIN_NMS:
@@ -1222,10 +1241,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		char *p = e->strl.str;
 		cgen_write(g, "mkslice_(\"");
 		for (size_t i = 0; i < e->strl.len; ++i, ++p) {
-			if (isprint(*p) && *p != '"')
-				cgen_write(g, "%c", *p);
-			else
-				cgen_write(g, "\\x%02x", *p);
+			cgen_char(g, *p);
 		}
 		cgen_write(g, "\", %lu)", (unsigned long)e->strl.len);
 	} break;

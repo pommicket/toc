@@ -1,37 +1,23 @@
-//#include "std/io.toc";
-
 #include "std/io.toc";
-c_add ::= fn(x:int, y:int) int {
-	#C("x+y")
+#include "std/mem.toc";
+
+generate_numbers ::= fn() []int {
+	nums := news(int, 10);
+	for n, i := &nums {
+		*n = i*i;
+	}
+	nums
 }
 
+hw := "hello, world!";
+nums := generate_numbers();
+
 main ::= fn() {
-	{
-	xs : [5]Point;
-	for use x, i := &xs {
-		z = c_add(i*i, i*i*i) as f32;
+	hw[0] = 'j';
+	nums[5] = 183;
+	puts(hw);
+	for x := nums {
+		puti(x);
 	}
-	for use x := xs {
-		puti(z as int);
-	}
-	Point ::= struct {
-		x: int;
-		y: int;
-		z: f32;
-	}
-	}
-	{
-	xs : [5]Point;
-	for use x, i := &xs {
-		z = c_add(i*i, i*i*i) as f32;
-	}
-	for use x := xs {
-		puti(z as int);
-	}
-	Point ::= struct {
-		x: int;
-		y: int;
-		z: f32;
-	}
-	}
+	
 }

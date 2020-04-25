@@ -345,16 +345,20 @@ static void cgen_decls_decl(CGenerator *g, Declaration *d) {
 			for (int i = 0, n_idents = (int)arr_len(d->idents); i < n_idents; ++i) {
 				Identifier ident = d->idents[i];
 				Type *type = decl_type_at_index(d, i);
+				Value *val = NULL;
+				if (d->flags & DECL_HAS_EXPR)
+					assert(d->flags & DECL_FOUND_VAL);
+				if (d->flags & DECL_FOUND_VAL)
+					val = decl_val_at_index(d, i);
 				if (!type_is_compileonly(type)) {
+					if (val) cgen_val_pre(g, val, type);
 					if (!(d->flags & DECL_EXPORT))
 						cgen_write(g, "static ");
 					cgen_type_pre(g, type);
 					cgen_write(g, " ");
 					cgen_ident(g, ident);
 					cgen_type_post(g, type);
-					if (d->flags & DECL_HAS_EXPR) {
-						assert(d->flags & DECL_FOUND_VAL);
-						Value *val = decl_val_at_index(d, i);
+					if (val) {
 						cgen_write(g, " = ");
 						cgen_val(g, val, type);
 					} else {
