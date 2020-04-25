@@ -1037,6 +1037,11 @@ typedef struct Typer {
 	Namespace *nms;
 	StrHashTable included_files; /* maps to IncludedFile */
 	File *file;
+	/* 
+		have we had an error because we couldn't find a file that was #include'd 
+		(so that we can stop compiling immediately)
+	*/
+	bool had_include_err; 
 } Typer;
 
 typedef struct CGenerator {

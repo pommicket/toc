@@ -8,8 +8,6 @@
 
 /* 
 @TODO:
-allow `use ???;` if an error has already occurred
-if something gets included into a namespace, and its typing fails, the namespace should still be of type namespace, not ???
 make sure you can do a[i] where a is &[5]int or &[]char or something
 do we consistently handle x := &some_array_or_slice; x.len
 use

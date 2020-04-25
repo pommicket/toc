@@ -1,23 +1,6 @@
-#include "std/io.toc";
-#include "std/mem.toc";
-
-generate_numbers ::= fn() []int {
-	nums := news(int, 10);
-	for n, i := &nums {
-		*n = i*i;
-	}
-	nums
-}
-
-hw := "hello, world!";
-nums := generate_numbers();
+#include "std/io.toc", io;
+use io;
 
 main ::= fn() {
-	hw[0] = 'j';
-	nums[5] = 183;
-	puts(hw);
-	for x := nums {
-		puti(x);
-	}
-	
+	puts("hi");
 }

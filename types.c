@@ -1520,10 +1520,16 @@ static Status expr_must_usable_(Expression *e) {
 	return false;
 }
 
-static Status expr_must_usable(Expression *e) {
+static Status expr_must_usable(Typer *tr, Expression *e) {
 	Type *t = &e->type;
 	if (t->kind != TYPE_STRUCT && !type_is_builtin(t, BUILTIN_NMS)) {
 		if (!(t->kind == TYPE_PTR && t->ptr->kind == TYPE_STRUCT)) {
+			if (t->kind == TYPE_UNKNOWN) {
+				if (tr->err_ctx->have_errored) {
+					/* silently fail; this could've been because of an earlier error */
+					return false;
+				}
+			}
 			char *str = type_to_str(&e->type);
 			err_print(e->where, "You cannot use something of type %s (only Namespaces and structs).", str);
 			free(str);
@@ -1548,7 +1554,7 @@ static Status use_ident(Typer *tr, Identifier i, Type *t, Location where) {
 	used->type = *t;
 	used->ident = i;
 	used->where = where;
-	if (!expr_must_usable(used))
+	if (!expr_must_usable(tr, used))
 		return false;
 	return true;
 }
@@ -3289,6 +3295,10 @@ static Status types_block(Typer *tr, Block *b) {
 	arr_foreach(b->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {
 			success = false;
+			if (tr->had_include_err) {
+				/* stop immediately; prevent too many "undeclared identifier" errors */
+				break;
+			}
 			continue;
 		}
 		if (s->kind == STMT_EXPR && (s->flags & STMT_EXPR_NO_SEMICOLON)) {
@@ -3579,8 +3589,10 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			inc_f->main_nms = tr->nms;
 		}
 		char *contents = read_file_contents(tr->allocr, filename, s->where);
-		if (!contents)
+		if (!contents) {
+			tr->had_include_err = true;
 			return false;
+		}
 
 		Tokenizer tokr;
 		tokr_create(&tokr, tr->err_ctx, tr->allocr);
@@ -3662,7 +3674,7 @@ static Status types_stmt(Typer *tr, Statement *s) {
 		Expression *e = &u->expr;
 		if (!types_expr(tr, e))
 			return false;
-		if (!expr_must_usable(e)) {
+		if (!expr_must_usable(tr, e)) {
 			return false;
 		}
 		if (tr->block)
@@ -3684,6 +3696,7 @@ static void typer_create(Typer *tr, Evaluator *ev, File *file, ErrCtx *err_ctx, 
 	tr->file = file;
 	tr->err_ctx = err_ctx;
 	tr->in_decls = NULL;
+	tr->had_include_err = false;
 	tr->allocr = allocr;
 	tr->globals = idents;
 	typer_arr_add(tr, tr->blocks, NULL);
@@ -3696,6 +3709,10 @@ static Status types_file(Typer *tr, ParsedFile *f) {
 	tr->uses = NULL;
 	arr_foreach(f->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {
+			if (tr->had_include_err) {
+				/* stop immediately; prevent too many "undeclared identifier" errors */
+				return false;
+			}
 			ret = false;
 		}
 	}
