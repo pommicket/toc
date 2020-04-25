@@ -1,11 +1,6 @@
 #include "io.toc";
 #include "mem.toc";
 
-Arr ::= struct (t :: Type) {
-	data: []t;
-	len, cap: int;
-};
-
 
 arr_add ::= fn(t ::=, a : &Arr(t), x : t) {
 		if a.len >= a.cap {
@@ -33,14 +28,14 @@ square ::= fn(t ::=, x : t) t {
 };
 
 
-// ArrInt ::= Arr(int);
+ArrInt ::= Arr(int);
 
 inc ::= fn(t ::=, x : t) t {
 	x + 1
 };
 
 main ::= fn() {
-	 arr : Arr(int);
+	 arr : ArrInt;
 	 farr : Arr(float);
 	 for i := 1..100 {	
 	 	   arr_add(&arr, inc(square(i)));
@@ -52,4 +47,9 @@ main ::= fn() {
 	 for i := 0..farr.len - 1 {
 	 	  puti(farr.data[i] as int);
 	 }
+};
+
+Arr ::= struct (t :: Type) {
+	data: []t;
+	len, cap: int;
 };

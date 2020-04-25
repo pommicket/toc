@@ -75,37 +75,125 @@ static size_t compiler_alignof_builtin(BuiltinType b) {
 	return 0;
 }
 
-/* finds offsets and size */
-static Status struct_find_offsets(StructDef *s) {
-	/* assume the align of a struct is the greatest align out of its children's */
-	if (!(s->flags & STRUCT_DEF_FOUND_OFFSETS)) {
-		if (s->flags & STRUCT_DEF_FINDING_OFFSETS) {
-			err_print(s->where, "Circular dependency in struct!");
+/* new_stmts is what s->body.stmts will become after typing is done */
+static Status add_block_to_struct(Typer *tr, Block *b, StructDef *s, Statement **new_stmts) {
+	arr_foreach(b->stmts, Statement, stmt) {
+		if (stmt->kind == STMT_EXPR) {
+			if (stmt->expr->kind == EXPR_BLOCK) {
+				if (!add_block_to_struct(tr, stmt->expr->block, s, new_stmts))
+					return false;
+				continue;
+			}
+		}
+		if (stmt->kind != STMT_DECL) {
+			err_print(stmt->where, "structs can only contain declarations.");
 			return false;
 		}
-		s->flags |= STRUCT_DEF_FINDING_OFFSETS;
-		size_t bytes = 0;
-		size_t total_align = 1;
-		arr_foreach(s->fields, Field, f) {
-			size_t size = compiler_sizeof(f->type);
-			if (size == SIZE_MAX) {
-				info_print(f->where, "... while descending into this field of a struct.");
+		Declaration *d = stmt->decl;
+		DeclFlags flags = d->flags;
+		if (flags & DECL_EXPORT) {
+			err_print(d->where, "struct members can't be exported.");
+			return false;
+		}
+		if (flags & DECL_IS_CONST) {
+			if (flags & DECL_INFER) {
+				err_print(d->where, "struct members can't be inferred.");
 				return false;
 			}
-			size_t falign = compiler_alignof(f->type);
-			if (falign > total_align)
-				total_align = falign;
-			/* align */
-			bytes += ((falign - bytes) % falign + falign) % falign; /* = -bytes mod falign */
-			assert(bytes % falign == 0);
-			f->offset = bytes;
-			/* add size */
-			bytes += size;
+			typer_arr_add(tr, *new_stmts, *stmt);
+		} else {
+			if (flags & DECL_SEMI_CONST) {
+				err_print(d->where, "struct members can't be semi-constant.");
+				return false;
+			}
+			if (flags & DECL_HAS_EXPR) {
+				err_print(d->where, "Non-constant struct members can't have initializers.");
+				return false;
+			}
+			int i = 0;
+			arr_foreach(d->idents, Identifier, ident) {
+				Field *field = typer_arr_add_ptr(tr, s->fields);
+				field->where = d->where;
+				field->name = *ident;
+				field->type = decl_type_at_index(d, i);
+				++i;
+			}
+			
+			typer_arr_add(tr, *new_stmts, *stmt);
 		}
-		bytes += ((total_align - bytes) % total_align + total_align) % total_align; /* = -bytes mod align */
-		s->size = bytes;
-		s->align = total_align;
-		s->flags |= STRUCT_DEF_FOUND_OFFSETS;
+		if (b != &s->body) {
+			/* we need to translate d's identifiers to s's scope */
+			arr_foreach(d->idents, Identifier, ip) {
+				Identifier redeclared = ident_get(&s->body.idents, (*ip)->str);
+				if (redeclared) {
+					char *str = ident_to_str(*ip);
+					err_print(d->where, "Redeclaration of struct member %s", str);
+					info_print(ident_decl_location(redeclared), "Previous declaration was here.");
+					free(str);
+					return false;
+				}
+				*ip = ident_translate_forced(*ip, &s->body.idents);
+				(*ip)->decl = d;
+			}
+		}
+	}
+	return true;
+}
+
+static Status struct_resolve(Typer *tr, StructDef *s) {
+	if (!(s->flags & STRUCT_DEF_RESOLVED)) {
+		{ /* resolving stuff */
+			if (!types_block(tr, &s->body))
+				return false;
+			s->fields = NULL;
+			Statement *new_stmts = NULL;
+			if (!add_block_to_struct(tr, &s->body, s, &new_stmts))
+				return false;
+			s->body.stmts = new_stmts;
+			/* set the field of each declaration, so that we can lookup struct members quickly */
+			Field *field = s->fields;
+			arr_foreach(new_stmts, Statement, stmt) {
+				assert(stmt->kind == STMT_DECL);
+				Declaration *decl = stmt->decl;
+				if (!(decl->flags & DECL_IS_CONST)) {
+					assert(!(decl->flags & DECL_HAS_EXPR));
+					decl->field = field;
+					field += arr_len(decl->idents);
+				}
+			}
+			s->instance_id = 0;
+		}
+		/* find offsets and size */
+		/* assume the align of a struct is the greatest align out of its children's */
+		{
+			if (s->flags & STRUCT_DEF_FINDING_OFFSETS) {
+				err_print(s->where, "Circular dependency in struct!");
+				return false;
+			}
+			s->flags |= STRUCT_DEF_FINDING_OFFSETS;
+			size_t bytes = 0;
+			size_t total_align = 1;
+			arr_foreach(s->fields, Field, f) {
+				size_t size = compiler_sizeof(f->type);
+				if (size == SIZE_MAX) {
+					info_print(f->where, "... while descending into this field of a struct.");
+					return false;
+				}
+				size_t falign = compiler_alignof(f->type);
+				if (falign > total_align)
+					total_align = falign;
+				/* align */
+				bytes += ((falign - bytes) % falign + falign) % falign; /* = -bytes mod falign */
+				assert(bytes % falign == 0);
+				f->offset = bytes;
+				/* add size */
+				bytes += size;
+			}
+			bytes += ((total_align - bytes) % total_align + total_align) % total_align; /* = -bytes mod align */
+			s->size = bytes;
+			s->align = total_align;
+		}
+		s->flags |= STRUCT_DEF_RESOLVED;
 	}
 	return true;
 }
@@ -131,8 +219,6 @@ static size_t compiler_alignof(Type *t) {
 		else
 			return toc_alignof(size_t);
 	case TYPE_STRUCT:
-		if (!struct_find_offsets(t->struc))
-			return SIZE_MAX;
 		return t->struc->align;
 	case TYPE_UNKNOWN:
 	case TYPE_EXPR:
@@ -160,8 +246,6 @@ static size_t compiler_sizeof(Type *t) {
 	case TYPE_SLICE:
 		return sizeof v.slice;
 	case TYPE_STRUCT: {
-		if (!struct_find_offsets(t->struc))
-			return SIZE_MAX;
 		return t->struc->size;
 	} break;
 	case TYPE_VOID:
@@ -692,97 +776,6 @@ top:;
 	return true;
 }
 
-/* new_stmts is what s->body.stmts will become after typing is done */
-static Status add_block_to_struct(Typer *tr, Block *b, StructDef *s, Statement **new_stmts) {
-	arr_foreach(b->stmts, Statement, stmt) {
-		if (stmt->kind == STMT_EXPR) {
-			if (stmt->expr->kind == EXPR_BLOCK) {
-				if (!add_block_to_struct(tr, stmt->expr->block, s, new_stmts))
-					return false;
-				continue;
-			}
-		}
-		if (stmt->kind != STMT_DECL) {
-			err_print(stmt->where, "structs can only contain declarations.");
-			return false;
-		}
-		Declaration *d = stmt->decl;
-		DeclFlags flags = d->flags;
-		if (flags & DECL_EXPORT) {
-			err_print(d->where, "struct members can't be exported.");
-			return false;
-		}
-		if (flags & DECL_IS_CONST) {
-			if (flags & DECL_INFER) {
-				err_print(d->where, "struct members can't be inferred.");
-				return false;
-			}
-			typer_arr_add(tr, *new_stmts, *stmt);
-		} else {
-			if (flags & DECL_SEMI_CONST) {
-				err_print(d->where, "struct members can't be semi-constant.");
-				return false;
-			}
-			if (flags & DECL_HAS_EXPR) {
-				err_print(d->where, "Non-constant struct members can't have initializers.");
-				return false;
-			}
-			int i = 0;
-			arr_foreach(d->idents, Identifier, ident) {
-				Field *field = typer_arr_add_ptr(tr, s->fields);
-				field->where = d->where;
-				field->name = *ident;
-				field->type = decl_type_at_index(d, i);
-				++i;
-			}
-			
-			typer_arr_add(tr, *new_stmts, *stmt);
-		}
-		if (b != &s->body) {
-			/* we need to translate d's identifiers to s's scope */
-			arr_foreach(d->idents, Identifier, ip) {
-				Identifier redeclared = ident_get(&s->body.idents, (*ip)->str);
-				if (redeclared) {
-					char *str = ident_to_str(*ip);
-					err_print(d->where, "Redeclaration of struct member %s", str);
-					info_print(ident_decl_location(redeclared), "Previous declaration was here.");
-					free(str);
-					return false;
-				}
-				*ip = ident_translate_forced(*ip, &s->body.idents);
-				(*ip)->decl = d;
-			}
-		}
-	}
-	return true;
-}
-
-static Status struct_resolve(Typer *tr, StructDef *s) {
-	if (!(s->flags & STRUCT_DEF_RESOLVED)) {
-		if (!types_block(tr, &s->body))
-			return false;
-		s->fields = NULL;
-		Statement *new_stmts = NULL;
-		if (!add_block_to_struct(tr, &s->body, s, &new_stmts))
-			return false;
-		s->body.stmts = new_stmts;
-		/* set the field of each declaration, so that we can lookup struct members quickly */
-		Field *field = s->fields;
-		arr_foreach(new_stmts, Statement, stmt) {
-			assert(stmt->kind == STMT_DECL);
-			Declaration *decl = stmt->decl;
-			if (!(decl->flags & DECL_IS_CONST)) {
-				assert(!(decl->flags & DECL_HAS_EXPR));
-				decl->field = field;
-				field += arr_len(decl->idents);
-			}
-		}
-		s->instance_id = 0;
-		s->flags |= STRUCT_DEF_RESOLVED;
-	}
-	return true;
-}
-
 /* fixes the type (replaces [5+3]int with [8]int, etc.) */
 static Status type_resolve(Typer *tr, Type *t, Location where) {
 	Evaluator *ev = tr->evalr;
@@ -903,10 +896,6 @@ static Status type_resolve(Typer *tr, Type *t, Location where) {
 	case TYPE_VOID:
 	case TYPE_BUILTIN:
 		break;
-	}
-	if (t->kind == TYPE_STRUCT && !!(t->struc->params) == !!(t->struc->instance_id)) { /* don't want it to try to deal with templates */
-		if (!struct_find_offsets(t->struc))
-			return false;
 	}
 	assert(t->kind != TYPE_EXPR);
 	t->flags |= TYPE_IS_RESOLVED;
@@ -3341,7 +3330,8 @@ static Status types_decl(Typer *tr, Declaration *d) {
 
 	if ((d->flags & DECL_HAS_EXPR)
 		&& d->expr.kind == EXPR_TYPE
-		&& d->expr.typeval->kind == TYPE_STRUCT) {
+		&& d->expr.typeval->kind == TYPE_STRUCT
+		&& tr->fn == NULL) {
 		d->expr.typeval->struc->name = d->idents[0];
 	}
 	

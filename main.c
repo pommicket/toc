@@ -8,7 +8,6 @@
 
 /* 
 @TODO:
-local structs should not be named in C
 make sure global slices work
 allow `use ???;` if an error has already occurred
 if something gets included into a namespace, and its typing fails, the namespace should still be of type namespace, not ???
@@ -17,8 +16,7 @@ do we consistently handle x := &some_array_or_slice; x.len
 use
  - use with struct members (e.g. SuperPoint ::= struct { use p: Point; })
 compile to a temp file, then move it if compilation succeeds
-if you include something twice, it should #define one thing to the other -- it's okay because struct field can't contain __
-	-> allow #force'd includes to namespaces
+fix including something twice - just use the non-namespacey version if it exists or pick one namespace to use everywhere otherwise
 &void
 simplify eval macros with val_to_u/i64
 #if should not create a block

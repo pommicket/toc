@@ -1,22 +1,37 @@
 //#include "std/io.toc";
 
-#include "std/io.toc", foo;
-#include "std/io.toc", bar;
+#include "std/io.toc";
 c_add ::= fn(x:int, y:int) int {
 	#C("x+y")
 }
 
 main ::= fn() {
+	{
 	xs : [5]Point;
 	for use x, i := &xs {
 		z = c_add(i*i, i*i*i) as f32;
 	}
 	for use x := xs {
-		foo.puti(z as int);
+		puti(z as int);
 	}
 	Point ::= struct {
 		x: int;
 		y: int;
 		z: f32;
+	}
+	}
+	{
+	xs : [5]Point;
+	for use x, i := &xs {
+		z = c_add(i*i, i*i*i) as f32;
+	}
+	for use x := xs {
+		puti(z as int);
+	}
+	Point ::= struct {
+		x: int;
+		y: int;
+		z: f32;
+	}
 	}
 }
