@@ -1,0 +1,47 @@
+#include "std/mem.toc", mem;
+#include "std/io.toc", io;
+use mem;
+
+fill_array ::= fn(n ::=, a : &[n]int) {
+	for i := 0..n-1 {
+		a[i] = i*i;
+	}
+	a[0] = 17;
+}
+
+sum_array ::= fn(n ::=, a : &[n]int) total := 0 {
+	for i := 0..n-1 {
+		total += a[i];
+	}
+}
+
+fill_slice ::= fn(a: &[]int) {
+	*a = mem.news(int, 3);
+	a[0] = 1;
+	a[1] = 48;
+	a[2] = 136;
+}
+
+sum_slice ::= fn(a : &[]int) total := 0 {
+	for i := 0..a.len-1 {
+		total += a[i];
+	}
+}
+
+thing ::= fn() int {
+	foo : [5]int;
+	fill_array(&foo);
+	a := sum_array(&foo);
+	bar : []int;
+	defer dels(bar);
+	fill_slice(&bar);
+	b := sum_slice(&bar);
+	a+b
+}
+
+main ::= fn() {
+	a := thing();
+	b ::= thing();
+	io.puti(a);
+	io.puti(b);
+}

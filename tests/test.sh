@@ -3,6 +3,7 @@
 tests='bf
 control_flow
 types
+arrs_slices
 defer
 sizeof
 new

@@ -412,7 +412,7 @@ static Status expr_must_lval(Expression *e, char const *purpose) {
 			
 			return of_type->kind == TYPE_SLICE
 				|| (of_type->kind == TYPE_PTR
-					&& of_type->kind == TYPE_SLICE);
+					&& of_type->ptr->kind == TYPE_SLICE);
 		}
 		err_print(e->where, "Cannot %s operator %s.", purpose, unary_op_to_str(e->unary.op));
 		return false;

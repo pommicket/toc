@@ -596,6 +596,13 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 }
 
 static Status eval_val_ptr_at_index(Location where, Value *arr, U64 i, Type *arr_type, void **ptr, Type **type) {
+	void *arr_ptr = NULL;
+	if (arr_type->kind == TYPE_PTR) {
+		arr_ptr = arr->ptr;
+		arr_type = arr_type->ptr;
+	} else {
+		arr_ptr = val_get_ptr(arr, arr_type);
+	}
 	switch (arr_type->kind) {
 	case TYPE_ARR: {
 		U64 arr_sz = (U64)arr_type->arr.n;
@@ -603,33 +610,36 @@ static Status eval_val_ptr_at_index(Location where, Value *arr, U64 i, Type *arr
 			err_print(where, "Array out of bounds (index = %lu, array size = %lu)\n", (unsigned long)i, (unsigned long)arr_sz);
 			return false;
 		}
-		*ptr = (char *)arr->arr + compiler_sizeof(arr_type->arr.of) * i;
+		*ptr = (char *)arr_ptr + compiler_sizeof(arr_type->arr.of) * i;
 		if (type) *type = arr_type->arr.of;
 	} break;
 	case TYPE_SLICE: {
-		U64 slice_sz = (U64)arr->slice.len;
+		Slice slice = *(Slice *)arr_ptr;
+		U64 slice_sz = (U64)slice.len;
 		if (i >= slice_sz) {
 			err_print(where, "Slice out of bounds (index = %lu, slice size = %lu)\n", (unsigned long)i, (unsigned long)slice_sz);
 			return false;
 		}
-		if (!arr->slice.data) {
+		if (!slice.data) {
 			err_print(where, "Indexing null slice.");
 			return false;
 		}
-		*ptr = (char *)arr->slice.data + compiler_sizeof(arr_type->slice) * i;
+		*ptr = (char *)slice.data + compiler_sizeof(arr_type->slice) * i;
 		if (type) *type = arr_type->slice;
 	} break;
-	case TYPE_BUILTIN:
+	case TYPE_BUILTIN: {
+		VarArg *varargs = *(VarArg **)arr_ptr;
 		if (arr_type->builtin == BUILTIN_VARARGS) {
-			if (i >= (U64)arr_len(arr->varargs)) {
+			if (i >= (U64)arr_len(varargs)) {
 				err_print(where, "Varargs out of bounds (index = %lu, varargs size = %lu)\n", (unsigned long)i, (unsigned long)arr_len(arr->varargs));
 				return false;
 			}
-			VarArg *vararg = &arr->varargs[i];
+			VarArg *vararg = &varargs[i];
 			*ptr = &vararg->val;
 			*type = vararg->type;
 			break;
 		}
+	}
 		/* fallthrough */
 	default: assert(0); break;
 	}
@@ -687,6 +697,7 @@ static Value *ident_val(Evaluator *ev, Identifier i, Location where) {
 				return &decl->val;
 		}
 	} else if (decl->flags & DECL_IS_CONST) {
+		assert(decl->flags & DECL_FOUND_VAL);
 		return decl_val_at_index(decl, idx);
 	} else if (decl->val_stack) {
 		Value *valp = arr_last(decl->val_stack);
@@ -762,9 +773,18 @@ static Status eval_address_of(Evaluator *ev, Expression *e, void **ptr) {
 			*ptr = v.ptr;
 		} break;
 		case UNARY_LEN: {
-			Value slice;
-			if (!eval_expr(ev, e, &slice)) return false;
-			*ptr = &slice.slice.len;
+			Type *of_type = &e->unary.of->type;
+			Slice *slice;
+			Value of_val;
+			if (!eval_expr(ev, e, &of_val)) return false;
+			if (of_type->kind == TYPE_PTR) {
+				assert(of_type->ptr->kind == TYPE_SLICE);
+				slice = of_val.ptr;
+			} else {
+				assert(of_type->kind == TYPE_SLICE);
+				slice = &of_val.slice;
+			}
+			*ptr = &slice->len;
 		} break;
 		default: assert(0); return false;
 		}

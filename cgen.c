@@ -1321,10 +1321,17 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			s = "%="; break;
 		case BINARY_AT_INDEX: {
 			Type *lhs_type = &lhs->type;
+			bool uses_ptr = false;
+			if (lhs_type->kind == TYPE_PTR) {
+				uses_ptr = true;
+				lhs_type = lhs_type->ptr;
+			}
 			cgen_write(g, "(");
 			switch (lhs_type->kind) {
 			case TYPE_ARR:
+				if (uses_ptr) cgen_write(g, "(*");
 				cgen_expr(g, lhs);
+				if (uses_ptr) cgen_write(g, ")");
 				cgen_write(g, "[");
 				cgen_expr(g, rhs);
 				cgen_write(g, "]");
@@ -1336,7 +1343,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 				cgen_type_post(g, &e->type);
 				cgen_write(g, ")(");
 				cgen_expr(g, lhs);
-				cgen_write(g, ".data))[");
+				cgen_write(g, "%sdata))[", uses_ptr ? "->" : ".");
 				cgen_expr(g, rhs);
 				cgen_write(g, "]");
 				break;

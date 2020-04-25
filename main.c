@@ -8,8 +8,6 @@
 
 /* 
 @TODO:
-make sure you can do a[i] where a is &[5]int or &[]char or something
-do we consistently handle x := &some_array_or_slice; x.len
 use
  - use with struct members (e.g. SuperPoint ::= struct { use p: Point; })
 compile to a temp file, then move it if compilation succeeds
