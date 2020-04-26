@@ -2108,6 +2108,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 						e->binary.lhs = used;
 						e->binary.rhs = typer_calloc(tr, 1, sizeof *e->binary.rhs);
 						e->binary.rhs->kind = EXPR_IDENT;
+						e->binary.rhs->flags = 0;
 						e->binary.rhs->ident_str.str = i_str;
 						e->binary.rhs->ident_str.len = i_len;
 						/* re-type */
@@ -3131,6 +3132,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					return false;
 				}
 				rhs->kind = EXPR_IDENT;
+				rhs->flags = 0;
 				rhs->ident_str.str = val.slice.data;
 				rhs->ident_str.len = (size_t)val.slice.len;
 				/* re-type with new expression */
@@ -3314,6 +3316,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 				free(s);
 				return false;
 			}
+			if (rhs->kind == EXPR_IDENT)
+				assert(!(rhs->flags & EXPR_FOUND_TYPE));
 		} break;
 		} break;
 	} break;

@@ -302,7 +302,6 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 		/* @TODO: improve this... we're gonna need expr_to_str ): */
 		return str_copy(buffer, bufsize, "<type expression>");
 	}
-
 	assert(0);
 	return 0;
 }
@@ -2607,16 +2606,20 @@ static void print_block_location(Block *b) {
 }
 
 static void fprint_fn_expr(FILE *out, FnExpr *f) {
-	fprintf(out, "fn (");
-	arr_foreach(f->params, Declaration, decl) {
-		if (decl != f->params)
-			fprintf(out, ", ");
-		fprint_decl(out, decl);
+	if (f->flags & FN_EXPR_FOREIGN) {
+		fprintf(out, "#foreign fn;");
+	} else {
+		fprintf(out, "fn (");
+		arr_foreach(f->params, Declaration, decl) {
+			if (decl != f->params)
+				fprintf(out, ", ");
+			fprint_decl(out, decl);
+		}
+		fprintf(out, ") ");
+		fprint_type(out, &f->ret_type);
+		fprintf(out, " ");
+		fprint_block(out, &f->body);
 	}
-	fprintf(out, ") ");
-	fprint_type(out, &f->ret_type);
-	fprintf(out, " ");
-	fprint_block(out, &f->body);
 }
 
 static void fprint_args(FILE *out, Argument *args) {
@@ -2678,8 +2681,12 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprintf(out, "(");
 		fprint_expr(out, e->binary.lhs);
 		fprintf(out, ")%s(", binary_op_to_str(e->binary.op));
-		if (e->binary.op == BINARY_DOT && found_type && e->binary.lhs->type.kind == TYPE_STRUCT) {
-			fprint_ident(out, e->binary.field->name);
+		Type *lhs_type = &e->binary.lhs->type;
+		if (lhs_type->kind == TYPE_PTR) {
+			lhs_type = lhs_type->ptr;
+		}
+		if (e->binary.op == BINARY_DOT && found_type && lhs_type->kind == TYPE_STRUCT) {
+			fprint_ident(out, e->binary.field->name);	
 		} else {
 			fprint_expr(out, e->binary.rhs);
 		}
@@ -2884,12 +2891,14 @@ static void fprint_stmt(FILE *out, Statement *s) {
 			fprintf(out, "#info ");
 			break;
 		}
+		fprint_expr(out, &m->text);
+		fprintf(out, ";\n");
 	} break;
 	case STMT_BREAK:
-		fprintf(out, "break;");
+		fprintf(out, "break;\n");
 		break;
 	case STMT_CONT:
-		fprintf(out, "continue;");
+		fprintf(out, "continue;\n");
 		break;
 	case STMT_DEFER:
 		fprintf(out, "defer ");
@@ -2898,6 +2907,7 @@ static void fprint_stmt(FILE *out, Statement *s) {
 	case STMT_USE:
 		fprintf(out, "use ");
 		fprint_expr(out, &s->use->expr);
+		fprintf(out, ";\n");
 		break;
 	}
 }

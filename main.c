@@ -8,7 +8,6 @@
 
 /* 
 @TODO:
-compile to a temp file, then move it if compilation succeeds
 fix including something twice - just use the non-namespacey version if it exists or pick one namespace to use everywhere otherwise
 &void
 null
@@ -109,6 +108,8 @@ int main(int argc, char **argv) {
 
 	const char *in_filename = NULL;
 	const char *out_filename = "out.c";
+	
+	bool verbose = false;
 
 	ErrCtx err_ctx = {0};
 	err_ctx.enabled = true;
@@ -126,22 +127,28 @@ int main(int argc, char **argv) {
 	err_ctx.color_enabled = default_color_enabled;
 
 	for (int i = 1; i < argc; ++i) {
-		if ((i == 1 || argv[i-1][0] != '-') && argv[i][0] != '-') {
-			in_filename = argv[i];
-		} else if (strs_equal(argv[i], "-no-color")) {
+		char *arg = argv[i];
+		if (strs_equal(arg, "-no-color")) {
 			err_ctx.color_enabled = false;
-		} else if (strs_equal(argv[i], "-color")) {
+		} else if (strs_equal(arg, "-color")) {
 			err_ctx.color_enabled = true;
-		} else if (strs_equal(argv[i], "-o")) {
+		} else if (strs_equal(arg, "-o")) {
 			if (i == argc-1) {
 				fprintf(stderr, "-o cannot be the last argument to toc.\n");
 				return EXIT_FAILURE;
 			}
 			out_filename = argv[i+1];
 			++i;
+		} else if (strs_equal(arg, "-v") || strs_equal(arg, "-verbose")) {
+			printf("Verbose mode enabled\n");
+			verbose = true;
 		} else {
-			fprintf(stderr, "Unrecognized option: %s.\n", argv[i]);
-			return EXIT_FAILURE;
+			if (arg[0] == '-') {
+				fprintf(stderr, "Unrecognized option: %s.\n", argv[i]);
+				return EXIT_FAILURE;
+			} else {
+				in_filename = arg;
+			}
 		}
 	}
 	
@@ -162,6 +169,7 @@ int main(int argc, char **argv) {
 	Location file_where = {0};
 	file_where.file = &file;
 	file.ctx = &err_ctx;
+	if (verbose) printf("Reading contents of %s...\n", in_filename);
 	char *contents = read_file_contents(&main_allocr, in_filename, file_where);
 	if (!contents) return EXIT_FAILURE;
 
@@ -169,6 +177,7 @@ int main(int argc, char **argv) {
 	idents_create(&globals, &main_allocr, NULL);
 	Tokenizer t;
 	file.contents = contents;
+	if (verbose) printf("Tokenizing...\n");
 	tokr_create(&t, &err_ctx, &main_allocr);
 	if (!tokenize_file(&t, &file)) {
 		err_text_important(&err_ctx, "Errors occured during preprocessing.\n");
@@ -176,15 +185,17 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 
-#if 0
-	arr_foreach(t.tokens, Token, token) {
-		if (token != t.tokens)
-			printf("    ");
-		fprint_token(stdout, token);
+	if (verbose) {
+		printf("Tokens:\n");
+		arr_foreach(t.tokens, Token, token) {
+			if (token != t.tokens)
+				printf("   ");
+			fprint_token(stdout, token);
+		}
+		printf("\n-----\n");
 	}
-	printf("\n");
-#endif
-	
+
+	if (verbose) printf("Parsing...\n");
 	Parser p;
 	parser_create(&p, &globals, &t, &main_allocr);
 	ParsedFile f;
@@ -193,9 +204,13 @@ int main(int argc, char **argv) {
 		allocr_free_all(&main_allocr);
 		return EXIT_FAILURE;
 	}
-	/* fprint_parsed_file(stdout, &f); */
-	/* printf("\n\n-----\n\n"); */
+	if (verbose) {
+		printf("Parsed file:\n");
+		fprint_parsed_file(stdout, &f);
+		printf("\n\n-----\n\n");
+	}
 	
+	if (verbose) printf("Determining types...\n");
 	
 	Typer tr;
 	Evaluator ev;
@@ -207,10 +222,14 @@ int main(int argc, char **argv) {
 		allocr_free_all(&main_allocr);
 		return EXIT_FAILURE;
 	}
-#ifdef TOC_DEBUG
-	/* printf("\n\n");	 */
-	/* fprint_parsed_file(stdout, &f); */
-#endif
+
+	if (verbose) {
+		printf("Typed file:\n");
+		fprint_parsed_file(stdout, &f);
+		printf("\n\n-----\n\n");
+	}
+
+	if (verbose) printf("Opening output file...\n");
 	FILE *out = fopen(out_filename, "w");
 	if (!out) {
 		err_text_important(&err_ctx, "Could not open output file: ");
@@ -218,11 +237,14 @@ int main(int argc, char **argv) {
 		allocr_free_all(&main_allocr);
 		return EXIT_FAILURE;
 	}
+	
+	if (verbose) printf("Generating C code...\n");
 	CGenerator g;
 	cgen_create(&g, out, &globals, &main_allocr);
 	cgen_file(&g, &f);
 	
-	allocr_free_all(&main_allocr);
+	if (verbose) printf("Cleaning up...\n");
 	fclose(out);
+	allocr_free_all(&main_allocr);
 	return 0;
 }
