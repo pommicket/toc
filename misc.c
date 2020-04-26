@@ -48,6 +48,13 @@ size_t str_copy(char *dest, size_t destsz, const char *src) {
 	return destsz-1;
 }
 
+static char *str_dup(char *s) {
+	size_t bufsz = strlen(s)+1;
+	char *ret = malloc(bufsz);
+	memcpy(ret, s, bufsz);
+	return ret;	
+}
+
 static char *cstr(char const *str, size_t len) {
 	char *ret = malloc(len+1);
 	memcpy(ret, str, len);

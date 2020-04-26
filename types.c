@@ -15,6 +15,7 @@ static bool val_truthiness(Value v, Type *t);
 static Value val_zero(Type *t); 
 static Status eval_stmt(Evaluator *ev, Statement *stmt); 
 static Status struct_resolve(Typer *tr, StructDef *s);
+static Status expr_must_usable(Typer *tr, Expression *e);
 
 static inline Identifiers *typer_get_idents(Typer *tr) {
 	return tr->block == NULL ? tr->globals : &tr->block->idents;
@@ -84,12 +85,65 @@ static size_t compiler_alignof_builtin(BuiltinType b) {
 	return 0;
 }
 
+static inline char *get_struct_name(StructDef *s) {
+	return s->name ? ident_to_str(s->name) : str_dup("anonymous struct");
+}
+
+/* adds fields of add to to */
+static Status struct_add_used_struct(Typer *tr, StructDef *to, StructDef *add, Declaration *use_decl) {
+	Location use_where = use_decl->where;
+	if (!struct_resolve(tr, add))
+		return false;
+	arr_foreach(add->body.stmts, Statement, stmt) {
+		assert(stmt->kind == STMT_DECL);
+		Declaration *decl = stmt->decl;
+		if (decl->flags & DECL_USE) {
+			assert(decl->type.kind == TYPE_STRUCT);
+			if (!struct_add_used_struct(tr, to, decl->type.struc, decl))
+				return false;
+		}
+		arr_foreach(decl->idents, Identifier, ip) {
+			Identifier i = *ip;
+			/* @OPTIM: only hash once */
+			Identifier previously_existing = ident_translate(i, &to->body.idents);
+			if (previously_existing) {
+				/* uh oh */
+				UsedFrom *uf = previously_existing->used_from;
+				char *struct_name = get_struct_name(to);
+				char *member_name = ident_to_str(previously_existing);
+				if (uf) {
+					/* conflicting uses */
+					Declaration *first_use = uf->use_decl;
+					err_print(first_use->where, "Conflicting used structs, while dealing with %s. %s was imported by this use statement...", struct_name, i);
+					info_print(use_where, "... and also by this use statement.");
+				} else {
+					/* declared a field, then used something which contains something of the same name */
+					Declaration *first_decl = previously_existing->decl;
+					char *used_struct_name = get_struct_name(add);
+					err_print(use_where, "used struct conflicts with field %s of %s (%s is also a member of %s).", member_name, struct_name, member_name, used_struct_name);
+					info_print(first_decl->where, "%s was declared here as a field.", member_name);
+					free(used_struct_name);
+				}
+				free(struct_name);
+				free(member_name);
+				return false;
+			}
+			Identifier new_ident = ident_translate_forced(i, &to->body.idents);
+			new_ident->decl = i->decl;
+			UsedFrom *uf = new_ident->used_from = typer_malloc(tr, sizeof *new_ident->used_from);
+			uf->use_decl = use_decl;
+			uf->struc = add;
+		}
+	}
+	return true;
+}
+
 /* new_stmts is what s->body.stmts will become after typing is done */
-static Status add_block_to_struct(Typer *tr, Block *b, StructDef *s, Statement **new_stmts) {
+static Status struct_add_block(Typer *tr, Block *b, StructDef *s, Statement **new_stmts) {
 	arr_foreach(b->stmts, Statement, stmt) {
 		if (stmt->kind == STMT_EXPR) {
 			if (stmt->expr->kind == EXPR_BLOCK) {
-				if (!add_block_to_struct(tr, stmt->expr->block, s, new_stmts))
+				if (!struct_add_block(tr, stmt->expr->block, s, new_stmts))
 					return false;
 				continue;
 			}
@@ -125,10 +179,29 @@ static Status add_block_to_struct(Typer *tr, Block *b, StructDef *s, Statement *
 				field->where = d->where;
 				field->name = *ident;
 				field->type = decl_type_at_index(d, i);
+				(*ident)->used_from = NULL;
 				++i;
 			}
-			
 			typer_arr_add(tr, *new_stmts, *stmt);
+		}
+		if (flags & DECL_USE) {
+			/* add everything in the used struct to the namespace */
+			if (flags & DECL_IS_CONST) {
+				/* @TODO(eventually) */
+				err_print(d->where, "You can't use constant stuff in a struct.");
+				return false;
+			}
+			if (d->type.kind != TYPE_STRUCT) {
+				/* i don't think this can ever happen right now */
+				err_print(d->where, "You can only use structs inside a struct.");
+				return false;
+			}
+			if (arr_len(d->idents) > 1) {
+				err_print(d->where, "use declarations can only declare one thing. Every single used identifier would have conflicting definitions otherwise.");
+				return false;
+			}
+			if (!struct_add_used_struct(tr, s, d->type.struc, d))
+				return false;
 		}
 		if (b != &s->body) {
 			/* we need to translate d's identifiers to s's scope */
@@ -215,15 +288,17 @@ static size_t compiler_sizeof(Type *t) {
 }
 
 static Status struct_resolve(Typer *tr, StructDef *s) {
+	if (s->flags & STRUCT_DEF_RESOLVING_FAILED) 
+		return false; /* silently fail; do not try to resolve again, because there'll be duplicate errors */
 	if (!(s->flags & STRUCT_DEF_RESOLVED)) {
 		s->flags |= STRUCT_DEF_RESOLVING;
 		{ /* resolving stuff */
 			if (!types_block(tr, &s->body))
-				return false;
+				goto fail;
 			s->fields = NULL;
 			Statement *new_stmts = NULL;
-			if (!add_block_to_struct(tr, &s->body, s, &new_stmts))
-				return false;
+			if (!struct_add_block(tr, &s->body, s, &new_stmts))
+				goto fail;
 			s->body.stmts = new_stmts;
 			/* set the field of each declaration, so that we can lookup struct members quickly */
 			Field *field = s->fields;
@@ -248,10 +323,10 @@ static Status struct_resolve(Typer *tr, StructDef *s) {
 				if (size == SIZE_MAX) {
 					err_print(f->where, "Use of type that hasn't been declared yet (but not as a pointer/slice).\n"
 						"Either make this field a pointer or put the declaration of its type before this struct.");
-					return false;
+					goto fail;
 				} else if (size == SIZE_MAX-1) {
 					err_print(f->where, "Circular dependency in structs! You will need to make this member a pointer.");
-					return false;
+					goto fail;
 				}
 				size_t falign = compiler_alignof(f->type);
 				if (falign > total_align)
@@ -271,6 +346,9 @@ static Status struct_resolve(Typer *tr, StructDef *s) {
 		s->flags |= STRUCT_DEF_RESOLVED;
 	}
 	return true;
+fail:
+	s->flags |= STRUCT_DEF_RESOLVING_FAILED;
+	return false;
 }
 
 
@@ -3148,12 +3226,34 @@ static Status types_expr(Typer *tr, Expression *e) {
 				if (!struct_resolve(tr, struc)) return false;
 
 				Identifier struct_ident = ident_get_with_len(&struc->body.idents, rhs->ident_str.str, rhs->ident_str.len);
+				UsedFrom *uf = struct_ident->used_from;
+				if (uf) {
+					/* foo.baz => (foo.bar).baz */
+					Expression *old_lhs = lhs;
+					lhs = e->binary.lhs = typer_malloc(tr, sizeof *lhs);
+					lhs->kind = EXPR_BINARY_OP;
+					lhs->flags = 0;
+					lhs->binary.op = BINARY_DOT;
+					lhs->binary.lhs = old_lhs;
+					Expression *middle = lhs->binary.rhs = typer_calloc(tr, 1, sizeof *lhs->binary.rhs);
+					middle->kind = EXPR_IDENT;
+					middle->flags = 0;
+					assert(arr_len(uf->use_decl->idents) == 1);
+					middle->ident_str = ident_to_string(uf->use_decl->idents[0]);
+					e->flags &= (ExprFlags)~(ExprFlags)EXPR_FOUND_TYPE;
+					/* re-type now that we know where it's from */
+					return types_expr(tr, e);
+				}
 				if (struct_ident && !(struct_ident->decl->flags & DECL_IS_CONST)) {
 					Field *field = struct_ident->decl->field;
 					field += ident_index_in_decl(struct_ident, struct_ident->decl);
 					e->binary.field = field;
 					*t = *field->type;
 				} else {
+					/* 
+						this call will fail if rhs->ident_str isn't a member of the structure.
+						kind of weird to have that check here but whatever
+					*/
 					if (!get_struct_constant(struct_type->struc, rhs->ident_str, e))
 						return false;
 				}

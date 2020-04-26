@@ -8,8 +8,6 @@
 
 /* 
 @TODO:
-use
- - use with struct members (e.g. SuperPoint ::= struct { use p: Point; })
 compile to a temp file, then move it if compilation succeeds
 fix including something twice - just use the non-namespacey version if it exists or pick one namespace to use everywhere otherwise
 &void

@@ -174,13 +174,21 @@ typedef struct VarArg {
 	Value val;
 } VarArg;
 
+typedef struct {
+	struct StructDef *struc;
+	struct Declaration *use_decl; /* field declaration which uses the identifier */
+} UsedFrom;
+
 typedef struct IdentSlot {
 	char *str;
 	size_t len;
 	/* where this identifier was declared */
 	struct Declaration *decl; /* if NULL, a declaration hasn't been found for it yet */
 	struct Identifiers *idents;
-	struct Namespace *nms; /* only exists after typing, and only for namespace-level declarations (i.e. not local variables) */
+	union {
+		struct Namespace *nms; /* only exists after typing, and only for namespace-level declarations (i.e. not local variables) */
+		UsedFrom *used_from; /* for stuff used inside structs -- NULL if this is actually in the struct body */
+	};
 } IdentSlot;
 
 typedef struct StrHashTableSlot {
@@ -504,7 +512,8 @@ enum {
 	STRUCT_DEF_CGEN_DECLARED = 0x02,
 	STRUCT_DEF_CGEN_DEFINED = 0x04,
 	STRUCT_DEF_RESOLVED = 0x08,
-	STRUCT_DEF_RESOLVING = 0x10	
+	STRUCT_DEF_RESOLVING = 0x10,
+	STRUCT_DEF_RESOLVING_FAILED = 0x20
 };
 typedef U8 StructFlags;
 typedef struct StructDef {

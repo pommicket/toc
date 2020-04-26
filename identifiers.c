@@ -96,6 +96,12 @@ static char *ident_to_str(Identifier i) {
 	return str;
 }
 
+static String ident_to_string(Identifier i) {
+	String ret;
+	ret.str = i->str;
+	ret.len = i->len;
+	return ret;
+}
 
 static inline void fprint_ident_str(FILE *out, char *s) {
 	fwrite(s, 1, ident_str_len(s), out);

@@ -1,9 +1,22 @@
 #include "std/io.toc";
 
+Point ::= struct {
+	x, y : int;
+}
+
+Point3D ::= struct {
+	use p : Point;
+	z : int;
+}
+
 main ::= fn() {
-	x:[]int;
-	p:=&x;
-	p.len = 12;
-	puti(p.len);
+	use s: Point3D;
+	x = 12;
+	z = 18;
+	y = -1238;
+	puti(x);
+	puti(y);
+	puti(z);
+	puti(p.x);
 }
 main();
