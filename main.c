@@ -12,8 +12,7 @@ compile to a temp file, then move it if compilation succeeds
 fix including something twice - just use the non-namespacey version if it exists or pick one namespace to use everywhere otherwise
 &void
 null
-simplify eval macros with val_to_u/i64
-#if should not create a block
+#if should not create a block if it's an EXPR_STMT
 &&, ||
 start making a standard library... (printf; stringbuilder would be nice to have)
 improve type_to_str:

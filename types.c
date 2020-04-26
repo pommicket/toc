@@ -114,7 +114,7 @@ static Status struct_add_used_struct(Typer *tr, StructDef *to, StructDef *add, D
 				if (uf) {
 					/* conflicting uses */
 					Declaration *first_use = uf->use_decl;
-					err_print(first_use->where, "Conflicting used structs, while dealing with %s. %s was imported by this use statement...", struct_name, i);
+					err_print(first_use->where, "Conflicting used structs, while dealing with %s. %s was imported by this use statement...", struct_name, member_name);
 					info_print(use_where, "... and also by this use statement.");
 				} else {
 					/* declared a field, then used something which contains something of the same name */

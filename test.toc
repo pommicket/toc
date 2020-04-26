@@ -1,22 +1,81 @@
-#include "std/io.toc";
+#include "std/io.toc", io;
+#include "std/mem.toc", mem;
 
-Point ::= struct {
-	x, y : int;
+use mem;
+
+Point ::= struct {	
+	x: int;
+	y: int;
+	a ::= 3;
 }
 
 Point3D ::= struct {
-	use p : Point;
-	z : int;
+	use point: Point;
+	z: int;
+
+}
+
+Point4D ::= struct {
+	use p3: Point3D;
+	w: int;
+}
+
+Foo ::= struct {
+	f: f32;
+}
+
+Bar ::= struct {
+	use foo: Foo;
+	use p4: Point4D;
+}
+
+
+
+make_point ::= fn (x_: int, y_: int) use p: Point {
+	x = x_+a;
+	y = y_+a;
+}
+
+make_bar ::= fn (x_ := 0, y_ := 0, z_ := 0, w_ := 0, f_ := 0.0) use b: Bar {
+	x = x_;
+	y = y_;
+	z = z_;
+	b.p4.w = w_;
+	b.f = f_;
 }
 
 main ::= fn() {
-	use s: Point3D;
-	x = 12;
-	z = 18;
-	y = -1238;
-	puti(x);
-	puti(y);
-	puti(z);
-	puti(p.x);
+
+	use io;
+
+	{
+		use p: Point;
+		use io;
+		x = 5;
+		puti(x);
+	}
+
+
+
+	ps := news(Point, 5);
+	for p := &ps {
+		*p = make_point(3, 5);
+	}
+	for use p, i := &ps {
+		x += i;
+		y += 2*i;
+	}
+	for use p := ps {
+		writei(x);
+		writes(" ");
+		writei(y);
+		puts("");
+	}
+	dels(ps);
+	b := make_bar(5, 8, 13, 12);
+	puti(b.x);
+	puti(b.y);
+	puti(b.z);
+	puti(b.w);
+
 }
-main();
