@@ -24,8 +24,8 @@ For more information, please refer to <http://unlicense.org/>
 */
 
 typedef struct ArrHeader {
-	size_t len;
-	size_t cap;
+	U32 len;
+	U32 cap;
 	MaxAlign data[];
 } ArrHeader;
 
@@ -44,13 +44,14 @@ static inline void arr_zero_(void *arr, size_t item_sz) {
 
 static WarnUnusedResult void *arr_resv_(void *arr, size_t n, size_t item_sz) {
 	ArrHeader *hdr;
+	assert(n < U32_MAX);
 	if (arr == NULL) {
 		hdr = err_malloc(item_sz * n + sizeof(ArrHeader));
 		hdr->len = 0;
-		hdr->cap = n;
+		hdr->cap = (U32)n;
 	} else {
 		hdr = arr_hdr(arr);
-		hdr->cap = n;
+		hdr->cap = (U32)n;
 		hdr = err_realloc(hdr, item_sz * n + sizeof(ArrHeader));
 		if (hdr->len > hdr->cap) hdr->len = hdr->cap;
 	}		
@@ -61,11 +62,11 @@ static WarnUnusedResult void *arr_resva_(void *arr, size_t n, size_t item_sz, Al
 	if (arr == NULL) {
 		hdr = allocr_malloc(a, item_sz * n + sizeof(ArrHeader));
 		hdr->len = 0;
-		hdr->cap = n;
+		hdr->cap = (U32)n;
 	} else {
 		hdr = arr_hdr(arr);
 		hdr = allocr_realloc(a, hdr, item_sz * hdr->cap + sizeof(ArrHeader), item_sz * n + sizeof(ArrHeader));
-		hdr->cap = n;
+		hdr->cap = (U32)n;
 		if (hdr->len > hdr->cap) hdr->len = hdr->cap;
 	}
 	return hdr->data;
@@ -129,7 +130,7 @@ static WarnUnusedResult void *arr_set_len_(void *arr, size_t n, size_t item_sz) 
 	if (n > arr_len(arr)) {
 		arr = arr_resv_(arr, n, item_sz);
 	}
-	arr_hdr(arr)->len = n;
+	arr_hdr(arr)->len = (U32)n;
 	/* @OPTIM: shrink */
 	return arr;
 }
@@ -138,7 +139,7 @@ static WarnUnusedResult void *arr_set_lena_(void *arr, size_t n, size_t item_sz,
 		return arr_cleara_(arr, item_sz, a);
 	}
 	arr = arr_resva_(arr, n, item_sz, a);
-	arr_hdr(arr)->len = n;
+	arr_hdr(arr)->len = (U32)n;
 	return arr;
 }
 

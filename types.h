@@ -1064,5 +1064,5 @@ typedef struct CGenerator {
 	FnExpr *fn; /* which function are we in? (NULL for none) - not used during decls */
 	Identifier main_ident;
 	Identifiers *globals;
-	char const **nms_prefixes; /* dynamic (null-terminated) array of namespace prefixes */
+	const char **nms_prefixes; /* dynamic (null-terminated) array of namespace prefixes */
 } CGenerator;

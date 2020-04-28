@@ -30,7 +30,7 @@ use point #except x;
 optional -Wshadow
 format errors so that vim/emacs can jump to them
 ---
-make sure that floating point literals are exact as possible
+make sure that floating point literals are as exact as possible
 	have some way of doing Infinity and s/qNaN (you can
 	have them be in std/math.toc)
 once you have a bunch of test code:
@@ -38,7 +38,6 @@ once you have a bunch of test code:
 - try making more Expression members pointers
 - should val_stack be on the allocator? what about temporary arrays?
 	-->on the contrary, should in_decls be off the allocator?
-- branch data: #define if(x) bool join(cond, __LINE__) = x; register_branch(__FILE__, __LINE__, cond); if (join(cond, __LINE__))
 error on x ::= {return; 3}
 struct param inference
 maybe macros are just inline functions

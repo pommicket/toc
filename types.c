@@ -457,7 +457,7 @@ static Type *overriding_type(Type *a, Type *b) {
 prints an error and returns false if the given expression is not an l-value 
 purpose is something like "take address of"
 */
-static Status expr_must_lval(Expression *e, char const *purpose) {
+static Status expr_must_lval(Expression *e, const char *purpose) {
 	/* NOTE: make sure you update eval when you change this */
 	assert(e->flags & EXPR_FOUND_TYPE);
 	switch (e->kind) {
@@ -2617,6 +2617,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					} else if ((param->flags & DECL_ANNOTATES_TYPE)
 							   && !type_is_builtin(&param->type, BUILTIN_VARARGS)) {
 						/* add to stuff infer can use */
+						/* @OPTIM: don't do this if we're not inferring */
 						arr_add(decl_types, &param->type);
 						arr_add(arg_types, &arg_exprs[i].type);
 						arr_add(arg_wheres, arg_exprs[i].where);
@@ -2637,9 +2638,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 				}
 				tr->block = prev;
 				
-				arr_clear(inferred_idents);
-				arr_clear(arg_types);
-				arr_clear(decl_types);
 				
 				{
 					Type *type = inferred_types;
@@ -2677,6 +2675,10 @@ static Status types_expr(Typer *tr, Expression *e) {
 				free(inferred_types);
 			}
 			
+			arr_clear(inferred_idents);
+			arr_clear(arg_types);
+			arr_clear(arg_wheres);
+			arr_clear(decl_types);
 
 			/* eval compile time arguments */
 			for (i = 0; i < nparams; ++i) {

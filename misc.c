@@ -48,21 +48,21 @@ size_t str_copy(char *dest, size_t destsz, const char *src) {
 	return destsz-1;
 }
 
-static char *str_dup(char *s) {
+static char *str_dup(const char *s) {
 	size_t bufsz = strlen(s)+1;
 	char *ret = malloc(bufsz);
 	memcpy(ret, s, bufsz);
 	return ret;	
 }
 
-static char *cstr(char const *str, size_t len) {
+static char *cstr(const char *str, size_t len) {
 	char *ret = malloc(len+1);
 	memcpy(ret, str, len);
 	ret[len] = 0;
 	return ret;
 }
 
-static bool str_eq_cstr(String s, char const *str) {
+static bool str_eq_cstr(String s, const char *str) {
 	return strncmp(s.str, str, s.len) == 0;
 }
 
@@ -77,7 +77,7 @@ static inline bool strs_equal(const char *a, const char *b) {
 }
 
 #define plural_suffix(x) ((x) == 1 ? "" : "s")
-static char const *indefinite_article(char const *s) {
+static const char *indefinite_article(const char *s) {
 	/* usually, words starting with "u" use "a" - "a unique thing", "a u64" */
 	if (*s == 'a' || *s == 'e' || *s == 'i' || *s == 'o')
 		return "an";

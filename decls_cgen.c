@@ -81,7 +81,7 @@ static void cgen_sdecls_expr(CGenerator *g, Expression *e) {
 	case EXPR_NMS: {
 		char *prefix_part = cgen_nms_prefix_part(g, e->nms);
 		size_t prefix_part_len = strlen(prefix_part);
-		char const *prev_prefix = g->nms_prefixes ? arr_last(g->nms_prefixes)
+		const char *prev_prefix = g->nms_prefixes ? arr_last(g->nms_prefixes)
 			: "";
 		size_t prev_prefix_len = strlen(prev_prefix);
 		char *new_prefix = cgen_malloc(g, prev_prefix_len + prefix_part_len + 1);
