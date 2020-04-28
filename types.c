@@ -2174,6 +2174,11 @@ static Status types_expr(Typer *tr, Expression *e) {
 				}
 				if (!cond || val_truthiness(v, &cond->type)) {
 					Block *true_block = &curr->body;
+					Statement *last = arr_last_ptr(true_block->stmts);
+					if (last && last->kind == STMT_EXPR && (last->flags & STMT_EXPR_NO_SEMICOLON)) {
+						err_print(last->where, "#ifs can't return values.");
+						return false;
+					}
 					e->kind = EXPR_BLOCK;
 					e->block = true_block;
 					break;

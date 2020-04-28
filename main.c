@@ -8,10 +8,10 @@
 
 /* 
 @TODO:
-fix including something twice - just use the non-namespacey version if it exists or pick one namespace to use everywhere otherwise
+#if should not create a block
 &void
 null
-#if should not create a block if it's an EXPR_STMT
+fix including something twice - just use the non-namespacey version if it exists or pick one namespace to use everywhere otherwise
 &&, ||
 start making a standard library... (printf; stringbuilder would be nice to have)
 improve type_to_str:

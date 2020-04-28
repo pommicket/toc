@@ -981,6 +981,18 @@ static void cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 	}
 }
 
+static void cgen_truthiness(CGenerator *g, Expression *e) {
+	switch (e->type.kind) {
+	case TYPE_SLICE:
+		cgen_expr(g, e);
+		cgen_write(g, ".n");
+		break;
+	default:
+		cgen_expr(g, e);
+		break;
+	}
+}
+
 static void cgen_expr_pre(CGenerator *g, Expression *e) {
 	IdentID id = 0;
 	char ret_name[CGEN_IDENT_ID_STR_SIZE+20];
@@ -1022,7 +1034,7 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 		while (1) {
 			if (curr->cond) {
 				cgen_write(g, "if (");
-				cgen_expr(g, curr->cond);
+				cgen_truthiness(g, curr->cond);
 				cgen_write(g, ") ");
 			}
 			cgen_block(g, &curr->body, ret_name, 0);
@@ -1785,11 +1797,13 @@ static void cgen_block(CGenerator *g, Block *b, const char *ret_name, U16 flags)
 	Block *prev_block = g->block;
 	g->block = b;
 	b->deferred = NULL;
-	++g->indent_lvl;
 	
 	if (!(flags & CGEN_BLOCK_NOBRACES)) {
 		cgen_writeln(g, "{");
 	}
+
+	++g->indent_lvl;
+
 	arr_foreach(b->stmts, Statement, s)
 		cgen_stmt(g, s);
 	if (b->ret_expr && ret_name) {
@@ -1814,6 +1828,7 @@ static void cgen_block(CGenerator *g, Block *b, const char *ret_name, U16 flags)
 			cgen_lbl(g, b->c.break_lbl);
 			cgen_writeln(g, ":;");
 		}
+		cgen_nl(g);
 	}
 	g->block = prev_block;
 }
