@@ -37,6 +37,7 @@ static bool builtin_truthiness(Value v, BuiltinType b) {
 	case BUILTIN_BOOL: return v.boolv;
 	case BUILTIN_CHAR: return v.charv != 0;
 	case BUILTIN_VARARGS: return arr_len(v.varargs) != 0;
+	case BUILTIN_VOID:
 	case BUILTIN_TYPE:
 	case BUILTIN_NMS:
 		break;
@@ -47,7 +48,6 @@ static bool builtin_truthiness(Value v, BuiltinType b) {
 static bool val_truthiness(Value v, Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
-	case TYPE_VOID: return false;
 	case TYPE_UNKNOWN: assert(0); return false;
 	case TYPE_BUILTIN: return builtin_truthiness(v, t->builtin);
 	case TYPE_PTR: return v.ptr != NULL;
@@ -146,7 +146,6 @@ static void *val_get_ptr(Value *v, Type *t) {
 	switch (t->kind) {
 	case TYPE_PTR:
 	case TYPE_BUILTIN:
-	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 	case TYPE_FN:
 	case TYPE_SLICE:
@@ -165,9 +164,6 @@ static void *val_get_ptr(Value *v, Type *t) {
 static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
-	case TYPE_VOID:
-		fprintf(f, "(void)");
-		break;
 	case TYPE_UNKNOWN:
 		fprintf(f, "???");
 		break;
@@ -185,6 +181,7 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		case BUILTIN_F64: fprintf(f, F64_FMT, *(F64 *)p); break;
 		case BUILTIN_CHAR: fprint_char_literal(f, *(char *)p); break;
 		case BUILTIN_BOOL: fprintf(f, "%s", *(bool *)p ? "true" : "false"); break;
+		case BUILTIN_VOID: fprintf(f, "(void)"); break;
 		case BUILTIN_VARARGS:
 			fprintf(f, "...(");
 			arr_foreach(*(VarArg **)p, VarArg, varg) {
@@ -278,7 +275,6 @@ static void *val_ptr_to_free(Value *v, Type *t) {
 	case TYPE_FN:
 	case TYPE_PTR:
 	case TYPE_SLICE:
-	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 		return NULL;
 	case TYPE_ARR:
@@ -302,53 +298,55 @@ static inline void val_free_ptr(Value *v, Type *t) {
 	free(v);
 }
 
-#define builtin_casts_to_int(x)					\
-	case BUILTIN_I8:							\
-	vout->i8 = (I8)(I64)vin->x; break;			\
-	case BUILTIN_I16:							\
-	vout->i16 = (I16)(I64)vin->x; break;		\
-	case BUILTIN_I32:							\
-	vout->i32 = (I32)(I64)vin->x; break;		\
-	case BUILTIN_I64:							\
-	vout->i64 = (I64)vin->x; break;				\
-	case BUILTIN_U8:							\
-	vout->u8 = (U8)(U64)vin->x; break;			\
-	case BUILTIN_U16:							\
-	vout->u16 = (U16)(U64)vin->x; break;		\
-	case BUILTIN_U32:							\
-	vout->u32 = (U32)(U64)vin->x; break;		\
-	case BUILTIN_U64:							\
+#define builtin_casts_to_int(x) \
+	case BUILTIN_I8: \
+	vout->i8 = (I8)(I64)vin->x; break; \
+	case BUILTIN_I16: \
+	vout->i16 = (I16)(I64)vin->x; break; \
+	case BUILTIN_I32: \
+	vout->i32 = (I32)(I64)vin->x; break; \
+	case BUILTIN_I64: \
+	vout->i64 = (I64)vin->x; break; \
+	case BUILTIN_U8: \
+	vout->u8 = (U8)(U64)vin->x; break; \
+	case BUILTIN_U16: \
+	vout->u16 = (U16)(U64)vin->x; break; \
+	case BUILTIN_U32: \
+	vout->u32 = (U32)(U64)vin->x; break; \
+	case BUILTIN_U64: \
 	vout->u64 = (U64)vin->x; break
 
-#define builtin_casts_to_num(x)					\
-	builtin_casts_to_int(x);					\
-	case BUILTIN_F32:							\
-	vout->f32 = (F32)vin->x; break;				\
-	case BUILTIN_F64:							\
+#define builtin_casts_to_num(x) \
+	builtin_casts_to_int(x); \
+	case BUILTIN_F32: \
+	vout->f32 = (F32)vin->x; break; \
+	case BUILTIN_F64: \
 	vout->f64 = (F64)vin->x; break
 
-#define builtin_int_casts(low, up)							\
-	case BUILTIN_##up:										\
-	switch (to) {											\
-		builtin_casts_to_num(low);							\
-	case BUILTIN_CHAR: vout->charv = (char)vin->low; break;	\
-	case BUILTIN_BOOL: vout->boolv = vin->low != 0; break;	\
-	case BUILTIN_NMS:										\
-	case BUILTIN_TYPE:										\
-	case BUILTIN_VARARGS:									\
-		assert(0); break;									\
+#define builtin_int_casts(low, up) \
+	case BUILTIN_##up: \
+	switch (to) { \
+		builtin_casts_to_num(low); \
+	case BUILTIN_CHAR: vout->charv = (char)vin->low; break; \
+	case BUILTIN_BOOL: vout->boolv = vin->low != 0; break; \
+	case BUILTIN_NMS: \
+	case BUILTIN_VOID: \
+	case BUILTIN_TYPE: \
+	case BUILTIN_VARARGS: \
+		assert(0); break; \
 	} break
 
-#define builtin_float_casts(low, up)							\
-	case BUILTIN_##up:											\
-	switch (to) {												\
-		builtin_casts_to_num(low);								\
-	case BUILTIN_BOOL: vout->boolv = vin->low != 0.0f; break;	\
-	case BUILTIN_CHAR:											\
-	case BUILTIN_TYPE:											\
-	case BUILTIN_NMS:											\
-	case BUILTIN_VARARGS:										\
-		assert(0); break;										\
+#define builtin_float_casts(low, up) \
+	case BUILTIN_##up: \
+	switch (to) { \
+		builtin_casts_to_num(low); \
+	case BUILTIN_BOOL: vout->boolv = vin->low != 0.0f; break; \
+	case BUILTIN_CHAR: \
+	case BUILTIN_TYPE: \
+	case BUILTIN_NMS: \
+	case BUILTIN_VARARGS: \
+	case BUILTIN_VOID: \
+		assert(0); break; \
 	} break
 	
 static void val_builtin_cast(Value *vin, BuiltinType from, Value *vout, BuiltinType to) {
@@ -378,6 +376,7 @@ static void val_builtin_cast(Value *vin, BuiltinType from, Value *vout, BuiltinT
 		case BUILTIN_BOOL:
 		case BUILTIN_TYPE:
 		case BUILTIN_NMS:
+		case BUILTIN_VOID:
 		case BUILTIN_VARARGS:
 			assert(0); break;
 		}
@@ -385,6 +384,7 @@ static void val_builtin_cast(Value *vin, BuiltinType from, Value *vout, BuiltinT
 	case BUILTIN_TYPE:
 	case BUILTIN_NMS:
 	case BUILTIN_VARARGS:
+	case BUILTIN_VOID:
 		assert(0);
 		break;
 	}
@@ -400,7 +400,6 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 	}
 	
 	switch (from->kind) {
-	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 	case TYPE_TUPLE:
 	case TYPE_STRUCT:
@@ -427,7 +426,6 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 		case TYPE_EXPR:
 		case TYPE_STRUCT:
 		case TYPE_SLICE:
-		case TYPE_VOID:
 		case TYPE_UNKNOWN:
 		case TYPE_TUPLE:
 		case TYPE_FN:
@@ -462,6 +460,7 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 			case BUILTIN_TYPE:
 			case BUILTIN_NMS:
 			case BUILTIN_VARARGS:
+			case BUILTIN_VOID:
 				assert(0); break;
 			}
 			break;
@@ -537,6 +536,7 @@ static void eval_deref(Value *v, void *ptr, Type *type) {
 		case BUILTIN_TYPE:
 			v->type = *(Type **)ptr;
 			break;
+		case BUILTIN_VOID:
 		case BUILTIN_VARARGS:
 			assert(0);
 			break;
@@ -545,7 +545,6 @@ static void eval_deref(Value *v, void *ptr, Type *type) {
 	case TYPE_SLICE:
 		v->slice = *(Slice *)ptr;
 		break;
-	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 	case TYPE_EXPR:
 		assert(0);
@@ -579,6 +578,7 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 		case BUILTIN_TYPE:
 			*(Type **)set = to->type;
 			break;
+		case BUILTIN_VOID:
 		case BUILTIN_VARARGS:
 			assert(0);
 			break;
@@ -587,7 +587,6 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 	case TYPE_SLICE:
 		*(Slice *)set = to->slice;
 		break;
-	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 	case TYPE_EXPR:
 		assert(0);
@@ -1521,7 +1520,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			}
 		}
 		if (ev->returning) {
-			if (fn->ret_type.kind != TYPE_VOID && !fn->ret_decls)
+			if (!type_is_void(&fn->ret_type) && !fn->ret_decls)
 				*v = ev->ret_val;
 			ev->returning = NULL;
 		}

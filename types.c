@@ -59,6 +59,7 @@ static size_t compiler_sizeof_builtin(BuiltinType b) {
 	case BUILTIN_TYPE: return sizeof(Type *);
 	case BUILTIN_NMS: return sizeof(Namespace *);
 	case BUILTIN_VARARGS: return sizeof(VarArg *);
+	case BUILTIN_VOID: return 1; /* void ptr arithmetic */
 	}
 	assert(0);
 	return 0;
@@ -80,6 +81,7 @@ static size_t compiler_alignof_builtin(BuiltinType b) {
 	case BUILTIN_TYPE: return toc_alignof(Type *);
 	case BUILTIN_NMS: return toc_alignof(Namespace *);
 	case BUILTIN_VARARGS: return toc_alignof(VarArg *);
+	case BUILTIN_VOID: return 1;
 	}
 	assert(0);
 	return 0;
@@ -227,8 +229,6 @@ static size_t compiler_alignof(Type *t) {
 	switch (t->kind) {
 	case TYPE_BUILTIN:
 		return compiler_alignof_builtin(t->builtin);
-	case TYPE_VOID:
-		return 1;
 	case TYPE_FN:
 		return toc_alignof(FnExpr *);
 	case TYPE_PTR:
@@ -277,7 +277,6 @@ static size_t compiler_sizeof(Type *t) {
 			return SIZE_MAX;
 		return t->struc->size;
 	} break;
-	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 		return 0;
 	case TYPE_EXPR:
@@ -359,7 +358,6 @@ static bool type_eq_exact(Type *a, Type *b) {
 	
 	if (a->kind != b->kind) return false;
 	switch (a->kind) {
-	case TYPE_VOID: return true;
 	case TYPE_UNKNOWN: return true;
 	case TYPE_BUILTIN:
 		return a->builtin == b->builtin;
@@ -429,7 +427,7 @@ static bool type_eq_implicit(Type *a, Type *b) {
 	}
 	if (a->kind == TYPE_PTR) {
 		/* &void casts to &anything */
-		if (a->ptr->kind == TYPE_VOID || b->ptr->kind == TYPE_VOID)
+		if (type_is_builtin(a->ptr, BUILTIN_VOID) || type_is_builtin(b->ptr, BUILTIN_VOID))
 			return true;
 	}
 	return type_eq_exact(a, b);
@@ -447,8 +445,13 @@ static Type *overriding_type(Type *a, Type *b) {
 		}
 		return b;
 	}
+
 	if (b->flags & TYPE_IS_FLEXIBLE)
 		return a;
+
+	if (a->kind == TYPE_PTR && type_is_builtin(a->ptr, BUILTIN_VOID)) 
+		return b;
+
 	/* doesn't matter */
 	return a;
 }
@@ -530,7 +533,6 @@ static Status expr_must_lval(Expression *e, const char *purpose) {
 static bool type_is_compileonly(Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
-	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 		return false;
 	case TYPE_BUILTIN:
@@ -708,7 +710,7 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 		}
 	}
 	
-	if (f->ret_decls && !generic && f->ret_type.kind == TYPE_VOID /* haven't found return type yet */) {
+	if (f->ret_decls && !generic && type_is_builtin(&f->ret_type, BUILTIN_VOID) /* haven't found return type yet */) {
 		/* find return type */
 
 		arr_foreach(f->ret_decls, Declaration, d) {
@@ -980,7 +982,6 @@ static Status type_resolve(Typer *tr, Type *t, Location where) {
 		}
 	} break;
 	case TYPE_UNKNOWN:
-	case TYPE_VOID:
 	case TYPE_BUILTIN:
 		break;
 	}
@@ -993,7 +994,6 @@ static Status type_resolve(Typer *tr, Type *t, Location where) {
 static bool type_can_be_truthy(Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
-	case TYPE_VOID:
 	case TYPE_TUPLE:
 	case TYPE_ARR:
 	case TYPE_STRUCT:
@@ -1007,6 +1007,7 @@ static bool type_can_be_truthy(Type *t) {
 		switch (t->builtin) {
 		case BUILTIN_TYPE:
 		case BUILTIN_NMS:
+		case BUILTIN_VOID:
 			return false;
 		case BUILTIN_I8:
 		case BUILTIN_U8:
@@ -1045,7 +1046,6 @@ static CastStatus type_cast_status(Type *from, Type *to) {
 	switch (from->kind) {
 	case TYPE_UNKNOWN: return CAST_STATUS_NONE;
 	case TYPE_STRUCT:
-	case TYPE_VOID:
 		return CAST_STATUS_ERR;
 	case TYPE_BUILTIN:
 		switch (from->builtin) {
@@ -1076,6 +1076,7 @@ static CastStatus type_cast_status(Type *from, Type *to) {
 				case BUILTIN_TYPE:
 				case BUILTIN_NMS:
 				case BUILTIN_VARARGS:
+				case BUILTIN_VOID:
 					return CAST_STATUS_ERR;
 				}
 				assert(0);
@@ -1108,6 +1109,7 @@ static CastStatus type_cast_status(Type *from, Type *to) {
 			case BUILTIN_TYPE:
 			case BUILTIN_NMS:
 			case BUILTIN_VARARGS:
+			case BUILTIN_VOID:
 				return CAST_STATUS_ERR;
 			}
 			assert(0);
@@ -1121,6 +1123,7 @@ static CastStatus type_cast_status(Type *from, Type *to) {
 		case BUILTIN_TYPE:
 		case BUILTIN_NMS:
 		case BUILTIN_VARARGS:
+		case BUILTIN_VOID:
 			return CAST_STATUS_ERR;
 		}
 		break;
@@ -1206,7 +1209,7 @@ static Status types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 			success = false;
 			goto ret;
 		}
-	} else if (ret_type->kind != TYPE_VOID && !has_named_ret_vals) {
+	} else if (!type_is_builtin(ret_type, BUILTIN_VOID) && !has_named_ret_vals) {
 		Statement *stmts = f->body.stmts;
 		if (arr_len(stmts)) {
 			Statement *last_stmt = (Statement *)stmts + (arr_len(stmts) - 1);
@@ -2019,7 +2022,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 			goto for_fail;
 		}
 		
-		t->kind = TYPE_VOID;
+		t->kind = TYPE_BUILTIN;
+		t->builtin = BUILTIN_VOID;
 		
 		typer_block_exit(tr);
 		}break;
@@ -2173,7 +2177,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		if (curr->body.ret_expr) {
 			*t = curr->body.ret_expr->type;
 		} else {
-			t->kind = TYPE_VOID;
+			t->kind = TYPE_BUILTIN; t->builtin = BUILTIN_VOID;
 			t->flags |= TYPE_IS_RESOLVED;
 		}
 		while (1) {
@@ -2199,7 +2203,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				if (nexti->body.ret_expr) {
 					*next_type = nexti->body.ret_expr->type;
 				} else {
-					next_type->kind = TYPE_VOID;
+					next_type->kind = TYPE_BUILTIN; next_type->builtin = BUILTIN_VOID;
 					next_type->flags = TYPE_IS_RESOLVED;
 				}
 				if (!type_eq_implicit(next_type, curr_type)) {
@@ -2217,7 +2221,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 			}
 		}
 		
-		if (!has_else && t->kind != TYPE_VOID) {
+		if (!has_else && !type_is_builtin(t, BUILTIN_VOID)) {
 			err_print(e->where, "Non-void if block with no else.");
 			return false;
 		}
@@ -2235,7 +2239,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 			err_print(w->body.ret_expr->where, "while loops can't return values -- you're missing a semicolon (;)");
 			return false;
 		}
-		t->kind = TYPE_VOID;
+		t->kind = TYPE_BUILTIN;
+		t->builtin = BUILTIN_VOID;
 	} break;
 	case EXPR_CALL: {
 		CallExpr *c = &e->call;
@@ -2829,7 +2834,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 		if (b->ret_expr) {
 			*t = b->ret_expr->type;
 		} else {
-			t->kind = TYPE_VOID;
+			t->kind = TYPE_BUILTIN;
+			t->builtin = BUILTIN_VOID;
 		}
 	} break;
 	case EXPR_C: {
@@ -2931,10 +2937,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 			assert(0); /* types_expr is what makes things UNARY_LEN */
 			break;
 		case UNARY_TYPEOF: {
-			if (of->type.kind == TYPE_VOID) {
-				err_print(of->where, "This has type void, but you're trying to apply typeof to it.");
-				return false;
-			}
 			if (type_is_builtin(&of->type, BUILTIN_VARARGS)) {
 				err_print(of->where, "You can't apply typeof to varargs.");
 				return false;
@@ -3061,7 +3063,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 				switch (o) {
 				case BINARY_SET:
 					/* type of x = y is always void */
-					t->kind = TYPE_VOID;
+					t->kind = TYPE_BUILTIN;
+					t->builtin = BUILTIN_VOID;
 					break;
 				case BINARY_LT:
 				case BINARY_GT:
@@ -3094,7 +3097,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				o == BINARY_SET_SUB ||
 				o == BINARY_SET_MUL ||
 				o == BINARY_SET_DIV) {
-				t->kind = TYPE_VOID; /* actually, it's just void */
+				t->kind = TYPE_BUILTIN; t->builtin = BUILTIN_VOID; /* actually, it's just void */
 			}
 				
 			break;
@@ -3241,7 +3244,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 					/* allow access of slice pointer */
 					t->kind = TYPE_PTR;
 					t->ptr = typer_calloc(tr, 1, sizeof *t->ptr);
-					t->ptr->kind = TYPE_VOID;
+					t->ptr->kind = TYPE_BUILTIN;
+					t->ptr->builtin = BUILTIN_VOID;
 					t->ptr->flags = TYPE_IS_RESOLVED;
 					break;
 				}
@@ -3396,7 +3400,7 @@ static Status types_block(Typer *tr, Block *b) {
 		if (s->kind == STMT_EXPR && (s->flags & STMT_EXPR_NO_SEMICOLON)) {
 			/* not voided */
 			Expression *e = s->expr;
-			if (e->type.kind == TYPE_VOID) {
+			if (type_is_builtin(&e->type, BUILTIN_VOID)) {
 				if (!(e->kind == EXPR_BLOCK
 					  || e->kind == EXPR_IF
 					  || e->kind == EXPR_WHILE
@@ -3427,6 +3431,7 @@ static Status types_block(Typer *tr, Block *b) {
 }
 
 static Status types_decl(Typer *tr, Declaration *d) {
+	Type *dtype = &d->type;
 	if (d->flags & DECL_FOUND_TYPE) return true;
 	bool success = true;
 
@@ -3438,15 +3443,14 @@ static Status types_decl(Typer *tr, Declaration *d) {
 	}
 	
 	if (d->flags & DECL_INFER) {
-		d->type.kind = TYPE_UNKNOWN;
-		d->type.flags = 0;
+		dtype->kind = TYPE_UNKNOWN;
+		dtype->flags = 0;
 		return true;
 	}
 	typer_arr_add(tr, tr->in_decls, d);
 	if (d->flags & DECL_ANNOTATES_TYPE) {
 		/* type supplied */
-		assert(d->type.kind != TYPE_VOID); /* there's no way to annotate void */
-		if (!type_resolve(tr, &d->type, d->where)) {
+		if (!type_resolve(tr, dtype, d->where)) {
 			success = false;
 			goto ret;
 		}
@@ -3458,8 +3462,8 @@ static Status types_decl(Typer *tr, Declaration *d) {
 		}
 		assert(d->expr.type.flags & TYPE_IS_RESOLVED);
 		if (d->flags & DECL_ANNOTATES_TYPE) {
-			if (!type_eq_implicit(&d->expr.type, &d->type)) {
-				char *decl_type = type_to_str(&d->type),
+			if (!type_eq_implicit(&d->expr.type, dtype)) {
+				char *decl_type = type_to_str(dtype),
 					*expr_type = type_to_str(&d->expr.type);
 				err_print(d->expr.where, "Declaration type %s does not match expression type %s.", decl_type, expr_type);
 				free(decl_type); free(expr_type);
@@ -3467,14 +3471,14 @@ static Status types_decl(Typer *tr, Declaration *d) {
 				goto ret;
 			}
 		} else {
-			if (d->expr.type.kind == TYPE_VOID) {
+			if (type_is_void(&d->expr.type)) {
 				/* e.g. x := (fn(){})(); */
 				err_print(d->expr.where, "Use of void value.");
 				success = false;
 				goto ret;
 			}
-			d->type = d->expr.type;
-			d->type.flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE; /* x := 5; => x is not flexible */
+			*dtype = d->expr.type;
+			dtype->flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE; /* x := 5; => x is not flexible */
 		}
 		bool need_value = (d->flags & DECL_IS_CONST) || !tr->block || tr->block->kind == BLOCK_NMS;
 		if (need_value) {
@@ -3484,26 +3488,62 @@ static Status types_decl(Typer *tr, Declaration *d) {
 					success = false;
 					goto ret;
 				}
-				copy_val(tr->allocr, &d->val, val, &d->type);
+				copy_val(tr->allocr, &d->val, val, dtype);
 				d->flags |= DECL_FOUND_VAL;
 			}
 		}
 	}
-	
-	for (size_t i = 0; i < arr_len(d->idents); ++i) {
-		Type *t = d->type.kind == TYPE_TUPLE ? &d->type.tuple[i] : &d->type;
-		if (type_is_compileonly(&d->type)) {
-			if (!(d->flags & DECL_IS_CONST)) {
-				char *s = type_to_str(&d->type);
-				err_print(d->where, "Declarations with type %s must be constant.", s);
-				free(s);
-				success = false;
-				goto ret;
-			}
+
+	size_t n_idents; n_idents = arr_len(d->idents);
+
+	if (type_is_compileonly(dtype)) {
+		if (!(d->flags & DECL_IS_CONST)) {
+			char *s = type_to_str(dtype);
+			err_print(d->where, "Declarations with type %s must be constant.", s);
+			free(s);
+			success = false;
+			goto ret;
 		}
+	}
+	
+	if (dtype->kind == TYPE_TUPLE) {
+		if (n_idents != arr_len(dtype->tuple)) {
+			err_print(d->where, "Expected to have %lu things declared in declaration, but got %lu.", (unsigned long)arr_len(dtype->tuple), (unsigned long)n_idents);
+			success = false;
+			goto ret;
+		}
+	}
+	if (dtype->kind == TYPE_UNKNOWN) {
+		if (!d->where.file->ctx->have_errored) /* don't do an error if we haven't already done one, because it might be because of that */
+			err_print(d->where, "Can't determine type of declaration.");
+		success = false;
+		goto ret;
+	}
+	if (dtype->kind == TYPE_BUILTIN) {
+		if (dtype->builtin == BUILTIN_VARARGS && !(d->flags & DECL_IS_PARAM)) {
+			err_print(d->where, "Only parameters can be varargs.");
+			success = false;
+			goto ret;
+		} else if (dtype->builtin == BUILTIN_VOID) {
+			err_print(d->where, "The type of a declaration can't be void.");
+			success = false;
+			goto ret;
+		}
+	}
+	if (d->flags & DECL_IS_CONST) {
+		if (dtype->kind == TYPE_PTR) {
+			err_print(d->where, "You can't have a constant pointer.");
+			success = false;
+			goto ret;
+		}
+	}
+		
+	
+	for (int i = 0, len = (int)n_idents; i < len; ++i) {
+		Type *t = decl_type_at_index(d, i);
 		if (type_is_builtin(t, BUILTIN_TYPE)) {
 			if (d->flags & DECL_HAS_EXPR) {
-				Value *val = d->type.kind == TYPE_TUPLE ? &d->val.tuple[i] : &d->val;
+				Value *val = decl_val_at_index(d, i);
 				if (val->type->kind == TYPE_STRUCT && val->type->struc->params) {
 					/* don't resolve it because it's not really complete */
 				} else {
@@ -3522,34 +3562,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 			t->fn.constness = NULL;
 		}
 	}
-	
-	size_t n_idents; n_idents = arr_len(d->idents);
-	if (d->type.kind == TYPE_TUPLE) {
-		if (n_idents != arr_len(d->type.tuple)) {
-			err_print(d->where, "Expected to have %lu things declared in declaration, but got %lu.", (unsigned long)arr_len(d->type.tuple), (unsigned long)n_idents);
-			success = false;
-			goto ret;
-		}
-	}
-	if (d->type.kind == TYPE_UNKNOWN) {
-		if (!d->where.file->ctx->have_errored) /* don't do an error if we haven't already done one, because it might be because of that */
-			err_print(d->where, "Can't determine type of declaration.");
-		success = false;
-		goto ret;
-	}
-	if (type_is_builtin(&d->type, BUILTIN_VARARGS) && !(d->flags & DECL_IS_PARAM)) {
-		err_print(d->where, "Only parameters can be varargs.");
-		success = false;
-		goto ret;
-	}
-	if (d->flags & DECL_IS_CONST) {
-		if (d->type.kind == TYPE_PTR) {
-			err_print(d->where, "You can't have a constant pointer.");
-			success = false;
-			goto ret;
-		}
-	}
-		
+
 	if (d->flags & DECL_USE) {
 		int idx = 0;
 		if (arr_len(d->idents) > 1) {
@@ -3585,8 +3598,8 @@ static Status types_decl(Typer *tr, Declaration *d) {
 	d->flags |= DECL_FOUND_TYPE;
 	if (!success) {
 		/* use unknown type if we didn't get the type */
-		d->type.flags = TYPE_IS_RESOLVED;
-		d->type.kind = TYPE_UNKNOWN;
+		dtype->flags = TYPE_IS_RESOLVED;
+		dtype->kind = TYPE_UNKNOWN;
 	}
 	arr_remove_lasta(tr->in_decls, tr->allocr);
 	return success;
@@ -3700,7 +3713,7 @@ static Status types_stmt(Typer *tr, Statement *s) {
 		}
 	    r->referring_to = &tr->fn->body;
 		if (r->flags & RET_HAS_EXPR) {
-			if (tr->fn->ret_type.kind == TYPE_VOID) {
+			if (type_is_void(&tr->fn->ret_type)) {
 				err_print(s->where, "Return value in a void function.");
 				return false;
 			}
@@ -3717,8 +3730,7 @@ static Status types_stmt(Typer *tr, Statement *s) {
 				return false;
 			}
 		} else {
-			if (tr->fn->ret_type.kind != TYPE_VOID
-				&& !tr->fn->ret_decls) {
+			if (type_is_void(&tr->fn->ret_type) && !tr->fn->ret_decls) {
 				err_print(s->where, "No return value in non-void function.");
 				return false;
 			}

@@ -83,15 +83,13 @@ static U64 type_hash(Type *t) {
 											 0x8191b5178d728e8c,
 											 0x50da97f1211b2423,
 											 0xc3977306abd0ae6c,
-											 0x87ea684427e1c521,
-											 0xcee5fd6d6cbdfe23
+											 0x87ea684427e1c521
 	};
 	U64 hash = starters[t->kind];
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_BUILTIN:
 		return hash + (U64)t->builtin * 0x1307787dfff73417;
-	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 		return hash;
 	case TYPE_TUPLE:
@@ -124,7 +122,6 @@ static U64 type_hash(Type *t) {
 static U64 val_ptr_hash(void *v, Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
-	case TYPE_VOID: return 0;
 	case TYPE_UNKNOWN: return 0;
 	case TYPE_BUILTIN:
 		switch (t->builtin) {
@@ -152,6 +149,8 @@ static U64 val_ptr_hash(void *v, Type *t) {
 			return type_hash(*(Type **)v);
 		case BUILTIN_NMS:
 			return (U64)*(Namespace **)v;
+		case BUILTIN_VOID:
+			return 0;
 		}
 		assert(0);
 		return 0;
@@ -224,6 +223,7 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 		case BUILTIN_F64: return *(F64 *)u == *(F64 *)v;
 		case BUILTIN_BOOL: return *(bool *)u == *(bool *)v;
 		case BUILTIN_CHAR: return *(char *)u == *(char *)v;
+		case BUILTIN_VOID: return true;
 		case BUILTIN_VARARGS: {
 			VarArg *us = *(VarArg **)u, *vs = *(VarArg **)v;
 			size_t n = arr_len(us);
@@ -243,8 +243,6 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 			return *(Namespace **)u == *(Namespace **)v;
 		}
 		break;
-	case TYPE_VOID:
-		return true;
 	case TYPE_UNKNOWN:
 		return false;
 	case TYPE_FN:

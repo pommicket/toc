@@ -8,11 +8,12 @@
 
 /* 
 @TODO:
-&void
 null
+fix eval pointer arithmetic - we're not multiplying by the size?
 fix including something twice - just use the non-namespacey version if it exists or pick one namespace to use everywhere otherwise
 	- maybe store info about namespaces which are secretly the same as inline blocks/other namespaces in the Typer
 &&, ||
+#no_warn
 start making a standard library... (printf; stringbuilder would be nice to have)
 improve type_to_str:
 	Foo ::= struct(t::Type) {}
@@ -23,6 +24,7 @@ enums
 unions
 ---
 switch to / add as an alternative: libffi
+	- better yet, inline assembly
 don't bother generating ret_ if nothing's deferred
 X ::= newtype(int); or something
 any odd number of "s for a string

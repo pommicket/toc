@@ -170,6 +170,7 @@ static int kw_to_builtin_type(Keyword kw) {
 	case KW_BOOL: return BUILTIN_BOOL;
 	case KW_CHAR: return BUILTIN_CHAR;
 	case KW_TYPE: return BUILTIN_TYPE;
+	case KW_VOID: return BUILTIN_VOID;
 	case KW_NAMESPACE: return BUILTIN_NMS;
 	/* don't allow .. => varargs because it's not a normal type */
 	default: return -1;
@@ -192,6 +193,7 @@ static Keyword builtin_type_to_kw(BuiltinType t) {
 	case BUILTIN_BOOL: return KW_BOOL;
 	case BUILTIN_CHAR: return KW_CHAR;
 	case BUILTIN_TYPE: return KW_TYPE;
+	case BUILTIN_VOID: return KW_VOID;
 	case BUILTIN_NMS: return KW_NAMESPACE;
 	case BUILTIN_VARARGS: return KW_DOTDOT;
 	}
@@ -203,8 +205,6 @@ static Keyword builtin_type_to_kw(BuiltinType t) {
 static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 	bool resolved = (t->flags & TYPE_IS_RESOLVED) != 0;
 	switch (t->kind) {
-	case TYPE_VOID:
-		return str_copy(buffer, bufsize, "void");
 	case TYPE_UNKNOWN:
 		return str_copy(buffer, bufsize, "???");
 	case TYPE_BUILTIN: {
@@ -234,7 +234,7 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 			written += type_to_str_(&param_types[i], buffer + written, bufsize - written);
 		}
 		written += str_copy(buffer + written, bufsize - written, ")");
-		if (ret_type->kind != TYPE_VOID) {
+		if (!type_is_builtin(ret_type, BUILTIN_VOID)) {
 			written += str_copy(buffer + written, bufsize - written, " ");
 			written += type_to_str_(ret_type, buffer + written, bufsize - written);
 		}
@@ -550,7 +550,8 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 				 && t->token->kw != KW_LPAREN
 				 && t->token->kw != KW_AMPERSAND)
 				|| t->token->kw == KW_AS) {
-				ret_type->kind = TYPE_VOID;
+				ret_type->kind = TYPE_BUILTIN;
+				ret_type->builtin = BUILTIN_VOID;
 				ret_type->flags = 0;
 			} else {
 				if (!parse_type(p, ret_type, NULL))
@@ -930,7 +931,8 @@ static Status parse_fn_expr(Parser *p, FnExpr *f) {
 	
 	if (token_is_kw(t->token, KW_LBRACE)) {
 		/* void function */
-		f->ret_type.kind = TYPE_VOID;
+		f->ret_type.kind = TYPE_BUILTIN;
+		f->ret_type.builtin = BUILTIN_VOID;
 		f->ret_type.flags = 0;
 	} else if (is_decl(t)) {
 		if (!parse_decl_list(p, &f->ret_decls, DECL_CAN_END_WITH_LBRACE | DECL_CAN_END_WITH_COMMA))
@@ -943,7 +945,8 @@ static Status parse_fn_expr(Parser *p, FnExpr *f) {
 		}
 		--t->token;	/* move back to { */
 		/* just set return type to void. the actual return type will be set by types.c:type_of_fn */
-		f->ret_type.kind = TYPE_VOID;
+		f->ret_type.kind = TYPE_BUILTIN;
+		f->ret_type.builtin = BUILTIN_VOID;
 		f->ret_type.flags = 0;
 	} else {
 		if (!parse_type(p, &f->ret_type, NULL)) {
@@ -1088,11 +1091,12 @@ static Status ctype_to_type(Allocator *a, CType *ctype, Type *type, Location whe
 	case CTYPE_DOUBLE:
 		type->builtin = BUILTIN_F64;
 		break;
-	case CTYPE_PTR:
+	case CTYPE_PTR: {
 		type->kind = TYPE_PTR;
-		type->ptr = allocr_calloc(a, 1, sizeof *type->ptr);
-		type->ptr->kind = TYPE_VOID;
-		break;
+		Type *p = type->ptr = allocr_calloc(a, 1, sizeof *type->ptr);
+		p->kind = TYPE_BUILTIN;
+		p->builtin = BUILTIN_VOID;
+	} break;
 	case CTYPE_UNSIGNED: assert(0); break;
 	}
 	if (size != 0) {
@@ -1537,7 +1541,8 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			if (t->token == end) {
 				/* void */
 				ret_ctype->kind = CTYPE_NONE;
-				ret_type->kind = TYPE_VOID;
+				ret_type->kind = TYPE_BUILTIN;
+				ret_type->builtin = BUILTIN_VOID;
 				ret_type->flags = 0;
 			} else {
 				if (!parse_c_type(p, ret_ctype, ret_type))

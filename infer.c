@@ -81,7 +81,6 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 		}
 	}
 	switch (match->kind) {
-	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 	case TYPE_BUILTIN:
 		break; /* nothing we can do here */

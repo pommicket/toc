@@ -102,9 +102,6 @@ static bool arg_list_start(av_alist *arg_list, void (*fn)(), Value *return_val, 
 		warn_print(where, "Foreign function returns function pointer. If it returns a C-style function pointer, it won't be called properly by toc.");
 		av_start_ptr(*arg_list, fn, FnExpr *, &return_val->fn);
 		break;
-	case TYPE_VOID:
-		av_start_void(*arg_list, fn);
-		break;
 	case TYPE_PTR:
 		av_start_ptr(*arg_list, fn, void *, &return_val->ptr);
 		break;
@@ -153,6 +150,9 @@ static bool arg_list_start(av_alist *arg_list, void (*fn)(), Value *return_val, 
 		case BUILTIN_NMS:
 			av_start_ptr(*arg_list, fn, Namespace *, &return_val->nms);
 			break;
+		case BUILTIN_VOID:
+			av_start_void(*arg_list, fn);
+			break;
 		case BUILTIN_VARARGS:
 			assert(0);
 			break;
@@ -197,7 +197,6 @@ static bool arg_list_start(av_alist *arg_list, void (*fn)(), Value *return_val, 
 
 static bool arg_list_add(av_alist *arg_list, Value val, Type *type, Location where) {
 	switch (type->kind) {
-	case TYPE_VOID:
 	case TYPE_TUPLE:
 	case TYPE_UNKNOWN:
 	case TYPE_ARR: { /* @TODO: maybe just pass pointer for arr? */
@@ -262,6 +261,9 @@ static bool arg_list_add(av_alist *arg_list, Value val, Type *type, Location whe
 				arg_list_add(arg_list, arg->val, arg->type, where);
 			}
 			break;
+		case BUILTIN_VOID:
+			err_print(where, "Cannot pass type void to foreign function.");
+			return false;
 		}
 		break;
 	case TYPE_SLICE:

@@ -53,7 +53,6 @@ static void copy_val(Allocator *a, Value *out, Value in, Type *t) {
 	case TYPE_FN:
 	case TYPE_PTR:
 	case TYPE_SLICE:
-	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 		*out = in;
 		break;
@@ -122,7 +121,6 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 	*out = *in;
 	switch (in->kind) {
 	case TYPE_BUILTIN:
-	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 		break;
 	case TYPE_EXPR:

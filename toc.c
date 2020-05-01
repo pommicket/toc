@@ -81,6 +81,9 @@ static void fprint_char_literal(FILE *f, char c) {
 static inline bool type_is_builtin(Type *t, BuiltinType b) {
 	return t->kind == TYPE_BUILTIN && t->builtin == b;
 }
+static inline bool type_is_void(Type *t) {
+	return t->kind == TYPE_BUILTIN && t->builtin == BUILTIN_VOID;
+}
 
 static inline bool type_is_slicechar(Type *t) {
 	return t->kind == TYPE_SLICE && type_is_builtin(t->slice, BUILTIN_CHAR);

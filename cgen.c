@@ -169,7 +169,6 @@ static void cgen_defs_decl(CGenerator *g, Declaration *d);
 	case TYPE_PTR:														\
 		f(g, type->ptr);												\
 		break;															\
-	case TYPE_VOID:														\
 	case TYPE_BUILTIN:													\
 	case TYPE_UNKNOWN:													\
 		break;															\
@@ -286,7 +285,6 @@ static bool cgen_uses_ptr(Type *t) {
 	case TYPE_PTR:
 	case TYPE_FN:
 	case TYPE_SLICE:
-	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 		return false;
 	case TYPE_EXPR:
@@ -326,16 +324,14 @@ static void cgen_type_pre(CGenerator *g, Type *t) {
 		case BUILTIN_BOOL: cgen_write(g, "bool"); break;
 		case BUILTIN_F32: cgen_write(g, "f32"); break;
 		case BUILTIN_F64: cgen_write(g, "f64"); break;
+		case BUILTIN_VOID: cgen_write(g, "void"); break;
 		case BUILTIN_NMS:
 		case BUILTIN_TYPE:
 		case BUILTIN_VARARGS:
 			assert(0); break;
 		} break;
 	case TYPE_PTR:
-		if (t->ptr->kind == TYPE_UNKNOWN)
-			cgen_write(g, "void"); /* #C &"foo", for example */
-		else
-			cgen_type_pre(g, t->ptr);
+		cgen_type_pre(g, t->ptr);
 		cgen_write(g, "(*");
 		break;
 	case TYPE_ARR:
@@ -353,7 +349,6 @@ static void cgen_type_pre(CGenerator *g, Type *t) {
 	case TYPE_SLICE:
 		cgen_write(g, "slice_");
 		break;
-	case TYPE_VOID: cgen_write(g, "void"); break;
 	case TYPE_STRUCT:
 		cgen_write(g, "struct ");
 		cgen_struct_name(g, t->struc);
@@ -416,7 +411,6 @@ static void cgen_type_post(CGenerator *g, Type *t) {
 			cgen_type_post(g, &t->fn.types[0]);
 	} break;
 	case TYPE_BUILTIN:
-	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 	case TYPE_TUPLE:
 	case TYPE_SLICE:
@@ -543,7 +537,6 @@ static void cgen_val_ptr_pre(CGenerator *g, void *v, Type *t) {
 	case TYPE_FN:
 	case TYPE_UNKNOWN:
 	case TYPE_TUPLE:
-	case TYPE_VOID:
 	case TYPE_BUILTIN:
 	case TYPE_PTR:
 	case TYPE_STRUCT:
@@ -559,7 +552,6 @@ static void cgen_val_ptr(CGenerator *g, void *v, Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_TUPLE:
-	case TYPE_VOID:
 	case TYPE_EXPR:
 	case TYPE_UNKNOWN:
 		assert(0);
@@ -612,6 +604,7 @@ static void cgen_val_ptr(CGenerator *g, void *v, Type *t) {
 		case BUILTIN_TYPE:
 		case BUILTIN_NMS:
 		case BUILTIN_VARARGS:
+		case BUILTIN_VOID:
 			assert(0);
 			break;
 		}
@@ -829,7 +822,6 @@ static void cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 		assert(set_expr->kind == EXPR_TUPLE);
 		cgen_set_tuple(g, set_expr->tuple, NULL, NULL, to_expr);
 		break;
-	case TYPE_VOID:
 	case TYPE_EXPR:
 		assert(0);
 		break;
@@ -1003,7 +995,7 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 		
 		cgen_ident_id_to_str(ret_name, id);
 		char *p = ret_name + strlen(ret_name);
-		if (e->type.kind != TYPE_VOID) {
+		if (!type_is_void(&e->type)) {
 			if (e->type.kind == TYPE_TUPLE) {
 				for (unsigned long i = 0; i < arr_len(e->type.tuple); ++i) {
 					sprintf(p, "%lu", i);
@@ -1665,7 +1657,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 	} break;
 	case EXPR_BLOCK:
 	case EXPR_IF:
-		if (e->type.kind != TYPE_VOID)
+		if (!type_is_void(&e->type))
 			cgen_ident_id(g, e->cgen.id);
 		break;
 	case EXPR_CALL:
@@ -1850,7 +1842,6 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 	case TYPE_STRUCT:
 		cgen_write(g, "{0}");
 		break;
-	case TYPE_VOID:
 	case TYPE_UNKNOWN:
 	case TYPE_TUPLE:
 	case TYPE_EXPR:
@@ -2104,7 +2095,7 @@ static void cgen_ret(CGenerator *g, Block *returning_from, Expression *ret_expr)
 		ret.type = f->ret_type;
 		#endif
 		cgen_writeln(g, " return;");
-	} else if (f->ret_type.kind == TYPE_VOID) {
+	} else if (type_is_void(&f->ret_type)) {
 		cgen_writeln(g, "return;");
 	} else {
 		cgen_writeln(g, "return ret_;");
