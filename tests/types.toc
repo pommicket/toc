@@ -25,7 +25,7 @@ main ::= fn() {
 slice_to_ll ::= fn(t::=, slice: []t) use ll: LinkedList(t) {
 	head = slice[0];
 	if slice.len == 1 {
-		tail = 0 as &LinkedList(t);
+		tail = null;
 	} else {
 		tail = new(LinkedList(t));
 		*tail = slice_to_ll(slice[1:]);

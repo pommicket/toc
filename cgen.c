@@ -580,8 +580,11 @@ static void cgen_val_ptr(CGenerator *g, void *v, Type *t) {
 		cgen_fn_name(g, *(FnExpr **)v);
 		break;
 	case TYPE_PTR:
-		/* You can't have a constant pointer. */
-		assert(0);
+		/* this can happen; as i'm writing this it's only for null */
+		cgen_write(g, "((");
+		cgen_type_pre(g, t);
+		cgen_type_post(g, t);
+		cgen_write(g, ")" ULONGLONG_FMT ")", (ulonglong)*(void **)v);
 		break;
 	case TYPE_BUILTIN:
 		switch (t->builtin) {
@@ -1982,11 +1985,12 @@ static void cgen_decl(CGenerator *g, Declaration *d) {
 			cgen_write(g, "; ");
 		}
 		if (has_expr) {
+			Expression *expr = &d->expr;
 			assert((g->block || g->fn) && !(d->flags & DECL_IS_CONST));
-			if (d->expr.type.kind == TYPE_TUPLE) {
-				cgen_set_tuple(g, NULL, d->idents, NULL, &d->expr);
+			if (expr->type.kind == TYPE_TUPLE) {
+				cgen_set_tuple(g, NULL, d->idents, NULL, expr);
 			} else {
-				cgen_expr_pre(g, &d->expr);
+				if (expr->kind != EXPR_VAL) cgen_expr_pre(g, expr);
 				if (nidents > 1) {
 					/* set expr__ first to make sure side effects don't happen twice */
 					cgen_write(g, "{");
@@ -1995,7 +1999,7 @@ static void cgen_decl(CGenerator *g, Declaration *d) {
 					cgen_write(g, " expr_");
 					cgen_type_post(g, &d->type);
 					cgen_write(g, "; ");
-					cgen_set(g, NULL, "expr_", &d->expr, NULL);
+					cgen_set(g, NULL, "expr_", expr, NULL);
 				
 					arr_foreach(d->idents, Identifier, i) {
 						Expression e;
@@ -2008,17 +2012,26 @@ static void cgen_decl(CGenerator *g, Declaration *d) {
 					}
 					cgen_write(g, "}");
 				} else {
-					if (ident_eq_str(d->idents[0], "_")) {
-						cgen_expr(g, &d->expr);
+					Identifier ident = d->idents[0];
+					if (ident_eq_str(ident, "_")) {
+						cgen_expr(g, expr);
 						cgen_write(g, ";");
 					} else {
 						/* set it directly */
-						Expression e = {0};
-						e.kind = EXPR_IDENT;
-						e.type = d->type;
-						e.flags = EXPR_FOUND_TYPE;
-						e.ident = d->idents[0];
-						cgen_set(g, &e, NULL, &d->expr, NULL);
+						if (expr->kind == EXPR_VAL) {
+							/* don't use a temp variable */
+							cgen_ident(g, ident);
+							cgen_write(g, " = ");
+							cgen_val(g, &expr->val, &expr->type);
+							cgen_write(g, ";");
+						} else {
+							Expression e = {0};
+							e.kind = EXPR_IDENT;
+							e.type = d->type;
+							e.flags = EXPR_FOUND_TYPE;
+							e.ident = ident;
+							cgen_set(g, &e, NULL, expr, NULL);
+						}
 					}
 				}
 			}

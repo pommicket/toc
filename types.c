@@ -1651,10 +1651,14 @@ static Status use_ident(Typer *tr, Identifier i, Type *t, Location where) {
 
 static Status types_expr(Typer *tr, Expression *e) {
 	if (e->flags & EXPR_FOUND_TYPE) return true;
+	e->flags |= EXPR_FOUND_TYPE; /* even if failed, pretend we found the type */
+	if (e->kind == EXPR_VAL) {
+		/* can exist, e.g. for null */
+		return true; 
+	}
 	Type *t = &e->type;
 	t->flags = TYPE_IS_RESOLVED;
 	t->kind = TYPE_UNKNOWN; /* default to unknown type (in the case of an error) */
-	e->flags |= EXPR_FOUND_TYPE; /* even if failed, pretend we found the type */
 	switch (e->kind) {
 	case EXPR_FN: {
 		if (!type_of_fn(tr, e->fn, &e->type, 0)) {

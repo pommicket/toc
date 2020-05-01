@@ -230,7 +230,8 @@ static inline void copier_ident_translate(Copier *c, Identifier *i) {
 /* in must be untyped! */
 static void copy_expr(Copier *c, Expression *out, Expression *in) {
 	Allocator *a = c->allocr;
-	*out = *in;
+	*out = *in; /* NOTE : if in the future you are removing this, make sure in->type is still copied for EXPR_VAL,
+		which sometimes exists before typing, e.g. for null */
 	assert(!(in->flags & EXPR_FOUND_TYPE));
 	switch (in->kind) {
 	case EXPR_LITERAL_FLOAT:

@@ -31,9 +31,15 @@ typedef double Floating;
 #if __STDC_VERSION__ >= 199901 || defined _MSC_VER
 #define LONGLONG_AVAILABLE 1
 typedef long long longlong;
+typedef unsigned long long ulonglong;
+#define LONGLONG_FMT "%lld"
+#define ULONGLONG_FMT "%llu"
 #else
 #define LONGLONG_AVAILABLE 0
 typedef long longlong;
+typedef unsigned long ulonglong;
+#define LONGLONG_FMT "%ld"
+#define ULONGLONG_FMT "%lu"
 #endif
 
 
@@ -315,6 +321,7 @@ typedef enum {
 	KW_TYPEOF,
 	KW_SIZEOF,
 	KW_ALIGNOF,
+	KW_NULL,
 	KW_COUNT
 } Keyword;
 
@@ -329,7 +336,7 @@ static const char *const keywords[KW_COUNT] = {
 	"int", "i8", "i16", "i32", "i64",
 	"u8", "u16", "u32", "u64", "float", "f32", "f64", "void",
 	"Type",	"Namespace", "char", "bool", "true", "false", "nms", "use",
-	"typeof", "sizeof", "alignof"
+	"typeof", "sizeof", "alignof", "null"
 };
 
 typedef enum {

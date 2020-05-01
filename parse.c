@@ -1265,6 +1265,16 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					e->kind = EXPR_LITERAL_BOOL;
 					e->booll = false;
 					break;
+				case KW_NULL: {
+					e->kind = EXPR_VAL;
+					e->type.kind = TYPE_PTR;
+					e->type.flags = TYPE_IS_RESOLVED;
+					Type *ptr = e->type.ptr = parser_malloc(p, sizeof *ptr);
+					ptr->kind = TYPE_BUILTIN;
+					ptr->builtin = BUILTIN_VOID;
+					ptr->flags = TYPE_IS_RESOLVED;
+					e->val.ptr = NULL;
+				} break;
 				default: goto unrecognized;
 				}
 				break;
