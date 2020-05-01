@@ -4,7 +4,8 @@ main ::= fn() {
 	#if "hello" {
 		x := 5;
 	} else {
-		x := 6;
+		x : FOOTYPE = 6.3 + "foo";
+		_+3=bar;
 	}
 	puti(x);
 }

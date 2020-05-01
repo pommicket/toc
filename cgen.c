@@ -2135,16 +2135,6 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 		unsigned has_expr = r->flags & RET_HAS_EXPR;
 		cgen_ret(g, r->referring_to, has_expr ? &r->expr : NULL);
 	} break;
-	case STMT_INCLUDE: {
-		Include *i = s->inc;
-		if (i->inc_file && (i->inc_file->flags & INC_FILE_CGEND)){
-			/* already generated */
-		} else {
-			if (i->inc_file) i->inc_file->flags |= INC_FILE_CGEND;
-			arr_foreach(i->stmts, Statement, sub)
-				cgen_stmt(g, sub);
-		}
-	} break;
 	case STMT_BREAK: {
 		Block *b = s->referring_to;
 		cgen_deferred_up_to(g, b);
@@ -2164,6 +2154,13 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 		break;
 	case STMT_USE:
 	case STMT_MESSAGE:
+		break;
+	case STMT_INLINE_BLOCK:
+		arr_foreach(s->inline_block, Statement, sub)
+			cgen_stmt(g, sub);
+		break;
+	case STMT_INCLUDE:
+		assert(0);
 		break;
 	}
 }
@@ -2210,16 +2207,6 @@ static void cgen_defs_stmt(CGenerator *g, Statement *s) {
 		if (s->ret->flags & RET_HAS_EXPR)
 			cgen_defs_expr(g, &s->ret->expr);
 		break;
-	case STMT_INCLUDE: {
-		Include *i = s->inc;
-		if (i->inc_file && (i->inc_file->flags & INC_FILE_CGEND_DEFS)) {
-			/* already generated */
-		} else {
-			if (i->inc_file) i->inc_file->flags |= INC_FILE_CGEND_DEFS;
-			arr_foreach(i->stmts, Statement, sub)
-				cgen_defs_stmt(g, sub);
-		}
-	} break;
 	case STMT_BREAK:
 	case STMT_CONT:
 	case STMT_MESSAGE:
@@ -2229,6 +2216,13 @@ static void cgen_defs_stmt(CGenerator *g, Statement *s) {
 		break;
 	case STMT_USE:
 		cgen_defs_expr(g, &s->use->expr);
+		break;
+	case STMT_INLINE_BLOCK:
+		arr_foreach(s->inline_block, Statement, sub)	
+			cgen_defs_stmt(g, sub);
+		break;
+	case STMT_INCLUDE:
+		assert(0);
 		break;
 	}
 }

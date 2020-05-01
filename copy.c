@@ -378,6 +378,7 @@ static void copy_decl(Copier *c, Declaration *out, Declaration *in) {
 
 static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 	*out = *in;
+	assert(!(in->flags & STMT_TYPED));
 	switch (in->kind) {
 	case STMT_RET:
 		out->ret = copier_malloc(c, sizeof *out->ret);
@@ -388,15 +389,7 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 	case STMT_INCLUDE:
 		out->inc = copier_malloc(c, sizeof *out->inc);
 		*out->inc = *in->inc;
-		if (in->flags & STMT_TYPED) {
-			size_t nstmts = arr_len(in->inc->stmts);
-			arr_set_lena(out->inc->stmts, nstmts, c->allocr);
-			for (size_t i = 0; i < nstmts; ++i) {
-				copy_stmt(c, &out->inc->stmts[i], &in->inc->stmts[i]);
-			}
-		} else {
-			copy_expr(c, &out->inc->filename, &in->inc->filename);
-		}
+		copy_expr(c, &out->inc->filename, &in->inc->filename);
 		break;
 	case STMT_EXPR:
 		out->expr = copy_expr_(c, in->expr);
@@ -419,6 +412,9 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 		out->use = copier_malloc(c, sizeof *in->use);
 		*out->use = *in->use;
 		copy_expr(c, &out->use->expr, &in->use->expr);
+		break;
+	case STMT_INLINE_BLOCK:
+		assert(0); /* only exists after typing */
 		break;
 	}
 }

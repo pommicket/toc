@@ -2869,14 +2869,9 @@ static void fprint_stmt(FILE *out, Statement *s) {
 	} break;
 	case STMT_INCLUDE: {
 		Include *i = s->inc;
-		if (s->flags & STMT_TYPED) {
-			arr_foreach(i->stmts, Statement, sub)
-				fprint_stmt(out, sub);
-		} else {
-			fprintf(out, "#include ");
-			fprint_expr(out, &i->filename);
-			fprintf(out, ";\n");
-		}
+		fprintf(out, "#include ");
+		fprint_expr(out, &i->filename);
+		fprintf(out, ";\n");
 	} break;
 	case STMT_MESSAGE: {
 		Message *m = s->message;
@@ -2908,6 +2903,10 @@ static void fprint_stmt(FILE *out, Statement *s) {
 		fprintf(out, "use ");
 		fprint_expr(out, &s->use->expr);
 		fprintf(out, ";\n");
+		break;
+	case STMT_INLINE_BLOCK:
+		arr_foreach(s->inline_block, Statement, sub)
+			fprint_stmt(out, sub);
 		break;
 	}
 }

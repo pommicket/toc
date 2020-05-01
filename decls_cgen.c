@@ -138,16 +138,6 @@ static void cgen_sdecls_stmt(CGenerator *g, Statement *s) {
 		if (r->flags & RET_HAS_EXPR)
 			cgen_sdecls_expr(g, &r->expr);
 	} break;
-	case STMT_INCLUDE: {
-		Include *i = s->inc;
-		if (i->inc_file && (i->inc_file->flags & INC_FILE_CGEND_SDECLS)) {
-			/* already generated */
-		} else {
-			if (i->inc_file) i->inc_file->flags |= INC_FILE_CGEND_SDECLS;
-			arr_foreach(i->stmts, Statement, sub)
-				cgen_sdecls_stmt(g, sub);
-		}
-	} break;
 	case STMT_BREAK:
 		if (!s->referring_to->c.break_lbl) {
 			s->referring_to->c.break_lbl = ++g->lbl_counter;
@@ -165,6 +155,13 @@ static void cgen_sdecls_stmt(CGenerator *g, Statement *s) {
 		break;
 	case STMT_USE:
 		cgen_sdecls_expr(g, &s->use->expr);
+		break;
+	case STMT_INLINE_BLOCK:
+		arr_foreach(s->inline_block, Statement, sub)
+			cgen_sdecls_stmt(g, sub);
+		break;
+	case STMT_INCLUDE:
+		assert(0);
 		break;
 	}
 }
@@ -386,16 +383,6 @@ static void cgen_decls_stmt(CGenerator *g, Statement *s) {
 		if (r->flags & RET_HAS_EXPR)
 			cgen_decls_expr(g, &r->expr);
 	} break;
-	case STMT_INCLUDE: {
-		Include *i = s->inc;
-		if (i->inc_file && (i->inc_file->flags & INC_FILE_CGEND_DECLS)) {
-			/* already generated */
-		} else {
-			if (i->inc_file) i->inc_file->flags |= INC_FILE_CGEND_DECLS;
-			arr_foreach(i->stmts, Statement, sub)
-				cgen_decls_stmt(g, sub);
-		}
-	} break;
 	case STMT_BREAK:
 	case STMT_CONT:
 	case STMT_MESSAGE:
@@ -405,6 +392,13 @@ static void cgen_decls_stmt(CGenerator *g, Statement *s) {
 		break;
 	case STMT_USE:
 		cgen_sdecls_expr(g, &s->use->expr);
+		break;
+	case STMT_INLINE_BLOCK:
+		arr_foreach(s->inline_block, Statement, sub)
+			cgen_decls_stmt(g, sub);
+		break;
+	case STMT_INCLUDE: 
+		assert(0);
 		break;
 	}
 }

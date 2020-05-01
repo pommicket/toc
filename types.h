@@ -915,10 +915,11 @@ typedef enum {
 	STMT_RET,
 	STMT_BREAK,
 	STMT_CONT,
-	STMT_INCLUDE,
+	STMT_INCLUDE, /* turns into STMT_INLINE_BLOCK after typing */
 	STMT_MESSAGE,
 	STMT_DEFER,
-	STMT_USE
+	STMT_USE,
+	STMT_INLINE_BLOCK /* a group of statements acting as one statement */
 } StatementKind;
 
 enum {
@@ -949,11 +950,7 @@ enum {
 
 typedef union {
 	U8 flags;
-	union {
-		Expression filename; /* before typing */
-		struct Statement *stmts; /* after typing */
-	};
-	IncludedFile *inc_file;
+	Expression filename;
 } Include;
 
 typedef enum {
@@ -989,6 +986,7 @@ typedef struct Statement {
 		Message *message; /* #error, #warn, #info */
 		Block *referring_to; /* for break/continue; set during typing */
 		struct Statement *defer;
+		struct Statement *inline_block; /* statements in an inline block (dynamic array) */
 		Use *use;
 	};
 } Statement;
@@ -1044,7 +1042,6 @@ typedef struct Typer {
 	ParsedFile *parsed_file;
 	Namespace *nms;
 	StrHashTable included_files; /* maps to IncludedFile */
-	File *file;
 	/* 
 		have we had an error because we couldn't find a file that was #include'd 
 		(so that we can stop compiling immediately)

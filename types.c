@@ -2162,39 +2162,9 @@ static Status types_expr(Typer *tr, Expression *e) {
 		IfExpr *i = e->if_;
 		IfExpr *curr = i;
 		if (curr->flags & IF_STATIC) {
-			while (1) {
-				Expression *cond = curr->cond;
-				Expression *next = curr->next_elif;
-				Value v;
-				if (cond) {
-					if (!types_expr(tr, cond))
-						return false;
-					if (!eval_expr(tr->evalr, cond, &v))
-						return false;
-				}
-				if (!cond || val_truthiness(v, &cond->type)) {
-					Block *true_block = &curr->body;
-					Statement *last = arr_last_ptr(true_block->stmts);
-					if (last && last->kind == STMT_EXPR && (last->flags & STMT_EXPR_NO_SEMICOLON)) {
-						err_print(last->where, "#ifs can't return values.");
-						return false;
-					}
-					e->kind = EXPR_BLOCK;
-					e->block = true_block;
-					break;
-				}
-				if (!next) break;
-				curr = next->if_;
-			}
-			if (e->kind == EXPR_IF) {
-				/* all conds were false */
-				e->kind = EXPR_BLOCK;
-				e->block = typer_calloc(tr, 1, sizeof *e->block);
-				e->block->where = e->where;
-				e->block->parent = tr->block;
-				idents_create(&e->block->idents, tr->allocr, e->block);
-			}
-			goto expr_block;
+			/* handled in types_stmt unless there's a problem */
+			err_print(e->where, "You can't use #if in this way. It has to be a statement on its own, and can't return a value.");
+			return false;
 		}
 		Type *curr_type = t;
 		bool has_else = false;
@@ -2852,7 +2822,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 		free(order);
 		*t = *ret_type;
 	} break;
-	expr_block:
 	case EXPR_BLOCK: {
 		Block *b = e->block;
 		if (!types_block(tr, b))
@@ -3623,11 +3592,77 @@ static Status types_decl(Typer *tr, Declaration *d) {
 	return success;
 }
 
+static Status fix_ident_decls_inline_block(Typer *tr, Statement *stmts) {
+	Identifiers *idents = typer_get_idents(tr);
+	arr_foreach(stmts, Statement, s) {
+		if (s->kind == STMT_DECL) {
+			Declaration *d = s->decl;
+			arr_foreach(d->idents, Identifier, ident) {
+				Identifier i = *ident = ident_translate_forced(*ident, idents);
+				if (i->decl) {
+					char *istr = ident_to_str(i);
+					err_print(d->where, "Redeclaration of identifier %s.", istr);
+					info_print(i->decl->where, "%s was also declared here.", istr);
+					free(istr);
+					return false;
+				}
+				i->decl = d;
+			}
+		}
+	}
+	return true;
+}
+
 static Status types_stmt(Typer *tr, Statement *s) {
 	if (s->flags & STMT_TYPED) return true;
 	switch (s->kind) {
 	case STMT_EXPR: {
 		Expression *e = s->expr;
+		if (e->kind == EXPR_IF && (e->if_->flags & IF_STATIC)) {
+			/* handle #if */
+			IfExpr *curr = e->if_;
+			while (1) {
+				Expression *cond = curr->cond;
+				Expression *next = curr->next_elif;
+				Value v;
+				if (cond) {
+					if (!types_expr(tr, cond))
+						return false;
+					if (!eval_expr(tr->evalr, cond, &v))
+						return false;
+				}
+				if (!cond || val_truthiness(v, &cond->type)) {
+					Block *true_block = &curr->body;
+					Statement *last = arr_last_ptr(true_block->stmts);
+					if (last && last->kind == STMT_EXPR && (last->flags & STMT_EXPR_NO_SEMICOLON)) {
+						err_print(last->where, "#ifs can't return values.");
+						return false;
+					}
+					s->kind = STMT_INLINE_BLOCK;
+					s->inline_block = true_block->stmts;
+					if (!fix_ident_decls_inline_block(tr, s->inline_block))
+						return false;
+					bool success = true;
+					arr_foreach(s->inline_block, Statement, sub) {
+						if (!types_stmt(tr, sub)) {
+							success = false;
+						}
+					}
+					if (!success) return false;
+					goto success;
+				}
+				if (!next) break;
+				curr = next->if_;
+			}
+			if (e->kind == EXPR_IF) {
+				/* all conds were false */
+				/* empty inline block */
+				s->kind = STMT_INLINE_BLOCK;
+				s->inline_block = NULL;
+			}
+			break;
+		}
+
 		if (!types_expr(tr, e)) {
 			return false;
 		}
@@ -3696,6 +3731,9 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			return false;
 		size_t filename_len = strlen(filename);
 		IncludedFile *inc_f = NULL;
+
+		s->kind = STMT_INLINE_BLOCK;
+
 		if (s->flags & STMT_INC_TO_NMS) {
 			if (!(inc->flags & INC_FORCED)) {
 				inc_f = str_hash_table_get(&tr->included_files, filename, filename_len);
@@ -3703,12 +3741,11 @@ static Status types_stmt(Typer *tr, Statement *s) {
 					tr->nms->body.idents = inc_f->main_nms->body.idents;
 					tr->nms->body.idents.scope = &tr->nms->body;
 					tr->nms->points_to = inc_f->main_nms;
-					inc->inc_file = inc_f;
-					inc->stmts = inc_f->stmts;
+					s->inline_block = inc_f->stmts;
 					break;
 				}
 			}
-			inc->inc_file = inc_f = str_hash_table_insert(&tr->included_files, filename, filename_len);
+			inc_f = str_hash_table_insert(&tr->included_files, filename, filename_len);
 			inc_f->main_nms = tr->nms;
 		}
 		char *contents = read_file_contents(tr->allocr, filename, s->where);
@@ -3737,16 +3774,12 @@ static Status types_stmt(Typer *tr, Statement *s) {
 		if (inc_f) {
 			inc_f->stmts = stmts_inc;
 		}
-		inc->stmts = stmts_inc;
-		File *prev = tr->file;
-		tr->file = file;
+		s->inline_block = stmts_inc;
 		arr_foreach(stmts_inc, Statement, s_incd) {
 			if (!types_stmt(tr, s_incd)) {
-				tr->file = prev;
 				return false;
 			}
 		}
-		tr->file = prev;
 	} break;
 	case STMT_MESSAGE: {
 		Message *m = s->message;
@@ -3805,18 +3838,21 @@ static Status types_stmt(Typer *tr, Statement *s) {
 		else
 			typer_arr_add(tr, tr->uses, u);
 	} break;
+	case STMT_INLINE_BLOCK:
+		assert(0); /* only exists after typing */
+		break;
 	}
+success:
 	s->flags |= STMT_TYPED;
 	return true;
 }
 
-static void typer_create(Typer *tr, Evaluator *ev, File *file, ErrCtx *err_ctx, Allocator *allocr, Identifiers *idents) {
+static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *allocr, Identifiers *idents) {
 	tr->block = NULL;
 	tr->blocks = NULL;
 	tr->fn = NULL;
 	tr->nms = NULL;
 	tr->evalr = ev;
-	tr->file = file;
 	tr->err_ctx = err_ctx;
 	tr->in_decls = NULL;
 	tr->had_include_err = false;

@@ -1641,7 +1641,7 @@ static void eval_exit_stmts(Statement *stmts, Statement *last_reached) {
 				Declaration *d = s->decl;
 				decl_remove_val(d);
 			}
-			/* STMT_INCLUDEs are handled by eval_stmt; don't worry */
+			/* inline blocks are handled by eval_stmt; don't worry */
 		}
 	}
 }
@@ -1675,25 +1675,28 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 		ev->returning = stmt->referring_to;
 		ev->is_break = false;
 		break;
-	case STMT_INCLUDE: {
-		Include *i = stmt->inc;
-		Statement *last_reached = arr_last_ptr(i->stmts);
-		arr_foreach(i->stmts, Statement, sub) {
-			if (!eval_stmt(ev, sub))
-				return false;
-			if (ev->returning) {
-				last_reached = sub;
-				break;
-			}
-		}
-		eval_exit_stmts(i->stmts, last_reached);
-	} break;
 	case STMT_MESSAGE:
 		break;
 	case STMT_DEFER:
 		arr_add(ev->typer->block->deferred, stmt->defer);
 		break;
 	case STMT_USE:
+		break;
+	case STMT_INLINE_BLOCK: {
+		Statement *stmts = stmt->inline_block;
+		Statement *last_reached = arr_last_ptr(stmts);
+		arr_foreach(stmts, Statement, s) {
+			if (!eval_stmt(ev, s))
+				return false;
+			if (ev->returning) {
+				last_reached = s;
+				break;
+			}
+		}
+		eval_exit_stmts(stmts, last_reached);
+	} break;
+	case STMT_INCLUDE:
+		assert(0);
 		break;
 	}
 	return true;

@@ -8,10 +8,10 @@
 
 /* 
 @TODO:
-#if should not create a block
 &void
 null
 fix including something twice - just use the non-namespacey version if it exists or pick one namespace to use everywhere otherwise
+	- maybe store info about namespaces which are secretly the same as inline blocks/other namespaces in the Typer
 &&, ||
 start making a standard library... (printf; stringbuilder would be nice to have)
 improve type_to_str:
@@ -214,7 +214,7 @@ int main(int argc, char **argv) {
 	Typer tr;
 	Evaluator ev;
 	evalr_create(&ev, &tr, &main_allocr);
-	typer_create(&tr, &ev, &file, &err_ctx, &main_allocr, &globals);
+	typer_create(&tr, &ev, &err_ctx, &main_allocr, &globals);
 	
 	if (!types_file(&tr, &f)) {
 		err_text_important(&err_ctx, "Errors occured while determining types.\n");
