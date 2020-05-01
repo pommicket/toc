@@ -8,8 +8,6 @@
 
 /* 
 @TODO:
-fix eval pointer arithmetic - are we not multiplying by the size?
-	- pointer arithmetic test
 fix including something twice - just use the non-namespacey version if it exists or pick one namespace to use everywhere otherwise
 	- maybe store info about namespaces which are secretly the same as inline blocks/other namespaces in the Typer
 &&, ||

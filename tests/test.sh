@@ -4,6 +4,7 @@ tests='bf
 control_flow
 types
 arrs_slices
+ptr_arithmetic
 defer
 sizeof
 new

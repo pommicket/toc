@@ -1288,8 +1288,10 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 	case EXPR_BINARY_OP: {
 		const char *s = "";
 		Expression *lhs = e->binary.lhs, *rhs = e->binary.rhs;
+		Type *lhs_type = &lhs->type;
 		bool handled = false;
-		switch (e->binary.op) {
+		BinaryOp op = e->binary.op;
+		switch (op) {
 		case BINARY_SUB:
 			s = "-"; break;
 		case BINARY_ADD:
@@ -1327,13 +1329,11 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		case BINARY_SET_MOD:
 			s = "%="; break;
 		case BINARY_AT_INDEX: {
-			Type *lhs_type = &lhs->type;
 			bool uses_ptr = false;
 			if (lhs_type->kind == TYPE_PTR) {
 				uses_ptr = true;
 				lhs_type = lhs_type->ptr;
 			}
-			cgen_write(g, "(");
 			switch (lhs_type->kind) {
 			case TYPE_ARR:
 				if (uses_ptr) cgen_write(g, "(*");
@@ -1368,11 +1368,10 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 				assert(0);
 				break;
 			}
-			cgen_write(g, ")");
 			handled = true;
 		} break;
 		case BINARY_DOT: {
-			Type *struct_type = &lhs->type;
+			Type *struct_type = lhs_type;
 			if (struct_type->kind == TYPE_PTR) struct_type = struct_type->ptr;
 			if (struct_type->kind == TYPE_STRUCT) {
 				cgen_write(g, "(");
@@ -1396,6 +1395,29 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			handled = true;
 		} break;
 		}
+		if (lhs_type->kind == TYPE_PTR && type_is_void(lhs_type->ptr)) {
+			if (op == BINARY_ADD || op == BINARY_SUB) {
+				cgen_write(g, "((");
+				cgen_type_pre(g, &e->type);
+				cgen_type_post(g, &e->type);
+				cgen_write(g, ")((char*)");
+				cgen_expr(g, lhs);
+				cgen_write(g, "%s", s);
+				cgen_expr(g, rhs);
+				cgen_write(g, "))");
+			} else if (op == BINARY_SET_ADD || op == BINARY_SET_SUB) {
+				/* lhs could have side effects so we can't just do lhs = (char *)lhs + rhs */
+				cgen_write(g, "{");
+					cgen_write(g, "void **t_ = &");
+				cgen_expr(g, lhs);
+				cgen_write(g, ";");
+				cgen_write(g, "*t_ = (char *)*t_ %c ", s[0]);
+				cgen_expr(g, rhs);
+				cgen_write(g, ";}");
+			}
+			handled = true;
+		}
+
 		if (handled) break;
 		cgen_write(g, "(");
 		cgen_expr(g, lhs);
