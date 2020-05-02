@@ -1286,10 +1286,9 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		}
 	} break;
 	case EXPR_BINARY_OP: {
-		const char *s = "";
+		const char *s = NULL;
 		Expression *lhs = e->binary.lhs, *rhs = e->binary.rhs;
 		Type *lhs_type = &lhs->type;
-		bool handled = false;
 		BinaryOp op = e->binary.op;
 		switch (op) {
 		case BINARY_SUB:
@@ -1304,7 +1303,6 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			s = "%"; break;
 		case BINARY_SET: 
 			cgen_set(g, lhs, NULL, rhs, NULL);
-			handled = true;
 			break;
 		case BINARY_GT:
 			s = ">"; break;
@@ -1316,6 +1314,14 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			s = "<="; break;
 		case BINARY_EQ:
 			s = "=="; break;
+		case BINARY_AND:
+		case BINARY_OR:
+			cgen_write(g, "(");
+			cgen_truthiness(g, lhs);
+			cgen_write(g, " %s ", op == BINARY_AND ? "&&" : "||");
+			cgen_truthiness(g, rhs);
+			cgen_write(g, ")");
+			break;
 		case BINARY_NE:
 			s = "!="; break;
 		case BINARY_SET_ADD:
@@ -1368,7 +1374,6 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 				assert(0);
 				break;
 			}
-			handled = true;
 		} break;
 		case BINARY_DOT: {
 			Type *struct_type = lhs_type;
@@ -1387,7 +1392,6 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 				cgen_write(g, is_ptr ? "->" :".");
 				cgen_write(g, "data");
 			}
-			handled = true;
 		} break;
 		}
 		if (lhs_type->kind == TYPE_PTR && type_is_void(lhs_type->ptr)) {
@@ -1410,10 +1414,10 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 				cgen_expr(g, rhs);
 				cgen_write(g, ";}");
 			}
-			handled = true;
+			s = NULL;
 		}
 
-		if (handled) break;
+		if (!s) break;
 		cgen_write(g, "(");
 		cgen_expr(g, lhs);
 		cgen_write(g, "%s", s);
@@ -1421,8 +1425,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		cgen_write(g, ")");
 	} break;
 	case EXPR_UNARY_OP: {
-		const char *s = "";
-		bool handled = false;
+		const char *s = NULL;
 		Type *of_type = &e->unary.of->type;
 		switch (e->unary.op) {
 		case UNARY_MINUS:
@@ -1432,7 +1435,10 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		case UNARY_ADDRESS:
 			s = "&"; break;
 		case UNARY_NOT:
-			s = "!"; break;
+			cgen_write(g, "(!");
+			cgen_truthiness(g, e->unary.of);
+			cgen_write(g, ")");
+			break;
 		case UNARY_SIZEOF:
 		case UNARY_ALIGNOF:
 			cgen_write(g, "%s(", e->unary.op == UNARY_SIZEOF ? "sizeof" : "_Alignof");
@@ -1440,7 +1446,6 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			cgen_type_pre(g, e->unary.of->val.type);
 			cgen_type_post(g, e->unary.of->val.type);
 			cgen_write(g, ")");
-			handled = true;
 			break;
 		case UNARY_LEN: {
 			bool is_ptr = of_type->kind == TYPE_PTR;
@@ -1457,7 +1462,6 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 				break;
 			default: assert(0); break;
 			}
-			handled = true;
 		} break;
 		case UNARY_TYPEOF:
 		case UNARY_DSIZEOF:
@@ -1465,7 +1469,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			assert(0);
 			return;
 		}
-		if (handled) break;
+		if (!s) break;
 		cgen_write(g, "(");
 		cgen_write(g, "%s", s);
 		cgen_expr(g, e->unary.of);

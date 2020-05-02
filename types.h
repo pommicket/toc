@@ -274,6 +274,8 @@ typedef enum {
 	KW_LT,
 	KW_GE,
 	KW_GT,
+	KW_ANDAND,
+	KW_OROR,
 	KW_PLUS,
 	KW_MINUS,
 	KW_ASTERISK,
@@ -328,7 +330,7 @@ typedef enum {
 static const char *const keywords[KW_COUNT] = {
 	";", ":", ",", "(", ")", "{", "}", "[", "]", "==",
 	"+=", "-=", "*=", "/=", "%=",
-	"!=", "<=", "<", ">=", ">",
+	"!=", "<=", "<", ">=", ">", "&&", "||",
 	"+", "-", "*", "!", "&", "/", "%", "..", ".",
 	"=",
 	"if", "elif", "else", "while", "for", "return", "break",
@@ -338,6 +340,7 @@ static const char *const keywords[KW_COUNT] = {
 	"Type",	"Namespace", "char", "bool", "true", "false", "nms", "use",
 	"typeof", "sizeof", "alignof", "null"
 };
+
 
 typedef enum {
 	NUM_LITERAL_INT,
@@ -614,7 +617,9 @@ typedef enum {
 	BINARY_EQ,
 	BINARY_NE,
 	BINARY_AT_INDEX, /* e.g. x[i] */
-	BINARY_DOT
+	BINARY_DOT,
+	BINARY_AND, /* && */
+	BINARY_OR /* || */
 } BinaryOp;
 
 typedef struct CallExpr {

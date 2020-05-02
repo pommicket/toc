@@ -102,6 +102,8 @@ static const char *binary_op_to_str(BinaryOp b) {
 	case BINARY_NE: return "!=";
 	case BINARY_DOT: return ".";
 	case BINARY_MOD: return "%";
+	case BINARY_AND: return "&&";
+	case BINARY_OR: return "||";
 	}
 	assert(0);
 	return "";
@@ -589,6 +591,17 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 			Location ptr_where;
 			if (!parse_type(p, type->ptr, &ptr_where)) return false;
 		} break;
+		case KW_ANDAND: {	
+			/* pointer to pointer */
+			type->kind = TYPE_PTR;
+			Type *ptr = type->ptr = parser_malloc(p, sizeof *type->ptr);
+			ptr->flags = 0;
+			ptr->kind = TYPE_PTR;
+			ptr->ptr = parser_malloc(p, sizeof *ptr->ptr);
+			++t->token; /* move past && */
+			Location ptrptr_where;
+			if (!parse_type(p, ptr->ptr, &ptrptr_where)) return false;
+		} break;
 		case KW_STRUCT: {
 			/* struct */
 			type->kind = TYPE_STRUCT;
@@ -678,6 +691,9 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 		switch (t->token->kind) {
 		case TOKEN_KW:
 			switch (t->token->kw) {
+			case KW_ANDAND:
+				/* &&int */
+				return true;
 			case KW_STRUCT:
 				ret = true;
 				if (end) {
@@ -982,12 +998,14 @@ static int op_precedence(Keyword op) {
 	case KW_PERCENT_EQ:
 		return 0;
 	case KW_COMMA: return 1;
-	case KW_LT: return 3;
-	case KW_GT: return 3;
-	case KW_LE: return 3;
-	case KW_GE: return 3;
-	case KW_EQ_EQ: return 3;
-	case KW_NE: return 3;
+	case KW_OROR:  return 2;
+	case KW_ANDAND: return 3;
+	case KW_LT: return 4;
+	case KW_GT: return 4;
+	case KW_LE: return 4;
+	case KW_GE: return 4;
+	case KW_EQ_EQ: return 4;
+	case KW_NE: return 4;
 	case KW_SIZEOF:
 	case KW_ALIGNOF:
 		return 5;
@@ -1854,6 +1872,12 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				break;
 			case KW_PERCENT_EQ:
 				op = BINARY_SET_MOD;
+				break;
+			case KW_ANDAND:
+				op = BINARY_AND;
+				break;
+			case KW_OROR:
+				op = BINARY_OR;
 				break;
 			default:
 				err_print(token_location(p->file, lowest_precedence_op), "Unary operator '%s' being used as a binary operator!", kw_to_str(lowest_precedence_op->kw));

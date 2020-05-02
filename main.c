@@ -8,7 +8,6 @@
 
 /* 
 @TODO:
-&&, ||
 #no_warn
 start making a standard library... (printf; stringbuilder would be nice to have)
 improve type_to_str:
@@ -18,6 +17,7 @@ switch
  - #fallthrough
 enums
 unions
+bitwise operations
 ---
 either detect circular #includes or set a #include limit (maybe sometimes you want finite circular includes with #if)
 switch to / add as an alternative: libffi
@@ -29,6 +29,7 @@ use point #except x;
 optional -Wshadow
 format errors so that vim/emacs can jump to them
 show include stack--especially for redeclarations with #include #force
+stuff like __builtin_sqrt
 ---
 make sure that floating point literals are as exact as possible
 	have some way of doing Infinity and s/qNaN (you can
@@ -36,6 +37,7 @@ make sure that floating point literals are as exact as possible
 once you have a bunch of test code:
 - analyze memory usage by secretly passing __FILE__, __LINE__ to allocr_m/c/realloc
 - try making more Expression members pointers
+- try making Value.slice a pointer
 - should val_stack be on the allocator? what about temporary arrays?
 	-->on the contrary, should in_decls be off the allocator?
 error on x ::= {return; 3}

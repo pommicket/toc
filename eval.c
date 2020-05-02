@@ -1150,10 +1150,11 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	} break;
 	case EXPR_BINARY_OP: {
 		Value lhs, rhs;
+		BinaryOp o = e->binary.op;
 		Expression *lhs_expr = e->binary.lhs, *rhs_expr = e->binary.rhs;
-		if (e->binary.op != BINARY_SET)
+		if (o != BINARY_SET)
 			if (!eval_expr(ev, lhs_expr, &lhs)) return false;
-		if (e->binary.op != BINARY_DOT)
+		if (o != BINARY_DOT && o != BINARY_AND && o != BINARY_OR)
 			if (!eval_expr(ev, rhs_expr, &rhs)) return false;
 		switch (e->binary.op) {
 		case BINARY_DOT: {
@@ -1161,6 +1162,22 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			if (!eval_ptr_to_struct_field(ev, e, &ptr))
 				return false;
 			eval_deref(v, ptr, &e->type);
+		} break;
+		case BINARY_AND: {
+			if (!val_truthiness(lhs, &lhs_expr->type)) {
+				v->boolv = false;
+				break;
+			}
+			if (!eval_expr(ev, rhs_expr, &rhs)) return false;
+			v->boolv = val_truthiness(rhs, &rhs_expr->type);
+		} break;
+		case BINARY_OR: {
+			if (val_truthiness(lhs, &lhs_expr->type)) {
+				v->boolv = true;
+				break;
+			}
+			if (!eval_expr(ev, rhs_expr, &rhs)) return false;
+			v->boolv = val_truthiness(rhs, &rhs_expr->type);
 		} break;
 		case BINARY_ADD:
 		case BINARY_SUB:
@@ -1223,6 +1240,13 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		IfExpr *i = e->if_;
 		if (i->cond) {
 			Value cond;
+			if (i->cond->type.kind == TYPE_UNKNOWN) {
+				if (!i->cond->where.file->ctx->have_errored) {
+					err_print(i->cond->where, "Couldn't determine type of if condition, but need to evaluate it.");
+					return false;
+				}
+				return false;
+			}
 			if (!eval_expr(ev, i->cond, &cond)) return false;
 			if (val_truthiness(cond, &i->cond->type)) {
 				if (!eval_block(ev, &i->body, v)) return false;
@@ -1238,6 +1262,13 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		WhileExpr *w = e->while_;
 		while (1) {
 			if (w->cond) {
+				if (w->cond->type.kind == TYPE_UNKNOWN) {
+					if (!w->cond->where.file->ctx->have_errored) {
+						err_print(w->cond->where, "Couldn't determine type of while condition, but need to evaluate it.");
+						return false;
+					}
+					return false;
+				}
 				if (!eval_expr(ev, w->cond, &cond)) return false;
 				Type *cond_type = &w->cond->type;
 				if (!val_truthiness(cond, cond_type))

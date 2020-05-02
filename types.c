@@ -3038,6 +3038,24 @@ static Status types_expr(Typer *tr, Expression *e) {
 				
 			break;
 		}
+		case BINARY_AND:
+		case BINARY_OR: {
+			bool success = true;
+			if (!type_can_be_truthy(lhs_type)) {
+				char *s = type_to_str(lhs_type);
+				success = false;
+				err_print(lhs->where, "Cannot use operator %s on type %s.", binary_op_to_str(o), s);
+				free(s);
+			}
+			if (!type_can_be_truthy(rhs_type)) {
+				char *s = type_to_str(rhs_type);
+				success = false;
+				err_print(lhs->where, "Cannot use operator %s on type %s.", binary_op_to_str(o), s);
+				free(s);
+			}
+			if (!success) return false;
+			t->kind = TYPE_BUILTIN; t->builtin = BUILTIN_BOOL;
+		} break;
 		case BINARY_AT_INDEX:
 			if (type_is_slicechar(rhs_type)) {
 				/* switch to BINARY_DOT (point["x"] => point.x) */
