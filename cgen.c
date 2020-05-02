@@ -1728,25 +1728,6 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		case BUILTIN_COMPILING:
 			cgen_write(g, "false");
 			break;
-		case BUILTIN_SIZEOF_SHORT:
-		case BUILTIN_SIZEOF_INT:
-		case BUILTIN_SIZEOF_LONG:
-		case BUILTIN_SIZEOF_LONG_LONG:
-		case BUILTIN_SIZEOF_FLOAT:
-		case BUILTIN_SIZEOF_DOUBLE:
-		case BUILTIN_SIZEOF_LONG_DOUBLE:
-		case BUILTIN_TSIZEOF_SHORT:
-		case BUILTIN_TSIZEOF_INT:
-		case BUILTIN_TSIZEOF_LONG:
-		case BUILTIN_TSIZEOF_LONG_LONG:
-		case BUILTIN_TSIZEOF_FLOAT:
-		case BUILTIN_TSIZEOF_DOUBLE:
-		case BUILTIN_TSIZEOF_LONG_DOUBLE:
-		case BUILTIN_SIZEOF_SIZE_T:
-		case BUILTIN_TSIZEOF_SIZE_T: {
-			Value val = get_builtin_val(e->builtin.which.val);
-			cgen_write(g, I64_FMT, val.i64);
-		} break;
 		}
 		break;
 	case EXPR_CAST: {

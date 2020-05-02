@@ -8,10 +8,6 @@
 
 /* 
 @TODO:
-#foreign non-functions (e.g. stderr)
-remove some now-unnecessary #builtins (all are unnecessary except for "compiling", 
-	which probably isn't even that useful but maybe more builtins will exist in 
-	the future)
 &&, ||
 #no_warn
 start making a standard library... (printf; stringbuilder would be nice to have)

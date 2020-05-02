@@ -738,32 +738,12 @@ typedef enum {
 	BUILTIN_STDOUT,
 	BUILTIN_STDERR,
 	BUILTIN_STDIN,
-	BUILTIN_SIZEOF_SHORT,
-	BUILTIN_TSIZEOF_SHORT, /* target sizeof(short) */
-	BUILTIN_SIZEOF_INT,
-	BUILTIN_TSIZEOF_INT,
-	BUILTIN_SIZEOF_LONG,
-	BUILTIN_TSIZEOF_LONG,
-	BUILTIN_SIZEOF_LONG_LONG,
-	BUILTIN_TSIZEOF_LONG_LONG,
-	BUILTIN_SIZEOF_SIZE_T,
-	BUILTIN_TSIZEOF_SIZE_T,
-	BUILTIN_SIZEOF_FLOAT,
-	BUILTIN_TSIZEOF_FLOAT,
-	BUILTIN_SIZEOF_DOUBLE,
-	BUILTIN_TSIZEOF_DOUBLE,
-	BUILTIN_SIZEOF_LONG_DOUBLE,
-	BUILTIN_TSIZEOF_LONG_DOUBLE,
 	BUILTIN_COMPILING
 #define BUILTIN_VAL_COUNT (BUILTIN_COMPILING+1)
 } BuiltinVal;
 
 const char *const builtin_val_names[BUILTIN_VAL_COUNT] =
-	{"stdout", "stderr", "stdin", "sizeof short", "target sizeof short",
-	 "sizeof int", "target sizeof int", "sizeof long", "target sizeof long",
-	 "sizeof long long", "target sizeof long long", "sizeof size_t", "target sizeof size_t",
-	 "sizeof float", "target sizeof float", "sizeof double", "target sizeof double",
-	 "sizeof long double", "target sizeof long double", "compiling"};
+	{"stdout", "stderr", "stdin", "compiling"};
 
 typedef struct Namespace {
 	Block body;

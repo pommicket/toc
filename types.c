@@ -1468,55 +1468,6 @@ static Value get_builtin_val(BuiltinVal val) {
 	case BUILTIN_COMPILING:
 		v.boolv = true;
 		break;
-	case BUILTIN_SIZEOF_SHORT:
-		v.i64 = (I64)sizeof(short);
-		break;
-	case BUILTIN_SIZEOF_INT:
-		v.i64 = (I64)sizeof(int);
-		break;
-	case BUILTIN_SIZEOF_LONG:
-		v.i64 = (I64)sizeof(long);
-		break;
-	case BUILTIN_SIZEOF_LONG_LONG:
-		v.i64 = (I64)sizeof(long long);
-		break;
-	case BUILTIN_SIZEOF_FLOAT:
-		v.i64 = (I64)sizeof(float);
-		break;
-	case BUILTIN_SIZEOF_DOUBLE:
-		v.i64 = (I64)sizeof(double);
-		break;
-	case BUILTIN_SIZEOF_LONG_DOUBLE:
-		v.i64 = (I64)sizeof(long double);
-		break;
-	case BUILTIN_SIZEOF_SIZE_T:
-		v.i64 = (I64)sizeof(size_t);
-		break;
-		/* @TODO(eventually): fix these for cross compilation */
-	case BUILTIN_TSIZEOF_SHORT:
-		v.i64 = (I64)sizeof(short);
-		break;
-	case BUILTIN_TSIZEOF_INT:
-		v.i64 = (I64)sizeof(int);
-		break;
-	case BUILTIN_TSIZEOF_LONG:
-		v.i64 = (I64)sizeof(long);
-		break;
-	case BUILTIN_TSIZEOF_LONG_LONG:
-		v.i64 = (I64)sizeof(long long);
-		break;
-	case BUILTIN_TSIZEOF_FLOAT:
-		v.i64 = (I64)sizeof(float);
-		break;
-	case BUILTIN_TSIZEOF_DOUBLE:
-		v.i64 = (I64)sizeof(double);
-		break;
-	case BUILTIN_TSIZEOF_LONG_DOUBLE:
-		v.i64 = (I64)sizeof(long double);
-		break;
-	case BUILTIN_TSIZEOF_SIZE_T:
-		v.i64 =(I64)sizeof(size_t);
-		break;
 	}
 	return v;
 }
@@ -1537,25 +1488,6 @@ static void get_builtin_val_type(Allocator *a, BuiltinVal val, Type *t) {
 	case BUILTIN_COMPILING:
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_BOOL;
-		break;
-	case BUILTIN_SIZEOF_SHORT:
-	case BUILTIN_SIZEOF_INT:
-	case BUILTIN_SIZEOF_LONG:
-	case BUILTIN_SIZEOF_LONG_LONG:
-	case BUILTIN_SIZEOF_FLOAT:
-	case BUILTIN_SIZEOF_DOUBLE:
-	case BUILTIN_SIZEOF_LONG_DOUBLE:
-	case BUILTIN_TSIZEOF_SHORT:
-	case BUILTIN_TSIZEOF_INT:
-	case BUILTIN_TSIZEOF_LONG:
-	case BUILTIN_TSIZEOF_LONG_LONG:
-	case BUILTIN_TSIZEOF_FLOAT:
-	case BUILTIN_TSIZEOF_DOUBLE:
-	case BUILTIN_TSIZEOF_LONG_DOUBLE:
-	case BUILTIN_SIZEOF_SIZE_T:
-	case BUILTIN_TSIZEOF_SIZE_T:
-		t->kind = TYPE_BUILTIN;
-		t->builtin = BUILTIN_I64;
 		break;
 	}
 }
