@@ -8,8 +8,10 @@
 
 /* 
 @TODO:
-fix including something twice - just use the non-namespacey version if it exists or pick one namespace to use everywhere otherwise
-	- maybe store info about namespaces which are secretly the same as inline blocks/other namespaces in the Typer
+#foreign non-functions (e.g. stderr)
+remove some now-unnecessary #builtins (all are unnecessary except for "compiling", 
+	which probably isn't even that useful but maybe more builtins will exist in 
+	the future)
 &&, ||
 #no_warn
 start making a standard library... (printf; stringbuilder would be nice to have)
@@ -21,6 +23,7 @@ switch
 enums
 unions
 ---
+either detect circular #includes or set a #include limit (maybe sometimes you want finite circular includes with #if)
 switch to / add as an alternative: libffi
 	- better yet, inline assembly
 don't bother generating ret_ if nothing's deferred
@@ -29,6 +32,7 @@ any odd number of "s for a string
 use point #except x;
 optional -Wshadow
 format errors so that vim/emacs can jump to them
+show include stack--especially for redeclarations with #include #force
 ---
 make sure that floating point literals are as exact as possible
 	have some way of doing Infinity and s/qNaN (you can
@@ -72,8 +76,20 @@ static void signal_handler(int num) {
 	case SIGSEGV:
 		fprintf(stderr, "Segmentation fault.\n");
 		break;
+	case SIGFPE:
+		fprintf(stderr, "Floating point exception.\n");
+		break;
+	case SIGINT:
+		fprintf(stderr, "Interrupted.\n");
+		break;
+	case SIGTERM:
+		fprintf(stderr, "Terminated.\n");
+		break;
+	case SIGILL:
+		fprintf(stderr, "Illegal instruction.\n");
+		break;
 	default:
-		fprintf(stderr, "Terminated for unknown reason.\n");
+		fprintf(stderr, "Terminated for unknown reason (signal %d).\n", num);
 		break;
 	}
 	fprintf(stderr, "Stack trace:\n");
@@ -91,7 +107,8 @@ static void signal_handler(int num) {
 	}
 	system(command);
 	/* free(syms); */
-	
+	signal(SIGABRT, SIG_DFL);
+	abort();
 }
 #endif
 int main(int argc, char **argv) {
@@ -99,12 +116,15 @@ int main(int argc, char **argv) {
 	program_name = argv[0];
 	signal(SIGABRT, signal_handler);
 	signal(SIGSEGV, signal_handler);
+	signal(SIGINT, signal_handler);
+	signal(SIGTERM, signal_handler);
+	signal(SIGILL, signal_handler);
+	signal(SIGFPE, signal_handler);
 #endif
 #if RUN_TESTS	
 	printf("running tests...\n");
 	test_all();
 #endif
-
 	const char *in_filename = NULL;
 	const char *out_filename = "out.c";
 	
@@ -116,7 +136,7 @@ int main(int argc, char **argv) {
 #if UNISTD_AVAILABLE
 	#if defined _POSIX_VERSION && _POSIX_VERSION >= 200112L
 	/* isatty available */
-	default_color_enabled = isatty(2); /* is /dev/stderr a tty? */
+	default_color_enabled = (bool)isatty(2); /* is /dev/stderr a tty? */
 	#else
 	default_color_enabled = false; /* old posix version */
 	#endif
@@ -124,7 +144,7 @@ int main(int argc, char **argv) {
 	default_color_enabled = false; /* probably windows */
 #endif
 	err_ctx.color_enabled = default_color_enabled;
-
+	
 	for (int i = 1; i < argc; ++i) {
 		char *arg = argv[i];
 		if (strs_equal(arg, "-no-color")) {

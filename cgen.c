@@ -1386,11 +1386,6 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 				bool is_ptr = lhs->type.kind == TYPE_PTR;
 				cgen_write(g, is_ptr ? "->" :".");
 				cgen_write(g, "data");
-			} else {
-				assert(type_is_builtin(struct_type, BUILTIN_NMS));
-				char *prefix = lhs->val.nms->c.prefix;
-				cgen_write(g, "%s", prefix);
-				cgen_ident_simple(g, rhs->ident);
 			}
 			handled = true;
 		} break;

@@ -192,7 +192,7 @@ typedef struct IdentSlot {
 	struct Declaration *decl; /* if NULL, a declaration hasn't been found for it yet */
 	struct Identifiers *idents;
 	union {
-		struct Namespace *nms; /* only exists after typing, and only for namespace-level declarations (i.e. not local variables) */
+		struct Namespace *nms; /* only exists after typing, and only for namespace-level declarations (i.e. not local variables inside namespaces) */
 		UsedFrom *used_from; /* for stuff used inside structs -- NULL if this is actually in the struct body */
 	};
 } IdentSlot;
@@ -768,12 +768,11 @@ const char *const builtin_val_names[BUILTIN_VAL_COUNT] =
 typedef struct Namespace {
 	Block body;
 	Identifier associated_ident; /* if this is foo ::= nms { ... }, then associated_ident is foo; can be NULL. used by cgen. only non-null if the namespace isn't in a non-namespace block */
-	struct Namespace *points_to; /* if not NULL, this namespace just points to another namespace, because something has been included twice */
 	struct {
 		char *prefix; /* generated during sdecls_cgen */
 	} c;
 } Namespace;
-
+typedef Namespace *NamespacePtr;
 
 enum {
 	EXPR_FOUND_TYPE = 0x01
@@ -950,6 +949,7 @@ typedef struct {
 	U8 flags;
 	Namespace *main_nms; /* namespace of first inclusion */
 	struct Statement *stmts;
+	Namespace **all_namespaces; /* namespaces which this file has been included to */
 } IncludedFile;
 
 enum {
@@ -979,7 +979,6 @@ typedef Use *UsePtr;
 
 enum {
 	STMT_EXPR_NO_SEMICOLON = 0x01,
-	STMT_INC_TO_NMS = 0x01,
 	STMT_TYPED = 0x02
 };
 typedef struct Statement {

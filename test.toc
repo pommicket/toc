@@ -1,33 +1,5 @@
 #include "std/io.toc";
-#include "std/mem.toc";
-
-ptr_arithmetic_test ::= fn() total := 0 {
-	foo := news(int, 10);
-	for p, i := &foo {
-		*p = i;
-	}
-	p := &foo[0];
-	
-	p += 2;
-	total += *p;
-	total += *(p + 3);
-	total += *(p - 1);
-
-	voidp : &void = &foo[7];
-	total += *(voidp as &int);
-	voidp = voidp + 8;
-	total += *(voidp as &int);
-	voidp += 8;
-	total += *(voidp as &int);
-	voidp = voidp - 8;
-	total += *(voidp as &int);
-	voidp -= 8;
-	total += *(voidp as &int);
-}
 
 main ::= fn() {
-	x ::= ptr_arithmetic_test();
-	y := ptr_arithmetic_test();
-	puti(x);
-	puti(y);
+	puts("hello");
 }

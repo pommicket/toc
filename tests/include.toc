@@ -1,0 +1,16 @@
+#include "std/io.toc", io;
+#include "std/io.toc", foo;
+#include "std/io.toc", bar;
+#include "std/io.toc", baz;
+#include "std/io.toc";
+#include "included.toc", inc;
+
+main ::= fn() {
+	puts("hello");
+	io.puts("hello");
+	foo.puts("hello");
+	bar.puts("hello");
+	baz.puts("hello");
+	inc.puts("hello");
+	inc.foo.puts("hello");
+}

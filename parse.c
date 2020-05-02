@@ -2471,16 +2471,10 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				idents_create(&body->idents, p->allocr, body);
 				Statement *inc_stmt = parser_arr_add_ptr(p, body->stmts);
 				inc_stmt->kind = STMT_INCLUDE;
-				inc_stmt->flags = STMT_INC_TO_NMS;
+				inc_stmt->flags = 0;
 				inc_stmt->where = body->where;
 				inc_stmt->inc = parser_calloc(p, 1, sizeof *inc_stmt->inc);
 				inc_stmt->inc->filename = filename;
-			} else if (i->flags & INC_FORCED) {
-				/* go back to #forced */
-				while (!token_is_direct(t->token, DIRECT_FORCE)) --t->token;
-				err_print(token_location(p->file, t->token), "You don't need to specify #force if you're not including into a namespace (this is the default behaviour).");
-				tokr_skip_semicolon(t);
-				return false;
 			}
 			if (!token_is_kw(t->token, KW_SEMICOLON)) {
 				tokr_err(t, "Expected ; after #include directive");
@@ -2940,7 +2934,11 @@ static void fprint_parsed_file(FILE *out, ParsedFile *f) {
 static int decl_ident_index(Declaration *d, Identifier i) {
 	int idx = 0;
 	arr_foreach(d->idents, Identifier, j) {
-		if (i == *j)
+		/* this can't just be i == *j because sometimes identifiers point to declarations which don't declare
+			**that specific identifier** - e.g. including something twice makes one identifier point to the
+			declaration in the other include
+		*/
+		if (ident_eq(i, *j))
 			return idx;
 		++idx;
 	}

@@ -45,9 +45,6 @@ static void cgen_sdecls_block(CGenerator *g, Block *b) {
 
 static char *cgen_nms_prefix_part(CGenerator *g, Namespace *n) {
 	char *s;
-	while (n->points_to) {
-		n = n->points_to;
-	}
 	if (n->associated_ident) {
 		size_t ident_len = n->associated_ident->len;
 		s = malloc(ident_len + 3);

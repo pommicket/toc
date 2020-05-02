@@ -747,13 +747,6 @@ static Status eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr, void
 			return false;
 		/* access struct data */
 		*p = &((Slice *)ptr)->data;
-	} else {
-		void *ptr;
-		Identifier ident = dot_expr->binary.rhs->ident;
-		assert(type_is_builtin(struct_type, BUILTIN_NMS));
-		if (!eval_address_of_ident(ev, ident, dot_expr->where, &dot_expr->type, &ptr))
-			return false;
-		*p = ptr;
 	}
 	return true;
 }

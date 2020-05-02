@@ -1,0 +1,5 @@
+// included by include.toc
+
+#include "std/io.toc";
+#include "std/io.toc", foo;
+

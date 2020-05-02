@@ -3,6 +3,7 @@
 tests='bf
 control_flow
 types
+include
 arrs_slices
 ptr_arithmetic
 defer

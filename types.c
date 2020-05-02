@@ -3281,19 +3281,19 @@ static Status types_expr(Typer *tr, Expression *e) {
 				if (!eval_expr(tr->evalr, lhs, &nms_val))
 					return false;
 				Namespace *nms = nms_val.nms;
-				lhs->kind = EXPR_VAL;
-				lhs->val.nms = nms;
 				String str = rhs->ident_str;
-				rhs->ident = ident_get_with_len(&nms->body.idents, str.str, str.len);
-				if (!rhs->ident) {
+				Identifier i = rhs->ident = ident_get_with_len(&nms->body.idents, str.str, str.len);
+				if (!i) {
 					char *s = cstr(str.str, str.len);
 					err_print(e->where, "\"%s\" is not a member of this namespace.", s);
 					free(s);
 					return false;
 				}
-				if (!type_of_ident(tr, rhs->where, rhs->ident, t)) {
+				if (!type_of_ident(tr, rhs->where, i, t)) {
 					return false;
 				}
+				e->kind = EXPR_IDENT;
+				e->ident = i;
 			} else {
 				char *s = type_to_str(lhs_type);
 				err_print(e->where, "Operator . applied to type %s, which is not a structure or pointer to structure.", s);
@@ -3355,7 +3355,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 	case EXPR_NMS: {
 		Namespace *prev_nms = tr->nms;
 		Namespace *n = tr->nms = e->nms;
-		n->points_to = NULL;
 		if (!types_block(tr, &n->body)) {
 			tr->nms = prev_nms;
 			return false;
@@ -3630,6 +3629,33 @@ static Status fix_ident_decls_inline_block(Typer *tr, Statement *stmts) {
 	return true;
 }
 
+/* introduce identifiers from stmts into current scope, setting their "nms" field to nms */
+static Status include_stmts_link_to_nms(Typer *tr, Namespace *nms, Statement *stmts) {
+	Identifiers *idents = typer_get_idents(tr);
+	arr_foreach(stmts, Statement, s) {
+		if (s->kind == STMT_INLINE_BLOCK) {
+			if (!include_stmts_link_to_nms(tr, nms, s->inline_block))
+				return false;
+		} else if (s->kind == STMT_DECL) {
+			Declaration *d = s->decl;
+			arr_foreach(d->idents, Identifier, ident) {
+				/* @OPTIM: only hash once */
+				Identifier preexisting = ident_translate(*ident, idents);
+				if (preexisting) {
+					char *istr = ident_to_str(preexisting);
+					err_print(d->where, "Redeclaration of identifier %s.", istr);
+					info_print(preexisting->decl->where, "%s was first declared here.", istr);
+					free(istr);
+				}
+				Identifier i = ident_translate_forced(*ident, idents);
+				i->nms = nms;
+				i->decl = d;
+			}
+		}
+	}
+	return true;
+}
+
 static Status types_stmt(Typer *tr, Statement *s) {
 	if (s->flags & STMT_TYPED) return true;
 	switch (s->kind) {
@@ -3750,19 +3776,33 @@ static Status types_stmt(Typer *tr, Statement *s) {
 
 		s->kind = STMT_INLINE_BLOCK;
 
-		if (s->flags & STMT_INC_TO_NMS) {
+		{
 			if (!(inc->flags & INC_FORCED)) {
 				inc_f = str_hash_table_get(&tr->included_files, filename, filename_len);
 				if (inc_f) {
-					tr->nms->body.idents = inc_f->main_nms->body.idents;
-					tr->nms->body.idents.scope = &tr->nms->body;
-					tr->nms->points_to = inc_f->main_nms;
-					s->inline_block = inc_f->stmts;
+					/* has already been included */
+
+					s->inline_block = NULL; /* nothing needed here */
+					bool already_included_to_this_namespace = false;
+					arr_foreach(inc_f->all_namespaces, NamespacePtr, npp) {
+						if (*npp == tr->nms) {
+							already_included_to_this_namespace = true;
+							break;
+						}
+					}
+
+					if (!already_included_to_this_namespace) {
+						typer_arr_add(tr, inc_f->all_namespaces, tr->nms);
+						if (!include_stmts_link_to_nms(tr, inc_f->main_nms, inc_f->stmts))
+							return false;
+					}
 					break;
 				}
 			}
 			inc_f = str_hash_table_insert(&tr->included_files, filename, filename_len);
 			inc_f->main_nms = tr->nms;
+			inc_f->all_namespaces = NULL;
+			typer_arr_add(tr, inc_f->all_namespaces, tr->nms);
 		}
 		char *contents = read_file_contents(tr->allocr, filename, s->where);
 		if (!contents) {

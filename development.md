@@ -22,6 +22,9 @@ Functions which can fail (i.e. print an error message and stop) return a Status,
 which is a bool, but GCC/clang warns about not using the return value.
 
 Almost all of toc's types are defined in types.h.
+Sometimes a type ending in Ptr is defined, e.g. typedef Declaration \*DeclarationPtr. This is
+for the arr\_foreach macro, and not meant for normal use.
+
 The fixed-width types U8/16/32/64 and I8/16/32/64 have been defined.
 data\_structures.c contains a dynamic array implementation which is very useful.
 
