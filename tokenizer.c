@@ -401,7 +401,7 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 					n->floatval = (Floating)n->intval;
 					tokr_nextchar(t);
 					continue;
-				} else if (*t->s == 'e') {
+				} else if (*t->s == 'e' && base != 16) {
 					tokr_nextchar(t);
 					if (n->kind == NUM_LITERAL_INT) {
 						n->kind = NUM_LITERAL_FLOAT;
@@ -436,7 +436,7 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 					if (*t->s >= 'a' && *t->s <= 'f')
 						digit = 10 + *t->s - 'a';
 					else if (*t->s >= 'A' && *t->s <= 'F')
-						digit = *t->s - 'A';
+						digit = 10 + *t->s - 'A';
 				}
 				if (digit == -1) {
 					if (*t->s >= '0' && *t->s <= '9')

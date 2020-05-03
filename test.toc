@@ -1,31 +1,18 @@
-/*
-
 stdc ::= "msvcrt.dll";
 printf ::= #foreign("printf",stdc) fn (#C &"char const", #C ..) #C int;
-puti ::= fn(i: i32) i32 {
-	fmt := "number: %d\n\0";
+puti ::= fn(i: u64) i32 {
+	fmt := "number: %llx\n\0";
 	printf(&fmt[0], i) as i32
 }
+
 // BUG: puti(puti(x))
-//sqrt ::= #foreign("sqrt",stdc) fn(f64) f64;
-sqrtf ::= #foreign("sinf",stdc) fn(f32) f32;
-/*
+sqrt ::= #foreign("sqrt",stdc) fn(f64) f64;
 putf ::= fn(f: f64) i32 {
 	fmt := "number: %f\n\0";
 	printf(&fmt[0], f) as i32
 }
-*/
-
+foo ::= #foreign("foo", "test.dll") fn(#C unsigned_long_long, #C unsigned_long_long) #C unsigned_long_long;
 main ::= fn() {
-	sqrtf(3.1);
+	puti(foo(0x12345678cafebabe as u64, 0x76543210deadbeef as u64));
 }
 main();
-
-*/
-
-foo ::= #foreign("foo","test.dll") fn(f32) f32;
-printf ::= #foreign("printf", "msvcrt.dll") fn(#C &"const char", #C ..) #C int;
-
-main ::= fn() {
-	x ::= foo(2.7);
-}

@@ -73,41 +73,41 @@ registers)
 */
 
 /* call function with 0 arguments, returning some sort of integer (or pointer) */
-static Word msvc_call0i(FnPtr fn, Word *w) {
+static U64 msvc_call0i(FnPtr fn, Word *w) {
 	(void)w;
-	return ((Word(*)(void))fn)();
+	return ((U64(*)(void))fn)();
 }
-static Word msvc_call1i(FnPtr fn, Word *w) {
-	return ((Word(*)(Word))fn)(w[0]);
+static U64 msvc_call1i(FnPtr fn, Word *w) {
+	return ((U64(*)(Word))fn)(w[0]);
 }
-static Word msvc_call2i(FnPtr fn, Word *w) {
-	return ((Word(*)(Word, Word))fn)(w[0], w[1]);
+static U64 msvc_call2i(FnPtr fn, Word *w) {
+	return ((U64(*)(Word, Word))fn)(w[0], w[1]);
 }
-static Word msvc_call3i(FnPtr fn, Word *w) {
-	return ((Word(*)(Word, Word, Word))fn)(w[0], w[1], w[2]);
+static U64 msvc_call3i(FnPtr fn, Word *w) {
+	return ((U64(*)(Word, Word, Word))fn)(w[0], w[1], w[2]);
 }
-static Word msvc_call4i(FnPtr fn, Word *w) {
-	return ((Word(*)(Word, Word, Word, Word))fn)(w[0], w[1], w[2], w[3]);
+static U64 msvc_call4i(FnPtr fn, Word *w) {
+	return ((U64(*)(Word, Word, Word, Word))fn)(w[0], w[1], w[2], w[3]);
 }
-static Word msvc_call5i(FnPtr fn, Word *w) {
-	return ((Word(*)(Word, Word, Word, Word, Word))fn)(w[0], w[1], w[2], w[3], w[4]);
+static U64 msvc_call5i(FnPtr fn, Word *w) {
+	return ((U64(*)(Word, Word, Word, Word, Word))fn)(w[0], w[1], w[2], w[3], w[4]);
 }
-static Word msvc_call6i(FnPtr fn, Word *w) {
-	return ((Word(*)(Word, Word, Word, Word, Word, Word))fn)(w[0], w[1], w[2], w[3], w[4], w[5]);
+static U64 msvc_call6i(FnPtr fn, Word *w) {
+	return ((U64(*)(Word, Word, Word, Word, Word, Word))fn)(w[0], w[1], w[2], w[3], w[4], w[5]);
 }
-static Word msvc_call7i(FnPtr fn, Word *w) {
-	return ((Word(*)(Word, Word, Word, Word, Word, Word, Word))fn)(w[0], w[1], w[2], w[3], w[4], w[5], w[6]);
+static U64 msvc_call7i(FnPtr fn, Word *w) {
+	return ((U64(*)(Word, Word, Word, Word, Word, Word, Word))fn)(w[0], w[1], w[2], w[3], w[4], w[5], w[6]);
 }
-static Word msvc_call8i(FnPtr fn, Word *w) {
-	return ((Word(*)(Word, Word, Word, Word, Word, Word, Word, Word))fn)(w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7]);
+static U64 msvc_call8i(FnPtr fn, Word *w) {
+	return ((U64(*)(Word, Word, Word, Word, Word, Word, Word, Word))fn)(w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7]);
 }
-static Word msvc_call9i(FnPtr fn, Word *w) {
-	return ((Word(*)(Word, Word, Word, Word, Word, Word, Word, Word, Word))fn)(w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], w[8]);
+static U64 msvc_call9i(FnPtr fn, Word *w) {
+	return ((U64(*)(Word, Word, Word, Word, Word, Word, Word, Word, Word))fn)(w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], w[8]);
 }
-static Word msvc_call10i(FnPtr fn, Word *w) {
-	return ((Word(*)(Word, Word, Word, Word, Word, Word, Word, Word, Word, Word))fn)(w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], w[8], w[9]);
+static U64 msvc_call10i(FnPtr fn, Word *w) {
+	return ((U64(*)(Word, Word, Word, Word, Word, Word, Word, Word, Word, Word))fn)(w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], w[8], w[9]);
 }
-static Word (*const msvc_calli[11])(FnPtr fn, Word *w) = {
+static U64 (*const msvc_calli[11])(FnPtr fn, Word *w) = {
 	msvc_call0i,
 	msvc_call1i,
 	msvc_call2i,
@@ -203,11 +203,20 @@ static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, 
 		fn->foreign.fn_ptr = fn_ptr;
 	}
 	Word words[10];
+	Word *word = words;
 	char *type = (char *)arg_types;
 	for (size_t i = 0; i < nargs; ++i) {
-		val_to_words(args[i], (Type *)type, call_where, &words[i]);
+		int arg_words = compiler_sizeof((Type *)type) == 8 ? 2 : 1;
+		if (word + arg_words > words + 10) {
+			err_print(call_where, "You can only call functions with up to 40 bytes of arguments on 32-bit Windows.");
+			return false;
+		}
+		if (!val_to_words(args[i], (Type *)type, call_where, word))
+			return false;
 		type += arg_types_stride;
+		word += arg_words;
 	}
+	size_t nwords = (size_t)(word - words);
 	bool is_float = false;
 	switch (ret_type->kind) {
 	case TYPE_BUILTIN:
@@ -244,13 +253,8 @@ static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, 
 	}
 	}
 	
-	if (nargs > 10) {
-		err_print(call_where, "You can only call functions with up to 10 arguments on Windows at compile time. This call has %ld.", (long)nargs);
-		return false;
-	}
-
 	if (is_float) {
-		double d = msvc_callf[nargs](fn_ptr, words);
+		double d = msvc_callf[nwords](fn_ptr, words);
 		assert(ret_type->kind == TYPE_BUILTIN);
 		if (ret_type->builtin == BUILTIN_F32) {
 			ret->f32 = (F32)d; /* turns out functions just always return doubles */
@@ -259,26 +263,26 @@ static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, 
 			ret->f64 = d;
 		}
 	} else {
-		Word w = msvc_calli[nargs](fn_ptr, words);
+		U64 r = msvc_calli[nwords](fn_ptr, words);
 		switch (ret_type->kind) {
 		case TYPE_BUILTIN:
 			switch (ret_type->builtin) {
-			case BUILTIN_I8: ret->i8 = (I8)w; break;
-			case BUILTIN_I16: ret->i16 = (I16)w; break;
-			case BUILTIN_I32: ret->i32 = (I32)w; break;
-			case BUILTIN_I64: ret->i64 = (I64)w; break;
-			case BUILTIN_U8: ret->u8 = (U8)w; break;
-			case BUILTIN_U16: ret->u16 = (U16)w; break;
-			case BUILTIN_U32: ret->u32 = (U32)w; break;
-			case BUILTIN_U64: ret->u64 = (U64)w; break;
-			case BUILTIN_BOOL: ret->boolv = (bool)w; break;
-			case BUILTIN_CHAR: ret->charv = (char)w; break;
-			case BUILTIN_VOID: (void)w; break;
+			case BUILTIN_I8: ret->i8 = (I8)r; break;
+			case BUILTIN_I16: ret->i16 = (I16)r; break;
+			case BUILTIN_I32: ret->i32 = (I32)r; break;
+			case BUILTIN_I64: ret->i64 = (I64)r; break;
+			case BUILTIN_U8: ret->u8 = (U8)r; break;
+			case BUILTIN_U16: ret->u16 = (U16)r; break;
+			case BUILTIN_U32: ret->u32 = (U32)r; break;
+			case BUILTIN_U64: ret->u64 = (U64)r; break;
+			case BUILTIN_BOOL: ret->boolv = (bool)r; break;
+			case BUILTIN_CHAR: ret->charv = (char)r; break;
+			case BUILTIN_VOID: (void)r; break;
 			default: assert(0); break;
 			}
 			break;
 		case TYPE_PTR:
-			ret->ptr = (void *)w;
+			ret->ptr = (void *)r;
 			break;
 		default: assert(0); break;
 		}
