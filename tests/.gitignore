@@ -1,4 +1,6 @@
 got
 out.c
+a.out
 *.exe
 test
+*.core

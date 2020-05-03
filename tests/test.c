@@ -14,7 +14,9 @@ static const char *tests[] = {
 	"arrs_slices",
 	"ptr_arithmetic",
 	"defer",
-	"sizeof",
+#ifndef __OpenBSD__
+	"sizeof", /* OpenBSD's GCC doesn't support _Alignof */
+#endif
 	"new",
 	"arr",
 	"arr2",
@@ -42,9 +44,12 @@ static const char *compilers[] = {
 };
 #else
 static const char *compilers[] = {
-	"gcc -O0 -g -Wno-parentheses-equality -Wno-builtin-declaration-mismatch",
-	"clang -O3 -s -Wno-parentheses-equality -Wno-builtin-requires-header -Wno-format-security",
+	"gcc -O0 -g -Wno-parentheses-equality -Wno-builtin-declaration-mismatch -std=c99",
+	"clang -O3 -s -Wno-parentheses-equality -Wno-builtin-requires-header -Wno-format-security -std=c99"
+#ifdef __linux__ /* couldn't get TCC to build on BSD */
+	,
 	"tcc"
+#endif
 };
 #endif
 #define ncompilers ((int)(sizeof compilers / sizeof *compilers))
@@ -61,8 +66,12 @@ int main(int argc, char **argv) {
 	int i, c;
 	char command[256];
 	int color = 0;
+	int valgrind = 0;
 #if unix
 	color = isatty(1);
+	#ifdef __linux__ /* valgrind is complaining a lot on BSD, but i think it's wrong */
+	valgrind = 1;
+	#endif
 #endif
 	char const *failed;
 	if (color) {
@@ -76,8 +85,10 @@ int main(int argc, char **argv) {
 		fflush(stdout);
 		if (windows) {
 			sprintf(command, "..\\toc %s.toc", test);
+		} else if (valgrind) {
+			sprintf(command, "valgrind -q --error-exitcode=1 ../toc %s.toc", test);
 		} else {
-			sprintf(command, "valgrind -q --exit-on-first-error=yes --error-exitcode=1 ../toc %s.toc", test);
+			sprintf(command, "../toc %s.toc", test);
 		}
 		if (system(command)) {
 			fprintf(stderr, "%s (while compiling toc).\n", failed);

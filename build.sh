@@ -8,15 +8,17 @@ if [ "$CC" = "" ]; then
 fi
 
 if uname | grep -qi bsd; then
-	CFLAGS="$CFLAGS -L/usr/local/lib -I/usr/local/include"
+	CFLAGS="$CFLAGS -L/usr/local/lib -I/usr/local/include -std=gnu99 -w"
+else
+	CFLAGS="$CFLAGS -Wpedantic -std=c11"
 fi
 
 ADDITIONAL_FLAGS="$CFLAGS -Wno-unused-function"
 
 if [ "$CC" = "clang" ]; then
-	WARNINGS='-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wimplicit-fallthrough -Wno-missing-braces'
+	WARNINGS='-Wall -Wextra -Wshadow -Wconversion -Wimplicit-fallthrough -Wno-missing-braces'
 elif [ "$CC" = "gcc" ]; then
-	WARNINGS='-Wall -Wextra -Wpedantic -Wshadow -Wconversion'
+	WARNINGS='-Wall -Wextra -Wshadow -Wconversion'
 elif [ "$CC" = "tcc" ]; then
 	WARNINGS='-Wall'
 elif [ "$CC" = "g++" ]; then
@@ -35,7 +37,7 @@ if [ "$COMPILE_TIME_FOREIGN_FN_SUPPORT" != "no" ]; then
 fi
 
 
-DEBUG_FLAGS="-O0 $WARNINGS -std=c11 -DTOC_DEBUG"
+DEBUG_FLAGS="-O0 $WARNINGS -DTOC_DEBUG"
 if [ "$CC" = "gcc" ]; then
 	DEBUG_FLAGS="$DEBUG_FLAGS -no-pie -gdwarf-2 -pipe"
 elif [ "$CC" = "clang" ]; then
