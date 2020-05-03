@@ -211,7 +211,7 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 	} break;
 	case TYPE_ARR: {
 		fprintf(f, "["); /* @TODO: change? when array initializers are added */
-		size_t n = t->arr.n;
+		size_t n = (size_t)t->arr.n;
 		if (n > 5) n = 5;
 		for (size_t i = 0; i < n; ++i) {
 			if (i) fprintf(f, ", ");
@@ -1002,7 +1002,7 @@ static Value val_zero(Type *t) {
 		val.struc = err_calloc(1, compiler_sizeof(t));
 		break;
 	case TYPE_ARR:
-		val.arr = err_calloc(t->arr.n, compiler_sizeof(t->arr.of));
+		val.arr = err_calloc((size_t)t->arr.n, compiler_sizeof(t->arr.of));
 		break;
 	default:
 		break;

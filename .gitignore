@@ -17,3 +17,10 @@ std/*.o
 *.so
 README.html
 docs/*.html
+*.dll
+*.exp
+*.lib
+*.pdb
+*.ilk
+*.obj
+*.exe

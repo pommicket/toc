@@ -7,25 +7,37 @@ but I don't think there's any other way that doesn't involve inline assembly
 
 typedef size_t Word;
 
+#if SIZE_MAX != U32_MAX
+/*
+@TODO 
+x64 has its own calling convention
+*/
+#error "Calling #foreign functitons at compile time only works on 32-bit Windows, not 64-bit."
+#endif
+
 typedef struct {
 	HMODULE handle;
 } Library;
 
-
-static Status val_to_word(Value v, Type *t, Location where, Word *w) {
+/* f64s take 2 words */
+static Status val_to_words(Value v, Type *t, Location where, Word *w) {
 	switch (t->kind) {
 	case TYPE_BUILTIN:
 		switch (t->builtin) {
 		case BUILTIN_I8: *w = (Word)v.i8; break;
 		case BUILTIN_I16: *w = (Word)v.i16; break;
 		case BUILTIN_I32: *w = (Word)v.i32; break;
-		case BUILTIN_I64: *w = (Word)v.i64; break;
 		case BUILTIN_U8: *w = (Word)v.u8; break;
 		case BUILTIN_U16: *w = (Word)v.u16; break;
 		case BUILTIN_U32: *w = (Word)v.u32; break;
-		case BUILTIN_U64: *w = (Word)v.u64; break;
-		case BUILTIN_F32: *w = (Word)*(uint32_t *)&v.f32; break;
-		case BUILTIN_F64: *w = (Word)*(uint64_t *)&v.f64; break;
+		case BUILTIN_F32: *w = (Word)*(U32 *)&v.f32; break;
+		case BUILTIN_I64:
+		case BUILTIN_U64:
+		case BUILTIN_F64: {
+			Word *ws = (Word *)&v;
+			w[0] = ws[0];
+			w[1] = ws[1];
+		} break;
 		case BUILTIN_CHAR: *w = (Word)v.charv; break;
 		case BUILTIN_BOOL: *w = (Word)v.boolv; break;
 		case BUILTIN_TYPE:
@@ -55,7 +67,7 @@ because of the way the MSVC "cdecl" calling convention works, the only things th
 the number of arguments and whether the function returns an integer (or pointer), floating-point number,
 or struct (struct return values are not supported yet).
 
-this means we can get away with these twenty functions--GCC passes most arguments in registers, so there would need to be
+this means we can get away with these twenty functions--GCC/MSVC x64 pass most arguments in registers, so there would need to be
 a lot more functions to support different combinations of integer and floating-point arguments (since they use different
 registers)
 */
@@ -193,7 +205,7 @@ static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, 
 	Word words[10];
 	char *type = (char *)arg_types;
 	for (size_t i = 0; i < nargs; ++i) {
-		val_to_word(args[i], (Type *)type, call_where, &words[i]);
+		val_to_words(args[i], (Type *)type, call_where, &words[i]);
 		type += arg_types_stride;
 	}
 	bool is_float = false;
@@ -241,8 +253,7 @@ static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, 
 		double d = msvc_callf[nargs](fn_ptr, words);
 		assert(ret_type->kind == TYPE_BUILTIN);
 		if (ret_type->builtin == BUILTIN_F32) {
-			U64 lower_bits = (U32)*(U64 *)&d;
-			ret->f32 = *(float *)&lower_bits;
+			ret->f32 = (F32)d; /* turns out functions just always return doubles */
 		} else {
 			assert(ret_type->builtin == BUILTIN_F64);
 			ret->f64 = d;

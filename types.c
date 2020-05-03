@@ -264,7 +264,7 @@ static size_t compiler_sizeof(Type *t) {
 	case TYPE_PTR:
 		return sizeof v.ptr;
 	case TYPE_ARR:
-		return t->arr.n * compiler_sizeof(t->arr.of);
+		return (size_t)t->arr.n * compiler_sizeof(t->arr.of);
 	case TYPE_TUPLE:
 		return sizeof v.tuple;
 	case TYPE_SLICE:

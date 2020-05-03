@@ -135,7 +135,7 @@ static Location token_location(File *file, Token *t);
 
 #if COMPILE_TIME_FOREIGN_FN_SUPPORT
 #if defined _MSC_VER && !defined COMPILE_TIME_FOREIGN_FN_AVCALL
-#include "foreign_msvc.c"
+#include "foreign_msvc32.c"
 #else
 #include "foreign_avcall.c"
 #endif
