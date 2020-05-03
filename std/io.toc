@@ -1,13 +1,22 @@
+/* TODO: use write / WriteFile */
+
 #include "std/base.toc";
 
 putchar ::= #foreign("putchar", libc) fn(#C int) #C int;
 toc_putchar ::= fn(x: char) {
 	putchar(x as #C int);
 }
-fwrite ::= #foreign("fwrite", libc) fn(#C &"const void", #C size_t, #C size_t, #C &"FILE") #C size_t;
+
+/* 
+unfortunately, we can't use fwrite because MSVC doesn't like it when you
+use a file handle that's not from the DLL. (i.e. you can't pass your stdout
+to the imported version of fwrite)
+*/
 
 writes ::= fn(x: []char) {
-	fwrite(&x[0], 1, x.len as #C size_t, #builtin("stdout"));
+	for c := x {
+		toc_putchar(c);
+	}
 }
 
 puts ::= fn(x: []char) {

@@ -1,34 +1,39 @@
-#include "std/io.toc";
-#include "std/mem.toc";
-main ::= fn() {
-	p := #builtin("platform");
-	P ::= #builtin("platform");
-	puti(p);
-	puti(P);
-	s := news(char, 12);
-	for c, i := "hello, world" {
-		s[i] = c;
-	}
-	puts(s);
-}
-main();
-/*
-stdc ::= "msvcrt.dll";
-printf ::= #foreign("printf",stdc) fn (#C &"char const", #C ..) #C int;
-puti ::= fn(i: u64) i32 {
-	fmt := "number: %llx\n\0";
-	printf(&fmt[0], i) as i32
-}
+// BUGBUGBUG: puti(puti(x))
 
-// BUG: puti(puti(x))
-sqrt ::= #foreign("sqrt",stdc) fn(f64) f64;
-putf ::= fn(f: f64) i32 {
-	fmt := "number: %f\n\0";
-	printf(&fmt[0], f) as i32
-}
-foo ::= #foreign("foo", "test.dll") fn(#C unsigned_long_long, #C unsigned_long_long) #C unsigned_long_long;
+printf ::= #foreign("printf","libc.so.6") fn(#C &"const char", #C ..) #C int;
+
+
+// NOTE: this doesn't work (e.g. "%%%")
+tprintf_valid ::= fn(fmt :: []char, nargs: int) bool {
+	if fmt[fmt.len-1] != '\0' {
+		return false;
+	}
+	count := 0;
+	for x, i := fmt {
+		if x == '%' {
+			if i == fmt.len-1 {
+				count += 1;
+			} elif fmt[i+1] != '%' {
+				count += 1;
+			} else {
+				count -= 1;
+			}
+		}
+	}
+	count == nargs
+};
+	
+
+tprintf ::= fn(fmt :: []char, args: ..) {
+	#if !tprintf_valid(fmt, args.len) {
+		#error "Invalid printf format";
+	}
+	f := fmt;
+	printf(&f[0], args);
+};
+
 main ::= fn() {
-	puti(foo(0x12345678cafebabe as u64, 0x76543210deadbeef as u64));
-}
-main();
-*/
+	 tprintf("%d %d%%\n\0", 3 as #C int, 4 as #C int);
+	 tprintf("%d %d %d%%\n\0", 3 as #C int, 4 as #C int, 5 as #C int);
+	 tprintf("Hello!\n\0");
+};

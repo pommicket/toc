@@ -1,15 +1,15 @@
 #include "std/mem.toc";
-
+#include "std/io.toc";
 
 readfile ::= fn(filename: []char) []char {
 #C("extern void *fopen(char *name, char const *mode); extern char *fgets(char *buf, size_t sz, void *f);");
 #C("
-extern int printf(const char *fmt, ...);
 extern void exit(int);
 ");
 	fp : &u8 = #C("(u8 *)fopen(&(((char *)filename.data)[0]), \"r\")");
 	if !fp {
-		#C("printf(\"Couldn't open file\\n\"); exit(-1);");
+		puts("couldn't open file.");
+		#C("exit(-1);");
 	}
 	contents := news(char, 1);
 	contents_sz : int;
@@ -40,13 +40,6 @@ extern void exit(int);
 	}
 	contents[contents_len] = 0 as char;
 	contents
-};
-
-puti ::= fn(x: int) {
-	 #C("
-extern int printf(const char *fmt, ...);
-");
-	 #C("printf(\"%ld\\n\", x);");
 };
 
 runfile ::= fn(filename: []char) {

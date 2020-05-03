@@ -31,7 +31,7 @@ tprintf ::= fn(fmt :: []char, args: ..) {
 };
 
 main ::= fn() {
-	 tprintf("%d %d%%\n\0", 3, 4);
-	 tprintf("%d %d %d%%\n\0", 3, 4, 5);
+	 tprintf("%d %d%%\n\0", 3 as #C int, 4 as #C int);
+	 tprintf("%d %d %d%%\n\0", 3 as #C int, 4 as #C int, 5 as #C int);
 	 tprintf("Hello!\n\0");
 };

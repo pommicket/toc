@@ -1,19 +1,5 @@
 #include "std/mem.toc";
-puti ::= fn(x: int) {
-//tcc's giving me "incompatible types for redefinition of 'printf'" for some reason (even though the declarations have the exact same type)
-	 #C("#ifndef __TINYC__
-extern int printf(const char *fmt, ...);
-#endif
-");
-	 #C("printf(\"%ld\\n\", (long)x);");
-};
-putf ::= fn(x: float) {
-	 #C("#ifndef __TINYC__
-extern int printf(const char *fmt, ...);
-#endif
-");
-	 #C("printf(\"%f\\n\", (double)x);");
-};
+#include "std/io.toc";
 
 // it would be nice if Arr.data.len == Arr.len (: but this will require some C code...
 Arr ::= fn (t :: Type) Type {

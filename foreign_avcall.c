@@ -261,7 +261,8 @@ static Status arg_list_add(av_alist *arg_list, Value val, Type *type, Location w
 			break;
 		case BUILTIN_VARARGS:
 			arr_foreach(val.varargs, VarArg, arg) {
-				arg_list_add(arg_list, arg->val, arg->type, where);
+				if (!arg_list_add(arg_list, arg->val, arg->type, where))
+					return false;
 			}
 			break;
 		case BUILTIN_VOID:

@@ -1,17 +1,11 @@
+#include "std/io.toc";
+
 addmul ::= fn (x:=0, y:=0) add := x+y, mul := x*y {
 };
 
 do_foo ::= fn (x := 3) y := x {
 	   y *= 12;
 	   y += x;
-};
-
-puti ::= fn(x: int) {
-	 #C("#ifndef __TINYC__
-extern int printf(const char *fmt, ...);
-#endif
-");
-	 #C("printf(\"%ld\\n\", x);");
 };
 
 
