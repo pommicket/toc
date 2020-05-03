@@ -1,12 +1,13 @@
-putchar ::= #foreign("putchar", "libc.so.6") fn(#C int) #C int;
+#include "std/base.toc";
+
+putchar ::= #foreign("putchar", libc) fn(#C int) #C int;
 toc_putchar ::= fn(x: char) {
 	putchar(x as #C int);
 }
-printf ::= #foreign("printf", "libc.so.6") fn(#C &"char const", #C ..) #C int; 
+fwrite ::= #foreign("fwrite", libc) fn(#C &"const void", #C size_t, #C size_t, #C &"FILE") #C size_t;
 
 writes ::= fn(x: []char) {
-	printf_strfmt := "%s\0";
-	printf(&printf_strfmt[0], &x[0]);
+	fwrite(&x[0], 1, x.len as #C size_t, #builtin("stdout"));
 }
 
 puts ::= fn(x: []char) {

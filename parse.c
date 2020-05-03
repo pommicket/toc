@@ -3051,3 +3051,24 @@ static inline void construct_resolved_builtin_type(Type *t, BuiltinType builtin)
 	t->builtin = builtin;
 	t->flags = TYPE_IS_RESOLVED;
 }
+
+#ifndef TOC_DEBUG
+static
+#endif
+char *location_to_str(Location *where) {
+	File *file = where->file;
+	Token *tokens = file->tokens;
+	SourcePos pos = tokens[where->start].pos;
+	char *contents = file->contents;
+	char *s = contents + pos.start;
+	size_t nchars = 10;
+	char buf[64] = {0};
+	snprintf(buf, sizeof buf - 12, "Line %u of %s: ", (unsigned)pos.line, file->filename);
+	char *end = memchr(s, '\0', nchars);
+	if (!end) end = s + nchars;
+	char tmp = *end;
+	*end = '\0';
+	strcat(buf, s);
+	*end = tmp;
+	return str_dup(buf);
+}

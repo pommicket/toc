@@ -366,7 +366,7 @@ typedef String StrLiteral;
 
 typedef struct {
 	U32 line;
-	U32 start; /* index in ctx->str */
+	U32 start; /* index in file->contents */
 	U32 end; /* exclusive */
 } SourcePos;
 
@@ -741,16 +741,25 @@ typedef struct SliceExpr {
 	} c;
 } SliceExpr;
 
+#define PLATFORM_OTHER 0
+#define PLATFORM_LINUX 1
+#define PLATFORM_WINDOWS 2
+#define PLATFORM_OSX 3
+#define PLATFORM_FREEBSD 4
+#define PLATFORM_OPENBSD 5
+#define PLATFORM_MISC_UNIX 6
+
 typedef enum {
 	BUILTIN_STDOUT,
 	BUILTIN_STDERR,
 	BUILTIN_STDIN,
-	BUILTIN_COMPILING
-#define BUILTIN_VAL_COUNT (BUILTIN_COMPILING+1)
+	BUILTIN_COMPILING,
+	BUILTIN_PLATFORM
+#define BUILTIN_VAL_COUNT (BUILTIN_PLATFORM+1)
 } BuiltinVal;
 
 const char *const builtin_val_names[BUILTIN_VAL_COUNT] =
-	{"stdout", "stderr", "stdin", "compiling"};
+	{"stdout", "stderr", "stdin", "compiling", "platform"};
 
 typedef struct Namespace {
 	Block body;

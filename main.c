@@ -8,6 +8,11 @@
 
 /* 
 @TODO:
+allow 
+#include "foo.toc", foo;
+#include "foo.toc", foo;
+then do #include "std/base.toc", base; in std/io.toc and std/mem.toc
+does our use before declare thing work with #include?
 #no_warn
 start making a standard library... (printf; stringbuilder would be nice to have)
 improve type_to_str:

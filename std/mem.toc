@@ -1,6 +1,8 @@
+#include "std/base.toc";
+
 // TODO: check for failed calloc
-calloc ::= #foreign("calloc", "libc.so.6") fn(#C size_t, #C size_t) #C &"void";
-free ::= #foreign("free", "libc.so.6") fn(#C &"void");
+calloc ::= #foreign("calloc", libc) fn(#C size_t, #C size_t) #C &"void";
+free ::= #foreign("free", libc) fn(#C &"void");
 
 new ::= fn(t :: Type) &t {
 	calloc(1, (sizeof t) as #C size_t)

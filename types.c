@@ -1468,6 +1468,9 @@ static Value get_builtin_val(BuiltinVal val) {
 	case BUILTIN_COMPILING:
 		v.boolv = true;
 		break;
+	case BUILTIN_PLATFORM:
+		v.i64 = platform__;
+		break;
 	}
 	return v;
 }
@@ -1488,6 +1491,10 @@ static void get_builtin_val_type(Allocator *a, BuiltinVal val, Type *t) {
 	case BUILTIN_COMPILING:
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_BOOL;
+		break;
+	case BUILTIN_PLATFORM:
+		t->kind = TYPE_BUILTIN;
+		t->builtin = BUILTIN_I64;
 		break;
 	}
 }

@@ -69,6 +69,25 @@ static void print_block_location(Block *b);
 #define join3(a,b) a##b
 #define join2(a,b) join3(a,b)
 #define join(a,b) join2(a,b)
+#define stringify3(x) #x
+#define stringify2(x) stringify3(x)
+#define stringify(x) stringify2(x)
+
+#ifdef __linux__ /* see also cgen_file */
+#define platform__ PLATFORM_LINUX
+#elif defined _WIN32
+#define platform__ PLATFORM_WINDOWS
+#elif defined __APPLE__
+#define platform__ PLATFORM_OSX
+#elif defined __FreeBSD__
+#define platform__ PLATFORM_FREEBSD
+#elif defined __OpenBSD__
+#define platform__ PLATFORM_OPENBSD
+#elif defined __unix__
+#define platform__ PLATFORM_MISC_UNIX
+#else
+#define platform__ PLATFORM_OTHER
+#endif
 
 static void fprint_char_literal(FILE *f, char c) {
 	if (isprint(c))

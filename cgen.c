@@ -1732,6 +1732,9 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		case BUILTIN_COMPILING:
 			cgen_write(g, "false");
 			break;
+		case BUILTIN_PLATFORM:
+			cgen_write(g, "platform__");
+			break;
 		}
 		break;
 	case EXPR_CAST: {
@@ -2270,6 +2273,21 @@ static void cgen_file(CGenerator *g, ParsedFile *f) {
 			   "typedef struct { void *data; i64 n; } slice_;\n"
 			   "#define false ((bool)0)\n"
 			   "#define true ((bool)1)\n"
+			   "#ifdef __linux__\n" /* see also toc.c */
+			   "#define platform__ " stringify(PLATFORM_LINUX) "\n"
+			   "#elif defined _WIN32\n"
+			   "#define platform__ " stringify(PLATFORM_WINDOWS) "\n"
+			   "#elif defined __APPLE__\n"
+			   "#define platform__ " stringify(PLATFORM_OSX) "\n"
+			   "#elif defined __FreeBSD__\n"
+			   "#define platform__ " stringify(PLATFORM_FREEBSD) "\n"
+			   "#elif defined __OpenBSD__\n"
+			   "#define platform__ " stringify(PLATFORM_OPENBSD) "\n"
+			   "#elif defined __unix__\n"
+			   "#define platform__ " stringify(PLATFORM_MISC_UNIX) "\n"
+			   "#else\n"
+			   "#define platform__ " stringify(PLATFORM_OTHER) "\n"
+			   "#endif\n"
 			   "static slice_ mkslice_(void *data, i64 n) { slice_ ret; ret.data = data; ret.n = n; return ret; }\n");
 
 	cgen_sdecls_file(g, f);
