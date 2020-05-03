@@ -2433,7 +2433,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					nvarargs += nvarargs_here;
 					--nvarargs;
 						
-					long arg_out_idx = arg_out - arg_exprs; /* save and restore arg_out to prevent realloc from causing problems */
+					long arg_out_idx = (long)(arg_out - arg_exprs); /* save and restore arg_out to prevent realloc from causing problems */
 					/* add more room (or if nvarargs_here == 0, remove room) for more varargs */
 					arr_set_lena(arg_exprs, narg_exprs, tr->allocr);
 					arg_out = arg_exprs + arg_out_idx;

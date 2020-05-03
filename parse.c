@@ -146,12 +146,16 @@ static bool type_builtin_is_float(BuiltinType b) {
 	}
 }
 
-static bool type_builtin_is_numerical(BuiltinType b) {
+static inline bool type_builtin_is_numerical(BuiltinType b) {
 	return type_builtin_is_int(b) || type_builtin_is_float(b);
 }
 
-static bool type_is_int(Type *t) {
+static inline bool type_is_int(Type *t) {
 	return t->kind == TYPE_BUILTIN && type_builtin_is_int(t->builtin);
+}
+
+static inline bool type_is_float(Type *t) {
+	return t->kind == TYPE_BUILTIN && type_builtin_is_float(t->builtin);
 }
 
 /* returns -1 on failure */

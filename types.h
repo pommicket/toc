@@ -42,13 +42,15 @@ typedef unsigned long ulonglong;
 #define ULONGLONG_FMT "%lu"
 #endif
 
+/* generic function pointer */
+typedef void (*FnPtr)(void);
 
 /* try to find the type with the strictest alignment */
 typedef union {
 	double floating;
 	void *ptr;
 	longlong integer;
-	void (*fn_ptr)(void);
+	FnPtr fn_ptr;
 } MaxAlign;
 
 typedef uint8_t U8;
@@ -695,7 +697,7 @@ typedef struct FnExpr {
 				const char *lib;
 				struct Expression *lib_expr;
 			};
-			void (*fn_ptr)();
+			FnPtr fn_ptr;
 		} foreign;
 	};
 	HashTable *instances; /* for fns with constant parameters. the key is a tuple where
@@ -998,18 +1000,9 @@ typedef struct Parser {
 	ParsedFile *parsed_file;
 } Parser;
 
-#if COMPILE_TIME_FOREIGN_FN_SUPPORT
 typedef struct {
-	void *handle;
-} Library;
-#endif
-
-typedef struct {
-#if COMPILE_TIME_FOREIGN_FN_SUPPORT
-	StrHashTable libs_loaded; /* of Library */
-#else
-	char unused;
-#endif
+	Allocator *allocr;
+	StrHashTable libs_loaded; /* of Library (NOTE: Library is defined in foreign_something.c) */
 } ForeignFnManager;
 
 typedef struct Evaluator {
@@ -1053,5 +1046,5 @@ typedef struct CGenerator {
 	FnExpr *fn; /* which function are we in? (NULL for none) - not used during decls */
 	Identifier main_ident;
 	Identifiers *globals;
-	const char **nms_prefixes; /* dynamic (null-terminated) array of namespace prefixes */
+	char **nms_prefixes; /* dynamic (null-terminated) array of namespace prefixes */
 } CGenerator;

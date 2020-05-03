@@ -1,22 +1,13 @@
-#include "std/io.toc";
+stdc ::= "msvcrt.dll";
+printf ::= #foreign("printf",stdc) fn (#C &"char const", #C ..) #C int;
+puti ::= fn(i: i32) i32 {
+	fmt := "number: %d\n\0";
+	printf(&fmt[0], i) as i32
+}
+// BUG: puti(puti(x))
+sqrtf ::= #foreign("sqrt",stdc) fn(f64) f64;
 
-foo ::= fn() total := 0{
-	if "foo" || (1/0) { 
-		total += 1;
-	}
-	if !"foo" && (1/0) {
-		total += 100;
-	}
-	if "foo" || "bar" && 0 {
-		total += 10;
-	}
-	if !"foo" || !"bar" {
-		total += 1000;
-	}
-}
 main ::= fn() {
-	a := foo();
-	b ::= foo();
-	puti(a);
-	puti(b);
+	f ::= sqrtf(2.0);
 }
+main();

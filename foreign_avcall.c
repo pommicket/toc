@@ -1,6 +1,9 @@
 /* WARNING: In this file, you will find crazy macros and dubious usage of avcall. Beware! */
 
-#if COMPILE_TIME_FOREIGN_FN_SUPPORT
+typedef struct {
+	void *handle;
+} Library;
+
 #if CHAR_BIT != 8
 #error "Compile-time foreign functions can only be used on systems where CHAR_BIT is 8."
 #endif
@@ -87,7 +90,7 @@
 #define toc_av_f32 av_float
 #define toc_av_f64 av_double
 
-static bool arg_list_start(av_alist *arg_list, void (*fn)(), Value *return_val, Type *return_type, Location where) {
+static Status arg_list_start(av_alist *arg_list, FnPtr fn, Value *return_val, Type *return_type, Location where) {
 	switch (return_type->kind) {
 	case TYPE_UNKNOWN:
 		err_print(where, "Cannot call foreign function with unknown return type.");
@@ -195,7 +198,7 @@ static bool arg_list_start(av_alist *arg_list, void (*fn)(), Value *return_val, 
 	return true;
 }
 
-static bool arg_list_add(av_alist *arg_list, Value val, Type *type, Location where) {
+static Status arg_list_add(av_alist *arg_list, Value val, Type *type, Location where) {
 	switch (type->kind) {
 	case TYPE_TUPLE:
 	case TYPE_UNKNOWN:
@@ -285,12 +288,8 @@ static bool arg_list_add(av_alist *arg_list, Value val, Type *type, Location whe
 #pragma GCC diagnostic pop
 #endif
 
-static void ffmgr_create(ForeignFnManager *ffmgr, Allocator *allocr) {
-	str_hash_table_create(&ffmgr->libs_loaded, sizeof(Library), allocr);
-}
-
-static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, Type *arg_types, size_t arg_types_stride, Value *args, size_t nargs, Location call_where, Value *ret) {
-	void (*fn_ptr)() = fn->foreign.fn_ptr;
+static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, Type *arg_types, size_t arg_types_stride, Value *args, size_t nargs, Location call_where, Value *ret) {
+	FnPtr fn_ptr = fn->foreign.fn_ptr;
 	if (!fn_ptr) {
 		assert(fn->flags & FN_EXPR_FOREIGN);
 		const char *libname = fn->foreign.lib;
@@ -338,18 +337,4 @@ static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, Ty
 	av_call(arg_list);
 	return true;
 }
-
-#else
-static void ffmgr_create(ForeignFnManager *ffmgr, Allocator *allocr) {
-	(void)ffmgr;
-	(void)allocr;
-}
-
-static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, Type *arg_types, size_t arg_types_stride, Value *args, size_t nargs, Location call_where, Value *ret) {
-	(void)ffmgr; (void)fn; (void)ret_type; (void)arg_types; (void)arg_types_stride; (void)args; (void)nargs; (void)ret;
-	err_print(call_where, "You have not compiled toc with compile time foreign function support.");
-	return false;
-}
-
-#endif
 

@@ -17,7 +17,7 @@
 #include <inttypes.h>
 
 #ifndef COMPILE_TIME_FOREIGN_FN_SUPPORT
-#define COMPILE_TIME_FOREIGN_FN_SUPPORT 0
+#define COMPILE_TIME_FOREIGN_FN_SUPPORT 1
 #endif
 
 
@@ -132,7 +132,26 @@ static Location token_location(File *file, Token *t);
 #include "copy.c"
 #include "tokenizer.c"
 #include "parse.c"
-#include "foreign.c"
+
+#if COMPILE_TIME_FOREIGN_FN_SUPPORT
+#if defined _MSC_VER && !defined COMPILE_TIME_FOREIGN_FN_AVCALL
+#include "foreign_msvc.c"
+#else
+#include "foreign_avcall.c"
+#endif
+#else
+static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, Type *arg_types, size_t arg_types_stride, Value *args, size_t nargs, Location call_where, Value *ret) {
+	(void)ffmgr; (void)fn; (void)ret_type; (void)arg_types; (void)arg_types_stride; (void)args; (void)nargs; (void)ret;
+	err_print(call_where, "You have not compiled toc with compile time foreign function support.");
+	return false;
+}
+typedef char Library;
+#endif
+static void ffmgr_create(ForeignFnManager *ffmgr, Allocator *allocr) {
+	ffmgr->allocr = allocr;
+	str_hash_table_create(&ffmgr->libs_loaded, sizeof(Library), allocr);
+}
+
 #include "infer.c"
 #include "types.c"
 #include "eval.c"
