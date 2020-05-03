@@ -50,13 +50,13 @@ size_t str_copy(char *dest, size_t destsz, const char *src) {
 
 static char *str_dup(const char *s) {
 	size_t bufsz = strlen(s)+1;
-	char *ret = malloc(bufsz);
+	char *ret = err_malloc(bufsz);
 	memcpy(ret, s, bufsz);
 	return ret;	
 }
 
 static char *cstr(const char *str, size_t len) {
-	char *ret = malloc(len+1);
+	char *ret = err_malloc(len+1);
 	memcpy(ret, str, len);
 	ret[len] = 0;
 	return ret;

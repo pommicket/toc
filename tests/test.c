@@ -1,5 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#ifdef __unix__
+#include <unistd.h>
+#define unix 1
+#endif
+
 static const char *tests[] = {
 	"bf",
 	"control_flow",
@@ -36,46 +42,61 @@ static const char *compilers[] = {
 };
 #else
 static const char *compilers[] = {
-	"gcc -O0 -g",
-	"clang -O3 -s",
+	"gcc -O0 -g -Wno-parentheses-equality -Wno-builtin-declaration-mismatch",
+	"clang -O3 -s -Wno-parentheses-equality -Wno-builtin-requires-header -Wno-format-security",
 	"tcc"
 };
 #endif
 #define ncompilers ((int)(sizeof compilers / sizeof *compilers))
 
+static char *str_dup(const char *s) {
+	size_t bufsz = strlen(s)+1;
+	char *ret = malloc(bufsz);
+	memcpy(ret, s, bufsz);
+	return ret;	
+}
 
-int main(void) {
+
+int main(int argc, char **argv) {
 	int i, c;
 	char command[256];
-#if windows	
-	char path[MAX_PATH];
-	GetModuleFileNameA(NULL, path, MAX_PATH);
-	char *backslash = strrchr(path, '\\');
-	*backslash = 0;
-	puts(path);
-	_chdir(path);
+	int color = 0;
+#if unix
+	color = isatty(1);
 #endif
+	char const *failed;
+	if (color) {
+		failed = "\x1b[91mFAILED\x1b[0m";
+	} else {
+		failed = "FAILED";
+	}
 	for (i = 0; i < ntests; ++i) {
 		const char *test = tests[i];
 		printf("Running test %s... ", test);
+		fflush(stdout);
 		if (windows) {
 			sprintf(command, "..\\toc %s.toc", test);
 		} else {
-			sprintf(command, "valgrind ../toc %s.toc", test);
+			sprintf(command, "valgrind -q --exit-on-first-error=yes --error-exitcode=1 ../toc %s.toc", test);
 		}
 		if (system(command)) {
-			fprintf(stderr, "FAILED (while compiling toc).\n");
+			fprintf(stderr, "%s (while compiling toc).\n", failed);
 			return EXIT_FAILURE;
 		}
 		for (c = 0; c < ncompilers; ++c) {
-			const char *compiler = compilers[c];
+			const char *compiler = str_dup(compilers[c]);
+			char *p = strchr(compiler, ' ');
+			if (p) *p = 0;
+			printf("on %s... ", compiler);
+			if (p) *p = ' ';
+			fflush(stdout);
 			if (windows) {
 				sprintf(command, "%s out.c", compiler);
 			} else {
-				sprintf(command, "valgrind %s out.c", compiler);
+				sprintf(command, "%s out.c", compiler);
 			}
 			if (system(command)) {
-				fprintf(stderr, "FAILED (while compiling C).\n");
+				fprintf(stderr, "%s (while compiling C).\n", failed);
 				return EXIT_FAILURE;
 			}
 			{
@@ -85,7 +106,7 @@ int main(void) {
 				else
 					ret = system("./a.out > got");
 				if (ret != 0) {
-					fprintf(stderr, "FAILED (while running).\n");
+					fprintf(stderr, "%s (while running).\n", failed);
 					return EXIT_FAILURE;
 				}
 			}
@@ -96,32 +117,32 @@ int main(void) {
 				char *expected = NULL, *got = NULL;
 				FILE *expected_f = fopen(filename, "rb");
 				if (!expected_f) {
-					fprintf(stderr, "FAILED (couldn't open %s).\n", filename);
+					fprintf(stderr, "%s (couldn't open %s).\n", failed, filename);
 					return EXIT_FAILURE;
 				}
 				fseek(expected_f, 0L, SEEK_END);
-				size_t expected_size = ftell(expected_f);
+				size_t expected_size = (size_t)ftell(expected_f);
 				fseek(expected_f, 0L, SEEK_SET);
 				expected = malloc(expected_size);
 				fread(expected, 1, expected_size, expected_f);
 				fclose(expected_f);
 				FILE *got_f = fopen("got", "rb");
 				if (!got_f) {
-					fprintf(stderr, "FAILED (couldn't open got).\n");
+					fprintf(stderr, "%s (couldn't open got).\n", failed);
 					return EXIT_FAILURE;
 				}
 				fseek(got_f, 0L, SEEK_END);
-				size_t got_size = ftell(got_f);
+				size_t got_size = (size_t)ftell(got_f);
 				fseek(got_f, 0L, SEEK_SET);
 				got = malloc(got_size);
 				fread(got, 1, got_size, got_f);
 				fclose(got_f);
 				if (expected_size != got_size) {
-					fprintf(stderr, "FAILED (mismatch between expected/got file sizes).\n");
+					fprintf(stderr, "%s (mismatch between expected/got file sizes).\n", failed);
 					return EXIT_FAILURE;
 				}
 				if (memcmp(expected, got, expected_size) != 0) {
-					fprintf(stderr, "FAILED (mismatch between expected/got file contents).\n");
+					fprintf(stderr, "%s (mismatch between expected/got file contents).\n", failed);
 					return EXIT_FAILURE;
 				}
 				free(expected); free(got);
@@ -135,7 +156,11 @@ int main(void) {
 		}
 		remove("out.c");
 		remove("got");
-		printf("success!\n");
+		if (color) {
+			printf("\x1b[92msuccess!\x1b[0m\n");
+		} else {
+			printf("success!\n");
+		}
 	}
 	return 0;
 }
