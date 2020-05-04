@@ -2114,8 +2114,11 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					return false;
 				goto success;
 			}
-			
-			tokr_err(t, "Unrecognized expression.");
+			Location where;
+			where.file = p->file;
+			where.start = (U32)(t->token - t->tokens);
+			where.end = (U32)(end - t->tokens);
+			err_print(where, "Unrecognized expression.");
 			return false;
 		}
 	}
