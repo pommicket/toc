@@ -1459,12 +1459,13 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		/* set parameter values */
 		Declaration *params = fn->params;
 		Expression *arg = e->call.arg_exprs;
+		/* @OPTIM: figure out how much memory parameters use, then allocate that much space (possibly with alloca)? */
+		Value **to_free = NULL;
 		arr_foreach(params, Declaration, p) {
 			int idx = 0;
-			Value *pval = decl_add_val(p);
-			--arr_hdr(p->val_stack)->len;
 			bool multiple_idents = arr_len(p->idents) > 1;
 			bool is_tuple = p->type.kind == TYPE_TUPLE;
+			Value *pval = err_malloc(sizeof *pval);
 			if (type_is_builtin(&p->type, BUILTIN_VARARGS)) {
 				Expression *args_end = e->call.arg_exprs + nargs;
 				/* set varargs */
@@ -1487,7 +1488,8 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 					++idx;
 				}
 			}
-			++arr_hdr(p->val_stack)->len;
+			arr_add(p->val_stack, pval);
+			arr_add(to_free, pval);
 		}
 
 		arr_foreach(fn->ret_decls, Declaration, d) {
@@ -1550,6 +1552,8 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		}
 		arr_foreach(fn->params, Declaration, p)
 			decl_remove_val(p);
+		arr_foreach(to_free, ValuePtr, p)
+			free(*p);
 		arr_foreach(fn->ret_decls, Declaration, d)
 			decl_remove_val(d);
 	} break;

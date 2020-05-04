@@ -176,6 +176,7 @@ typedef union Value {
 	struct Namespace *nms;
 	struct VarArg *varargs; /* dynamic array */
 } Value;
+typedef Value *ValuePtr;
 
 typedef struct VarArg {
 	struct Type *type;
@@ -880,7 +881,6 @@ typedef struct Declaration {
 
 	/* for eval, for non-constant local decls: */
 	/* the pointers to values need to be fixed, which is why this isn't just Value *.  */
-	/* @OPTIM: some block array of values somewhere which we can just use a pointer to, which is freed when the block is exited? */
 	Value **val_stack;
 } Declaration;
 typedef Declaration *DeclarationPtr;
