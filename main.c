@@ -8,6 +8,8 @@
 
 /* 
 @TODO:
+fix puti(puti(x))
+win64 #foreign
 allow 
 #include "foo.toc", foo;
 #include "foo.toc", foo;
@@ -24,7 +26,7 @@ enums
 unions
 bitwise operations
 ---
-either detect circular #includes or set a #include limit (maybe sometimes you want finite circular includes with #if)
+either detect circular #includes or set a #include depth limit (maybe sometimes you want finite circular includes with #if)
 switch to / add as an alternative: libffi
 	- better yet, inline assembly
 don't bother generating ret_ if nothing's deferred

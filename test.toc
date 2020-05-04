@@ -1,4 +1,9 @@
-main ::=fn(){
-
-	yeoop #C 3;
+foo ::= fn(x: int) int {
+	2*x
 }
+
+main ::=fn(){
+	foo(foo(10));
+
+}
+main();
