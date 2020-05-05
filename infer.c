@@ -1,3 +1,8 @@
+/*
+  Copyright (C) 2019, 2020 Leo Tenenbaum.
+  This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
+  You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
+*/
 static bool call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Location where, I16 **orderp);
 static bool parameterized_struct_arg_order(StructDef *struc, Argument *args, I16 **order, Location where);
 static bool types_expr(Typer *tr, Expression *e);
