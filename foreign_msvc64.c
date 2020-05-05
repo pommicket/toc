@@ -52,7 +52,7 @@ static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, 
 	U64 *word = words;
 	char *type = (char *)arg_types;
 	for (size_t i = 0; i < nargs; ++i) {
-		if (!val_to_words(args[i], (Type *)type, call_where, word))
+		if (!val_to_word(args[i], (Type *)type, call_where, word))
 			return false;
 		type += arg_types_stride;
 		++word;

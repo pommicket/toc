@@ -30,7 +30,7 @@
 ;;  first get nasm: https://nasm.us/ 
 ;;  add it to your path, then do:
 ;;   nasm -f win64 win64call.asm
-;;  You will get win64call.lib
+;;  You will get win64call.obj
 ;;To use this in a C/C++ program:
 ;;  typedef void (*FnPtr)();
 ;;  extern unsigned long long win64_call(FnPtr fn, void *args, long long nargs);

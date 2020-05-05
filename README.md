@@ -30,7 +30,15 @@ See `docs` for more information (in progress).
 
 To compile the compiler on a Unix-y system, just run `./build.sh release` (or `make release`). You can supply a compiler by running `CC=tcc ./build.sh release`, or build it in debug mode without the `release`. To disable compile time foreign function support (which you will need to do if you don't have ffcall/dl), prefix this with `COMPILE_TIME_FOREIGN_FN_SUPPORT=no`.
 
-On other systems, you can just compile main.c with a C compiler. `toc` uses several C99 and a couple of C11 features, so it might not work on all compilers. But it does compile on quite a few, including `clang`, `gcc`, and `tcc`. It can also be compiled as if it were C++, so and `g++` can also compile it (it does rely on implicit casting of  `void *` though). MSVC can also compile toc. The *outputted* code should be C99-compliant.
+On Windows, first make sure the compiler works from the command line. You can follow the instructions here:
+https://docs.microsoft.com/en-us/cpp/build/building-on-the-command-line .
+You can run `build32.bat release` or `build64.bat release` depending on whether you want a 32-bit or 64-bit version of toc. 
+
+On other systems, you can just compile main.c with a C compiler. 
+By default, toc will use libdl and libffcall. If you don't have these installed, add the preprocessor define `COMPILE_TIME_FOREIGN_FN_SUPPORT=0`.
+This is usually done with `-DCOMPILE_TIME_FOREIGN_FN_SUPPORT=0`.
+
+`toc` uses several C99 and a couple of C11 features, so it might not work on all compilers. But it does compile on quite a few, including `clang`, `gcc`, `tcc`, and MSVC. It can also be compiled as if it were C++, so and `g++` can also compile it (it does rely on implicit casting of  `void *` though). The *outputted* code should be C99-compliant.
 
 #### Why it compiles to C
 
@@ -54,7 +62,7 @@ See `LICENSE` for the GNU General Public License.
 ##### Why?
 This improves compilation speeds (especially from scratch), since you don't have to include headers a bunch of times for each translation unit. This is more of a problem in C++, where, for example, doing `#include <map>` ends up turning into 25,000 lines after preprocessing. All of toc's source code, which includes most of the C standard library, at the time of this writing (Dec 2019) is only 22,000 lines after preprocessing; imagine including all of that once for each translation unit which includes `map`. It also obviates the need for fancy build systems like CMake.
 
-#### New features
+#### "New" features
 
 Here are all the C99 features which `toc` depends on (I might have forgotten some...):
 
