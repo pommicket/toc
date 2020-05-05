@@ -1,23 +1,12 @@
 /*
 this code is not standard-compliant in the slightest, and a bit dubious,
-but I don't think there's any other way that doesn't involve inline assembly
+but I don't think there's any other way that doesn't involve assembly
 */
-
-#include <windows.h>
 
 typedef size_t Word;
-
 #if SIZE_MAX != U32_MAX
-/*
-@TODO 
-x64 has its own calling convention
-*/
-#error "Calling #foreign functitons at compile time only works on 32-bit Windows, not 64-bit."
+#error "What's going on? The 32-bit Windows file was included, but size_t isn't 32 bits!"
 #endif
-
-typedef struct {
-	HMODULE handle;
-} Library;
 
 /* f64s take 2 words */
 static Status val_to_words(Value v, Type *t, Location where, Word *w) {
@@ -171,37 +160,12 @@ static double (*const msvc_callf[11])(FnPtr fn, Word *w) = {
 	msvc_call10f
 };
 
+
 static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, Type *arg_types, size_t arg_types_stride, Value *args, size_t nargs, Location call_where, Value *ret) {
 	possibly_static_assert(sizeof(double) == 8);
 	possibly_static_assert(sizeof(float) == 4);
-	FnPtr fn_ptr = fn->foreign.fn_ptr;
-	if (!fn_ptr) {
-		assert(fn->flags & FN_EXPR_FOREIGN);
-		char const *libname = fn->foreign.lib;
-		if (!libname) {
-			err_print(call_where, "Attempt to call function at compile time which does not have an associated library.");
-			info_print(fn->where, "Function was declared here.");
-			return false;
-		}
-		Library *lib = str_hash_table_get(&ffmgr->libs_loaded, libname, strlen(libname));
-		if (!lib) {
-			HMODULE handle = LoadLibraryA(libname);
-			if (!handle) {
-				DWORD err = GetLastError();
-				err_print(call_where, "Could not open dynamic library %s (error code %ld).", libname, err);
-				return false;
-			}
-			lib = str_hash_table_insert(&ffmgr->libs_loaded, libname, strlen(libname));
-			lib->handle = handle;
-		}
-		const char *name = fn->foreign.name;
-		fn_ptr = (FnPtr)GetProcAddress(lib->handle, name);
-		if (!fn_ptr) {
-			err_print(call_where, "Could not get function %s from dynamic library.", name);
-			return false;
-		}
-		fn->foreign.fn_ptr = fn_ptr;
-	}
+	FnPtr fn_ptr = msvc_get_fn_ptr(ffmgr, fn, call_where);
+
 	Word words[10];
 	Word *word = words;
 	char *type = (char *)arg_types;

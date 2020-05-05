@@ -8,7 +8,6 @@
 
 /* 
 @TODO:
-fix puti(puti(x))
 win64 #foreign
 allow 
 #include "foo.toc", foo;
