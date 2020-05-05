@@ -2757,12 +2757,12 @@ static Status types_expr(Typer *tr, Expression *e) {
 				
 				/* if anything happens, make sure we let the user know that this happened while generating a fn */
 				ErrCtx *err_ctx = e->where.file->ctx;
-				typer_arr_add(tr, err_ctx->instance_stack, e->where);
+				arr_add(err_ctx->instance_stack, e->where);
 				Block *prev_block = tr->block;
 				tr->block = fn_copy->body.parent;
 				bool success = types_fn(tr, c->instance->fn, &f->type, c->instance);
 				tr->block = prev_block;
-				arr_remove_lasta(err_ctx->instance_stack, tr->allocr);
+				arr_remove_last(err_ctx->instance_stack);
 				if (!success) return false;
 			}
 			
