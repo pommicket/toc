@@ -21,6 +21,7 @@ main ::= fn() {
 	io.puti(f.b.f.k);
 	io.puti(f.b.f.b.f.k);
 }
+main();
 
 slice_to_ll ::= fn(t::=, slice: []t) use ll: LinkedList(t) {
 	head = slice[0];

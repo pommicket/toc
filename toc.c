@@ -153,10 +153,10 @@ static Location token_location(File *file, Token *t);
 #include "parse.c"
 
 #if COMPILE_TIME_FOREIGN_FN_SUPPORT
-#if defined _MSC_VER && !defined COMPILE_TIME_FOREIGN_FN_AVCALL
+#if defined _MSC_VER
 #include "foreign_msvc.c"
-#else
-#include "foreign_avcall.c"
+#elif defined __unix__ || defined __OSX__
+#include "foreign_unix.c"
 #endif
 #else
 static bool foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, Type *arg_types, size_t arg_types_stride, Value *args, size_t nargs, Location call_where, Value *ret) {

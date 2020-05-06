@@ -8,7 +8,6 @@
 
 /* 
 @TODO:
-win64 #foreign
 allow 
 #include "foo.toc", foo;
 #include "foo.toc", foo;

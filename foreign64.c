@@ -4,12 +4,42 @@
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
 #if SIZE_MAX != U64_MAX
-#error "What's going on? The 64-bit Windows file was included, but size_t isn't 64 bits!"
+#error "What's going on? The 64-bit #foreign file was included, but size_t isn't 64 bits!"
 #endif
 
+#ifdef _WIN64
 extern U64 win64_call(FnPtr fn, U64 *args, I64 nargs);
 extern float win64_callf(FnPtr fn, U64 *args, I64 nargs);
 extern double win64_calld(FnPtr fn, U64 *args, I64 nargs);
+
+static inline U64 foreign_calli(FnPtr fn, U64 *args, I64 nargs, bool *is_float) {
+	(void)is_float;
+	return win64_call(fn, args, nargs);
+}
+
+static inline float foreign_callf(FnPtr fn, U64 *args, I64 nargs, bool *is_float) {
+	(void)is_float;
+	return win64_callf(fn, args, nargs);
+}
+
+static inline double foreign_calld(FnPtr fn, U64 *args, I64 nargs, bool *is_float) {
+	(void)is_float;
+	return win64_calld(fn, args, nargs);
+}
+#else
+extern U64 systemv64_call(FnPtr fn, U64 *args, I64 nargs, bool *is_float);
+extern float systemv64_callf(FnPtr fn, U64 *args, I64 nargs, bool *is_float);
+extern double systemv64_calld(FnPtr fn, U64 *args, I64 nargs, bool *is_float);
+static inline U64 foreign_calli(FnPtr fn, U64 *args, I64 nargs, bool *is_float) {
+	return systemv64_call(fn, args, nargs, is_float);
+}
+static inline float foreign_callf(FnPtr fn, U64 *args, I64 nargs, bool *is_float) {
+	return systemv64_callf(fn, args, nargs, is_float);
+}
+static inline double foreign_calld(FnPtr fn, U64 *args, I64 nargs, bool *is_float) {
+	return systemv64_calld(fn, args, nargs, is_float);
+}
+#endif
 
 static Status val_to_word(Value v, Type *t, Location where, U64 *w) {
 	switch (t->kind) {
@@ -49,16 +79,19 @@ static Status val_to_word(Value v, Type *t, Location where, U64 *w) {
 }
 
 static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, Type *arg_types, size_t arg_types_stride, Value *args, size_t nargs, Location call_where, Value *ret) {
-	possibly_static_assert(sizeof(double) == 8);
+	possibly_static_assert(sizeof(double) == 8); /* if either of these assertions fails, you'll need to use libffcall */
 	possibly_static_assert(sizeof(float) == 4);
-	FnPtr fn_ptr = msvc_get_fn_ptr(ffmgr, fn, call_where);
+	FnPtr fn_ptr = foreign_get_fn_ptr(ffmgr, fn, call_where);
 
+	/* @OPTIM: use alloca/_malloca if available */
 	U64 *words = err_malloc(nargs * sizeof *words);
+	bool *is_float = err_malloc(nargs);
 	U64 *word = words;
 	char *type = (char *)arg_types;
 	for (size_t i = 0; i < nargs; ++i) {
 		if (!val_to_word(args[i], (Type *)type, call_where, word))
 			return false;
+		is_float[i] = type_is_float((Type *)type);
 		type += arg_types_stride;
 		++word;
 	}
@@ -102,7 +135,7 @@ static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, 
 	
 	switch (kind) {
 	case 0: {
-		U64 r = win64_call(fn_ptr, words, (I64)nargs);
+		U64 r = foreign_calli(fn_ptr, words, (I64)nargs, is_float);
 		switch (ret_type->kind) {
 		case TYPE_BUILTIN:
 			switch (ret_type->builtin) {
@@ -127,12 +160,13 @@ static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, 
 		}
 	} break;
 	case 1:
-		ret->f32 = win64_callf(fn_ptr, words, (I64)nargs);
+		ret->f32 = foreign_callf(fn_ptr, words, (I64)nargs, is_float);
 		break;
 	case 2:
-		ret->f64 = win64_calld(fn_ptr, words, (I64)nargs);
+		ret->f64 = foreign_calld(fn_ptr, words, (I64)nargs, is_float);
 		break;
 	}
 	free(words);
+	free(is_float);
 	return true;
 }

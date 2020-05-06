@@ -1,7 +1,7 @@
-toc: *.[ch]
+toc: *.[ch] build.sh
 	./build.sh 
-release: *.[ch]
+release: *.[ch] build.sh
 	./build.sh release
 
 clean:
-	rm toc
+	rm toc *.o

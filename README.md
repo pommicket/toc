@@ -35,8 +35,14 @@ https://docs.microsoft.com/en-us/cpp/build/building-on-the-command-line .
 You can run `build32.bat release` or `build64.bat release` depending on whether you want a 32-bit or 64-bit version of toc. 
 
 On other systems, you can just compile main.c with a C compiler. 
-By default, toc will use libdl and libffcall. If you don't have these installed, add the preprocessor define `COMPILE_TIME_FOREIGN_FN_SUPPORT=0`.
-This is usually done with `-DCOMPILE_TIME_FOREIGN_FN_SUPPORT=0`.
+By default, on Unix x86\_64 systems, you will need to link in an assembled version of `systemv64call.asm` (this is for foreign function support at compile time). 
+You can do this with:
+```
+nasm -f elf64 systemv64call.asm
+cc main.c systemv64call.o -o toc
+```
+If you want to diable foreign function support at compile time, add your equivalent of `-DCOMPILE_TIME_FOREIGN_FN_SUPPORT=0` to the compile command.
+
 
 `toc` uses several C99 and a couple of C11 features, so it might not work on all compilers. But it does compile on quite a few, including `clang`, `gcc`, `tcc`, and MSVC. It can also be compiled as if it were C++, so and `g++` can also compile it (it does rely on implicit casting of  `void *` though). The *outputted* code should be C99-compliant.
 

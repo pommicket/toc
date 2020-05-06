@@ -169,7 +169,7 @@ static double (*const msvc_callf[11])(FnPtr fn, Word *w) = {
 static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, Type *arg_types, size_t arg_types_stride, Value *args, size_t nargs, Location call_where, Value *ret) {
 	possibly_static_assert(sizeof(double) == 8);
 	possibly_static_assert(sizeof(float) == 4);
-	FnPtr fn_ptr = msvc_get_fn_ptr(ffmgr, fn, call_where);
+	FnPtr fn_ptr = foreign_get_fn_ptr(ffmgr, fn, call_where);
 
 	Word words[10];
 	Word *word = words;

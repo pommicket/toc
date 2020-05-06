@@ -1,4 +1,6 @@
 #!/bin/sh
+[ "$NASM" = "" ] && NASM=nasm
+
 if [ "$CC" = "" ]; then
 	if [ "$1" = "release" ]; then
 		CC=clang
@@ -27,12 +29,12 @@ else
 	WARNINGS=''
 fi
 
+[ "$ARCH" = "" ] && ARCH="$(uname -m)"
+
+
 if [ "$COMPILE_TIME_FOREIGN_FN_SUPPORT" != "no" ]; then
-	if uname | grep -qi bsd; then
-		LIBRARIES='-lavcall'
-	else
-		LIBRARIES='-ldl -lavcall'
-	fi
+	uname | grep -qi bsd || LIBRARIES="$LIBRARIES -ldl"
+	[ "$ARCH" = "x86_64" ] || LIBRARIES="$LIBRARIES -lavcall"
 	ADDITIONAL_FLAGS="$ADDITIONAL_FLAGS $LIBRARIES"
 else
 	ADDITIONAL_FLAGS="$ADDITIONAL_FLAGS -DCOMPILE_TIME_FOREIGN_FN_SUPPORT=0"
@@ -53,6 +55,10 @@ else
 	FLAGS="$DEBUG_FLAGS $ADDITIONAL_FLAGS"
 fi
 
-COMMAND="$CC $FLAGS -o toc main.c"
-echo $COMMAND
-$COMMAND || exit 1
+c() {
+	echo "$1" && $1 || exit 1
+}
+
+c "$NASM -f elf64 systemv64call.asm"
+c "$CC $FLAGS -o toc main.c systemv64call.o"
+

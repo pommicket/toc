@@ -5,10 +5,6 @@
 */
 /* WARNING: In this file, you will find crazy macros and dubious usage of avcall. Beware! */
 
-typedef struct {
-	void *handle;
-} Library;
-
 #if CHAR_BIT != 8
 #error "Compile-time foreign functions can only be used on systems where CHAR_BIT is 8."
 #endif
@@ -24,7 +20,6 @@ typedef struct {
 #pragma GCC diagnostic ignored "-Wsign-conversion"
 #endif
 #include <avcall.h>
-#include <dlfcn.h>
 
 
 #if SCHAR_MAX != 127
@@ -295,42 +290,7 @@ static Status arg_list_add(av_alist *arg_list, Value val, Type *type, Location w
 #endif
 
 static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, Type *arg_types, size_t arg_types_stride, Value *args, size_t nargs, Location call_where, Value *ret) {
-	FnPtr fn_ptr = fn->foreign.fn_ptr;
-	if (!fn_ptr) {
-		assert(fn->flags & FN_EXPR_FOREIGN);
-		const char *libname = fn->foreign.lib;
-		if (!libname) {
-			err_print(call_where, "Attempt to call function at compile time which does not have an associated library.");
-			info_print(fn->where, "Function was declared here.");
-			return false;
-		}
-		Library *lib = str_hash_table_get(&ffmgr->libs_loaded, libname, strlen(libname));
-		if (!lib) {
-			void *handle = dlopen(libname, RTLD_LAZY);
-			if (!handle) {
-				err_print(call_where, "Could not open dynamic library: %s.", libname);
-				return false;
-			}
-			lib = str_hash_table_insert(&ffmgr->libs_loaded, libname, strlen(libname));
-			lib->handle = handle;
-		}
-		const char *name = fn->foreign.name;
-#ifdef __GNUC__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpedantic"
-#endif
-		fn_ptr = dlsym(lib->handle, name);
-#ifdef __GNUC__
-#pragma GCC diagnostic pop
-#endif
-		
-		if (!fn_ptr) {
-			err_print(call_where, "Could not get function from dynamic library: %s.", name);
-			return false;
-		}
-		fn->foreign.fn_ptr = fn_ptr;		
-	}
-
+	FnPtr fn_ptr = foreign_get_fn_ptr(ffmgr, fn, call_where);
 	av_alist arg_list;
 	if (!arg_list_start(&arg_list, fn_ptr, ret, ret_type, call_where))
 		return false;
