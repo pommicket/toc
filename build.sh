@@ -30,7 +30,7 @@ else
 fi
 
 [ "$ARCH" = "" ] && ARCH="$(uname -m)"
-
+[ "$ARCH" = "amd64" ] && ARCH=x86_64
 
 if [ "$COMPILE_TIME_FOREIGN_FN_SUPPORT" != "no" ]; then
 	uname | grep -qi bsd || LIBRARIES="$LIBRARIES -ldl"
@@ -59,6 +59,8 @@ c() {
 	echo "$1" && $1 || exit 1
 }
 
-[ ! -f systemv64call.o ] && c "$NASM -f elf64 systemv64call.asm"
-c "$CC $FLAGS -o toc main.c systemv64call.o"
+[ "$ARCH" = "x86_64" ] && [ ! -f systemv64call.o ] && c "$NASM -f elf64 systemv64call.asm"
+SOURCES=main.c
+[ "$ARCH" = "x86_64" ] && SOURCES="$SOURCES systemv64call.o" 
+c "$CC $FLAGS -o toc $SOURCES"
 

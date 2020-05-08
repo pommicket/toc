@@ -53,7 +53,7 @@ puti ::= fn(x: int) {
 
 writef ::= fn(x: float) {
 	fmt := "%f\0";
-	printf(&fmt[0], x);
+	printf(&fmt[0], x as f64);
 }
 putf ::= fn(x: float) {
 	writef(x);

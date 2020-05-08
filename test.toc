@@ -1,9 +1,7 @@
 #include "std/io.toc", io;
+#include "std/base.toc", base;
 
 main ::= fn() {
-	#warn("foo"); #no_warn
-	x := 0 as &int; #no_warn
-	#warn("foo"); #no_warn
-	#warn("foo"); #no_warn
-	#warn("foo"); #no_warn
+	io.putf(3.7);
 }
+main();
