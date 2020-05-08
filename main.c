@@ -8,8 +8,6 @@
 
 /* 
 @TODO:
-does our use before declare thing work with #include?
-allow using constant before declaring it, and do DECL_FINDING_TYPE, for circular dependencies
 #no_warn
 start making a standard library... (printf; stringbuilder would be nice to have)
 if we do #include "foo.toc", bar; and foo.toc fails, bar should be declared as TYPE_UNKNOWN (right now it's undeclared)

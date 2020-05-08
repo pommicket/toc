@@ -1,1 +1,14 @@
 #include "std/io.toc", io;
+
+foo ::= fn() {
+	x := bar(12);
+	io.puti(x);
+}
+
+bar ::= fn(x: int) int {
+	y := x;
+	io.puti(y);
+	y
+}
+
+foo();

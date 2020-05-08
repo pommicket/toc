@@ -845,20 +845,22 @@ top:;
 			t->flags |= TYPE_IS_RESOLVED; /* for function templates */
 			return true;
 		} else {
-			if (where.start <= d->where.end) {
+			if (d->flags & DECL_INFER) {
 				char *s = ident_to_str(i);
-				err_print(where, "Use of identifier %s before its declaration.", s);
+				err_print(where, "Use of identifier %s before it has been inferred. You are trying to do stuff with inference which toc doesn't support.", s);
+				free(s);
+				return false;
+			}
+			if ((d->flags & DECL_IS_CONST) && (tr->block == NULL)) {
+				/* let's type the declaration, and redo this (for evaling future constants) */
+				if (!types_decl(tr, d)) return false;
+				goto top;
+			} else {
+				char *s = ident_to_str(i);
+				err_print(where, "Use of %s before its declaration.", s);
 				info_print(d->where, "%s will be declared here.", s);
 				free(s);
 				return false;
-			} else {
-				if (d->flags & DECL_INFER) {
-					err_print(where, "Use of identifier before it has been inferred. You are trying to do stuff with inference which toc doesn't support.");
-					return false;
-				}
-				/* let's type the declaration, and redo this (for evaling future functions) */
-				if (!types_decl(tr, d)) return false;
-				goto top;
 			}
 		}
 	}
@@ -2074,7 +2076,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		}
 		if (undeclared) {
 			char *s = cstr(e->ident_str.str, e->ident_str.len);
-			err_print(e->where, "Undeclared identifier \"%s\".", s);
+			err_print(e->where, "Undeclared identifier '%s'.", s);
 			free(s);
 			return false;
 		}

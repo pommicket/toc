@@ -1803,7 +1803,7 @@ static void cgen_block(CGenerator *g, Block *b, const char *ret_name, U16 flags)
 	}
 
 	++g->indent_lvl;
-
+	
 	arr_foreach(b->stmts, Statement, s)
 		cgen_stmt(g, s);
 	if (b->ret_expr && ret_name) {
@@ -1957,6 +1957,8 @@ static void cgen_decl(CGenerator *g, Declaration *d) {
 			if (has_expr) {
 				cgen_val_pre(g, val, type);
 			}
+			if (d->flags & DECL_IS_CONST)
+				cgen_write(g, "static ");
 			cgen_type_pre(g, type);
 			cgen_write(g, " ");
 			cgen_ident(g, i);
