@@ -11,14 +11,14 @@ static FnPtr foreign_get_fn_ptr(ForeignFnManager *ffmgr, FnExpr *fn, Location ca
 		if (!libname) {
 			err_print(call_where, "Attempt to call function at compile time which does not have an associated library.");
 			info_print(fn->where, "Function was declared here.");
-			return false;
+			return NULL;
 		}
 		Library *lib = str_hash_table_get(&ffmgr->libs_loaded, libname, strlen(libname));
 		if (!lib) {
 			void *handle = dlopen(libname, RTLD_LAZY);
 			if (!handle) {
 				err_print(call_where, "Could not open dynamic library: %s.", libname);
-				return false;
+				return NULL;
 			}
 			lib = str_hash_table_insert(&ffmgr->libs_loaded, libname, strlen(libname));
 			lib->handle = handle;
@@ -35,7 +35,7 @@ static FnPtr foreign_get_fn_ptr(ForeignFnManager *ffmgr, FnExpr *fn, Location ca
 		
 		if (!fn_ptr) {
 			err_print(call_where, "Could not get function from dynamic library: %s.", name);
-			return false;
+			return NULL;
 		}
 		fn->foreign.fn_ptr = fn_ptr;		
 	}

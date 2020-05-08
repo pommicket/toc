@@ -1,8 +1,8 @@
-/* TODO: use write / WriteFile */
+/* @TODO: use write / WriteFile */
 
-#include "std/base.toc";
+#include "std/base.toc", base;
 
-putchar ::= #foreign("putchar", libc) fn(#C int) #C int;
+putchar ::= #foreign("putchar", base.libc) fn(#C int) #C int;
 toc_putchar ::= fn(x: char) {
 	putchar(x as #C int);
 }

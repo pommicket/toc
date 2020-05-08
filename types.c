@@ -3598,7 +3598,7 @@ static Status include_stmts_link_to_nms(Typer *tr, Namespace *nms, Statement *st
 			arr_foreach(d->idents, Identifier, ident) {
 				/* @OPTIM: only hash once */
 				Identifier preexisting = ident_translate(*ident, idents);
-				if (preexisting) {
+				if (preexisting && preexisting->decl != d) {
 					char *istr = ident_to_str(preexisting);
 					err_print(d->where, "Redeclaration of identifier %s.", istr);
 					info_print(preexisting->decl->where, "%s was first declared here.", istr);
@@ -3728,70 +3728,115 @@ static Status types_stmt(Typer *tr, Statement *s) {
 		char *filename = eval_expr_as_cstr(tr, &inc->filename, "import filename");
 		if (!filename)
 			return false;
-		size_t filename_len = strlen(filename);
 		IncludedFile *inc_f = NULL;
+		
+		Namespace *inc_nms = NULL; /* non-NULL if this is an include to nms */
+		if (inc->nms) {
+			inc_nms = typer_calloc(tr, 1, sizeof *inc_nms);
+			Block *body = &inc_nms->body;
+			body->kind = BLOCK_NMS;
+			body->where = s->where;
+			idents_create(&body->idents, tr->allocr, body);
+			body->parent = tr->block;
+		}
 
 		s->kind = STMT_INLINE_BLOCK;
 
-		{
-			if (!(inc->flags & INC_FORCED)) {
-				inc_f = str_hash_table_get(&tr->included_files, filename, filename_len);
-				if (inc_f) {
-					/* has already been included */
-
-					s->inline_block = NULL; /* nothing needed here */
-					bool already_included_to_this_namespace = false;
-					arr_foreach(inc_f->all_namespaces, NamespacePtr, npp) {
-						if (*npp == tr->nms) {
-							already_included_to_this_namespace = true;
-							break;
-						}
-					}
-
-					if (!already_included_to_this_namespace) {
-						typer_arr_add(tr, inc_f->all_namespaces, tr->nms);
-						if (!include_stmts_link_to_nms(tr, inc_f->main_nms, inc_f->stmts))
-							return false;
-					}
-					break;
-				}
+		if (!(inc->flags & INC_FORCED)) {
+			size_t filename_len = strlen(filename);
+			inc_f = str_hash_table_get(&tr->included_files, filename, filename_len);
+			if (inc_f) {
+				/* has already been included */
+				s->inline_block = NULL; /* nothing needed here */
+				/* just set ident declarations */
+				if (!include_stmts_link_to_nms(tr, inc_f->main_nms, inc_f->stmts))
+					return false;
+				goto nms_transform;
 			}
 			inc_f = str_hash_table_insert(&tr->included_files, filename, filename_len);
 			inc_f->main_nms = tr->nms;
-			inc_f->all_namespaces = NULL;
-			typer_arr_add(tr, inc_f->all_namespaces, tr->nms);
 		}
-		char *contents = read_file_contents(tr->allocr, filename, s->where);
-		if (!contents) {
-			tr->had_include_err = true;
-			return false;
-		}
-
-		Tokenizer tokr;
-		tokr_create(&tokr, tr->err_ctx, tr->allocr);
-		File *file = typer_calloc(tr, 1, sizeof *file);
-		file->filename = filename;
-		file->contents = contents;
-		file->ctx = tr->err_ctx;
-		
-		if (!tokenize_file(&tokr, file))
-			return false;
-		Parser parser;
-		parser_create(&parser, tr->globals, &tokr, tr->allocr);
-		parser.block = tr->block;
-		ParsedFile parsed_file;
-		if (!parse_file(&parser, &parsed_file)) {
-			return false;
-		}
-		Statement *stmts_inc = parsed_file.stmts;
-		if (inc_f) {
-			inc_f->stmts = stmts_inc;
-		}
-		s->inline_block = stmts_inc;
-		arr_foreach(stmts_inc, Statement, s_incd) {
-			if (!types_stmt(tr, s_incd)) {
+		{
+			char *contents = read_file_contents(tr->allocr, filename, s->where);
+			if (!contents) {
+				tr->had_include_err = true;
 				return false;
 			}
+
+			Tokenizer tokr;
+			tokr_create(&tokr, tr->err_ctx, tr->allocr);
+			File *file = typer_calloc(tr, 1, sizeof *file);
+			file->filename = filename;
+			file->contents = contents;
+			file->ctx = tr->err_ctx;
+			
+			if (!tokenize_file(&tokr, file))
+				return false;
+			Parser parser;
+			parser_create(&parser, tr->globals, &tokr, tr->allocr);
+			parser.block = inc_nms ? &inc_nms->body : tr->block;
+			ParsedFile parsed_file;
+			if (!parse_file(&parser, &parsed_file)) {
+				return false;
+			}
+			Statement *stmts_inc = parsed_file.stmts;
+			if (inc_f) {
+				inc_f->stmts = stmts_inc;
+			}
+			s->inline_block = stmts_inc;
+			Namespace *prev_nms = tr->nms;
+			Block *prev_block = tr->block;
+			if (inc_nms) {
+				tr->nms = inc_nms;
+				tr->block = &inc_nms->body;
+			}
+			arr_foreach(stmts_inc, Statement, s_incd) {
+				if (!types_stmt(tr, s_incd)) {
+					return false;
+				}
+			}
+			if (inc_nms) {
+				tr->nms = prev_nms;
+				tr->block = prev_block;
+				inc_nms->body.stmts = stmts_inc;
+			}
+		}
+		nms_transform:
+		if (inc_nms) {
+			inc_nms->inc_file = inc_f;
+			/* turn #include "foo", bar into bar ::= nms { ... } */
+			s->kind = STMT_DECL;
+			Declaration *d = s->decl = typer_calloc(tr, 1, sizeof *d);
+			d->flags = DECL_FOUND_TYPE | DECL_HAS_EXPR | DECL_IS_CONST | DECL_FOUND_VAL;
+			construct_resolved_builtin_type(&d->type, BUILTIN_NMS);
+			char *ident_str = inc->nms;
+			Identifier i = ident_insert(typer_get_idents(tr), &ident_str);
+			typer_arr_add(tr, d->idents, i);
+			if (i->decl) {
+				Declaration *d2 = i->decl;
+				/* maybe they included it twice into one namespace */
+				if ((d2->flags & DECL_HAS_EXPR) && (d2->expr.kind == EXPR_NMS) && 
+					(d2->expr.nms->inc_file == inc_f)) {
+					/* that's okay; get rid of this declaration */
+					s->kind = STMT_INLINE_BLOCK;
+					s->inline_block = NULL;
+					break;
+				} else {
+					char *istr = ident_to_str(i);
+					err_print(s->where, "Redeclaration of identifier %s.", istr);
+					info_print(ident_decl_location(i), "Previous declaration was here.");
+					free(istr);
+					return false;
+				}
+			}
+			i->decl = d;
+			inc_nms->associated_ident = i;
+			d->expr.kind = EXPR_NMS;
+			d->expr.nms = inc_nms;
+			d->expr.flags = EXPR_FOUND_TYPE;
+			d->expr.type = d->type;
+			d->val.nms = inc_nms;
+			d->where = d->expr.where = s->where;
 		}
 	} break;
 	case STMT_MESSAGE: {

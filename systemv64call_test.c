@@ -31,11 +31,13 @@ should output:
 Hello 3.000000 -2848239.700000 -123 456 789 43873243.234982 111.100000 222.200000 333.300000 444.400000 555.500000 666.600000
 126
 foo returned: -298.100006
+that's all!
 */
 
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <math.h>
 
 
@@ -75,6 +77,11 @@ long long bar(int a, int b, int c, int d, int e, int f, int g, int h, int i, int
 Point mkpoint(int a, int b, int c) {
 	Point ret = {a,b,c};
 	return ret;
+}
+
+void end(void) {
+	puts("that's all!");
+	exit(0);
 }
 
 int main(void) {
@@ -145,5 +152,7 @@ int main(void) {
 	int ret3 = systemv64_call((FnPtr)printf, params3, arr_sz(params3), is_fp3);
 	printf("%d\n",ret3);
 	main2();
+	systemv64_call(end, NULL, 0, NULL);
+	puts("this shouldn't be printed");
 	return 0;
 }

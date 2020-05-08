@@ -253,6 +253,7 @@ static void cgen_fn_decl(CGenerator *g, FnExpr *f, Type *t) {
 		if (ctypes[0].kind == CTYPE_NONE)
 			cgen_type_post(g, &fn_types[0]);
 		cgen_write(g, ";");
+
 		if (!f->c.name || !ident_eq_str(f->c.name, foreign_name) || g->nms != NULL) {
 			cgen_write(g, "static ");
 			if (ctypes[0].kind == CTYPE_NONE) {

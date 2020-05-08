@@ -59,6 +59,6 @@ c() {
 	echo "$1" && $1 || exit 1
 }
 
-c "$NASM -f elf64 systemv64call.asm"
+[ ! -f systemv64call.o ] && c "$NASM -f elf64 systemv64call.asm"
 c "$CC $FLAGS -o toc main.c systemv64call.o"
 

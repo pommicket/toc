@@ -1331,7 +1331,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				goto success;
 			}
 			case KW_NMS: {
-				Namespace *n = e->nms = parser_malloc(p, sizeof *n);
+				Namespace *n = e->nms = parser_calloc(p, 1, sizeof *n);
 				e->kind = EXPR_NMS;
 				++t->token;
 				if (!parse_block(p, &n->body, 0))
@@ -1559,14 +1559,12 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				}
 				if (token_is_kw(t->token, KW_COMMA)) {
 					++t->token;
-				} else if (token_is_kw(t->token, KW_RPAREN)) {
-					++t->token;
-					break;
-				} else {
+				} else if (!token_is_kw(t->token, KW_RPAREN)) {
 					tokr_err(t, "Expected , or ) following #foreign fn type.");
 					return false;
 				}
 			}
+			++t->token;
 
 			Type *ret_type = &fn_type->types[0];
 			CType *ret_ctype = &fn->foreign.ctypes[0];
@@ -2464,48 +2462,15 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				return false;
 			}
 			if (token_is_kw(t->token, KW_COMMA)) {
-				Expression filename = i->filename;
 				++t->token;
 				if (t->token->kind != TOKEN_IDENT) {
-					tokr_err(t, "Expected identifier for #include name (after comma).");
-					tokr_skip_semicolon(t);
+					tokr_err(t, "Expected identifier after , in #include (to specify include namespace).");
 					return false;
 				}
-				Identifier ident = parser_ident_insert(p, t->token->ident);
+				i->nms = t->token->ident;
 				++t->token;
-				/* this isn't actually a STMT_INCLUDE, but a STMT_DECL! */
-				/* replace #include "io.toc", io => io ::= nms { #include "io.toc"; } */
-				s->kind = STMT_DECL;
-				Declaration *d = s->decl = parser_calloc(p, 1, sizeof *d);
-				d->where = s->where;
-				parser_put_end(p, &d->where); /* we haven't set s->where.end, so... */
-				d->flags |= DECL_HAS_EXPR|DECL_IS_CONST;
-				parser_arr_add(p, d->idents, ident);
-				
-				if (!check_ident_redecl(p, ident)) {
-					tokr_skip_semicolon(t);
-					return false;
-				}
-				ident->decl = d;
-			
-				Expression *e = &d->expr;
-				e->kind = EXPR_NMS;
-				e->nms = parser_calloc(p, 1, sizeof *e->nms);
-				e->where = s->where;
-				e->nms->associated_ident = ident;
-				Block *body = &e->nms->body;
-				body->kind = BLOCK_NMS;
-				body->where = s->where;
-				parser_put_end(p, &body->where);
-				++body->where.end; /* past semicolon */
-				body->parent = p->block;
-				idents_create(&body->idents, p->allocr, body);
-				Statement *inc_stmt = parser_arr_add_ptr(p, body->stmts);
-				inc_stmt->kind = STMT_INCLUDE;
-				inc_stmt->flags = 0;
-				inc_stmt->where = body->where;
-				inc_stmt->inc = parser_calloc(p, 1, sizeof *inc_stmt->inc);
-				inc_stmt->inc->filename = filename;
+			} else {
+				i->nms = NULL;
 			}
 			if (!token_is_kw(t->token, KW_SEMICOLON)) {
 				tokr_err(t, "Expected ; after #include directive");

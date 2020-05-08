@@ -170,7 +170,7 @@ static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, 
 	possibly_static_assert(sizeof(double) == 8);
 	possibly_static_assert(sizeof(float) == 4);
 	FnPtr fn_ptr = foreign_get_fn_ptr(ffmgr, fn, call_where);
-
+	if (!fn_ptr) return false;
 	Word words[10];
 	Word *word = words;
 	char *type = (char *)arg_types;

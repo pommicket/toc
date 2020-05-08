@@ -113,6 +113,8 @@ systemv64_call_other:
 	mov r11, 0 ; floating point index
 	mov rbx, 0 ; arg index
 .fp_loop:
+	cmp rbx, rdx ; if arg_index >= nargs
+	jge .fp_loop_end
 	cmp byte [rcx], 0
 	jne .fp_loop_float
 	; integer argument
@@ -123,8 +125,8 @@ systemv64_call_other:
 	.fp_continue:
 	inc rbx ; ++arg_index
 	inc rcx ; ++is_float
-	cmp rbx, rdx ; if arg_index < nargs
-	jl .fp_loop
+	jmp .fp_loop
+.fp_loop_end:
 
 	; r10 now holds the number of integer arguments, and r11 holds the number of floating point arguments
 

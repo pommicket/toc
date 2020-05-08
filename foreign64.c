@@ -41,6 +41,11 @@ static inline double foreign_calld(FnPtr fn, U64 *args, I64 nargs, bool *is_floa
 }
 #endif
 
+/* disable strict aliasing warnings */
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstrict-aliasing"
+#endif
 static Status val_to_word(Value v, Type *t, Location where, U64 *w) {
 	switch (t->kind) {
 	case TYPE_BUILTIN:
@@ -77,12 +82,15 @@ static Status val_to_word(Value v, Type *t, Location where, U64 *w) {
 	}
 	return true;
 }
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 
 static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, Type *arg_types, size_t arg_types_stride, Value *args, size_t nargs, Location call_where, Value *ret) {
 	possibly_static_assert(sizeof(double) == 8); /* if either of these assertions fails, you'll need to use libffcall */
 	possibly_static_assert(sizeof(float) == 4);
 	FnPtr fn_ptr = foreign_get_fn_ptr(ffmgr, fn, call_where);
-
+	if (!fn_ptr) return false;
 	/* @OPTIM: use alloca/_malloca if available */
 	U64 *words = err_malloc(nargs * sizeof *words);
 	bool *is_float = err_malloc(nargs);

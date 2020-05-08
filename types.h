@@ -765,6 +765,7 @@ const char *const builtin_val_names[BUILTIN_VAL_COUNT] =
 typedef struct Namespace {
 	Block body;
 	Identifier associated_ident; /* if this is foo ::= nms { ... }, then associated_ident is foo; can be NULL. used by cgen. only non-null if the namespace isn't in a non-namespace block */
+	struct IncludedFile *inc_file; /* NULL if this is not generated from an include to nms */
 	struct {
 		char *prefix; /* generated during sdecls_cgen */
 	} c;
@@ -941,20 +942,21 @@ enum {
 	INC_FILE_CGEND = 0x08
 };
 
-typedef struct {
+typedef struct IncludedFile {
 	U8 flags;
 	Namespace *main_nms; /* namespace of first inclusion */
 	struct Statement *stmts;
-	Namespace **all_namespaces; /* namespaces which this file has been included to */
 } IncludedFile;
 
 enum {
-	INC_FORCED = 0x01
+	INC_FORCED = 0x01,
+	INC_TO_NMS = 0x02
 };
 
-typedef union {
+typedef struct {
 	U8 flags;
 	Expression filename;
+	char *nms; /* NULL if this is just a plain old #include, otherwise string which can be used with ident_get */
 } Include;
 
 typedef enum {

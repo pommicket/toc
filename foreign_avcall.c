@@ -291,6 +291,7 @@ static Status arg_list_add(av_alist *arg_list, Value val, Type *type, Location w
 
 static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, Type *arg_types, size_t arg_types_stride, Value *args, size_t nargs, Location call_where, Value *ret) {
 	FnPtr fn_ptr = foreign_get_fn_ptr(ffmgr, fn, call_where);
+	if (!fn_ptr) return false;
 	av_alist arg_list;
 	if (!arg_list_start(&arg_list, fn_ptr, ret, ret_type, call_where))
 		return false;

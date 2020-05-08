@@ -1,4 +1,4 @@
-toc: *.[ch] build.sh
+debug: *.[ch] build.sh
 	./build.sh 
 release: *.[ch] build.sh
 	./build.sh release
