@@ -1,14 +1,9 @@
 #include "std/io.toc", io;
 
-foo ::= fn() {
-	x := bar(12);
-	io.puti(x);
+main ::= fn() {
+	#warn("foo"); #no_warn
+	x := 0 as &int; #no_warn
+	#warn("foo"); #no_warn
+	#warn("foo"); #no_warn
+	#warn("foo"); #no_warn
 }
-
-bar ::= fn(x: int) int {
-	y := x;
-	io.puti(y);
-	y
-}
-
-foo();

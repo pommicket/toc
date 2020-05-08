@@ -325,10 +325,14 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 			Directive direct = tokenize_direct(&t->s);
 			if (direct != DIRECT_COUNT) {
 				/* it's a directive */
-				tokr_put_end_pos(t, &token);
-				token.kind = TOKEN_DIRECT;
-				token.direct = direct;
-				arr_adda(t->tokens, token, t->allocr);
+				if (direct == DIRECT_NO_WARN) {
+					arr_adda(file->no_warn_lines, t->line, t->allocr);
+				} else {
+					tokr_put_end_pos(t, &token);
+					token.kind = TOKEN_DIRECT;
+					token.direct = direct;
+					arr_adda(t->tokens, token, t->allocr);
+				}
 				continue;
 			}
 			--t->s; /* go back to # */

@@ -248,12 +248,13 @@ typedef enum {
 	DIRECT_ERROR,
 	DIRECT_WARN,
 	DIRECT_INFO,
+	DIRECT_NO_WARN,
 	DIRECT_COUNT
 } Directive;
 
 static const char *directives[DIRECT_COUNT] = {
 	"C", "sizeof", "alignof", "export", "foreign", "builtin", "include", "force", "if", "error", "warn",
-	"info"
+	"info", "no_warn"
 };
 
 typedef enum {
@@ -389,6 +390,7 @@ typedef struct {
 	const char *filename;
 	char *contents;
 	Token *tokens;
+	U32 *no_warn_lines; /* in sorted order; right now we do a binary search */
 } File;
 
 typedef struct Location {

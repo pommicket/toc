@@ -37,4 +37,7 @@ main ::= fn() {
 	p.e = 100;
 	io.puti(p["bar"]);
 	io.puti(p["e"]);
+
+	foo := 4483 as &int; #no_warn
+	io.puti(foo as int); #no_warn
 };

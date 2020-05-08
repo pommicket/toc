@@ -88,3 +88,21 @@ static const char *indefinite_article(const char *s) {
 	return "a";
 }
 
+
+static U32 *bsearch_u32(U32 *data, size_t count, U32 search) {
+	size_t lo = 0;
+	size_t hi = count;
+	while (hi > lo) {
+		size_t mid = (lo+hi) / 2;
+		U32 datum = data[mid];
+		if (datum > search)
+			hi = mid;
+		else if (datum < search)
+			lo = mid + 1;
+		else
+			return &data[mid];
+	}
+	return NULL;
+}
+
+
