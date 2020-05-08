@@ -1,0 +1,25 @@
+#include "std/base.toc", base;
+
+// TODO: check for failed calloc
+calloc ::= #foreign("calloc", base.libc) fn(#C size_t, #C size_t) #C &"void";
+free ::= #foreign("free", base.libc) fn(#C &"void");
+
+new ::= fn(t :: Type) &t {
+	calloc(1, (sizeof t) as #C size_t)
+}
+
+news ::= fn(t :: Type, n : int) []t {
+	s: []t;
+	s.data = calloc(n as #C size_t, (sizeof t) as #C size_t);
+	s.len = n;
+	s
+}
+
+// TODO(eventually): use type information to make this just one function
+del ::= fn(t::=, x: &t) {
+	free(x);
+}
+
+dels ::= fn(t::=, x: []t) {
+	free(x.data);
+}
