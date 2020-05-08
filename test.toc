@@ -1,10 +1,1 @@
 #include "std/io.toc", io;
-#include "std/io.toc", io;
-
-foo ::= #foreign("abort", "libc.so.6") fn();
-
-main ::= fn() {
-	io.puts("hi");
-	foo();
-}
-main();

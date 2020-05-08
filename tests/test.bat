@@ -1,5 +1,5 @@
 @echo off
 pushd "%~dp0"
-cl /nologo test.c
-test
+cl /nologo tests.c
+tests.exe
 popd

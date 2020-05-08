@@ -51,3 +51,12 @@ puti ::= fn(x: int) {
 	toc_putchar('\n');
 }
 
+printf ::= #foreign("printf", base.libc) fn (#C &"const char", #C ..) #C int;
+writef ::= fn(x: float) {
+	fmt := "%f\0";
+	printf(&fmt[0], x);
+}
+putf ::= fn(x: float) {
+	writef(x);
+	toc_putchar('\n');
+}

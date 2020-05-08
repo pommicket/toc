@@ -3728,8 +3728,8 @@ static Status types_stmt(Typer *tr, Statement *s) {
 		char *filename = eval_expr_as_cstr(tr, &inc->filename, "import filename");
 		if (!filename)
 			return false;
+		Namespace *prev_nms = tr->nms;
 		IncludedFile *inc_f = NULL;
-		
 		Namespace *inc_nms = NULL; /* non-NULL if this is an include to nms */
 		if (inc->nms) {
 			inc_nms = typer_calloc(tr, 1, sizeof *inc_nms);
@@ -3738,6 +3738,9 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			body->where = s->where;
 			idents_create(&body->idents, tr->allocr, body);
 			body->parent = tr->block;
+			/* go inside namespace and block (it'll help to be there later on) */
+			tr->nms = inc_nms;
+			typer_block_enter(tr, &inc_nms->body);
 		}
 
 		s->kind = STMT_INLINE_BLOCK;
@@ -3750,7 +3753,7 @@ static Status types_stmt(Typer *tr, Statement *s) {
 				s->inline_block = NULL; /* nothing needed here */
 				/* just set ident declarations */
 				if (!include_stmts_link_to_nms(tr, inc_f->main_nms, inc_f->stmts))
-					return false;
+					goto inc_fail;
 				goto nms_transform;
 			}
 			inc_f = str_hash_table_insert(&tr->included_files, filename, filename_len);
@@ -3760,7 +3763,7 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			char *contents = read_file_contents(tr->allocr, filename, s->where);
 			if (!contents) {
 				tr->had_include_err = true;
-				return false;
+				goto inc_fail;
 			}
 
 			Tokenizer tokr;
@@ -3771,38 +3774,34 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			file->ctx = tr->err_ctx;
 			
 			if (!tokenize_file(&tokr, file))
-				return false;
+				goto inc_fail;
 			Parser parser;
 			parser_create(&parser, tr->globals, &tokr, tr->allocr);
-			parser.block = inc_nms ? &inc_nms->body : tr->block;
+			parser.block = tr->block;
 			ParsedFile parsed_file;
 			if (!parse_file(&parser, &parsed_file)) {
-				return false;
+				goto inc_fail;
 			}
 			Statement *stmts_inc = parsed_file.stmts;
 			if (inc_f) {
 				inc_f->stmts = stmts_inc;
 			}
 			s->inline_block = stmts_inc;
-			Namespace *prev_nms = tr->nms;
-			Block *prev_block = tr->block;
-			if (inc_nms) {
-				tr->nms = inc_nms;
-				tr->block = &inc_nms->body;
-			}
 			arr_foreach(stmts_inc, Statement, s_incd) {
 				if (!types_stmt(tr, s_incd)) {
-					return false;
+					goto inc_fail;
 				}
 			}
 			if (inc_nms) {
-				tr->nms = prev_nms;
-				tr->block = prev_block;
 				inc_nms->body.stmts = stmts_inc;
 			}
 		}
-		nms_transform:
+	nms_transform:
 		if (inc_nms) {
+			/* go back to parent namespace/block because that's where the declaration is gonna be */
+			tr->nms = prev_nms;
+			typer_block_exit(tr);
+
 			inc_nms->inc_file = inc_f;
 			/* turn #include "foo", bar into bar ::= nms { ... } */
 			s->kind = STMT_DECL;
@@ -3826,7 +3825,7 @@ static Status types_stmt(Typer *tr, Statement *s) {
 					err_print(s->where, "Redeclaration of identifier %s.", istr);
 					info_print(ident_decl_location(i), "Previous declaration was here.");
 					free(istr);
-					return false;
+					goto inc_fail;
 				}
 			}
 			i->decl = d;
@@ -3838,7 +3837,12 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			d->val.nms = inc_nms;
 			d->where = d->expr.where = s->where;
 		}
-	} break;
+		break;
+	inc_fail:
+		tr->nms = prev_nms;
+		typer_block_exit(tr);
+		return false;
+	}
 	case STMT_MESSAGE: {
 		Message *m = s->message;
 	    char *text = eval_expr_as_cstr(tr, &m->text, "message");

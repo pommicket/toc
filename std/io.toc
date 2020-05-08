@@ -6,13 +6,14 @@ putchar ::= #foreign("putchar", base.libc) fn(#C int) #C int;
 toc_putchar ::= fn(x: char) {
 	putchar(x as #C int);
 }
+printf ::= #foreign("printf", base.libc) fn (#C &"const char", #C ..) #C int;
 
 /* 
 unfortunately, we can't use fwrite because MSVC doesn't like it when you
 use a file handle that's not from the DLL. (i.e. you can't pass your stdout
 to the imported version of fwrite)
 */
-
+/*
 writes ::= fn(x: []char) {
 	for c := x {
 		toc_putchar(c);
@@ -50,4 +51,15 @@ puti ::= fn(x: int) {
 	writei(x);
 	toc_putchar('\n');
 }
+*/
 
+/*
+writef ::= fn(x: float) {
+	fmt := "%f\0";
+	printf(&fmt[0], x);
+}
+putf ::= fn(x: float) {
+	writef(x);
+	toc_putchar('\n');
+}
+*/

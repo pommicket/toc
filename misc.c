@@ -62,6 +62,10 @@ static char *cstr(const char *str, size_t len) {
 	return ret;
 }
 
+static inline char *str_to_cstr(String s) {
+	return cstr(s.str, s.len);
+}
+
 static bool str_eq_cstr(String s, const char *str) {
 	return strncmp(s.str, str, s.len) == 0;
 }

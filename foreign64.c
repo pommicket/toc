@@ -7,10 +7,17 @@
 #error "What's going on? The 64-bit #foreign file was included, but size_t isn't 64 bits!"
 #endif
 
+#ifdef __cplusplus
+#define external extern "C"
+#else
+#define external extern
+#endif
+
 #ifdef _WIN64
-extern U64 win64_call(FnPtr fn, U64 *args, I64 nargs);
-extern float win64_callf(FnPtr fn, U64 *args, I64 nargs);
-extern double win64_calld(FnPtr fn, U64 *args, I64 nargs);
+
+external U64 win64_call(FnPtr fn, U64 *args, I64 nargs);
+external float win64_callf(FnPtr fn, U64 *args, I64 nargs);
+external double win64_calld(FnPtr fn, U64 *args, I64 nargs);
 
 static inline U64 foreign_calli(FnPtr fn, U64 *args, I64 nargs, bool *is_float) {
 	(void)is_float;
@@ -27,9 +34,9 @@ static inline double foreign_calld(FnPtr fn, U64 *args, I64 nargs, bool *is_floa
 	return win64_calld(fn, args, nargs);
 }
 #else
-extern U64 systemv64_call(FnPtr fn, U64 *args, I64 nargs, bool *is_float);
-extern float systemv64_callf(FnPtr fn, U64 *args, I64 nargs, bool *is_float);
-extern double systemv64_calld(FnPtr fn, U64 *args, I64 nargs, bool *is_float);
+external U64 systemv64_call(FnPtr fn, U64 *args, I64 nargs, bool *is_float);
+external float systemv64_callf(FnPtr fn, U64 *args, I64 nargs, bool *is_float);
+external double systemv64_calld(FnPtr fn, U64 *args, I64 nargs, bool *is_float);
 static inline U64 foreign_calli(FnPtr fn, U64 *args, I64 nargs, bool *is_float) {
 	return systemv64_call(fn, args, nargs, is_float);
 }

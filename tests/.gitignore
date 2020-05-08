@@ -2,5 +2,5 @@ got
 out.c
 a.out
 *.exe
-test
+tests
 *.core

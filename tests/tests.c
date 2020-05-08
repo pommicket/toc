@@ -96,6 +96,8 @@ int main(int argc, char **argv) {
 		}
 		for (c = 0; c < ncompilers; ++c) {
 			const char *compiler = str_dup(compilers[c]);
+			if (strcmp(test, "sizeof") == 0 && strncmp(compiler, "tcc", 3) == 0)
+				continue; /* i think some versions of tcc have _Alignof but some don't */
 			char *p = strchr(compiler, ' ');
 			if (p) *p = 0;
 			printf("on %s... ", compiler);
