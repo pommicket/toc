@@ -8,8 +8,10 @@
 
 /* 
 @TODO:
+remove while loops with no condition- they're weird
 initialization functions (maybe #init(-50), where -50 is the priority and <0 is reserved for standard library)
-start making a standard library... (printf; stringbuilder would be nice to have)
+detect circular declarations (A ::= B; B ::= A)
+either detect circular #includes or set a #include depth limit (maybe sometimes you want finite circular includes with #if)
 if we do #include "foo.toc", bar; and foo.toc fails, bar should be declared as TYPE_UNKNOWN (right now it's undeclared)
 improve type_to_str:
 	Foo ::= struct(t::Type) {}
@@ -20,7 +22,6 @@ enums
 unions
 bitwise operations
 ---
-either detect circular #includes or set a #include depth limit (maybe sometimes you want finite circular includes with #if)
 switch to / add as an alternative: libffi
 	- better yet, inline assembly
 don't bother generating ret_ if nothing's deferred

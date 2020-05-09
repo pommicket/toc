@@ -1,11 +1,32 @@
 #include "std/base.toc", base;
+#include "std/mem.toc", mem;
+
+str_to_cstr ::= fn(s: []char) []char {
+	ret := mem.news(char, s.len+1);
+	mem.mem_copy(&ret[0], &s[0], s.len);
+	ret
+}
 
 #if base.PLATFORM_IS_UNIX {
 	// @TODO: use syscall instead
-	write ::= #foreign("write", "libc.so.6") fn(#C int, #C &"const void", #C size_t) #C long;
+	write ::= #foreign("write", base.libc) fn(#C int, #C &"const void", #C size_t) #C long;
+	open ::= #foreign("open", base.libc) fn (#C &"const char", #C int) #C int;
+
+	O_RDONLY ::= 0x00;
+	O_WRONLY ::= 0x01;
+	O_CREAT  ::= 0x40;
+
 	RawFile ::= int;
-	raw_file_write ::= fn(file: RawFile, buf: &void, size: int) int {
-		write(file as #C int, buf, size as #C size_t) as int
+	raw_file_write ::= fn(file: RawFile, buf: &void, size: int) bool {
+		while size > 0 {
+			bytes_written := write(file as #C int, buf, size as #C size_t);
+			if bytes_written < 0 {
+				return false;
+			}
+			size -= bytes_written;
+			buf += bytes_written;
+		}
+		true
 	}
 	raw_stdout ::= fn() RawFile {
 		1
@@ -13,18 +34,33 @@
 	raw_stderr ::= fn() RawFile {
 		2
 	}
+	file_open_write ::= fn(name: []char) f: RawFile, success: bool {
+		cstr := str_to_cstr(name);
+		defer mem.dels(cstr);
+		// @TODO: switch to bitwise or when that exists
+		f = open(&cstr[0], (O_WRONLY + O_CREAT) as #C int) as RawFile;
+		success = f != -1;
+	}
 } else {
 	// @TODO: on windows, use WriteFile
 	fwrite ::= #foreign("fwrite", base.libc) fn(#C &"const void", #C size_t, #C size_t, &void) #C size_t;
 	RawFile ::= &void;
-	raw_file_write ::= fn(file: RawFile, buf: &void, size: int) int {
-		fwrite(buf, 1, size, file);
+	raw_file_write ::= fn(file: RawFile, buf: &void, size: int) bool {
+		bytes_written := fwrite(buf, 1, size, file) as int;
+		bytes_written == size
 	}
 	raw_stdout ::= fn() RawFile {
 		#builtin("stdout")
 	}
 	raw_stderr ::= fn() RawFile {
 		#builtin("stdout")
+	}
+	file_open_write ::= fn(name: []char) f: RawFile, success: bool {
+		cstr := base.str_to_cstr(name);
+		defer mem.dels(cstr);
+		mode := "w\0";
+		f = fopen(&cstr[0], &mode[0]);
+		success = f != null;
 	}
 }
 
@@ -58,11 +94,11 @@ file_writes ::= fn(use f: &File, s : []char) {
 		if s.len > BUFSZ {
 			raw_file_write(raw, &s[0], s.len);
 		} else {
-			base.memcpy(&buffer[0], &s[0], s.len as #C size_t);
+			mem.mem_copy(&buffer[0], &s[0], s.len);
 			written = s.len;
 		}
 	} else {
-		base.memcpy(&buffer[written], &s[0], s.len as #C size_t);
+		mem.mem_copy(&buffer[written], &s[0], s.len);
 		written += s.len;
 	}
 }

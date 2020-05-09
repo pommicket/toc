@@ -23,3 +23,9 @@ del ::= fn(t::=, x: &t) {
 dels ::= fn(t::=, x: []t) {
 	free(x.data);
 }
+
+// @TODO: write your own
+memcpy ::= #foreign("memcpy", base.libc) fn(&void, #C &"const void", #C size_t) &void;
+mem_copy ::= fn(dst: &void, src: &void, n: int) {
+	memcpy(dst, src, n as #C size_t);
+}

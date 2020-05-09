@@ -23,5 +23,4 @@ PLATFORM ::= #builtin("platform");
 PLATFORM_IS_UNIX :: bool = PLATFORM == PLATFORM_LINUX || PLATFORM == PLATFORM_OSX || PLATFORM == PLATFORM_FREEBSD
 	|| PLATFORM == PLATFORM_OPENBSD || PLATFORM == PLATFORM_MISC_UNIX;
 
-// @TODO: write your own
-memcpy ::= #foreign("memcpy", libc) fn(&void, #C &"const void", #C size_t) &void;
+

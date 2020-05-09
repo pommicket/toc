@@ -883,7 +883,7 @@ typedef struct Declaration {
 	Value val; /* only for constant decls, non-constant globals, and varargs. */
 
 	/* 
-		for eval, for non-constant local decls
+		for eval, for non-constant decls
 		the pointers to values need to be fixed, which is why this isn't just Value *.
 		no, this can't be a union with val, because of global variables and possibly
 		other things (varargs maybe?)
