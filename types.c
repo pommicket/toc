@@ -3417,6 +3417,9 @@ static Status types_decl(Typer *tr, Declaration *d) {
 			goto ret;
 		}
 	}
+	
+	size_t n_idents; n_idents = arr_len(d->idents);
+
 	if (d->flags & DECL_HAS_EXPR) {
 		if (!types_expr(tr, &d->expr)) {
 			success = false;
@@ -3452,11 +3455,28 @@ static Status types_decl(Typer *tr, Declaration *d) {
 				}
 				copy_val(tr->allocr, &d->val, val, dtype);
 				d->flags |= DECL_FOUND_VAL;
+				if (!(d->flags & DECL_IS_CONST)) {
+					/* 
+						create a value stack for this declaration so that it can be modified by compile time execution,
+						but not permanently (i.e. output will still have old value)
+					*/
+
+					Value *copy = typer_malloc(tr, sizeof *copy);
+					if (n_idents > 1 && dtype->kind != TYPE_TUPLE) {
+						/* actually, make n_idents copies of the value, and put them in a tuple. */
+						Value *tuple = copy->tuple = typer_malloc(tr, n_idents * sizeof *copy);
+						for (size_t i = 0; i < n_idents; ++i) {
+							copy_val(tr->allocr, &tuple[i], val, dtype);
+						}
+					} else {
+						copy_val(tr->allocr, copy, val, dtype);
+					}
+					typer_arr_add(tr, d->val_stack, copy);
+				}
 			}
 		}
 	}
 
-	size_t n_idents; n_idents = arr_len(d->idents);
 
 	if (type_is_compileonly(dtype)) {
 		if (!(d->flags & DECL_IS_CONST)) {

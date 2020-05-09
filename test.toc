@@ -1,6 +1,22 @@
+/*
+
 #include "std/io.toc", io;
+
+
 
 main ::= fn() {
 	io.file_writes(&io.std_out, "hello!\n");
 	io.file_flush(&io.std_out);
 }
+
+*/
+
+
+#include "tests/std/io.toc", io;
+a, b := 5;
+main ::= fn() {
+	a = 6;
+	io.puti(a);
+	io.puti(b);
+}
+main();
