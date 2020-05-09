@@ -3475,6 +3475,17 @@ static Status types_decl(Typer *tr, Declaration *d) {
 				}
 			}
 		}
+	} else if (!tr->block || tr->block->kind == BLOCK_NMS) {
+		/* give global variables without initializers a value stack */
+		Value *val = typer_malloc(tr, sizeof *val);
+		arr_add(d->val_stack, val);
+		if (n_idents > 1 && dtype->kind != TYPE_TUPLE) {
+			Value *tuple = val->tuple = typer_malloc(tr, n_idents * sizeof *tuple);
+			for (size_t i = 0; i < n_idents; ++i)	
+				tuple[i] = val_zero(dtype);
+		} else {
+			*val = val_zero(dtype);
+		}
 	}
 
 
@@ -3739,7 +3750,7 @@ static Status types_stmt(Typer *tr, Statement *s) {
 				return false;
 			}
 		} else {
-			if (type_is_void(&tr->fn->ret_type) && !tr->fn->ret_decls) {
+			if (!type_is_void(&tr->fn->ret_type) || tr->fn->ret_decls) {
 				err_print(s->where, "No return value in non-void function.");
 				return false;
 			}

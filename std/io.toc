@@ -7,8 +7,11 @@
 	raw_file_write ::= fn(file: RawFile, buf: &void, size: int) int {
 		write(file as #C int, buf, size as #C size_t) as int
 	}
-	get_stdout ::= fn() RawFile {
+	raw_stdout ::= fn() RawFile {
 		1
+	}
+	raw_stderr ::= fn() RawFile {
+		2
 	}
 } else {
 	// @TODO: on windows, use WriteFile
@@ -17,7 +20,10 @@
 	raw_file_write ::= fn(file: RawFile, buf: &void, size: int) int {
 		fwrite(buf, 1, size, file);
 	}
-	get_stdout ::= fn() RawFile {
+	raw_stdout ::= fn() RawFile {
+		#builtin("stdout")
+	}
+	raw_stderr ::= fn() RawFile {
 		#builtin("stdout")
 	}
 }
@@ -27,6 +33,7 @@ File ::= struct {
 	BUFSZ ::= 4096;
 	raw : RawFile;
 	written : int; // ranges from 0 to FILE_BUFSZ-1
+	nobuffer : bool; // if true, flush after every write
 	buffer : [BUFSZ]char;
 }
 
@@ -34,7 +41,7 @@ raw_file_to_file ::= fn(raw : RawFile) f: File {
 	f.raw = raw;
 }
 
-std_out := raw_file_to_file(get_stdout());
+std_out, std_err : File;
 
 file_flush ::= fn(use f: &File) {
 	raw_file_write(raw, &buffer[0], written);
@@ -42,6 +49,10 @@ file_flush ::= fn(use f: &File) {
 }
 
 file_writes ::= fn(use f: &File, s : []char) {
+	if f.nobuffer {
+		raw_file_write(raw, &s[0], s.len);
+		return;
+	}
 	if written + s.len > BUFSZ {
 		file_flush(f);
 		if s.len > BUFSZ {
@@ -54,4 +65,11 @@ file_writes ::= fn(use f: &File, s : []char) {
 		base.memcpy(&buffer[written], &s[0], s.len as #C size_t);
 		written += s.len;
 	}
+}
+
+io_init ::= fn() {
+	std_out	= raw_file_to_file(raw_stdout());
+	std_out.nobuffer = true;
+	std_err	= raw_file_to_file(raw_stderr());
+	std_err.nobuffer = true;
 }

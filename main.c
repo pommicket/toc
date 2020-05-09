@@ -8,6 +8,7 @@
 
 /* 
 @TODO:
+initialization functions (maybe #init(-50), where -50 is the priority and <0 is reserved for standard library)
 start making a standard library... (printf; stringbuilder would be nice to have)
 if we do #include "foo.toc", bar; and foo.toc fails, bar should be declared as TYPE_UNKNOWN (right now it's undeclared)
 improve type_to_str:

@@ -1,22 +1,15 @@
-/*
-
 #include "std/io.toc", io;
+#include "std/base.toc", base;
 
-
+sleep ::= #foreign("sleep", base.libc) fn(#C unsigned) #C unsigned;
 
 main ::= fn() {
+	io.io_init();
 	io.file_writes(&io.std_out, "hello!\n");
-	io.file_flush(&io.std_out);
-}
-
-*/
-
-
-#include "tests/std/io.toc", io;
-a, b := 5;
-main ::= fn() {
-	a = 6;
-	io.puti(a);
-	io.puti(b);
+	io.file_writes(&io.std_out, "goodbye!\n");
+	io.file_writes(&io.std_err, "ERROR: ");
+	sleep(1);
+	io.file_writes(&io.std_err, "something went wrong!\n");
 }
 main();
+

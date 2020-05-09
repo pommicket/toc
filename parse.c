@@ -1176,18 +1176,22 @@ static Status parse_c_type(Parser *p, CType *ctype, Type *type) {
 		} else if (t->token->kind == TOKEN_IDENT) {
 			char *id = t->token->ident;
 			ctype->kind = 0;
-			if (ident_str_len(id) > 9 && strncmp(id, "unsigned_", 9) == 0) {
-				ctype->kind |= CTYPE_UNSIGNED;
-				id += 9;
-			}
 			if (ident_str_eq_str(id, "signed_char"))
 				ctype->kind = CTYPE_SIGNED_CHAR;
 			else if (ident_str_eq_str(id, "short"))
-				ctype->kind |= CTYPE_SHORT;
+				ctype->kind = CTYPE_SHORT;
+			else if (ident_str_eq_str(id, "unsigned_short"))
+				ctype->kind = CTYPE_UNSIGNED_SHORT;
+			else if (ident_str_eq_str(id, "unsigned"))
+				ctype->kind = CTYPE_UNSIGNED_INT;
 			else if (ident_str_eq_str(id, "long"))
-				ctype->kind |= CTYPE_LONG;
+				ctype->kind = CTYPE_LONG;
+			else if (ident_str_eq_str(id, "unsigned_long"))
+				ctype->kind = CTYPE_UNSIGNED_LONG;
 			else if (ident_str_eq_str(id, "long_long"))
-				ctype->kind |= CTYPE_LONGLONG;
+				ctype->kind = CTYPE_LONGLONG;
+			else if (ident_str_eq_str(id, "unsigned_long_long"))
+				ctype->kind = CTYPE_UNSIGNED_LONGLONG;
 			else if (ident_str_eq_str(id, "double"))
 				ctype->kind = CTYPE_DOUBLE;
 			else if (ident_str_eq_str(id, "size_t"))
