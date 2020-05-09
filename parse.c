@@ -823,6 +823,7 @@ static Status parse_block(Parser *p, Block *b, U8 flags) {
 	Block *prev_block = p->block;
 	b->flags = 0;
 	b->kind = BLOCK_OTHER;
+	b->uses = NULL;
 	b->ret_expr = NULL;
 	assert(p->block != b);
 	b->parent = p->block;

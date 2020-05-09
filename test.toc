@@ -1,7 +1,6 @@
 #include "std/io.toc", io;
-#include "std/base.toc", base;
 
 main ::= fn() {
-	io.putf(3.7);
+	io.file_writes(&io.std_out, "hello!\n");
+	io.file_flush(&io.std_out);
 }
-main();

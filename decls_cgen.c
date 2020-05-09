@@ -277,7 +277,10 @@ static void cgen_fn_decl(CGenerator *g, FnExpr *f, Type *t) {
 					cgen_ctype(g, csub);
 				}
 			}
-			cgen_write(g, ") = %s;", foreign_name);
+			cgen_write(g, ")");
+			if (ctypes[0].kind == CTYPE_NONE)
+				cgen_type_post(g, &fn_types[0]);
+			cgen_write(g, "= %s;", foreign_name);
 		}
 		cgen_nl(g);
 		return;

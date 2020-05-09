@@ -1,61 +1,57 @@
-/* @TODO: use write / WriteFile */
-
 #include "std/base.toc", base;
 
-putchar ::= #foreign("putchar", base.libc) fn(#C int) #C int;
-toc_putchar ::= fn(x: char) {
-	putchar(x as #C int);
-}
-printf ::= #foreign("printf", base.libc) fn (#C &"const char", #C ..) #C int;
-
-/* 
-unfortunately, we can't use fwrite because MSVC doesn't like it when you
-use a file handle that's not from the DLL. (i.e. you can't pass your stdout
-to the imported version of fwrite)
-*/
-writes ::= fn(x: []char) {
-	for c := x {
-		toc_putchar(c);
+#if base.PLATFORM_IS_UNIX {
+	// @TODO: use syscall instead
+	write ::= #foreign("write", "libc.so.6") fn(#C int, #C &"const void", #C size_t) #C long;
+	RawFile ::= int;
+	raw_file_write ::= fn(file: RawFile, buf: &void, size: int) int {
+		write(file as #C int, buf, size as #C size_t) as int
+	}
+	get_stdout ::= fn() RawFile {
+		1
+	}
+} else {
+	// @TODO: on windows, use WriteFile
+	fwrite ::= #foreign("fwrite", base.libc) fn(#C &"const void", #C size_t, #C size_t, &void) #C size_t;
+	RawFile ::= &void;
+	raw_file_write ::= fn(file: RawFile, buf: &void, size: int) int {
+		fwrite(buf, 1, size, file);
+	}
+	get_stdout ::= fn() RawFile {
+		#builtin("stdout")
 	}
 }
 
-puts ::= fn(x: []char) {
-	writes(x);
-	toc_putchar('\n');
+
+File ::= struct {
+	BUFSZ ::= 4096;
+	raw : RawFile;
+	written : int; // ranges from 0 to FILE_BUFSZ-1
+	buffer : [BUFSZ]char;
 }
 
-writei ::= fn(x: int) {
-	if x < 0 {
-	   toc_putchar('-');
-	   // NOTE: don't do x = -x; here to make sure I64_MIN works
-	}
-	if x == 0 {
-		toc_putchar('0');
-	} else {
-		abs ::= fn(x: int) int { if x < 0 { -x } else { x } };
-		scan_digit := 1000000000000000000;
-		started := false;
-		while scan_digit > 0 {
-			digit := abs((x / scan_digit) % 10);
-			if digit > 0 { started = true; }
-			if started {
-			   toc_putchar((('0' as int) + digit) as char);
-			}
-			scan_digit /= 10;
+raw_file_to_file ::= fn(raw : RawFile) f: File {
+	f.raw = raw;
+}
+
+std_out := raw_file_to_file(get_stdout());
+
+file_flush ::= fn(use f: &File) {
+	raw_file_write(raw, &buffer[0], written);
+	written = 0;
+}
+
+file_writes ::= fn(use f: &File, s : []char) {
+	if written + s.len > BUFSZ {
+		file_flush(f);
+		if s.len > BUFSZ {
+			raw_file_write(raw, &s[0], s.len);
+		} else {
+			base.memcpy(&buffer[0], &s[0], s.len as #C size_t);
+			written = s.len;
 		}
+	} else {
+		base.memcpy(&buffer[written], &s[0], s.len as #C size_t);
+		written += s.len;
 	}
-}
-
-puti ::= fn(x: int) {
-	writei(x);
-	toc_putchar('\n');
-}
-
-writef ::= fn(x: float) {
-	fmt := "%f\0";
-	printf(&fmt[0], x as f64);
-}
-putf ::= fn(x: float) {
-	writef(x);
-	toc_putchar('\n');
 }
