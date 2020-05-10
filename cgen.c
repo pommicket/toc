@@ -100,8 +100,7 @@ static void cgen_defs_decl(CGenerator *g, Declaration *d);
 	} break;															\
 	case EXPR_WHILE: {													\
 		WhileExpr *w = e->while_;										\
-		if (w->cond)													\
-			f(g, w->cond);												\
+		f(g, w->cond);													\
 		block_f(g, &w->body);											\
 	} break;															\
 	case EXPR_FOR: {													\
@@ -1478,11 +1477,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 	case EXPR_WHILE: {
 		WhileExpr *w = e->while_;
 		cgen_write(g, "while (");
-		if (w->cond) {
-			cgen_expr(g, w->cond);
-		} else {
-			cgen_write(g, "true");
-		}
+		cgen_expr(g, w->cond);
 		cgen_write(g, ") ");
 		cgen_block(g, &w->body, NULL, 0);
 	} break;

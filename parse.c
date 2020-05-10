@@ -1411,23 +1411,18 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				e->kind = EXPR_WHILE;
 				WhileExpr *w = e->while_ = parser_malloc(p, sizeof *w);
 				++t->token;
-				if (token_is_kw(t->token, KW_LBRACE)) {
-					/* infinite loop */
-					w->cond = NULL;
-				} else {
-					Token *cond_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE);
-					if (!cond_end) return false;
-					if (!token_is_kw(cond_end, KW_LBRACE)) {
-						t->token = cond_end;
-						tokr_err(t, "Expected { to open while body.");
-						return false;
-					}
-					Expression *cond = parser_new_expr(p);
-					w->cond = cond;
-				
-					if (!parse_expr(p, cond, cond_end))
-						return false;
+				Token *cond_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE);
+				if (!cond_end) return false;
+				if (!token_is_kw(cond_end, KW_LBRACE)) {
+					t->token = cond_end;
+					tokr_err(t, "Expected { to open while body.");
+					return false;
 				}
+				Expression *cond = parser_new_expr(p);
+				w->cond = cond;
+			
+				if (!parse_expr(p, cond, cond_end))
+					return false;
 				if (!parse_block(p, &w->body, 0)) return false;
 				w->body.kind = BLOCK_WHILE;
 				goto success;
@@ -2733,7 +2728,7 @@ static void fprint_expr(FILE *out, Expression *e) {
 	case EXPR_WHILE: {
 		WhileExpr *w = e->while_;
 		fprintf(out, "while ");
-		if (w->cond) fprint_expr(out, w->cond);
+		fprint_expr(out, w->cond);
 		fprint_block(out, &w->body);
 	} break;
 	case EXPR_FOR: {

@@ -2174,7 +2174,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 	case EXPR_WHILE: {
 		WhileExpr *w = e->while_;
 		bool ret = true;
-		if (w->cond && !types_expr(tr, w->cond))
+		if (!types_expr(tr, w->cond))
 			ret = false;
 		if (!types_block(tr, &w->body))
 			ret = false;

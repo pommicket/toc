@@ -262,8 +262,7 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		WhileExpr *win = in->while_;
 		WhileExpr *wout = out->while_ = allocr_malloc(a, sizeof *wout);
 		*wout = *win;
-		if (win->cond)
-			wout->cond = copy_expr_(c, win->cond);
+		wout->cond = copy_expr_(c, win->cond);
 		copy_block(c, &wout->body, &win->body, 0);
 	} break;
 	case EXPR_FOR: {

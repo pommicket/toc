@@ -8,7 +8,6 @@
 
 /* 
 @TODO:
-remove while loops with no condition- they're weird
 initialization functions (maybe #init(-50), where -50 is the priority and <0 is reserved for standard library)
 detect circular declarations (A ::= B; B ::= A)
 either detect circular #includes or set a #include depth limit (maybe sometimes you want finite circular includes with #if)
