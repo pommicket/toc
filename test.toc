@@ -1,4 +1,3 @@
-/*
 
 #include "std/io.toc", io;
 #include "std/base.toc", base;
@@ -14,14 +13,3 @@ main ::= fn() {
 	io.file_writes(&io.std_err, "something went wrong!\n");
 }
 main();
-*/
-
-a ::= nms {
-	#if 1 {
-		test ::= 0x501;
-		foo ::= fn() {
-			test;
-		}
-	}
-}
-

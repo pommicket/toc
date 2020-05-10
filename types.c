@@ -3601,6 +3601,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 static Status fix_ident_decls_inline_block(Typer *tr, Statement *stmts) {
 	Identifiers *idents = typer_get_idents(tr);
 	arr_foreach(stmts, Statement, s) {
+		assert(!(s->flags & STMT_TYPED));
 		if (s->kind == STMT_DECL) {
 			Declaration *d = s->decl;
 			arr_foreach(d->idents, Identifier, ident) {
@@ -3675,6 +3676,12 @@ static Status types_stmt(Typer *tr, Statement *s) {
 					s->inline_block = true_block->stmts;
 					if (!fix_ident_decls_inline_block(tr, s->inline_block))
 						return false;
+					/* 
+						erase identifiers in old block - we don't want anyone to think that
+						stuff is actually declared in the old block.
+						this isn't ideal, but oh well
+					*/
+					idents_create(&true_block->idents, tr->allocr, true_block);
 					bool success = true;
 					arr_foreach(s->inline_block, Statement, sub) {
 						if (!types_stmt(tr, sub)) {

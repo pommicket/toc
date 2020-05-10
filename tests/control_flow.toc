@@ -8,7 +8,7 @@ f ::= fn() int {
 		if i == 7 { break; }
 	}
 	i := 0;
-	while {
+	while true {
 		i += 1;
 		total += i;
 		if i == 10 {

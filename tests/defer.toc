@@ -50,7 +50,7 @@ main ::= fn() {
 		}
 	}
 	i := 0;
-	while {
+	while true {
 		defer io.puts("deferred from while");
 		i += 1;
 		io.puti(i);
