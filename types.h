@@ -1003,9 +1003,22 @@ typedef struct Statement {
 } Statement;
 
 typedef Statement *StatementPtr;
+/*
+ Statements to be run before any code in main is called.
+ This is mainly for the standard library, so you don't have to do something weird
+ like io.init(); 
+ Each initialization has a "priority", with lower priorities being executed first.
+ Priorities <0 are reserved for the standard library (you can use them if you want,
+ but standard library functions might not work)
+*/
+typedef struct {
+	Statement s;
+	I64 priority;
+} Initialization;
 
 typedef struct ParsedFile {
 	Statement *stmts;
+	Initialization *inits;
 } ParsedFile;
 
 typedef struct Parser {

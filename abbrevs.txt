@@ -1,3 +1,7 @@
+Abbreviations used in this code
+Some of them are very common
+Others aren't
+
 allocr - allocator
 arg - argument
 cap - capacity
@@ -15,6 +19,7 @@ expr - expression
 fn - function
 ident - identifier
 inc - include
+init - initialization
 kw - keyword
 lbl - label
 len - length

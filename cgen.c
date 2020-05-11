@@ -467,16 +467,19 @@ static void cgen_ctype(CGenerator *g, CType *c) {
 }
 
 
+
+static inline void cgen_fn_instance_number(CGenerator *g, U64 instance) {
+	cgen_write(g, U64_FMT "_", instance);
+}
 static inline void cgen_fn_name(CGenerator *g, FnExpr *f) {
 	if (f->c.name) {
 		cgen_ident(g, f->c.name);
 	} else {
 		cgen_ident_id(g, f->c.id);
 	}
-}
-
-static inline void cgen_fn_instance_number(CGenerator *g, U64 instance) {
-	cgen_write(g, U64_FMT "_", instance);
+	if (f->instance_id) {
+		cgen_fn_instance_number(g, f->instance_id);
+	}
 }
 
 /* should we generate this function? (or is it just meant for compile time) */
@@ -490,13 +493,6 @@ static bool cgen_should_gen_fn(FnExpr *f) {
 		return true;
 	} else {
 		return !type_is_compileonly(&f->ret_type);
-	}
-}
-
-static void cgen_full_fn_name(CGenerator *g, FnExpr *f) {
-	cgen_fn_name(g, f);
-	if (f->instance_id) {
-		cgen_fn_instance_number(g, f->instance_id);
 	}
 }
 
@@ -729,7 +725,7 @@ static void cgen_fn_header(CGenerator *g, FnExpr *f, U64 which_are_const) {
 		cgen_type_pre(g, &f->ret_type);
 		cgen_write(g, " ");
 	}
-	cgen_full_fn_name(g, f);	
+	cgen_fn_name(g, f);	
 	cgen_fn_params(g, f, which_are_const);
 	if (!out_param) {
 		cgen_type_post(g, &f->ret_type);
@@ -863,10 +859,7 @@ static void cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 		Type *ret_type = &fn_type->types[0];
 		Constness *constness = fn_type->constness;
 		int i = 0;
-
 		IdentID *underscore_ids = NULL;
-
-		
 		int nout_params = (int)(exprs ? arr_len(exprs) : arr_len(idents));
 		
 		if (idents) {
