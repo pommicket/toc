@@ -140,17 +140,16 @@ static Status struct_add_used_struct(Typer *tr, StructDef *to, StructDef *add, D
 	return true;
 }
 
-/* new_stmts is what s->body.stmts will become after typing is done */
-static Status struct_add_block(Typer *tr, Block *b, StructDef *s, Statement **new_stmts) {
-	arr_foreach(b->stmts, Statement, stmt) {
-		if (stmt->kind == STMT_EXPR) {
-			if (stmt->expr->kind == EXPR_BLOCK) {
-				if (!struct_add_block(tr, stmt->expr->block, s, new_stmts))
-					return false;
-				continue;
-			}
+/* create s->fields, also check to make sure the struct's statements are valid */
+static Status struct_add_stmts(Typer *tr, StructDef *s, Statement *stmts) {
+	arr_foreach(stmts, Statement, stmt) {
+		StatementKind kind = stmt->kind;
+		if (kind == STMT_INLINE_BLOCK) {
+			if (!struct_add_stmts(tr, s, stmt->inline_block))
+				return false;
+			continue;
 		}
-		if (stmt->kind != STMT_DECL) {
+		if (kind != STMT_DECL) {
 			err_print(stmt->where, "structs can only contain declarations.");
 			return false;
 		}
@@ -165,7 +164,6 @@ static Status struct_add_block(Typer *tr, Block *b, StructDef *s, Statement **ne
 				err_print(d->where, "struct members can't be inferred.");
 				return false;
 			}
-			typer_arr_add(tr, *new_stmts, *stmt);
 		} else {
 			if (flags & DECL_SEMI_CONST) {
 				err_print(d->where, "struct members can't be semi-constant.");
@@ -184,7 +182,6 @@ static Status struct_add_block(Typer *tr, Block *b, StructDef *s, Statement **ne
 				(*ident)->used_from = NULL;
 				++i;
 			}
-			typer_arr_add(tr, *new_stmts, *stmt);
 		}
 		if (flags & DECL_USE) {
 			/* add everything in the used struct to the namespace */
@@ -205,23 +202,31 @@ static Status struct_add_block(Typer *tr, Block *b, StructDef *s, Statement **ne
 			if (!struct_add_used_struct(tr, s, d->type.struc, d))
 				return false;
 		}
-		if (b != &s->body) {
-			/* we need to translate d's identifiers to s's scope */
-			arr_foreach(d->idents, Identifier, ip) {
-				Identifier redeclared = ident_get(&s->body.idents, (*ip)->str);
-				if (redeclared) {
-					char *str = ident_to_str(*ip);
-					err_print(d->where, "Redeclaration of struct member %s", str);
-					info_print(ident_decl_location(redeclared), "Previous declaration was here.");
-					free(str);
-					return false;
-				}
-				*ip = ident_translate_forced(*ip, &s->body.idents);
-				(*ip)->decl = d;
-			}
-		}
 	}
 	return true;
+}
+
+/* 
+	set the field pointers of the declarations in this struct, so that when we look up the declaration of 
+	a member of the struct, we know which Field it refers to.
+	this needs to be a different step after struct_add_stmts, because the pointers to Fields can change 
+	during struct_add_stmts
+*/
+static void struct_set_decl_field_ptrs(Typer *tr, StructDef *s, Statement *stmts) {
+	Field *field = s->fields;
+	arr_foreach(stmts, Statement, stmt) {
+		if (stmt->kind == STMT_INLINE_BLOCK) {
+			struct_set_decl_field_ptrs(tr, s, stmt->inline_block);
+			continue;
+		}
+		assert(stmt->kind == STMT_DECL);
+		Declaration *decl = stmt->decl;
+		if (!(decl->flags & DECL_IS_CONST)) {
+			assert(!(decl->flags & DECL_HAS_EXPR));
+			decl->field = field;
+			field += arr_len(decl->idents);
+		}
+	}
 }
 
 static size_t compiler_alignof(Type *t) {
@@ -292,24 +297,14 @@ static Status struct_resolve(Typer *tr, StructDef *s) {
 	if (!(s->flags & STRUCT_DEF_RESOLVED)) {
 		s->flags |= STRUCT_DEF_RESOLVING;
 		{ /* resolving stuff */
-			if (!types_block(tr, &s->body))
+			Block *body = &s->body;
+			if (!types_block(tr, body))
 				goto fail;
 			s->fields = NULL;
-			Statement *new_stmts = NULL;
-			if (!struct_add_block(tr, &s->body, s, &new_stmts))
+			Statement *stmts = body->stmts;
+			if (!struct_add_stmts(tr, s, stmts))
 				goto fail;
-			s->body.stmts = new_stmts;
-			/* set the field of each declaration, so that we can lookup struct members quickly */
-			Field *field = s->fields;
-			arr_foreach(new_stmts, Statement, stmt) {
-				assert(stmt->kind == STMT_DECL);
-				Declaration *decl = stmt->decl;
-				if (!(decl->flags & DECL_IS_CONST)) {
-					assert(!(decl->flags & DECL_HAS_EXPR));
-					decl->field = field;
-					field += arr_len(decl->idents);
-				}
-			}
+			struct_set_decl_field_ptrs(tr, s, stmts);
 			s->instance_id = 0;
 		}
 		/* find offsets and size */
@@ -1533,9 +1528,10 @@ static Status get_struct_constant(StructDef *struc, String ident, Expression *e)
 		return true;
 	} else {
 		char *member_s = cstr(ident.str, ident.len);
-		char *struc_s = struc->name ? ident_to_str(struc->name) : "anonymous struct";
+		char *struc_s = get_struct_name(struc);
 		err_print(e->where, "Cannot get value %s from struct %s. Are you missing parameters to this struct?", member_s, struc_s);
 		free(member_s);
+		free(struc_s);
 		return false;
 	}
 }
@@ -3185,6 +3181,12 @@ static Status types_expr(Typer *tr, Expression *e) {
 				if (!struct_resolve(tr, struc)) return false;
 
 				Identifier struct_ident = ident_get_with_len(&struc->body.idents, rhs->ident_str.str, rhs->ident_str.len);
+				if (!struct_ident) {
+					char *struc_s = get_struct_name(struc);
+					char *member_s = str_to_cstr(rhs->ident_str);
+					err_print(e->where, "%s is not a member of structure %s.", member_s, struc_s);
+					return false;
+				}
 				UsedFrom *uf = struct_ident->used_from;
 				if (uf) {
 					/* foo.baz => (foo.bar).baz */
@@ -3209,10 +3211,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 					e->binary.field = field;
 					*t = *field->type;
 				} else {
-					/* 
-						this call will fail if rhs->ident_str isn't a member of the structure.
-						kind of weird to have that check here but whatever
-					*/
 					if (!get_struct_constant(struct_type->struc, rhs->ident_str, e))
 						return false;
 				}

@@ -8,7 +8,8 @@
 
 /* 
 @TODO:
-struct_add_block needs serious changes, now that #ifs generate *inline* blocks
+test #include inside a struct
+cgen_recurse_subtypes should go inside struct params. maybe it could also go into the body?
 get rid of UNARY_LEN?
 detect circular declarations (A ::= B; B ::= A)
 either detect circular #includes or set a #include depth limit (maybe sometimes you want finite circular includes with #if)

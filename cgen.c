@@ -143,7 +143,7 @@ static void cgen_defs_decl(CGenerator *g, Declaration *d);
 	}
 
 
-#define cgen_recurse_subtypes(f, g, type)								\
+#define cgen_recurse_subtypes(g, type, f)								\
 	switch (type->kind) {												\
 	case TYPE_STRUCT:													\
 		/* don't descend into fields */									\
@@ -2171,10 +2171,11 @@ static void cgen_defs_type(CGenerator *g, Type *t) {
 	if (t->kind == TYPE_STRUCT) {
 		StructDef *sdef = t->struc;
 		if (!(sdef->flags & STRUCT_DEF_CGEN_FN_DEFS)) {
-			cgen_defs_block(g, &sdef->body);
 			sdef->flags |= STRUCT_DEF_CGEN_FN_DEFS;
+			cgen_defs_block(g, &sdef->body);
 		}
 	}
+	cgen_recurse_subtypes(g, t, cgen_defs_type);
 }
 
 static void cgen_defs_fn(CGenerator *g, FnExpr *f) {

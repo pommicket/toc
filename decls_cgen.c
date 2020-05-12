@@ -30,6 +30,7 @@ static void cgen_sdecls_type(CGenerator *g, Type *type) {
 		/* we'll actually define the struct later; here we can just declare it */
 	
 		if ((sdef->flags & STRUCT_DEF_RESOLVED) && !(sdef->flags & STRUCT_DEF_CGEN_DECLARED)) {
+			sdef->flags |= STRUCT_DEF_CGEN_DECLARED;
 			cgen_write(g, "struct ");
 			if (!sdef->name) {
 				sdef->c.id = ++g->ident_counter;
@@ -38,10 +39,9 @@ static void cgen_sdecls_type(CGenerator *g, Type *type) {
 			cgen_write(g, ";");
 			cgen_nl(g);
 			cgen_sdecls_block(g, &sdef->body);
-			sdef->flags |= STRUCT_DEF_CGEN_DECLARED;
 		}
 	}
-	cgen_recurse_subtypes(cgen_sdecls_type, g, type);
+	cgen_recurse_subtypes(g, type, cgen_sdecls_type);
 }
 
 static char *cgen_nms_prefix_part(CGenerator *g, Namespace *n) {
@@ -171,6 +171,7 @@ static void cgen_decls_type(CGenerator *g, Type *type) {
 	if (type->kind == TYPE_STRUCT) {
 		StructDef *sdef = type->struc;
 		if ((sdef->flags & STRUCT_DEF_RESOLVED) && !(sdef->flags & STRUCT_DEF_CGEN_DEFINED)) {
+			sdef->flags |= STRUCT_DEF_CGEN_DEFINED;
 			/* generate struct definition */
 			cgen_write(g, "struct ");
 			cgen_struct_name(g, sdef);
@@ -189,11 +190,10 @@ static void cgen_decls_type(CGenerator *g, Type *type) {
 			cgen_write(g, "};");
 			cgen_nl(g);
 			cgen_decls_block(g, &sdef->body);
-			sdef->flags |= STRUCT_DEF_CGEN_DEFINED;
 		}
 		
 	}
-	cgen_recurse_subtypes(cgen_decls_type, g, type);
+	cgen_recurse_subtypes(g, type, cgen_decls_type);
 }
 
 static void cgen_single_fn_decl(CGenerator *g, FnExpr *f, U64 which_are_const) {
