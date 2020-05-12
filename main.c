@@ -8,9 +8,11 @@
 
 /* 
 @TODO:
-initialization functions (maybe #init(-50), where -50 is the priority and <0 is reserved for standard library)
+struct_add_block needs serious changes, now that #ifs generate *inline* blocks
+get rid of UNARY_LEN?
 detect circular declarations (A ::= B; B ::= A)
 either detect circular #includes or set a #include depth limit (maybe sometimes you want finite circular includes with #if)
+initialization functions (maybe #init(-50), where -50 is the priority and <0 is reserved for standard library)
 if we do #include "foo.toc", bar; and foo.toc fails, bar should be declared as TYPE_UNKNOWN (right now it's undeclared)
 improve type_to_str:
 	Foo ::= struct(t::Type) {}
@@ -26,6 +28,7 @@ switch to / add as an alternative: libffi
 don't bother generating ret_ if nothing's deferred
 X ::= newtype(int); or something
 any odd number of "s for a string
+give each warning a number; #no_warn(warning), #no_warn_throughout_this_file(warning) 
 use point #except x;
 optional -Wshadow
 format errors so that vim/emacs can jump to them

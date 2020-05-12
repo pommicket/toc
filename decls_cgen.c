@@ -10,6 +10,19 @@ static void cgen_decls_stmt(CGenerator *g, Statement *s);
 static void cgen_decls_block(CGenerator *g, Block *b);
 static void cgen_decls_decl(CGenerator *g, Declaration *d);
 
+static void cgen_sdecls_block(CGenerator *g, Block *b) {
+	Block *prev_block = g->block;
+	g->block = b;
+	b->c.break_lbl = 0;
+	b->c.cont_lbl = 0;
+	
+	arr_foreach(b->stmts, Statement, s)
+		cgen_sdecls_stmt(g, s);
+	if (b->ret_expr)
+		cgen_sdecls_expr(g, b->ret_expr);
+	g->block = prev_block;
+}
+
 /* i is the name for this type, NULL if not available */
 static void cgen_sdecls_type(CGenerator *g, Type *type) {
 	if (type->kind == TYPE_STRUCT) {
@@ -24,23 +37,11 @@ static void cgen_sdecls_type(CGenerator *g, Type *type) {
 			cgen_struct_name(g, sdef);
 			cgen_write(g, ";");
 			cgen_nl(g);
+			cgen_sdecls_block(g, &sdef->body);
 			sdef->flags |= STRUCT_DEF_CGEN_DECLARED;
 		}
 	}
 	cgen_recurse_subtypes(cgen_sdecls_type, g, type);
-}
-
-static void cgen_sdecls_block(CGenerator *g, Block *b) {
-	Block *prev_block = g->block;
-	g->block = b;
-	b->c.break_lbl = 0;
-	b->c.cont_lbl = 0;
-	
-	arr_foreach(b->stmts, Statement, s)
-		cgen_sdecls_stmt(g, s);
-	if (b->ret_expr)
-		cgen_sdecls_expr(g, b->ret_expr);
-	g->block = prev_block;
 }
 
 static char *cgen_nms_prefix_part(CGenerator *g, Namespace *n) {
@@ -65,9 +66,6 @@ static char *cgen_nms_prefix_part(CGenerator *g, Namespace *n) {
 
 static void cgen_sdecls_expr(CGenerator *g, Expression *e) {
 	switch (e->kind) {
-	case EXPR_CAST:
-		cgen_sdecls_type(g, &e->cast.type);
-		break;
 	case EXPR_FN:
 		/* needs to go before decls_cgen.c... */
 		e->fn->c.id = ++g->ident_counter;
@@ -92,7 +90,7 @@ static void cgen_sdecls_expr(CGenerator *g, Expression *e) {
 	default: break;
 	}
 	if (e->kind != EXPR_IDENT) {
-		cgen_recurse_subexprs(g, e, cgen_sdecls_expr, cgen_sdecls_block, cgen_sdecls_decl);
+		cgen_recurse_subexprs(g, e, cgen_sdecls_expr, cgen_sdecls_block, cgen_sdecls_decl, cgen_sdecls_type);
 	}
 	if (e->kind == EXPR_NMS) {
 		arr_remove_last(g->nms_prefixes);
@@ -190,8 +188,10 @@ static void cgen_decls_type(CGenerator *g, Type *type) {
 			--g->indent_lvl;
 			cgen_write(g, "};");
 			cgen_nl(g);
+			cgen_decls_block(g, &sdef->body);
 			sdef->flags |= STRUCT_DEF_CGEN_DEFINED;
 		}
+		
 	}
 	cgen_recurse_subtypes(cgen_decls_type, g, type);
 }
@@ -294,7 +294,7 @@ static void cgen_fn_decl(CGenerator *g, FnExpr *f, Type *t) {
 
 static void cgen_decls_expr(CGenerator *g, Expression *e) {
 	assert(e->flags & EXPR_FOUND_TYPE);
-	cgen_recurse_subexprs(g, e, cgen_decls_expr, cgen_decls_block, cgen_decls_decl);
+	cgen_recurse_subexprs(g, e, cgen_decls_expr, cgen_decls_block, cgen_decls_decl, cgen_decls_type);
 	switch (e->kind) {
 	case EXPR_FN: {
 		FnExpr *f = e->fn;
@@ -307,9 +307,6 @@ static void cgen_decls_expr(CGenerator *g, Expression *e) {
 		Type *type = e->typeval;
 		cgen_decls_type(g, type);
 	} break;
-	case EXPR_CAST:
-		cgen_decls_type(g, &e->cast.type);
-		break;
 	case EXPR_BINARY_OP: {
 		Type *lhs_type = &e->binary.lhs->type;
 		if (lhs_type->kind == TYPE_PTR)
@@ -333,7 +330,7 @@ static void cgen_decls_decl(CGenerator *g, Declaration *d) {
 	cgen_decls_type(g, &d->type);
 	if (cgen_fn_is_direct(g, d)) {
 		cgen_fn_decl(g, d->expr.fn, &d->expr.type);
-		cgen_recurse_subexprs(g, (&d->expr), cgen_decls_expr, cgen_decls_block, cgen_decls_decl);
+		cgen_recurse_subexprs(g, (&d->expr), cgen_decls_expr, cgen_decls_block, cgen_decls_decl, cgen_decls_type);
 	} else {
 		if (d->flags & DECL_HAS_EXPR) {
 			cgen_decls_expr(g, &d->expr);

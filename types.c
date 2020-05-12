@@ -787,8 +787,8 @@ top:;
 	if (!(d->flags & DECL_IS_CONST)) {
 		/* check for trying to capture a variable into a function */
 		bool captured = false;
-		if (ident_scope(i) != NULL && ident_scope(i)->kind != BLOCK_NMS) {
-			Block *decl_scope = ident_scope(i);
+		Block *decl_scope = ident_scope(i);
+		if (decl_scope && decl_scope->kind != BLOCK_NMS) {
 			if (decl_scope->kind != BLOCK_NMS) {
 				/* go back through scopes */
 				arr_foreach_reversed(tr->blocks, BlockPtr, block) {
@@ -2079,6 +2079,21 @@ static Status types_expr(Typer *tr, Expression *e) {
 			err_print(e->where, "Undeclared identifier '%s'.", s);
 			free(s);
 			return false;
+		}
+		if (b && b->kind == BLOCK_STRUCT) {
+			/* this is really necessary if you're trying to access a struct constant from inside a function in the same struct */
+			e->kind = EXPR_VAL;
+			Declaration *decl = final_ident->decl;
+			if (!(decl->flags & DECL_IS_CONST)) {
+				/* not sure if this can even happen right now, but might as well have this check here */
+				err_print(e->where, "Trying to access non-constant struct member from inside of it. This is not allowed.");
+				return false;
+			}
+			assert(decl->flags & DECL_FOUND_VAL);
+			int idx = decl_ident_index(decl, final_ident);
+			e->val = *decl_val_at_index(decl, idx);
+			e->type = *decl_type_at_index(decl, idx);
+			break;
 		}
 		e->ident = final_ident;
 		if (!type_of_ident(tr, e->where, e->ident, t)) {
@@ -3396,14 +3411,8 @@ static Status types_decl(Typer *tr, Declaration *d) {
 	Type *dtype = &d->type;
 	if (d->flags & DECL_FOUND_TYPE) return true;
 	bool success = true;
+	Expression *e = (d->flags & DECL_HAS_EXPR) ? &d->expr : NULL;
 
-	if ((d->flags & DECL_HAS_EXPR)
-		&& d->expr.kind == EXPR_TYPE
-		&& d->expr.typeval->kind == TYPE_STRUCT
-		&& tr->fn == NULL) {
-		d->expr.typeval->struc->name = d->idents[0];
-	}
-	
 	if (d->flags & DECL_INFER) {
 		dtype->kind = TYPE_UNKNOWN;
 		dtype->flags = 0;
@@ -3420,36 +3429,45 @@ static Status types_decl(Typer *tr, Declaration *d) {
 	
 	size_t n_idents; n_idents = arr_len(d->idents);
 
-	if (d->flags & DECL_HAS_EXPR) {
-		if (!types_expr(tr, &d->expr)) {
+	if (e) {
+		if (e->kind == EXPR_FN && tr->block && tr->block->kind == BLOCK_STRUCT) {
+			warn_print(d->where, "This function is in the body of a struct. Are you trying to declare a method, because they don't exist in this language.\n"
+					"Try moving the function outside of the struct, otherwise you might run into problems.");
+		}
+		if (e->kind == EXPR_TYPE
+			&& e->typeval->kind == TYPE_STRUCT
+			&& tr->fn == NULL) {
+			e->typeval->struc->name = d->idents[0];
+		}
+		if (!types_expr(tr, e)) {
 			success = false;
 			goto ret;
 		}
 		assert(d->expr.type.flags & TYPE_IS_RESOLVED);
 		if (d->flags & DECL_ANNOTATES_TYPE) {
-			if (!type_eq_implicit(&d->expr.type, dtype)) {
+			if (!type_eq_implicit(&e->type, dtype)) {
 				char *decl_type = type_to_str(dtype),
-					*expr_type = type_to_str(&d->expr.type);
-				err_print(d->expr.where, "Declaration type %s does not match expression type %s.", decl_type, expr_type);
+					*expr_type = type_to_str(&e->type);
+				err_print(e->where, "Declaration type %s does not match expression type %s.", decl_type, expr_type);
 				free(decl_type); free(expr_type);
 				success = false;
 				goto ret;
 			}
 		} else {
-			if (type_is_void(&d->expr.type)) {
+			if (type_is_void(&e->type)) {
 				/* e.g. x := (fn(){})(); */
-				err_print(d->expr.where, "Use of void value.");
+				err_print(e->where, "Use of void value.");
 				success = false;
 				goto ret;
 			}
-			*dtype = d->expr.type;
+			*dtype = e->type;
 			dtype->flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE; /* x := 5; => x is not flexible */
 		}
 		bool need_value = (d->flags & DECL_IS_CONST) || !tr->block || tr->block->kind == BLOCK_NMS;
 		if (need_value) {
 			if (!(d->flags & DECL_FOUND_VAL)) {
 				Value val;
-				if (!eval_expr(tr->evalr, &d->expr, &val)) {
+				if (!eval_expr(tr->evalr, e, &val)) {
 					success = false;
 					goto ret;
 				}
@@ -3567,7 +3585,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 			return false;
 	}
 
-	if (n_idents == 1 && (d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_NMS) {
+	if (n_idents == 1 && e && e->kind == EXPR_NMS) {
 		bool is_at_top_level = true;
 		arr_foreach(tr->blocks, BlockPtr, b) {
 			if (*b && (*b)->kind != BLOCK_NMS) {
@@ -3916,6 +3934,10 @@ static Status types_stmt(Typer *tr, Statement *s) {
 		}
 	} break;
 	case STMT_DEFER:
+		if (tr->block == NULL) {
+			err_print(s->where, "You can't defer something at global scope.");
+			return false;
+		}
 		if (!types_stmt(tr, s->defer))
 			return false;
 		if (s->defer->kind == STMT_DEFER) {

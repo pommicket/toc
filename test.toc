@@ -1,15 +1,16 @@
+#include "tests/std/io.toc";
 
-#include "std/io.toc", io;
-#include "std/base.toc", base;
-
-sleep ::= #foreign("sleep", base.libc) fn(#C unsigned) #C unsigned;
+Foo ::= struct {
+	x : int;
+	N ::= 5;
+	S ::= "hello!";
+	f ::= fn() []char {
+		S
+	}
+}
 
 main ::= fn() {
-	io.io_init();
-	io.file_writes(&io.std_out, "hello!\n");
-	io.file_writes(&io.std_out, "goodbye!\n");
-	io.file_writes(&io.std_err, "ERROR: ");
-	sleep(1);
-	io.file_writes(&io.std_err, "something went wrong!\n");
+	puts(Foo.f());
+	
 }
 main();

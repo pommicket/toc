@@ -51,10 +51,9 @@ static void cgen_defs_decl(CGenerator *g, Declaration *d);
 		g->block = prev_block;                                  \
 	}
 
-/* calls f on every sub-expression of e, block_f on every sub-block, and decl_f on every sub-declaration. */
-#define cgen_recurse_subexprs(g, e, f, block_f, decl_f)					\
+/* calls f on every sub-expression of e, block_f on every sub-block, type_f on every type, and decl_f on every sub-declaration. */
+#define cgen_recurse_subexprs(g, e, f, block_f, decl_f, type_f)			\
 	switch (e->kind) {													\
-	case EXPR_TYPE:														\
 	case EXPR_VAL:														\
 	case EXPR_C:														\
 	case EXPR_BUILTIN:													\
@@ -64,6 +63,9 @@ static void cgen_defs_decl(CGenerator *g, Declaration *d);
 	case EXPR_LITERAL_STR:												\
 	case EXPR_LITERAL_CHAR:												\
 	case EXPR_LITERAL_FLOAT:											\
+		break; \
+	case EXPR_TYPE:														\
+		type_f(g, e->typeval); \
 		break;															\
 	case EXPR_UNARY_OP:													\
 		f(g, e->unary.of);												\
@@ -75,6 +77,7 @@ static void cgen_defs_decl(CGenerator *g, Declaration *d);
 		break;															\
 	case EXPR_CAST:														\
 		f(g, e->cast.expr);												\
+		type_f(g, &e->cast.type); \
 		break;															\
 	case EXPR_CALL:														\
 		f(g, e->call.fn);												\
@@ -2164,6 +2167,16 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 	}
 }
 
+static void cgen_defs_type(CGenerator *g, Type *t) {
+	if (t->kind == TYPE_STRUCT) {
+		StructDef *sdef = t->struc;
+		if (!(sdef->flags & STRUCT_DEF_CGEN_FN_DEFS)) {
+			cgen_defs_block(g, &sdef->body);
+			sdef->flags |= STRUCT_DEF_CGEN_FN_DEFS;
+		}
+	}
+}
+
 static void cgen_defs_fn(CGenerator *g, FnExpr *f) {
 	if (fn_has_instances(f)) {
 		HashTable *instances = f->instances;
@@ -2184,7 +2197,7 @@ static void cgen_defs_expr(CGenerator *g, Expression *e) {
 	if (e->kind == EXPR_FN) {
 		cgen_defs_fn(g, e->fn);
 	}
-	cgen_recurse_subexprs(g, e, cgen_defs_expr, cgen_defs_block, cgen_defs_decl);
+	cgen_recurse_subexprs(g, e, cgen_defs_expr, cgen_defs_block, cgen_defs_decl, cgen_defs_type);
 }
 
 static void cgen_defs_decl(CGenerator *g, Declaration *d) {

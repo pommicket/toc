@@ -652,9 +652,9 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 			p->block = prev_block;
 			if (!parse_block(p, &struc->body, PARSE_BLOCK_DONT_CREATE_IDENTS))
 				return false;
+			struc->body.kind = BLOCK_STRUCT;
 			parser_put_end(p, &struc->where);
 			break;
-			
 		struct_fail:
 			p->block = prev_block;
 			return false;
@@ -2420,18 +2420,14 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			}
 			break;
 		case KW_DEFER: {
-			if (p->block == NULL) {
-				tokr_err(t, "You can't defer something at global scope.");
-				return false;
-			}
 			++t->token;
 			s->kind = STMT_DEFER;
 			Token *deferred_start = t->token;
 			s->defer = parser_malloc(p, sizeof *s->defer);
 			if (!parse_stmt(p, s->defer, was_a_statement))
-				return false;
+				return false; 
 			if (!*was_a_statement) {
-				err_print(token_location(p->file, deferred_start), "Empty defer");
+				err_print(token_location(p->file, deferred_start), "Invalid defer (are you missing a statement?).");
 				return false;
 			}
 			break;
@@ -2505,6 +2501,36 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			}
 		    break;
 		}
+		case DIRECT_INIT: {
+			*was_a_statement = false;
+			Initialization *init = parser_arr_add_ptr(p, p->parsed_file->inits);
+			++t->token;
+			if (!token_is_kw(t->token, KW_LPAREN)) {
+				tokr_err(t, "Expected ( after #init.");
+				tokr_skip_semicolon(t);
+				return false;
+			}
+			++t->token;
+			if (!parse_expr(p, &init->priority_expr, expr_find_end(p, 0))) {
+				tokr_skip_semicolon(t);
+				return false;
+			}
+			if (!token_is_kw(t->token, KW_RPAREN)) {
+				tokr_err(t, "Expected ) after #init priority.");
+				tokr_skip_semicolon(t);
+				return false;
+			}
+			++t->token;
+			Token *stmt_start = t->token;
+			bool was_stmt;
+			if (!parse_stmt(p, &init->stmt, &was_stmt))
+				return false;
+			if (!was_stmt) {
+				err_print(token_location(p->file, stmt_start), "Invalid #init (are you missing a statement?).");
+				tokr_skip_semicolon(t);
+				return false;
+			}
+		} break;
 		default:
 			goto stmt_expr;
 		}
@@ -2544,6 +2570,7 @@ static void parser_create(Parser *p, Identifiers *globals, Tokenizer *t, Allocat
 static Status parse_file(Parser *p, ParsedFile *f) {
 	Tokenizer *t = p->tokr;
 	f->stmts = NULL;
+	f->inits = NULL;
 	p->file = t->file;
 	p->parsed_file = f;
 	bool ret = true;

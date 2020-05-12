@@ -249,12 +249,13 @@ typedef enum {
 	DIRECT_WARN,
 	DIRECT_INFO,
 	DIRECT_NO_WARN,
+	DIRECT_INIT,
 	DIRECT_COUNT
 } Directive;
 
 static const char *directives[DIRECT_COUNT] = {
 	"C", "sizeof", "alignof", "export", "foreign", "builtin", "include", "force", "if", "error", "warn",
-	"info", "no_warn"
+	"info", "no_warn", "init"
 };
 
 typedef enum {
@@ -502,14 +503,16 @@ typedef enum {
 	BLOCK_FN,
 	BLOCK_NMS,
 	BLOCK_FOR,
-	BLOCK_WHILE
+	BLOCK_WHILE,
+	BLOCK_STRUCT
 } BlockKind;
 
 typedef U8 BlockFlags;
 typedef struct Block {
 	/* NOTE: make sure you check copy.c when you add something to this */
 	BlockFlags flags;
-	BlockKind kind;
+	BlockKind kind; /* set during the parsing phase, but don't access while this specific block is being
+	                   parsed, because sometimes it's set after parse_block */
 	struct {
 		IdentID break_lbl, cont_lbl; /* initially 0, set to non-zero values if needed (++g->lbl_counter); set by sdecls_cgen. */
 	} c;
@@ -527,9 +530,10 @@ enum {
 	STRUCT_DEF_FOUND_OFFSETS = 0x01,
 	STRUCT_DEF_CGEN_DECLARED = 0x02,
 	STRUCT_DEF_CGEN_DEFINED = 0x04,
-	STRUCT_DEF_RESOLVED = 0x08,
-	STRUCT_DEF_RESOLVING = 0x10,
-	STRUCT_DEF_RESOLVING_FAILED = 0x20
+	STRUCT_DEF_CGEN_FN_DEFS = 0x08, /* have the functions contained in this struct been defined? */
+	STRUCT_DEF_RESOLVED = 0x10,
+	STRUCT_DEF_RESOLVING = 0x20,
+	STRUCT_DEF_RESOLVING_FAILED = 0x40
 };
 typedef U8 StructFlags;
 typedef struct StructDef {
@@ -1004,16 +1008,19 @@ typedef struct Statement {
 
 typedef Statement *StatementPtr;
 /*
- Statements to be run before any code in main is called.
- This is mainly for the standard library, so you don't have to do something weird
- like io.init(); 
- Each initialization has a "priority", with lower priorities being executed first.
- Priorities <0 are reserved for the standard library (you can use them if you want,
- but standard library functions might not work)
+	Statements to be run before any code in main is called.
+	This is mainly for the standard library, so you don't have to do something weird
+	like io.init(); 
+	Each initialization has a "priority", with lower priorities being executed first.
+	Priorities <0 are reserved for the standard library (you can use them if you want,
+	but standard library functions might not work)
 */
 typedef struct {
-	Statement s;
-	I64 priority;
+	Statement stmt;
+	union {
+		Expression priority_expr; /* before resolving */
+		I64 priority; /* after resolving */
+	};
 } Initialization;
 
 typedef struct ParsedFile {
