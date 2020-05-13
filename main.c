@@ -13,7 +13,7 @@ cgen_recurse_subtypes should go inside struct params. maybe it could also go int
 get rid of UNARY_LEN?
 detect circular declarations (A ::= B; B ::= A)
 either detect circular #includes or set a #include depth limit (maybe sometimes you want finite circular includes with #if)
-initialization functions (maybe #init(-50), where -50 is the priority and <0 is reserved for standard library)
+initialization statements (maybe #init(-50), where -50 is the priority and <0 is reserved for standard library)
 if we do #include "foo.toc", bar; and foo.toc fails, bar should be declared as TYPE_UNKNOWN (right now it's undeclared)
 improve type_to_str:
 	Foo ::= struct(t::Type) {}

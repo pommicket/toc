@@ -3881,7 +3881,7 @@ static Status types_stmt(Typer *tr, Statement *s) {
 					err_print(s->where, "Redeclaration of identifier %s.", istr);
 					info_print(ident_decl_location(i), "Previous declaration was here.");
 					free(istr);
-					goto inc_fail;
+					return false; /* NOT goto inc_fail; */
 				}
 			}
 			i->decl = d;
@@ -3895,8 +3895,10 @@ static Status types_stmt(Typer *tr, Statement *s) {
 		}
 		break;
 	inc_fail:
-		tr->nms = prev_nms;
-		typer_block_exit(tr);
+		if (inc_nms) {
+			tr->nms = prev_nms;
+			typer_block_exit(tr);
+		}
 		return false;
 	}
 	case STMT_MESSAGE: {
