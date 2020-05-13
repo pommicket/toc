@@ -1,6 +1,25 @@
 #include "std/io.toc", io;
 #include "std/mem.toc";
 
+z ::= nms {
+	Foo ::= struct(f ::= fn() int { 7 }) {
+		x: int;
+	}
+
+	Bar ::= fn() &(struct { x, y: int; f ::= fn() int { 13 } } ) {
+		x : u64;
+		&x as &void
+	}
+
+
+	foo ::= fn() total : int = 0 {
+		f: Foo();
+		total += f.f();
+		total += Bar().f();
+	}
+}
+
+
 main ::= fn() {
 	nums := news(int, 10);
 	for x, i := &nums {
@@ -49,22 +68,3 @@ Foo ::= struct {
 Bar ::= struct {
 	f: Foo;
 }
-
-z ::= nms {
-	Foo ::= struct(f ::= fn() int { 7 }) {
-		x: int;
-	}
-
-	Bar ::= fn() &(struct { x, y: int; f ::= fn() int { 13 } } ) {
-		x : u64;
-		&x as &void
-	}
-
-
-	foo ::= fn() total : int = 0 {
-		f: Foo();
-		total += f.f();
-		total += Bar().f();
-	}
-}
-
