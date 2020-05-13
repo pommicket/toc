@@ -20,6 +20,10 @@ main ::= fn() {
 	io.puti(f.k);
 	io.puti(f.b.f.k);
 	io.puti(f.b.f.b.f.k);
+	x := z.foo();
+	y ::= z.foo();
+	io.puti(x);
+	io.puti(y);
 }
 
 slice_to_ll ::= fn(t::=, slice: []t) use ll: LinkedList(t) {
@@ -45,3 +49,22 @@ Foo ::= struct {
 Bar ::= struct {
 	f: Foo;
 }
+
+z ::= nms {
+	Foo ::= struct(f ::= fn() int { 7 }) {
+		x: int;
+	}
+
+	Bar ::= fn() &(struct { x, y: int; f ::= fn() int { 13 } } ) {
+		x : u64;
+		&x as &void
+	}
+
+
+	foo ::= fn() total : int = 0 {
+		f: Foo();
+		total += f.f();
+		total += Bar().f();
+	}
+}
+

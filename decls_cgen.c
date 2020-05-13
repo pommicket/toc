@@ -30,7 +30,6 @@ static void cgen_sdecls_type(CGenerator *g, Type *type) {
 		/* we'll actually define the struct later; here we can just declare it */
 	
 		if ((sdef->flags & STRUCT_DEF_RESOLVED) && !(sdef->flags & STRUCT_DEF_CGEN_DECLARED)) {
-			sdef->flags |= STRUCT_DEF_CGEN_DECLARED;
 			cgen_write(g, "struct ");
 			if (!sdef->name) {
 				sdef->c.id = ++g->ident_counter;
@@ -38,10 +37,10 @@ static void cgen_sdecls_type(CGenerator *g, Type *type) {
 			cgen_struct_name(g, sdef);
 			cgen_write(g, ";");
 			cgen_nl(g);
-			cgen_sdecls_block(g, &sdef->body);
+			/* we don't need to set the STRUCT_DEF_CGEN_DECLARED flag; that's done in cgen_recurse_subtypes */
 		}
 	}
-	cgen_recurse_subtypes(g, type, cgen_sdecls_type);
+	cgen_recurse_subtypes(g, type, cgen_sdecls_type, cgen_sdecls_decl, cgen_sdecls_block, STRUCT_DEF_CGEN_DECLARED);
 }
 
 static char *cgen_nms_prefix_part(CGenerator *g, Namespace *n) {
@@ -168,32 +167,44 @@ static void cgen_sdecls_file(CGenerator *g, ParsedFile *f) {
 }
 
 static void cgen_decls_type(CGenerator *g, Type *type) {
-	if (type->kind == TYPE_STRUCT) {
-		StructDef *sdef = type->struc;
-		if ((sdef->flags & STRUCT_DEF_RESOLVED) && !(sdef->flags & STRUCT_DEF_CGEN_DEFINED)) {
-			sdef->flags |= STRUCT_DEF_CGEN_DEFINED;
-			/* generate struct definition */
-			cgen_write(g, "struct ");
-			cgen_struct_name(g, sdef);
-			cgen_write(g, "{");
-			cgen_nl(g);
-			++g->indent_lvl;
-			arr_foreach(sdef->fields, Field, f) {
-				cgen_type_pre(g, f->type);
-				cgen_write(g, " ");
-				cgen_ident_simple(g, f->name);
-				cgen_type_post(g, f->type);
-				cgen_write(g, ";");
-				cgen_nl(g);
-			}
-			--g->indent_lvl;
-			cgen_write(g, "};");
-			cgen_nl(g);
-			cgen_decls_block(g, &sdef->body);
-		}
-		
+	/* this check needs to go before cgen_recurse_subtypes, because that sets the STRUCT_DEF_CGEN_DEFINED flag */
+	bool need_to_generate_struct_definition = type->kind == TYPE_STRUCT && !(type->struc->flags & STRUCT_DEF_CGEN_DEFINED)
+		&& !struct_is_template(type->struc);
+	/* 
+	this has to go BEFORE defining the struct, so that if it has struct fields, they're defined before it is, 
+	because
+	struct Foo;
+	struct Bar {
+		struct Foo f;
 	}
-	cgen_recurse_subtypes(g, type, cgen_decls_type);
+	struct Foo {
+		int x;
+	}
+	does not work in C
+	*/
+	cgen_recurse_subtypes(g, type, cgen_decls_type, cgen_decls_decl, cgen_decls_block, STRUCT_DEF_CGEN_DEFINED);
+
+	if (need_to_generate_struct_definition) {
+		StructDef *sdef = type->struc;
+		/* generate struct definition */
+		cgen_write(g, "struct ");
+		cgen_struct_name(g, sdef);
+		cgen_write(g, "{");
+		cgen_nl(g);
+		++g->indent_lvl;
+		arr_foreach(sdef->fields, Field, f) {
+			cgen_type_pre(g, f->type);
+			cgen_write(g, " ");
+			cgen_ident_simple(g, f->name);
+			cgen_type_post(g, f->type);
+			cgen_write(g, ";");
+			cgen_nl(g);
+		}
+		--g->indent_lvl;
+		cgen_write(g, "};");
+		cgen_nl(g);
+		/* we don't need to set the STRUCT_DEF_CGEN_DEFINED flag; that's done in cgen_recurse_subtypes */
+	}
 }
 
 static void cgen_single_fn_decl(CGenerator *g, FnExpr *f, U64 which_are_const) {

@@ -36,145 +36,159 @@ static void cgen_val_ptr(CGenerator *g, void *v, Type *t);
 static void cgen_defs_block(CGenerator *g, Block *b);
 static void cgen_defs_decl(CGenerator *g, Declaration *d);
 
-#define cgen_recurse_subexprs_fn_simple(fn, decl_f, block_f)	\
-	if (!(fn->flags & FN_EXPR_FOREIGN)) {						\
-		FnExpr *prev_fn = g->f##n;								\
-		Block *prev_block = g->block;                           \
-		g->f##n = fn;											\
-		g->block = &fn->body;                                   \
-		arr_foreach(fn->params, Declaration, param)             \
-			decl_f(g, param);									\
-		arr_foreach(fn->ret_decls, Declaration, r)				\
-			decl_f(g, r);										\
-		block_f(g, &fn->body);									\
-		g->f##n = prev_fn;										\
-		g->block = prev_block;                                  \
+#define cgen_recurse_subexprs_fn_simple(fn, decl_f, block_f, type_f) \
+	if (!(fn->flags & FN_EXPR_FOREIGN)) { \
+		FnExpr *prev_fn = g->f##n; \
+		Block *prev_block = g->block; \
+		g->f##n = fn; \
+		g->block = &fn->body; \
+		arr_foreach(fn->params, Declaration, param) \
+			decl_f(g, param); \
+		if (fn->ret_decls) { \
+			arr_foreach(fn->ret_decls, Declaration, r) \
+				decl_f(g, r); \
+		} else { \
+			type_f(g, &fn->ret_type); \
+		} \
+		block_f(g, &fn->body); \
+		g->f##n = prev_fn; \
+		g->block = prev_block; \
 	}
 
 /* calls f on every sub-expression of e, block_f on every sub-block, type_f on every type, and decl_f on every sub-declaration. */
-#define cgen_recurse_subexprs(g, e, f, block_f, decl_f, type_f)			\
-	switch (e->kind) {													\
-	case EXPR_VAL:														\
-	case EXPR_C:														\
-	case EXPR_BUILTIN:													\
-	case EXPR_IDENT:													\
-	case EXPR_LITERAL_BOOL:												\
-	case EXPR_LITERAL_INT:												\
-	case EXPR_LITERAL_STR:												\
-	case EXPR_LITERAL_CHAR:												\
-	case EXPR_LITERAL_FLOAT:											\
+#define cgen_recurse_subexprs(g, e, f, block_f, decl_f, type_f) \
+	switch (e->kind) { \
+	case EXPR_VAL: \
+	case EXPR_C: \
+	case EXPR_BUILTIN: \
+	case EXPR_IDENT: \
+	case EXPR_LITERAL_BOOL: \
+	case EXPR_LITERAL_INT: \
+	case EXPR_LITERAL_STR: \
+	case EXPR_LITERAL_CHAR: \
+	case EXPR_LITERAL_FLOAT: \
 		break; \
-	case EXPR_TYPE:														\
+	case EXPR_TYPE: \
 		type_f(g, e->typeval); \
-		break;															\
-	case EXPR_UNARY_OP:													\
-		f(g, e->unary.of);												\
-		break;															\
-	case EXPR_BINARY_OP:												\
-		f(g, e->binary.lhs);											\
-		if (e->binary.op != BINARY_DOT)									\
-			f(g, e->binary.rhs);										\
-		break;															\
-	case EXPR_CAST:														\
-		f(g, e->cast.expr);												\
+		break; \
+	case EXPR_UNARY_OP: \
+		f(g, e->unary.of); \
+		break; \
+	case EXPR_BINARY_OP: \
+		f(g, e->binary.lhs); \
+		if (e->binary.op != BINARY_DOT) \
+			f(g, e->binary.rhs); \
+		break; \
+	case EXPR_CAST: \
+		f(g, e->cast.expr); \
 		type_f(g, &e->cast.type); \
-		break;															\
-	case EXPR_CALL:														\
-		f(g, e->call.fn);												\
-		arr_foreach(e->call.arg_exprs, Expression, arg)					\
-			f(g, arg);													\
-		break;															\
-	case EXPR_BLOCK:													\
-		block_f(g, e->block);											\
-		break;															\
-	case EXPR_NMS: {													\
-		Namespace *prev = g->nms;										\
-		g->nms = e->nms;												\
-		block_f(g, &e->nms->body);										\
-		g->nms = prev;													\
-	} break;															\
-	case EXPR_IF: {														\
-		IfExpr *i = e->if_;												\
-		if (i->cond)													\
-			f(g, i->cond);												\
-		block_f(g, &i->body);											\
-		if (i->next_elif)												\
-			f(g, i->next_elif);											\
-	} break;															\
-	case EXPR_WHILE: {													\
-		WhileExpr *w = e->while_;										\
-		f(g, w->cond);													\
-		block_f(g, &w->body);											\
-	} break;															\
-	case EXPR_FOR: {													\
-		ForExpr *fo = e->for_;											\
-		if (fo->flags & FOR_IS_RANGE) {									\
-			f(g, fo->range.from);										\
-			if (fo->range.to) f(g, fo->range.to);						\
-			/* step is a value, not an expression */					\
-		} else {														\
-			f(g, fo->of);												\
-		}																\
-		block_f(g, &fo->body);											\
-	} break;															\
-	case EXPR_TUPLE:													\
-		arr_foreach(e->tuple, Expression, x)							\
-			f(g, x);													\
-		break;															\
-	case EXPR_SLICE:													\
-		f(g, e->slice.of);												\
-		if (e->slice.from) f(g, e->slice.from);							\
-		if (e->slice.to) f(g, e->slice.to);								\
-		break;															\
-	case EXPR_FN: {														\
-		FnExpr *fn = e->fn;												\
-		if (fn_has_instances(fn)) {										\
-			Instance **data = fn->instances->data;						\
-			for (U64 i = 0; i < fn->instances->cap; ++i) {				\
-				if (fn->instances->occupied[i]) {						\
-					cgen_recurse_subexprs_fn_simple(((*data)->fn), decl_f, block_f); \
-				}														\
-				++data;													\
-			}															\
-	 	} else {														\
-			cgen_recurse_subexprs_fn_simple(fn, decl_f, block_f);		\
-		}																\
-	} break;															\
+		break; \
+	case EXPR_CALL: \
+		f(g, e->call.fn); \
+		arr_foreach(e->call.arg_exprs, Expression, arg) \
+			f(g, arg); \
+		break; \
+	case EXPR_BLOCK: \
+		block_f(g, e->block); \
+		break; \
+	case EXPR_NMS: { \
+		Namespace *prev = g->nms; \
+		g->nms = e->nms; \
+		block_f(g, &e->nms->body); \
+		g->nms = prev; \
+	} break; \
+	case EXPR_IF: { \
+		IfExpr *i = e->if_; \
+		if (i->cond) \
+			f(g, i->cond); \
+		block_f(g, &i->body); \
+		if (i->next_elif) \
+			f(g, i->next_elif); \
+	} break; \
+	case EXPR_WHILE: { \
+		WhileExpr *w = e->while_; \
+		f(g, w->cond); \
+		block_f(g, &w->body); \
+	} break; \
+	case EXPR_FOR: { \
+		ForExpr *fo = e->for_; \
+		if (fo->flags & FOR_IS_RANGE) { \
+			f(g, fo->range.from); \
+			if (fo->range.to) f(g, fo->range.to); \
+			/* step is a value, not an expression */ \
+		} else { \
+			f(g, fo->of); \
+		} \
+		block_f(g, &fo->body); \
+	} break; \
+	case EXPR_TUPLE: \
+		arr_foreach(e->tuple, Expression, x) \
+			f(g, x); \
+		break; \
+	case EXPR_SLICE: \
+		f(g, e->slice.of); \
+		if (e->slice.from) f(g, e->slice.from); \
+		if (e->slice.to) f(g, e->slice.to); \
+		break; \
+	case EXPR_FN: { \
+		FnExpr *fn = e->fn; \
+		if (fn_has_instances(fn)) { \
+			Instance **data = fn->instances->data; \
+			for (U64 i = 0; i < fn->instances->cap; ++i) { \
+				if (fn->instances->occupied[i]) { \
+					cgen_recurse_subexprs_fn_simple(((*data)->fn), decl_f, block_f, type_f); \
+				} \
+				++data; \
+			} \
+	 	} else { \
+			cgen_recurse_subexprs_fn_simple(fn, decl_f, block_f, type_f); \
+		} \
+	} break; \
 	}
 
+#include <signal.h>
 
-#define cgen_recurse_subtypes(g, type, f)								\
-	switch (type->kind) {												\
-	case TYPE_STRUCT:													\
-		/* don't descend into fields */									\
-		break;															\
-	case TYPE_FN:														\
+#define cgen_recurse_subtypes(g, type, f, decl_f, block_f, struct_flag) \
+	switch (type->kind) { \
+	case TYPE_STRUCT: { \
+		StructDef *struc = type->struc; \
+		if (!(struc->flags & struct_flag)) { \
+			struc->flags |= struct_flag; \
+			if (struc->params) { \
+				if (struct_is_template(struc)) break; \
+				arr_foreach(struc->params, Declaration, param) \
+					decl_f(g, param); \
+			} \
+			block_f(g, &struc->body); \
+		} \
+	} break; \
+	case TYPE_FN: \
 		if (type->kind == TYPE_FN && (type->fn.constness || fn_type_has_varargs(&type->fn))) { \
-			/* we don't want to do this, because it's a template-y thing */	\
-		}																\
-		else {															\
-			arr_foreach(type->fn.types, Type, sub) {					\
-				f(g, sub);												\
-			}															\
-		}																\
-		break;															\
-	case TYPE_TUPLE:													\
-		arr_foreach(type->tuple, Type, sub)								\
-			f(g, sub);													\
-		break;															\
-	case TYPE_ARR:														\
-		f(g, type->arr.of);												\
-		break;															\
-	case TYPE_SLICE:													\
-		f(g, type->slice);												\
-		break;															\
-	case TYPE_PTR:														\
-		f(g, type->ptr);												\
-		break;															\
-	case TYPE_BUILTIN:													\
-	case TYPE_UNKNOWN:													\
-		break;															\
-	case TYPE_EXPR: assert(0);											\
+			/* we don't want to do this, because it's a template-y thing */ \
+		} \
+		else { \
+			arr_foreach(type->fn.types, Type, sub) { \
+				f(g, sub); \
+			} \
+		} \
+		break; \
+	case TYPE_TUPLE: \
+		arr_foreach(type->tuple, Type, sub) \
+			f(g, sub); \
+		break; \
+	case TYPE_ARR: \
+		f(g, type->arr.of); \
+		break; \
+	case TYPE_SLICE: \
+		f(g, type->slice); \
+		break; \
+	case TYPE_PTR: \
+		f(g, type->ptr); \
+		break; \
+	case TYPE_BUILTIN: \
+	case TYPE_UNKNOWN: \
+		break; \
+	case TYPE_EXPR: assert(0); \
 	}
 
 
@@ -2168,14 +2182,7 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 }
 
 static void cgen_defs_type(CGenerator *g, Type *t) {
-	if (t->kind == TYPE_STRUCT) {
-		StructDef *sdef = t->struc;
-		if (!(sdef->flags & STRUCT_DEF_CGEN_FN_DEFS)) {
-			sdef->flags |= STRUCT_DEF_CGEN_FN_DEFS;
-			cgen_defs_block(g, &sdef->body);
-		}
-	}
-	cgen_recurse_subtypes(g, t, cgen_defs_type);
+	cgen_recurse_subtypes(g, t, cgen_defs_type, cgen_defs_decl, cgen_defs_block, STRUCT_DEF_CGEN_FN_DEFS);
 }
 
 static void cgen_defs_fn(CGenerator *g, FnExpr *f) {
@@ -2205,6 +2212,8 @@ static void cgen_defs_decl(CGenerator *g, Declaration *d) {
 	if (d->flags & DECL_HAS_EXPR) {
 		cgen_defs_expr(g, &d->expr);
 	}
+	if (d->flags & DECL_ANNOTATES_TYPE)
+		cgen_defs_type(g, &d->type); /* we only need to do this if d has an annotated type, because otherwise we've already generated the defs for that type (because it can't be a new type) */
 }
 
 

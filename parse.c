@@ -1324,13 +1324,16 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			case KW_FN: {
 				/* this is a function */
 				e->kind = EXPR_FN;
+				Token *fn_start = t->token;
 				if (!parse_fn_expr(p, e->fn = parser_calloc(p, 1, sizeof *e->fn)))
 					return false;
 				if (t->token != end) {
-					if (token_is_kw(t->token, KW_LPAREN))
+					if (token_is_kw(t->token, KW_LPAREN)) {
 						tokr_err(t, "Direct function calling in an expression is not supported.\nYou can wrap the function in parentheses.");
-					else
-						tokr_err(t, "Expected end of function (did you forget a semicolon?).");
+					} else {
+						tokr_err(t, "Expected end of function.");
+						info_print(token_location(p->file, fn_start), "Note that if there is an opening brace { in the return type, you need to put the type in parentheses ().");
+					}
 					return false;
 				}
 				goto success;
@@ -3066,4 +3069,8 @@ char *location_to_str(Location *where) {
 	strcat(buf, s);
 	*end = tmp;
 	return str_dup(buf);
+}
+
+static inline bool struct_is_template(StructDef *s) {
+	return s->params && !(s->params[0].flags & DECL_FOUND_VAL);
 }

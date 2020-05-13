@@ -965,10 +965,9 @@ static Status type_resolve(Typer *tr, Type *t, Location where) {
 			return false;
 		*t = *typeval.type;
 		if (t->kind == TYPE_STRUCT) {
-			Declaration *params = t->struc->params;
-			if (params && !(params[0].flags & DECL_FOUND_VAL)) {
-				err_print(where, "Expected arguments to structure, but you didn't provide any.");
-				info_print(t->struc->where, "Structure was declared here.");
+			if (struct_is_template(t->struc)) {
+				err_print(where, "Expected arguments to struct, but you didn't provide any.");
+				info_print(t->struc->where, "struct was declared here.");
 				return false;
 			}
 		}
@@ -3428,7 +3427,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 	size_t n_idents; n_idents = arr_len(d->idents);
 
 	if (e) {
-		if (e->kind == EXPR_FN && tr->block && tr->block->kind == BLOCK_STRUCT) {
+		if (e->kind == EXPR_FN && tr->block && tr->block->kind == BLOCK_STRUCT && !tr->in_decls /* don't include params */) {
 			warn_print(d->where, "This function is in the body of a struct. Are you trying to declare a method, because they don't exist in this language.\n"
 					"Try moving the function outside of the struct, otherwise you might run into problems.");
 		}
@@ -4003,3 +4002,5 @@ static Status types_file(Typer *tr, ParsedFile *f) {
 	assert(arr_len(tr->blocks) && tr->blocks[0] == NULL);
 	return ret;
 }
+
+
