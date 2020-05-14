@@ -8,8 +8,6 @@
 
 /* 
 @TODO:
-detect circular declarations (A ::= B; B ::= A)
-either detect circular #includes or set a #include depth limit (maybe sometimes you want finite circular includes with #if)
 initialization statements (maybe #init(-50), where -50 is the priority and <0 is reserved for standard library)
 if we do #include "foo.toc", bar; and foo.toc fails, bar should be declared as TYPE_UNKNOWN (right now it's undeclared)
 improve type_to_str:
@@ -147,18 +145,18 @@ int main(int argc, char **argv) {
 	
 	for (int i = 1; i < argc; ++i) {
 		char *arg = argv[i];
-		if (strs_equal(arg, "-no-color")) {
+		if (streq(arg, "-no-color")) {
 			err_ctx.color_enabled = false;
-		} else if (strs_equal(arg, "-color")) {
+		} else if (streq(arg, "-color")) {
 			err_ctx.color_enabled = true;
-		} else if (strs_equal(arg, "-o")) {
+		} else if (streq(arg, "-o")) {
 			if (i == argc-1) {
 				fprintf(stderr, "-o cannot be the last argument to toc.\n");
 				return EXIT_FAILURE;
 			}
 			out_filename = argv[i+1];
 			++i;
-		} else if (strs_equal(arg, "-v") || strs_equal(arg, "-verbose")) {
+		} else if (streq(arg, "-v") || streq(arg, "-verbose")) {
 			printf("Verbose mode enabled\n");
 			verbose = true;
 		} else {
@@ -234,7 +232,7 @@ int main(int argc, char **argv) {
 	Typer tr;
 	Evaluator ev;
 	evalr_create(&ev, &tr, &main_allocr);
-	typer_create(&tr, &ev, &err_ctx, &main_allocr, &globals);
+	typer_create(&tr, &ev, &err_ctx, &main_allocr, &globals, &file);
 	
 	if (!types_file(&tr, &f)) {
 		err_text_important(&err_ctx, "Errors occured while determining types.\n");

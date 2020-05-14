@@ -2807,7 +2807,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		if (!builtin_name) return false;
 		int which = -1;
 		for (BuiltinVal b = 0; b < BUILTIN_VAL_COUNT; b = b + 1) {
-			if (strs_equal(builtin_val_names[b], builtin_name)) {
+			if (streq(builtin_val_names[b], builtin_name)) {
 				which = (int)b;
 			}
 		}
@@ -3786,12 +3786,20 @@ static Status types_stmt(Typer *tr, Statement *s) {
 		}
 
 		s->kind = STMT_INLINE_BLOCK;
-
+			
 		if (!(inc->flags & INC_FORCED)) {
 			size_t filename_len = strlen(filename);
+			if (streq(filename, tr->main_file->filename)) {
+				err_print(s->where, "Circular #include detected. You can add #force to this #include to force it to be included.");
+				goto inc_fail;
+			}
 			inc_f = str_hash_table_get(&tr->included_files, filename, filename_len);
 			if (inc_f) {
 				/* has already been included */
+				if (inc_f->flags & INC_FILE_INCLUDING) {
+					err_print(s->where, "Circular #include detected. You can add #force to this #include to force it to be included.");
+					goto inc_fail;
+				}
 				s->inline_block = NULL; /* nothing needed here */
 				/* just set ident declarations */
 				if (!include_stmts_link_to_nms(tr, inc_f->main_nms, inc_f->stmts))
@@ -3799,6 +3807,7 @@ static Status types_stmt(Typer *tr, Statement *s) {
 				goto nms_transform;
 			}
 			inc_f = str_hash_table_insert(&tr->included_files, filename, filename_len);
+			inc_f->flags |= INC_FILE_INCLUDING;
 			inc_f->main_nms = tr->nms;
 		}
 		{
@@ -3879,8 +3888,10 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			d->val.nms = inc_nms;
 			d->where = d->expr.where = s->where;
 		}
+		if (inc_f) inc_f->flags &= (IncFileFlags)~(IncFileFlags)INC_FILE_INCLUDING;
 		break;
 	inc_fail:
+		if (inc_f) inc_f->flags &= (IncFileFlags)~(IncFileFlags)INC_FILE_INCLUDING;
 		if (inc_nms) {
 			tr->nms = prev_nms;
 			typer_block_exit(tr);
@@ -3957,12 +3968,13 @@ success:
 	return true;
 }
 
-static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *allocr, Identifiers *idents) {
+static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *allocr, Identifiers *idents, File *main_file) {
 	tr->block = NULL;
 	tr->blocks = NULL;
 	tr->fn = NULL;
 	tr->nms = NULL;
 	tr->evalr = ev;
+	tr->main_file = main_file;
 	tr->err_ctx = err_ctx;
 	tr->in_decls = NULL;
 	tr->had_include_err = false;

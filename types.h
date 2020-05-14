@@ -944,14 +944,15 @@ typedef struct Return {
 } Return;
 
 enum {
-	INC_FILE_CGEND_SDECLS = 0x01,
-	INC_FILE_CGEND_DECLS = 0x02,
-	INC_FILE_CGEND_DEFS = 0x04,
-	INC_FILE_CGEND = 0x08
+	INC_FILE_INCLUDING = 0x01, /* are we currently in the process of including this file (i.e. during typing)? */
+	INC_FILE_CGEND_SDECLS = 0x10,
+	INC_FILE_CGEND_DECLS = 0x20,
+	INC_FILE_CGEND_DEFS = 0x40,
+	INC_FILE_CGEND = 0x80
 };
-
+typedef U8 IncFileFlags;
 typedef struct IncludedFile {
-	U8 flags;
+	IncFileFlags flags;
 	Namespace *main_nms; /* namespace of first inclusion */
 	struct Statement *stmts;
 } IncludedFile;
@@ -1053,6 +1054,7 @@ typedef struct Typer {
 	Allocator *allocr;
 	Evaluator *evalr;
 	Identifiers *globals;
+	File *main_file; /* this is the file which the compiler is invoked on. needed for checking for circular includes. */
 	Use **uses; /* global used things */
 	Declaration **in_decls; /* array of declarations we are currently inside */
 	Block *block;

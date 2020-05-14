@@ -1,23 +1,9 @@
-#include "std/mem.toc", mem;
-#include "tests/std/io.toc", io;
-use mem;
-sum_slice ::= fn(a : &[]int) total := 0 {
-	for i := 0..a.len-1 {
-		total += a[i];
-	}
-}
+#include "test.toc";
 
-thing ::= fn() int {
-	bar : []int;
-	defer dels(bar);
-	bar = news(int, 3);
-	b := sum_slice(&bar);
-	b
+foo ::= fn() int {
+	5
 }
 
 main ::= fn() {
-	a := thing();
-	b ::= thing();
-	io.puti(a);
-	io.puti(b);
+	foo();
 }

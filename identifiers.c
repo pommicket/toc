@@ -201,11 +201,11 @@ static void idents_test(void) {
 	allocr_create(&a);
 	idents_create(&ids, &a, NULL);
 	Identifier i1 = ident_insert(&ids, &s);
-	assert(strs_equal(s, " bar"));
+	assert(streq(s, " bar"));
 	char b2[] = "foo_variable+6";
 	s = b2;
 	Identifier i2 = ident_insert(&ids, &s);
-	assert(strs_equal(s, "+6"));
+	assert(streq(s, "+6"));
 	assert(i1 == i2);
 	allocr_free_all(&a);
 	

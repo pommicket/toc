@@ -66,18 +66,17 @@ static inline char *str_to_cstr(String s) {
 	return cstr(s.str, s.len);
 }
 
-static bool str_eq_cstr(String s, const char *str) {
+static inline bool str_eq_cstr(String s, const char *str) {
 	return strncmp(s.str, str, s.len) == 0;
+}
+
+static inline bool streq(const char *a, const char *b) {
+	return strcmp(a, b) == 0;
 }
 
 static inline U32 rand_u32(U32 seed) {
 	U64 seed64 = (U64)seed;
 	return (U32)((seed64 * 0x832f0fda4e1a8642 + 0x41d49cd5459a2ab4) >> 32);
-}
-
-
-static inline bool strs_equal(const char *a, const char *b) {
-	return strcmp(a, b) == 0;
 }
 
 #define plural_suffix(x) ((x) == 1 ? "" : "s")
