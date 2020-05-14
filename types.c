@@ -480,16 +480,6 @@ static Status expr_must_lval(Expression *e, const char *purpose) {
 	}
 	case EXPR_UNARY_OP:
 		if (e->unary.op == UNARY_DEREF) return true;
-		if (e->unary.op == UNARY_LEN) {
-			Type *of_type = &e->unary.of->type;
-			if (of_type->kind != TYPE_PTR && !expr_must_lval(e->unary.of, purpose)) { /* can't set length of a non-lvalue slice */
-				return false;
-			}
-			
-			return of_type->kind == TYPE_SLICE
-				|| (of_type->kind == TYPE_PTR
-					&& of_type->ptr->kind == TYPE_SLICE);
-		}
 		err_print(e->where, "Cannot %s operator %s.", purpose, unary_op_to_str(e->unary.op));
 		return false;
 	case EXPR_BINARY_OP:
@@ -502,7 +492,9 @@ static Status expr_must_lval(Expression *e, const char *purpose) {
 				return false;
 			}
 			return true;
-		case BINARY_DOT: return true;
+		case BINARY_DOT:  
+			if (e->type.kind == TYPE_PTR) return true; /* structure->member is always an lvalue */
+			return expr_must_lval(e->binary.lhs, purpose);
 		default: break;
 		}
 		err_print(e->where, "Cannot %s operator %s.", purpose, binary_op_to_str(e->binary.op));
@@ -2888,9 +2880,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 			t->kind = TYPE_BUILTIN;
 			t->builtin = BUILTIN_BOOL;
 			break;
-		case UNARY_LEN:
-			assert(0); /* types_expr is what makes things UNARY_LEN */
-			break;
 		case UNARY_TYPEOF: {
 			if (type_is_builtin(&of->type, BUILTIN_VARARGS)) {
 				err_print(of->where, "You can't apply typeof to varargs.");
@@ -3241,11 +3230,9 @@ static Status types_expr(Typer *tr, Expression *e) {
 					Declaration *decl = ident->decl;
 					e->kind = EXPR_VAL;
 					e->val.i64 = (I64)arr_len(decl->val.varargs);
-				} else {
-					/* change expr to UNARY_LEN */
-					e->kind = EXPR_UNARY_OP;
-					e->unary.op = UNARY_LEN;
-					e->unary.of = of;
+				} else if (struct_type->kind == TYPE_ARR) {	
+					e->kind = EXPR_VAL;
+					e->val.i64 = (I64)struct_type->arr.n;
 				}
 			} else if (type_is_builtin(struct_type, BUILTIN_NMS)) {
 				Value nms_val;

@@ -70,7 +70,6 @@ static const char *unary_op_to_str(UnaryOp u) {
 	case UNARY_ADDRESS: return "&";
 	case UNARY_DEREF: return "*";
 	case UNARY_NOT: return "!";
-	case UNARY_LEN: return "len";
 	case UNARY_DSIZEOF: return "#sizeof";
 	case UNARY_DALIGNOF: return "#alignof";
 	case UNARY_SIZEOF: return "sizeof";

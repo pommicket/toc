@@ -226,6 +226,10 @@ static inline void cgen_nl(CGenerator *g) {
 	g->will_indent = true;
 }
 
+static inline void cgen_string(CGenerator *g, String s) {
+	fwrite(s.str, 1, s.len, cgen_writing_to(g));
+}
+
 static inline char *cgen_ident_to_str(Identifier i) {
 	return ident_to_str_reduced_charset(i);
 }
@@ -989,7 +993,7 @@ static void cgen_truthiness(CGenerator *g, Expression *e) {
 	switch (e->type.kind) {
 	case TYPE_SLICE:
 		cgen_expr(g, e);
-		cgen_write(g, ".n");
+		cgen_write(g, ".len");
 		break;
 	default:
 		cgen_expr(g, e);
@@ -1179,11 +1183,11 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 		cgen_ident_id(g, from_id);
 		cgen_write(g, "; ");
 		cgen_ident_id(g, s_id);
-		cgen_write(g, ".n = ");
+		cgen_write(g, ".len = ");
 		if (s->to) {
 			cgen_expr(g, s->to);
 		} else {
-			cgen_write(g, "of__.n");
+			cgen_write(g, "of__.len");
 		}
 		cgen_write(g, " - ");
 		cgen_ident_id(g, from_id);
@@ -1399,7 +1403,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 				cgen_expr(g, lhs);
 				bool is_ptr = lhs->type.kind == TYPE_PTR;
 				cgen_write(g, is_ptr ? "->" :".");
-				cgen_write(g, "data");
+				cgen_string(g, rhs->ident_str);
 			}
 		} break;
 		}
@@ -1435,7 +1439,6 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 	} break;
 	case EXPR_UNARY_OP: {
 		const char *s = NULL;
-		Type *of_type = &e->unary.of->type;
 		switch (e->unary.op) {
 		case UNARY_MINUS:
 			s = "-"; break;
@@ -1456,22 +1459,6 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			cgen_type_post(g, e->unary.of->val.type);
 			cgen_write(g, ")");
 			break;
-		case UNARY_LEN: {
-			bool is_ptr = of_type->kind == TYPE_PTR;
-			if (is_ptr) {
-				of_type = of_type->ptr;
-			}
-			switch (of_type->kind) {
-			case TYPE_SLICE:
-				cgen_expr(g, e->unary.of);
-				cgen_write(g, "%sn", is_ptr ? "->" : ".");
-				break;
-			case TYPE_ARR:
-				cgen_write(g, "%lu", (unsigned long)of_type->arr.n);
-				break;
-			default: assert(0); break;
-			}
-		} break;
 		case UNARY_TYPEOF:
 		case UNARY_DSIZEOF:
 		case UNARY_DALIGNOF:
@@ -1607,7 +1594,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 				cgen_write(g, U64_FMT, (U64)of_type->arr.n);
 				break;
 			case TYPE_SLICE:
-				cgen_write(g, "of_.n");
+				cgen_write(g, "of_.len");
 				break;
 			default: assert(0); break;
 			}
@@ -2283,7 +2270,7 @@ static void cgen_file(CGenerator *g, ParsedFile *f) {
 			   "typedef float f32;\n"
 			   "typedef double f64;\n"
 			   "typedef u8 bool;\n"
-			   "typedef struct { void *data; i64 n; } slice_;\n"
+			   "typedef struct { void *data; i64 len; } slice_;\n"
 			   "#define false ((bool)0)\n"
 			   "#define true ((bool)1)\n"
 			   "#ifdef __linux__\n" /* see also toc.c */
@@ -2301,7 +2288,7 @@ static void cgen_file(CGenerator *g, ParsedFile *f) {
 			   "#else\n"
 			   "#define platform__ " stringify(PLATFORM_OTHER) "\n"
 			   "#endif\n"
-			   "static slice_ mkslice_(void *data, i64 n) { slice_ ret; ret.data = data; ret.n = n; return ret; }\n");
+			   "static slice_ mkslice_(void *data, i64 len) { slice_ ret; ret.data = data; ret.len = len; return ret; }\n");
 
 	cgen_sdecls_file(g, f);
 	cgen_decls_file(g, f);

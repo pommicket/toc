@@ -1,70 +1,23 @@
+#include "std/mem.toc", mem;
 #include "tests/std/io.toc", io;
-#include "std/mem.toc";
-
-
-z ::= nms {
-	Foo ::= struct(f ::= fn() int { 7 }) {
-		x: int;
+use mem;
+sum_slice ::= fn(a : &[]int) total := 0 {
+	for i := 0..a.len-1 {
+		total += a[i];
 	}
+}
 
-	Bar ::= fn() &(struct { x, y: int; f ::= fn() int { 13 } } ) {
-		x : u64;
-		&x as &void
-	}
-
-
-	foo ::= fn() total : int = 0 {
-		f: Foo();
-		total += f.f();
-		total += Bar().f();
-	}
+thing ::= fn() int {
+	bar : []int;
+	defer dels(bar);
+	bar = news(int, 3);
+	b := sum_slice(&bar);
+	b
 }
 
 main ::= fn() {
-	nums := news(int, 10);
-	for x, i := &nums {
-		*x = i*i;
-	}
-	l := slice_to_ll(nums);
-	p := &l;
-	while p {
-		io.puti(p.head);
-		p = p.tail;
-	}
-	f: Foo;
-	f.k = -173;
-	f.b = new(Bar);
-	f.b.f.b = new(Bar);
-	f.b.f.b.f.k = 9;
-	io.puti(f.k);
-	io.puti(f.b.f.k);
-	io.puti(f.b.f.b.f.k);
-	x := z.foo();
-	y ::= z.foo();
-	io.puti(x);
-	io.puti(y);
-}
-
-slice_to_ll ::= fn(t::=, slice: []t) use ll: LinkedList(t) {
-	head = slice[0];
-	if slice.len == 1 {
-		tail = null;
-	} else {
-		tail = new(LinkedList(t));
-		*tail = slice_to_ll(slice[1:]);
-	}
-}
-
-LinkedList ::= struct (of :: Type) {
-	head: of;
-	tail: &LinkedList(of);
-}
-
-Foo ::= struct {
-	k: int;
-	b: &Bar;
-}
-
-Bar ::= struct {
-	f: Foo;
+	a := thing();
+	b ::= thing();
+	io.puti(a);
+	io.puti(b);
 }

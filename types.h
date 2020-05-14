@@ -600,7 +600,6 @@ typedef enum {
 	UNARY_DEREF, /* *x */
 	UNARY_NOT, /* !x */
 	UNARY_TYPEOF, /* typeof x */
-	UNARY_LEN, /* x.len ; replaces BINARY_DOT len when typing  */
 	UNARY_DSIZEOF,
 	UNARY_DALIGNOF,
 	UNARY_SIZEOF,
@@ -889,8 +888,7 @@ typedef struct Declaration {
 	/* 
 		for eval, for non-constant decls
 		the pointers to values need to be fixed, which is why this isn't just Value *.
-		no, this can't be a union with val, because of global variables and possibly
-		other things (varargs maybe?)
+		no, this can't be a union with val, because of global variables and varargs
 	*/
 	Value **val_stack;
 } Declaration;

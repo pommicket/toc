@@ -8,7 +8,6 @@
 
 /* 
 @TODO:
-get rid of UNARY_LEN?
 detect circular declarations (A ::= B; B ::= A)
 either detect circular #includes or set a #include depth limit (maybe sometimes you want finite circular includes with #if)
 initialization statements (maybe #init(-50), where -50 is the priority and <0 is reserved for standard library)

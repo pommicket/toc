@@ -721,14 +721,15 @@ static inline bool eval_address_of_ident(Evaluator *ev, Identifier i, Location w
 }
 
 static Status eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr, void **p) {
-	Type *struct_type = &dot_expr->binary.lhs->type;
+	Expression *lhs = dot_expr->binary.lhs;
+	Type *struct_type = &lhs->type;
 	bool is_ptr = struct_type->kind == TYPE_PTR;
 	if (is_ptr) {
 		struct_type = struct_type->ptr;
 	}
 	if (struct_type->kind == TYPE_STRUCT) {
 		Value struc;
-		if (!eval_expr(ev, dot_expr->binary.lhs, &struc))
+		if (!eval_expr(ev, lhs, &struc))
 			return false;
 		void *struc_data;
 		if (is_ptr) {
@@ -742,11 +743,25 @@ static Status eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr, void
 		}
 		*p = (char *)struc_data + dot_expr->binary.field->offset;
 	} else if (struct_type->kind == TYPE_SLICE) {
+		String member = dot_expr->binary.rhs->ident_str;
 	    void *ptr;
-		if (!eval_address_of(ev, dot_expr->binary.lhs, &ptr))
-			return false;
-		/* access struct data */
-		*p = &((Slice *)ptr)->data;
+		if (is_ptr) {
+			Value v;
+			if (!eval_expr(ev, lhs, &v))
+				return false;
+			ptr = v.ptr;
+		} else {
+			if (!eval_address_of(ev, lhs, &ptr))
+				return false;
+		}
+		if (str_eq_cstr(member, "data")) {
+			/* access struct data */
+			*p = &((Slice *)ptr)->data;
+		} else {
+			assert(str_eq_cstr(member, "len"));
+			/* access struct length */
+			*p = &((Slice *)ptr)->len;
+		}
 	}
 	return true;
 }
@@ -763,20 +778,6 @@ static Status eval_address_of(Evaluator *ev, Expression *e, void **ptr) {
 			Value v;
 			if (!eval_expr(ev, e, &v)) return false;
 			*ptr = v.ptr;
-		} break;
-		case UNARY_LEN: {
-			Type *of_type = &e->unary.of->type;
-			Slice *slice;
-			Value of_val;
-			if (!eval_expr(ev, e, &of_val)) return false;
-			if (of_type->kind == TYPE_PTR) {
-				assert(of_type->ptr->kind == TYPE_SLICE);
-				slice = of_val.ptr;
-			} else {
-				assert(of_type->kind == TYPE_SLICE);
-				slice = &of_val.slice;
-			}
-			*ptr = &slice->len;
 		} break;
 		default: assert(0); return false;
 		}
@@ -820,21 +821,6 @@ static Status eval_set(Evaluator *ev, Expression *set, Value *to) {
 			Value ptr;
 			if (!eval_expr(ev, set->unary.of, &ptr)) return false;
 			eval_deref_set(ptr.ptr, to, &set->type);
-		} break;
-		case UNARY_LEN: {
-			Type *of_type = &set->unary.of->type;
-			if (of_type->kind == TYPE_PTR) {
-				/* if it's a pointer, we can just eval it and set its length */
-				Value of;
-				if (!eval_expr(ev, set->unary.of, &of)) return false;
-				((Slice *)of.ptr)->len = to->i64;
-			} else {
-				/* otherwise, we need a pointer to the slice */
-				void *p;
-				if (!eval_address_of(ev, set->unary.of, &p))
-					return false;
-				((Slice *)p)->len = to->i64;
-			}
 		} break;
 		default: assert(0); break;
 		}
@@ -1092,7 +1078,6 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	case EXPR_UNARY_OP: {
 		Value of;
 		if (!eval_expr(ev, e->unary.of, &of)) return false;
-		Type *of_type = &e->unary.of->type;
 		switch (e->unary.op) {
 		case UNARY_ADDRESS: {
 			Expression *o = e->unary.of;
@@ -1118,22 +1103,6 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		} break;
 		case UNARY_NOT:
 			v->boolv = !val_truthiness(of, &e->unary.of->type);
-			break;
-		case UNARY_LEN:
-			if (of_type->kind == TYPE_PTR) {
-				/* dereference of */
-				eval_deref(&of, of.ptr, of_type->ptr);
-				of_type = of_type->ptr;
-			}
-			switch (of_type->kind) {
-			case TYPE_SLICE:
-				v->i64 = of.slice.len;
-				break;
-			case TYPE_ARR:
-				v->i64 = (I64)of_type->arr.n;
-				break;
-			default: assert(0); break;
-			}
 			break;
 		case UNARY_SIZEOF:
 			v->i64 = (I64)compiler_sizeof(of.type);
