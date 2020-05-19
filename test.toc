@@ -1,9 +1,14 @@
-#include "test.toc";
-
-foo ::= fn() int {
-	5
-}
 
 main ::= fn() {
-	foo();
+	nums : []int;
+	l := slice_to_ll(nums);
 }
+
+slice_to_ll ::= fn(t::=, slice: []t) use ll: LinkedList(t) {
+}
+
+LinkedList ::= struct (of :: Type) {
+	head: of;
+	tail: &LinkedList(of);
+}
+

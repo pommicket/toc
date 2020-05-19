@@ -33,165 +33,6 @@ static void cgen_ret(CGenerator *g, Block *returning_from, Expression *ret_expr)
 static void cgen_val(CGenerator *g, Value *v, Type *t);
 static void cgen_val_pre(CGenerator *g, Value *v, Type *t);
 static void cgen_val_ptr(CGenerator *g, void *v, Type *t);
-static void cgen_defs_block(CGenerator *g, Block *b);
-static void cgen_defs_decl(CGenerator *g, Declaration *d);
-
-#define cgen_recurse_subexprs_fn_simple(fn, decl_f, block_f, type_f) \
-	if (!(fn->flags & FN_EXPR_FOREIGN)) { \
-		FnExpr *prev_fn = g->f##n; \
-		Block *prev_block = g->block; \
-		g->f##n = fn; \
-		g->block = &fn->body; \
-		arr_foreach(fn->params, Declaration, param) \
-			decl_f(g, param); \
-		if (fn->ret_decls) { \
-			arr_foreach(fn->ret_decls, Declaration, r) \
-				decl_f(g, r); \
-		} else { \
-			type_f(g, &fn->ret_type); \
-		} \
-		block_f(g, &fn->body); \
-		g->f##n = prev_fn; \
-		g->block = prev_block; \
-	}
-
-/* calls f on every sub-expression of e, block_f on every sub-block, type_f on every type, and decl_f on every sub-declaration. */
-#define cgen_recurse_subexprs(g, e, f, block_f, decl_f, type_f) \
-	switch (e->kind) { \
-	case EXPR_VAL: \
-	case EXPR_C: \
-	case EXPR_BUILTIN: \
-	case EXPR_IDENT: \
-	case EXPR_LITERAL_BOOL: \
-	case EXPR_LITERAL_INT: \
-	case EXPR_LITERAL_STR: \
-	case EXPR_LITERAL_CHAR: \
-	case EXPR_LITERAL_FLOAT: \
-		break; \
-	case EXPR_TYPE: \
-		type_f(g, e->typeval); \
-		break; \
-	case EXPR_UNARY_OP: \
-		f(g, e->unary.of); \
-		break; \
-	case EXPR_BINARY_OP: \
-		f(g, e->binary.lhs); \
-		if (e->binary.op != BINARY_DOT) \
-			f(g, e->binary.rhs); \
-		break; \
-	case EXPR_CAST: \
-		f(g, e->cast.expr); \
-		type_f(g, &e->cast.type); \
-		break; \
-	case EXPR_CALL: \
-		f(g, e->call.fn); \
-		arr_foreach(e->call.arg_exprs, Expression, arg) \
-			f(g, arg); \
-		break; \
-	case EXPR_BLOCK: \
-		block_f(g, e->block); \
-		break; \
-	case EXPR_NMS: { \
-		Namespace *prev = g->nms; \
-		g->nms = e->nms; \
-		block_f(g, &e->nms->body); \
-		g->nms = prev; \
-	} break; \
-	case EXPR_IF: { \
-		IfExpr *i = e->if_; \
-		if (i->cond) \
-			f(g, i->cond); \
-		block_f(g, &i->body); \
-		if (i->next_elif) \
-			f(g, i->next_elif); \
-	} break; \
-	case EXPR_WHILE: { \
-		WhileExpr *w = e->while_; \
-		f(g, w->cond); \
-		block_f(g, &w->body); \
-	} break; \
-	case EXPR_FOR: { \
-		ForExpr *fo = e->for_; \
-		if (fo->flags & FOR_IS_RANGE) { \
-			f(g, fo->range.from); \
-			if (fo->range.to) f(g, fo->range.to); \
-			/* step is a value, not an expression */ \
-		} else { \
-			f(g, fo->of); \
-		} \
-		block_f(g, &fo->body); \
-	} break; \
-	case EXPR_TUPLE: \
-		arr_foreach(e->tuple, Expression, x) \
-			f(g, x); \
-		break; \
-	case EXPR_SLICE: \
-		f(g, e->slice.of); \
-		if (e->slice.from) f(g, e->slice.from); \
-		if (e->slice.to) f(g, e->slice.to); \
-		break; \
-	case EXPR_FN: { \
-		FnExpr *fn = e->fn; \
-		if (fn_has_instances(fn)) { \
-			Instance **data = fn->instances->data; \
-			for (U64 i = 0; i < fn->instances->cap; ++i) { \
-				if (fn->instances->occupied[i]) { \
-					cgen_recurse_subexprs_fn_simple(((*data)->fn), decl_f, block_f, type_f); \
-				} \
-				++data; \
-			} \
-	 	} else { \
-			cgen_recurse_subexprs_fn_simple(fn, decl_f, block_f, type_f); \
-		} \
-	} break; \
-	}
-
-#include <signal.h>
-
-#define cgen_recurse_subtypes(g, type, f, decl_f, block_f, struct_flag) \
-	switch (type->kind) { \
-	case TYPE_STRUCT: { \
-		StructDef *struc = type->struc; \
-		if (!(struc->flags & struct_flag)) { \
-			struc->flags |= struct_flag; \
-			if (struc->params) { \
-				if (struct_is_template(struc)) break; \
-				arr_foreach(struc->params, Declaration, param) \
-					decl_f(g, param); \
-			} \
-			block_f(g, &struc->body); \
-		} \
-	} break; \
-	case TYPE_FN: \
-		if (type->kind == TYPE_FN && (type->fn.constness || fn_type_has_varargs(&type->fn))) { \
-			/* we don't want to do this, because it's a template-y thing */ \
-		} \
-		else { \
-			arr_foreach(type->fn.types, Type, sub) { \
-				f(g, sub); \
-			} \
-		} \
-		break; \
-	case TYPE_TUPLE: \
-		arr_foreach(type->tuple, Type, sub) \
-			f(g, sub); \
-		break; \
-	case TYPE_ARR: \
-		f(g, type->arr.of); \
-		break; \
-	case TYPE_SLICE: \
-		f(g, type->slice); \
-		break; \
-	case TYPE_PTR: \
-		f(g, type->ptr); \
-		break; \
-	case TYPE_BUILTIN: \
-	case TYPE_UNKNOWN: \
-		break; \
-	case TYPE_EXPR: assert(0); \
-	}
-
-
 
 static inline FILE *cgen_writing_to(CGenerator *g) {
 	return g->outc;	/* for now */
@@ -284,7 +125,7 @@ static inline void cgen_char(CGenerator *g, char c) {
 }
 /* should this declaration be a direct function declaration C? (as opposed to using a function pointer or not being a function) */
 static bool cgen_fn_is_direct(CGenerator *g, Declaration *d) {
-	return (!g->block || g->block->kind == BLOCK_NMS) && (d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_FN && arr_len(d->idents) == 1;
+	return (!g->block || g->block->kind == BLOCK_NMS) && (d->flags & DECL_IS_CONST) && (d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_FN && arr_len(d->idents) == 1;
 }
 
 static bool fn_has_instances(FnExpr *f) {
@@ -487,19 +328,16 @@ static void cgen_ctype(CGenerator *g, CType *c) {
 	}
 }
 
-
-
-static inline void cgen_fn_instance_number(CGenerator *g, U64 instance) {
-	cgen_write(g, U64_FMT "_", instance);
-}
 static inline void cgen_fn_name(CGenerator *g, FnExpr *f) {
 	if (f->c.name) {
 		cgen_ident(g, f->c.name);
+		if (f->instance_id) {
+			cgen_write(g, U64_FMT "_", f->instance_id);
+		}
 	} else {
+		assert(!fn_is_template(f));
+		assert(f->c.id);
 		cgen_ident_id(g, f->c.id);
-	}
-	if (f->instance_id) {
-		cgen_fn_instance_number(g, f->instance_id);
 	}
 }
 
@@ -645,13 +483,12 @@ static inline bool cgen_is_type_simple(Type *t) {
 	return t->kind == TYPE_BUILTIN || t->kind == TYPE_FN;
 }
 
-static void cgen_fn_params(CGenerator *g, FnExpr *f, U64 which_are_const) {
+static void cgen_fn_params(CGenerator *g, FnExpr *f) {
 	bool out_param = cgen_uses_ptr(&f->ret_type);
 	cgen_write(g, "(");
-	int semi_const_idx = 0;
 	bool any_params = false;
 	arr_foreach(f->params, Declaration, d) {
-		if (d->flags & DECL_IS_CONST) continue;
+		if (d->flags & DECL_FOUND_VAL) continue;
 		if (type_is_builtin(&d->type, BUILTIN_VARARGS)) {
 			int idx = 0;
 			arr_foreach(d->val.varargs, VarArg, varg) {
@@ -665,9 +502,6 @@ static void cgen_fn_params(CGenerator *g, FnExpr *f, U64 which_are_const) {
 				cgen_type_post(g, varg->type);
 				++idx;
 			}
-		} else if ((d->flags & DECL_SEMI_CONST)
-				   && (which_are_const & (((U64)1) << semi_const_idx++))) {
-			/* semi constant argument is constant */
 		} else {
 			int idx = 0;
 			arr_foreach(d->idents, Identifier, i) {
@@ -733,7 +567,7 @@ static inline void cgen_arg(CGenerator *g, Expression *arg) {
 }
 
 /* unless f has const/semi-const args, which_are_const can be set to 0 */
-static void cgen_fn_header(CGenerator *g, FnExpr *f, U64 which_are_const) {
+static void cgen_fn_header(CGenerator *g, FnExpr *f) {
 	assert(!(f->flags & FN_EXPR_FOREIGN));
 	
 	bool out_param = cgen_uses_ptr(&f->ret_type);
@@ -747,7 +581,7 @@ static void cgen_fn_header(CGenerator *g, FnExpr *f, U64 which_are_const) {
 		cgen_write(g, " ");
 	}
 	cgen_fn_name(g, f);	
-	cgen_fn_params(g, f, which_are_const);
+	cgen_fn_params(g, f);
 	if (!out_param) {
 		cgen_type_post(g, &f->ret_type);
 	}
@@ -908,8 +742,6 @@ static void cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 		cgen_expr_pre(g, to->call.fn);
 		cgen_expr(g, to->call.fn);
 		
-		if (to->call.instance)
-			cgen_fn_instance_number(g, to->call.instance->fn->instance_id);
 		cgen_write(g, "(");
 		bool any_args = false;
 		i = 0;
@@ -1081,9 +913,6 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 				cgen_write(g, "; ");
 			}
 			cgen_expr(g, e->call.fn);
-			if (e->call.instance) {
-				cgen_fn_instance_number(g, e->call.instance->fn->instance_id);
-			}
 			cgen_write(g, "(");
 			bool any_args = false;
 			i = 0;
@@ -1110,9 +939,6 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 			cgen_type_post(g, &e->type);
 			cgen_write(g, ";"); cgen_nl(g);
 			cgen_expr(g, e->call.fn);
-			if (e->call.instance) {
-				cgen_fn_instance_number(g, e->call.instance->fn->instance_id);
-			}
 			cgen_write(g, "(");
 			bool any_args = false;
 			i = 0;
@@ -1281,16 +1107,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 				int index = decl_ident_index(d, i);
 				Value fn_val = *decl_val_at_index(d, index);
 				FnExpr *fn = fn_val.fn;
-				Expression fn_expr;
-				/* @TODO: is this all really necessary? */
-				
-				fn_expr.kind = EXPR_FN;
-				fn_expr.fn = allocr_malloc(g->allocr, sizeof *fn_expr.fn);
-				*fn_expr.fn = *fn;
-				fn_expr.flags = EXPR_FOUND_TYPE;
-				fn_expr.type = *decl_type_at_index(d, index);
-				
-				cgen_expr(g, &fn_expr);
+				cgen_fn_name(g, fn);
 				handled = true;
 			}
 		}
@@ -1684,9 +1501,6 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		} else {
 			FnType *fn_type = &e->call.fn->type.fn;
 			cgen_expr(g, e->call.fn);
-			if (e->call.instance) {
-				cgen_fn_instance_number(g, e->call.instance->fn->instance_id);
-			}
 			cgen_write(g, "(");
 			bool first_arg = true;
 			size_t i = 0;
@@ -1854,68 +1668,60 @@ static void cgen_zero_value(CGenerator *g, Type *t) {
 compile_time_args is needed because we can't determine which_are_const
 from just f.
  */
-static void cgen_fn(CGenerator *g, FnExpr *f, Value *compile_time_args) {
+static void cgen_fn(CGenerator *g, FnExpr *f) {
 	if (f->flags & FN_EXPR_FOREIGN)
-		return; /* handled by decls_cgen */
-	/* see also cgen_defs_expr */
-	U64 which_are_const = compile_time_args ? compile_time_args->u64 : 0;
+		return; /* handled by cgen_fn_decl */
 	if (!cgen_should_gen_fn(f))
 		return;
 	FnExpr *prev_fn = g->fn;
 	Block *prev_block = g->block;
 	g->fn = f;
 	g->block = &f->body;
-	cgen_fn_header(g, f, which_are_const);
+	cgen_fn_header(g, f);
 	cgen_write(g, " {");
 	cgen_nl(g);
-	if (compile_time_args) {
-		++compile_time_args; /* move past which_are_const */
-		int semi_const_idx = 0;
-		arr_foreach(f->params, Declaration, param) {
-			if ((param->flags & DECL_IS_CONST)
-				|| ((param->flags & DECL_SEMI_CONST)
-					&& (which_are_const & (((U64)1) << semi_const_idx++)))) {
-				int i = 0;
-				if (type_is_builtin(&param->type, BUILTIN_VARARGS)) {
-					VarArg *vararg = param->val.varargs;
-					size_t nvarargs = arr_len(vararg);
-					for (size_t v = 0; v < nvarargs; ++v, ++vararg) {
-						Type *type = vararg->type;
-						Value *arg = &vararg->val;
-						if (!type_is_compileonly(type)) {
-							cgen_val_pre(g, arg, type);
-							cgen_type_pre(g, type);
-							cgen_write(g, " const ");
-							assert(arr_len(param->idents) == 1);
-							cgen_ident(g, param->idents[0]);
-							cgen_write(g, "%lu_", (unsigned long)v);
-							cgen_type_post(g, type);
-							cgen_write(g, " = ");
-							cgen_val(g, arg, type);
-							cgen_writeln(g, ";");
-						}
+	arr_foreach(f->params, Declaration, param) {
+		if (param->flags & DECL_FOUND_VAL) {
+			int i = 0;
+			if (type_is_builtin(&param->type, BUILTIN_VARARGS)) {
+				VarArg *vararg = param->val.varargs;
+				size_t nvarargs = arr_len(vararg);
+				for (size_t v = 0; v < nvarargs; ++v, ++vararg) {
+					Type *type = vararg->type;
+					Value *arg = &vararg->val;
+					if (!type_is_compileonly(type)) {
+						cgen_val_pre(g, arg, type);
+						cgen_type_pre(g, type);
+						cgen_write(g, " const ");
+						assert(arr_len(param->idents) == 1);
+						cgen_ident(g, param->idents[0]);
+						cgen_write(g, "%lu_", (unsigned long)v);
+						cgen_type_post(g, type);
+						cgen_write(g, " = ");
+						cgen_val(g, arg, type);
+						cgen_writeln(g, ";");
 					}
-				} else {
-					arr_foreach(param->idents, Identifier, ident) {
-						Type *type = decl_type_at_index(param, i);
-						Value *arg = decl_val_at_index(param, i);
-						if (!type_is_compileonly(type)) {
-							cgen_val_pre(g, arg, type);
-							cgen_type_pre(g, type);
-							cgen_write(g, " const ");
-							cgen_ident(g, *ident);
-							cgen_type_post(g, type);
-							cgen_write(g, " = ");
-							cgen_val(g, arg, type);
-							cgen_writeln(g, ";");
-						}
-						++i;
+				}
+			} else {
+				arr_foreach(param->idents, Identifier, ident) {
+					Type *type = decl_type_at_index(param, i);
+					Value *arg = decl_val_at_index(param, i);
+					if (!type_is_compileonly(type)) {
+						cgen_val_pre(g, arg, type);
+						cgen_type_pre(g, type);
+						cgen_write(g, " const ");
+						cgen_ident(g, *ident);
+						cgen_type_post(g, type);
+						cgen_write(g, " = ");
+						cgen_val(g, arg, type);
+						cgen_writeln(g, ";");
 					}
+					++i;
 				}
 			}
 		}
-					
 	}
+
 	/* retdecls need to be after compile time arguments to allow fn(x::int) y := x */
 	arr_foreach(f->ret_decls, Declaration, d) {
 		cgen_decl(g, d);
@@ -1935,7 +1741,7 @@ static void cgen_decl(CGenerator *g, Declaration *d) {
 		return; /* already dealt with */
 	int has_expr = d->flags & DECL_HAS_EXPR;
 	if (cgen_fn_is_direct(g, d))
-		return; /* dealt with in cgen_defs_ */
+		return; /* dealt with in the loop that defines all the functions in cgen_file */
 	if (d->flags & DECL_FOUND_VAL) {
 		/* declarations where we use a value */
 		for (int idx = 0, nidents = (int)arr_len(d->idents); idx < nidents; ++idx) {
@@ -2168,90 +1974,113 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 	}
 }
 
-static void cgen_defs_type(CGenerator *g, Type *t) {
-	cgen_recurse_subtypes(g, t, cgen_defs_type, cgen_defs_decl, cgen_defs_block, STRUCT_DEF_CGEN_FN_DEFS);
-}
-
-static void cgen_defs_fn(CGenerator *g, FnExpr *f) {
-	if (fn_has_instances(f)) {
-		HashTable *instances = f->instances;
-		/* generate each instance */
-		Instance **is = instances->data;
-		for (U64 i = 0; i < instances->cap; ++i) {
-			if (instances->occupied[i]) {
-				/* generate this instance */
-				cgen_fn(g, is[i]->fn, is[i]->val.tuple);
+static void cgen_fn_decl(CGenerator *g, FnExpr *f) {
+	if (f->flags & FN_EXPR_FOREIGN) {
+		Type *t = &f->foreign.type;
+		/* foreign function declaration */
+		cgen_write(g, "extern ");
+		Type *fn_types = t->fn.types;
+		const char *foreign_name = f->foreign.name;
+		CType *ctypes = f->foreign.ctypes;
+		if (ctypes[0].kind == CTYPE_NONE) {
+			cgen_type_pre(g, &fn_types[0]);
+		} else {
+			cgen_ctype(g, &ctypes[0]);
+		}
+		cgen_write(g, " %s", foreign_name);
+		cgen_write(g, "(");
+		
+		for (size_t i = 1; i < arr_len(fn_types); ++i) {
+			if (i > 1)
+				cgen_write(g, ", ");
+			CType *csub = &ctypes[i];
+			if (csub->kind == CTYPE_NONE) {
+				Type *sub = &fn_types[i];
+				cgen_type_pre(g, sub);
+				cgen_type_post(g, sub);
+			} else {
+				cgen_ctype(g, csub);
 			}
 		}
+		cgen_write(g, ")");
+		if (ctypes[0].kind == CTYPE_NONE)
+			cgen_type_post(g, &fn_types[0]);
+		cgen_write(g, ";");
+
+		if (!f->c.name || !ident_eq_str(f->c.name, foreign_name) || g->nms != NULL) {
+			cgen_write(g, "static ");
+			if (ctypes[0].kind == CTYPE_NONE) {
+				cgen_type_pre(g, &fn_types[0]);
+			} else {
+				cgen_ctype(g, &ctypes[0]);
+			}
+			
+			cgen_write(g, " (* const ");
+			cgen_fn_name(g, f);
+			cgen_write(g, ")(");
+			for (size_t i = 1; i < arr_len(fn_types); ++i) {
+				if (i > 1)
+					cgen_write(g, ", ");
+				CType *csub = &ctypes[i];
+				if (csub->kind == CTYPE_NONE) {
+					Type *sub = &fn_types[i];
+					cgen_type_pre(g, sub);
+					cgen_type_post(g, sub);
+				} else {
+					cgen_ctype(g, csub);
+				}
+			}
+			cgen_write(g, ")");
+			if (ctypes[0].kind == CTYPE_NONE)
+				cgen_type_post(g, &fn_types[0]);
+			cgen_write(g, "= %s;", foreign_name);
+		}
+		cgen_nl(g);
+		return;
+	}
+	if (cgen_should_gen_fn(f)) {
+		cgen_fn_header(g, f);
+		cgen_write(g, ";");
+		cgen_nl(g);
+	}
+}
+
+static void cgen_global_decl(CGenerator *g, Declaration *d) {
+	if (cgen_fn_is_direct(g, d)) {
+		/* handled by cgen_fn_decl */
 	} else {
-		cgen_fn(g, f, NULL);
+		/* global variables */
+		for (int i = 0, n_idents = (int)arr_len(d->idents); i < n_idents; ++i) {
+			Identifier ident = d->idents[i];
+			Type *type = decl_type_at_index(d, i);
+			Value *val = NULL;
+			if (d->flags & DECL_HAS_EXPR)
+				assert(d->flags & DECL_FOUND_VAL);
+			if (d->flags & DECL_FOUND_VAL)
+				val = decl_val_at_index(d, i);
+			if (!type_is_compileonly(type)) {
+				if (val) cgen_val_pre(g, val, type);
+				if (!(d->flags & DECL_EXPORT))
+					cgen_write(g, "static ");
+				cgen_type_pre(g, type);
+				cgen_write(g, " ");
+				cgen_ident(g, ident);
+				cgen_type_post(g, type);
+				if (val) {
+					cgen_write(g, " = ");
+					cgen_val(g, val, type);
+				} else {
+					cgen_write(g, " = ");
+					cgen_zero_value(g, type);
+				}
+				cgen_write(g, ";");
+				cgen_nl(g);
+			}
+		}
 	}
 }
 
-static void cgen_defs_expr(CGenerator *g, Expression *e) {
-	if (e->kind == EXPR_FN) {
-		cgen_defs_fn(g, e->fn);
-	}
-	cgen_recurse_subexprs(g, e, cgen_defs_expr, cgen_defs_block, cgen_defs_decl, cgen_defs_type);
-}
-
-static void cgen_defs_decl(CGenerator *g, Declaration *d) {
-	if (d->flags & DECL_HAS_EXPR) {
-		cgen_defs_expr(g, &d->expr);
-	}
-	if (d->flags & DECL_ANNOTATES_TYPE)
-		cgen_defs_type(g, &d->type); /* we only need to do this if d has an annotated type, because otherwise we've already generated the defs for that type (because it can't be a new type) */
-}
-
-
-static void cgen_defs_stmt(CGenerator *g, Statement *s) {
-	switch (s->kind) {
-	case STMT_DECL:
-		cgen_defs_decl(g, s->decl);
-		break;
-	case STMT_EXPR:
-		cgen_defs_expr(g, s->expr);
-		break;
-	case STMT_RET:
-		if (s->ret->flags & RET_HAS_EXPR)
-			cgen_defs_expr(g, &s->ret->expr);
-		break;
-	case STMT_BREAK:
-	case STMT_CONT:
-	case STMT_MESSAGE:
-		break;
-	case STMT_DEFER:
-		cgen_defs_stmt(g, s->defer);
-		break;
-	case STMT_USE:
-		cgen_defs_expr(g, &s->use->expr);
-		break;
-	case STMT_INLINE_BLOCK:
-		arr_foreach(s->inline_block, Statement, sub)	
-			cgen_defs_stmt(g, sub);
-		break;
-	case STMT_INCLUDE:
-		assert(0);
-		break;
-	}
-}
-
-static void cgen_defs_block(CGenerator *g, Block *b) {
-	/* 
-	   NOTE: since we exit as soon as there's an error for cgen, we don't need to make sure we
-	   set g->block to the previous block if there's an error
-	*/
-	Block *prev_block = g->block;
-	g->block = b;
-	b->deferred = NULL;
-	arr_foreach(b->stmts, Statement, s) {
-		cgen_defs_stmt(g, s);
-	}
-	if (b->ret_expr) cgen_defs_expr(g, b->ret_expr);
-	g->block = prev_block;
-}
-
-static void cgen_file(CGenerator *g, ParsedFile *f) {
+static void cgen_file(CGenerator *g, ParsedFile *f, Typer *tr) {
 	g->block = NULL;
 	g->nms = NULL;
 	g->fn = NULL;
@@ -2289,14 +2118,69 @@ static void cgen_file(CGenerator *g, ParsedFile *f) {
 			   "#define platform__ " stringify(PLATFORM_OTHER) "\n"
 			   "#endif\n"
 			   "static slice_ mkslice_(void *data, i64 len) { slice_ ret; ret.data = data; ret.len = len; return ret; }\n");
+	cgen_write(g, "/* types */\n");
+	/* struct declarations */
+	arr_foreach(tr->all_structs, StructDefPtr, sdefp) {
+		StructDef *sdef = *sdefp;
+		cgen_write(g, "struct ");
+		if (!sdef->name) {
+			sdef->c.id = ++g->ident_counter;
+		} 
+		cgen_struct_name(g, sdef);
+		cgen_write(g, ";");
+		cgen_nl(g);
+	}
 
-	cgen_sdecls_file(g, f);
-	cgen_decls_file(g, f);
+	/* struct definitions */
+	arr_foreach(tr->all_structs, StructDefPtr, sdefp) {
+		StructDef *sdef = *sdefp;
+		cgen_write(g, "struct ");
+		cgen_struct_name(g, sdef);
+		cgen_write(g, "{");
+		cgen_nl(g);
+		++g->indent_lvl;
+		arr_foreach(sdef->fields, Field, field) {
+			cgen_type_pre(g, field->type);
+			cgen_write(g, " ");
+			cgen_ident_simple(g, field->name);
+			cgen_type_post(g, field->type);
+			cgen_write(g, ";");
+			cgen_nl(g);
+		}
+		--g->indent_lvl;
+		cgen_write(g, "};");
+		cgen_nl(g);
+	}
+	
+	cgen_write(g, "/* declarations */\n");
+	/* function declarations */
+	arr_foreach(tr->all_fns, FnWithCtx, fn_ctx) {
+		g->nms = fn_ctx->nms;
+		g->block = fn_ctx->block;
+		FnExpr *fn = fn_ctx->fn;
+		if (!fn->c.name) {
+			fn->c.id = ++g->ident_counter;
+		}
+		cgen_fn_decl(g, fn);
+	}
+
+	/* global (non-function) declarations */
+	arr_foreach(tr->all_globals, DeclWithCtx, dctx) {
+		g->nms = dctx->nms;
+		g->block = dctx->block;
+		cgen_global_decl(g, dctx->d);
+	}
+
 	cgen_write(g, "/* code */\n");
 	cgen_write(g, "int main() {\n\tmain_();\n\treturn 0;\n}\n\n");
-	arr_foreach(f->stmts, Statement, s) {
-		cgen_defs_stmt(g, s);
+	/* function definitions */
+	arr_foreach(tr->all_fns, FnWithCtx, fn_ctx) {
+		g->nms = fn_ctx->nms;
+		g->block = fn_ctx->block;
+		cgen_fn(g, fn_ctx->fn);
 	}
+	g->nms = NULL;
+	g->block = NULL;
 
 	arr_foreach(f->stmts, Statement, s) {
 		cgen_stmt(g, s);

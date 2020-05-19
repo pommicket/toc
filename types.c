@@ -296,6 +296,7 @@ static Status struct_resolve(Typer *tr, StructDef *s) {
 		return false; /* silently fail; do not try to resolve again, because there'll be duplicate errors */
 	if (!(s->flags & STRUCT_DEF_RESOLVED)) {
 		s->flags |= STRUCT_DEF_RESOLVING;
+		typer_arr_add(tr, tr->all_structs, s);
 		{ /* resolving stuff */
 			Block *body = &s->body;
 			if (!types_block(tr, body))
@@ -523,8 +524,8 @@ static bool type_is_compileonly(Type *t) {
 	case TYPE_UNKNOWN:
 		return false;
 	case TYPE_BUILTIN:
-		return t->builtin == BUILTIN_TYPE || t->builtin == BUILTIN_NMS;
-	case TYPE_PTR:
+		return t->builtin == BUILTIN_TYPE || t->builtin == BUILTIN_NMS || t->builtin == BUILTIN_VARARGS;
+ 	case TYPE_PTR:
 		return type_is_compileonly(t->ptr);
 	case TYPE_SLICE:
 		return type_is_compileonly(t->slice);
@@ -1155,7 +1156,11 @@ static bool arg_is_const(Expression *arg, Constness constness) {
 
 /* pass NULL for instance if this isn't an instance */
 static Status types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
-	if (f->flags & FN_EXPR_FOREIGN) return true;
+	if (f->flags & FN_EXPR_FOREIGN) {
+		FnWithCtx fn_ctx = {f, tr->nms, tr->block};
+		typer_arr_add(tr, tr->all_fns, fn_ctx);
+		return true;
+	}
 	FnExpr *prev_fn = tr->fn;
 	bool success = true;
 	Expression *ret_expr;
@@ -1168,7 +1173,10 @@ static Status types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 		if (t->fn.constness)
 			return true; /* don't type function body yet; we need to do that for every instance */
 	}
-	
+	{
+		FnWithCtx fn_ctx = {f, tr->nms, tr->block};
+		typer_arr_add(tr, tr->all_fns, fn_ctx);
+	}
 	tr->fn = f;
 	if (!types_block(tr, &f->body)) {
 		success = false;
@@ -1577,6 +1585,33 @@ static Status use_ident(Typer *tr, Identifier i, Type *t, Location where) {
 	return true;
 }
 
+static void typer_gen_nms_prefix(Typer *tr, Namespace *n) {
+	assert(tr->nms != n);
+	/* create a C prefix for this namespace */
+	const char *prev_prefix = "";
+	size_t prev_prefix_len = 0;
+	if (tr->nms) {
+		prev_prefix = tr->nms->c.prefix;
+		assert(prev_prefix);
+		prev_prefix_len = strlen(prev_prefix);
+	}
+	if (n->associated_ident) {
+		size_t ident_len = n->associated_ident->len;
+		char *prefix = n->c.prefix = typer_malloc(tr, ident_len + prev_prefix_len + 3);
+		memcpy(prefix, prev_prefix, prev_prefix_len);
+		prefix += prev_prefix_len;
+		memcpy(prefix, n->associated_ident->str, ident_len);
+		prefix += ident_len;
+		*prefix++ = '_';
+		*prefix++ = '_';
+		*prefix++ = '\0';
+	} else {
+		size_t bytes = prev_prefix_len + 20;
+		char *prefix = n->c.prefix = typer_malloc(tr, bytes);
+		snprintf(prefix, bytes, "%sa%lu__", prev_prefix, ++tr->nms_counter);
+	}
+}
+
 static Status types_expr(Typer *tr, Expression *e) {
 	if (e->flags & EXPR_FOUND_TYPE) return true;
 	e->flags |= EXPR_FOUND_TYPE; /* even if failed, pretend we found the type */
@@ -1589,14 +1624,15 @@ static Status types_expr(Typer *tr, Expression *e) {
 	t->kind = TYPE_UNKNOWN; /* default to unknown type (in the case of an error) */
 	switch (e->kind) {
 	case EXPR_FN: {
-		if (!type_of_fn(tr, e->fn, &e->type, 0)) {
+		FnExpr *fn = e->fn;
+		if (!type_of_fn(tr, fn, &e->type, 0)) {
 			return false;
 		}
-		if (fn_has_any_const_params(e->fn) || fn_type_has_varargs(&e->type.fn)) {
-			e->fn->instances = typer_calloc(tr, 1, sizeof *e->fn->instances);
+		if (!(fn->flags & FN_EXPR_FOREIGN) && (fn_has_any_const_params(fn) || fn_type_has_varargs(&e->type.fn))) {
+			fn->instances = typer_calloc(tr, 1, sizeof *fn->instances);
 			t->flags |= TYPE_IS_RESOLVED; /* pretend this type is resolved, even though its children aren't to fix some assertions */
 		} else {
-			if (!types_fn(tr, e->fn, &e->type, NULL)) {
+			if (!types_fn(tr, fn, &e->type, NULL)) {
 				return false;
 			}
 		}
@@ -2769,6 +2805,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 				arr_remove_last(err_ctx->instance_stack);
 				if (!success) return false;
 			}
+			c->fn->kind = EXPR_VAL;
+			c->fn->val.fn = c->instance->fn;
 			
 		}
 		free(order);
@@ -3312,13 +3350,14 @@ static Status types_expr(Typer *tr, Expression *e) {
 	} break;
 	case EXPR_NMS: {
 		Namespace *prev_nms = tr->nms;
-		Namespace *n = tr->nms = e->nms;
+		Namespace *n = e->nms;
+		typer_gen_nms_prefix(tr, n);
+		tr->nms = n;
 		if (!types_block(tr, &n->body)) {
 			tr->nms = prev_nms;
 			return false;
 		}
 		tr->nms = prev_nms;
-		n->associated_ident = NULL; /* set when we type the declaration which contains this namespace */
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_NMS;
 	} break;
@@ -3342,6 +3381,9 @@ static Status types_block(Typer *tr, Block *b) {
 		return false;
 	}
 	b->flags |= BLOCK_FINDING_TYPES;
+
+	b->c.break_lbl = 0;
+	b->c.cont_lbl = 0;
 	
 	/* for and fn need to deal with their own useds, because you can use stuff in the header */
 	if (b->kind != BLOCK_FOR && b->kind != BLOCK_FN)
@@ -3391,6 +3433,15 @@ static Status types_block(Typer *tr, Block *b) {
 	return success;
 }
 
+static bool is_at_top_level(Typer *tr) {
+	arr_foreach(tr->blocks, BlockPtr, b) {
+		if (*b && (*b)->kind != BLOCK_NMS) {
+			return false;
+		}
+	}
+	return true;
+}
+
 static Status types_decl(Typer *tr, Declaration *d) {
 	Type *dtype = &d->type;
 	if (d->flags & DECL_FOUND_TYPE) return true;
@@ -3423,6 +3474,12 @@ static Status types_decl(Typer *tr, Declaration *d) {
 			&& tr->fn == NULL) {
 			e->typeval->struc->name = d->idents[0];
 		}
+		
+		if (e->kind == EXPR_NMS) {
+			if (is_at_top_level(tr))
+				e->nms->associated_ident = d->idents[0];
+		}
+		
 		if (!types_expr(tr, e)) {
 			success = false;
 			goto ret;
@@ -3476,6 +3533,9 @@ static Status types_decl(Typer *tr, Declaration *d) {
 					typer_arr_add(tr, d->val_stack, copy);
 				}
 			}
+			if ((tr->block == NULL || tr->block->kind == BLOCK_NMS) && e->kind == EXPR_FN && n_idents == 1) {
+				e->fn->c.name = d->idents[0];
+			}
 		}
 	} else if (!tr->block || tr->block->kind == BLOCK_NMS) {
 		/* give global variables without initializers a value stack */
@@ -3492,7 +3552,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 
 
 	if (type_is_compileonly(dtype)) {
-		if (!(d->flags & DECL_IS_CONST)) {
+		if (!(d->flags & DECL_IS_CONST) && !type_is_builtin(dtype, BUILTIN_VARARGS)) {
 			char *s = type_to_str(dtype);
 			err_print(d->where, "Declarations with type %s must be constant.", s);
 			free(s);
@@ -3569,24 +3629,21 @@ static Status types_decl(Typer *tr, Declaration *d) {
 			return false;
 	}
 
-	if (n_idents == 1 && e && e->kind == EXPR_NMS) {
-		bool is_at_top_level = true;
-		arr_foreach(tr->blocks, BlockPtr, b) {
-			if (*b && (*b)->kind != BLOCK_NMS) {
-				is_at_top_level = false;
-				break;
-			}
-		}
-		if (is_at_top_level)
-			d->expr.nms->associated_ident = d->idents[0];
-	}
-
 	if (tr->nms && tr->block == &tr->nms->body) {
 		arr_foreach(d->idents, Identifier, ident) {
 			(*ident)->nms = tr->nms;
 		}
 	}
 
+	if (d->flags & DECL_EXPORT) {
+		if (d->expr.kind == EXPR_FN)
+			d->expr.fn->flags |= FN_EXPR_EXPORT;
+	}
+
+	if (is_at_top_level(tr)) {
+		DeclWithCtx dctx = {d, tr->nms, tr->block};
+		typer_arr_add(tr, tr->all_globals, dctx);
+	}
 	
  ret:
 	/* pretend we found the type even if we didn't to prevent too many errors */
@@ -3773,85 +3830,15 @@ static Status types_stmt(Typer *tr, Statement *s) {
 		Namespace *prev_nms = tr->nms;
 		IncludedFile *inc_f = NULL;
 		Namespace *inc_nms = NULL; /* non-NULL if this is an include to nms */
+		bool success = true;
 		if (inc->nms) {
 			inc_nms = typer_calloc(tr, 1, sizeof *inc_nms);
+			
 			Block *body = &inc_nms->body;
 			body->kind = BLOCK_NMS;
 			body->where = s->where;
 			idents_create(&body->idents, tr->allocr, body);
 			body->parent = tr->block;
-			/* go inside namespace and block (it'll help to be there later on) */
-			tr->nms = inc_nms;
-			typer_block_enter(tr, &inc_nms->body);
-		}
-
-		s->kind = STMT_INLINE_BLOCK;
-			
-		if (!(inc->flags & INC_FORCED)) {
-			size_t filename_len = strlen(filename);
-			if (streq(filename, tr->main_file->filename)) {
-				err_print(s->where, "Circular #include detected. You can add #force to this #include to force it to be included.");
-				goto inc_fail;
-			}
-			inc_f = str_hash_table_get(&tr->included_files, filename, filename_len);
-			if (inc_f) {
-				/* has already been included */
-				if (inc_f->flags & INC_FILE_INCLUDING) {
-					err_print(s->where, "Circular #include detected. You can add #force to this #include to force it to be included.");
-					goto inc_fail;
-				}
-				s->inline_block = NULL; /* nothing needed here */
-				/* just set ident declarations */
-				if (!include_stmts_link_to_nms(tr, inc_f->main_nms, inc_f->stmts))
-					goto inc_fail;
-				goto nms_transform;
-			}
-			inc_f = str_hash_table_insert(&tr->included_files, filename, filename_len);
-			inc_f->flags |= INC_FILE_INCLUDING;
-			inc_f->main_nms = tr->nms;
-		}
-		{
-			char *contents = read_file_contents(tr->allocr, filename, s->where);
-			if (!contents) {
-				tr->had_include_err = true;
-				goto inc_fail;
-			}
-
-			Tokenizer tokr;
-			tokr_create(&tokr, tr->err_ctx, tr->allocr);
-			File *file = typer_calloc(tr, 1, sizeof *file);
-			file->filename = filename;
-			file->contents = contents;
-			file->ctx = tr->err_ctx;
-			
-			if (!tokenize_file(&tokr, file))
-				goto inc_fail;
-			Parser parser;
-			parser_create(&parser, tr->globals, &tokr, tr->allocr);
-			parser.block = tr->block;
-			ParsedFile parsed_file;
-			if (!parse_file(&parser, &parsed_file)) {
-				goto inc_fail;
-			}
-			Statement *stmts_inc = parsed_file.stmts;
-			if (inc_f) {
-				inc_f->stmts = stmts_inc;
-			}
-			s->inline_block = stmts_inc;
-			arr_foreach(stmts_inc, Statement, s_incd) {
-				if (!types_stmt(tr, s_incd)) {
-					goto inc_fail;
-				}
-			}
-			if (inc_nms) {
-				inc_nms->body.stmts = stmts_inc;
-			}
-		}
-	nms_transform:
-		if (inc_nms) {
-			/* go back to parent namespace/block because that's where the declaration is gonna be */
-			tr->nms = prev_nms;
-			typer_block_exit(tr);
 
 			inc_nms->inc_file = inc_f;
 			/* turn #include "foo", bar into bar ::= nms { ... } */
@@ -3861,7 +3848,6 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			construct_resolved_builtin_type(&d->type, BUILTIN_NMS);
 			char *ident_str = inc->nms;
 			Identifier i = ident_insert(typer_get_idents(tr), &ident_str);
-			typer_arr_add(tr, d->idents, i);
 			if (i->decl) {
 				Declaration *d2 = i->decl;
 				/* maybe they included it twice into one namespace */
@@ -3879,25 +3865,95 @@ static Status types_stmt(Typer *tr, Statement *s) {
 					return false; /* NOT goto inc_fail; */
 				}
 			}
+			typer_arr_add(tr, d->idents, i);
 			i->decl = d;
-			inc_nms->associated_ident = i;
+			if (is_at_top_level(tr)) inc_nms->associated_ident = i;
+			typer_gen_nms_prefix(tr, inc_nms);
+
 			d->expr.kind = EXPR_NMS;
 			d->expr.nms = inc_nms;
 			d->expr.flags = EXPR_FOUND_TYPE;
 			d->expr.type = d->type;
 			d->val.nms = inc_nms;
 			d->where = d->expr.where = s->where;
+
+			/* go inside namespace and block (it'll help to be there later on) */
+			tr->nms = inc_nms;
+			typer_block_enter(tr, &inc_nms->body);
+		} else {
+			s->kind = STMT_INLINE_BLOCK;
 		}
-		if (inc_f) inc_f->flags &= (IncFileFlags)~(IncFileFlags)INC_FILE_INCLUDING;
-		break;
-	inc_fail:
-		if (inc_f) inc_f->flags &= (IncFileFlags)~(IncFileFlags)INC_FILE_INCLUDING;
+
+		if (!(inc->flags & INC_FORCED)) {
+			size_t filename_len = strlen(filename);
+			if (streq(filename, tr->main_file->filename)) {
+				err_print(s->where, "Circular #include detected. You can add #force to this #include to force it to be included.");
+				success = false; goto nms_done;
+			}
+			inc_f = str_hash_table_get(&tr->included_files, filename, filename_len);
+			if (inc_f) {
+				/* has already been included */
+				if (inc_f->flags & INC_FILE_INCLUDING) {
+					err_print(s->where, "Circular #include detected. You can add #force to this #include to force it to be included.");
+					success = false; goto nms_done;
+				}
+				if (s->kind == STMT_INLINE_BLOCK) s->inline_block = NULL; /* nothing needed here */
+				/* just set ident declarations */
+				if (!include_stmts_link_to_nms(tr, inc_f->main_nms, inc_f->stmts)) {
+					success = false; goto nms_done;
+				}
+				goto nms_done;
+			}
+			inc_f = str_hash_table_insert(&tr->included_files, filename, filename_len);
+			inc_f->flags |= INC_FILE_INCLUDING;
+			inc_f->main_nms = tr->nms;
+		}
+		{
+			char *contents = read_file_contents(tr->allocr, filename, s->where);
+			if (!contents) {
+				tr->had_include_err = true;
+				success = false; goto nms_done;
+			}
+
+			Tokenizer tokr;
+			tokr_create(&tokr, tr->err_ctx, tr->allocr);
+			File *file = typer_calloc(tr, 1, sizeof *file);
+			file->filename = filename;
+			file->contents = contents;
+			file->ctx = tr->err_ctx;
+			
+			if (!tokenize_file(&tokr, file)) {
+				success = false; goto nms_done;
+			}
+			Parser parser;
+			parser_create(&parser, tr->globals, &tokr, tr->allocr);
+			parser.block = tr->block;
+			ParsedFile parsed_file;
+			if (!parse_file(&parser, &parsed_file)) {
+				success = false; goto nms_done;
+			}
+			Statement *stmts_inc = parsed_file.stmts;
+			if (inc_f) {
+				inc_f->stmts = stmts_inc;
+			}
+			if (s->kind == STMT_INLINE_BLOCK) s->inline_block = stmts_inc;
+			arr_foreach(stmts_inc, Statement, s_incd) {
+				if (!types_stmt(tr, s_incd)) {
+					success = false; goto nms_done;
+				}
+			}
+			if (inc_nms) {
+				inc_nms->body.stmts = stmts_inc;
+			}
+		}
+	nms_done:
 		if (inc_nms) {
 			tr->nms = prev_nms;
 			typer_block_exit(tr);
 		}
-		return false;
-	}
+		if (inc_f) inc_f->flags &= (IncFileFlags)~(IncFileFlags)INC_FILE_INCLUDING;
+		if (!success) return false;
+	} break;
 	case STMT_MESSAGE: {
 		Message *m = s->message;
 	    char *text = eval_expr_as_cstr(tr, &m->text, "message");
@@ -3922,6 +3978,16 @@ static Status types_stmt(Typer *tr, Statement *s) {
 		for (block = tr->block; block; block = block->parent) {
 			if (block->kind == BLOCK_FOR || block->kind == BLOCK_WHILE) {
 				s->referring_to = block;
+				if (s->kind == STMT_BREAK) {
+					if (!block->c.break_lbl) {
+						block->c.break_lbl = ++tr->lbl_counter;
+					}
+				} else {	
+					assert(s->kind == STMT_CONT);
+					if (!block->c.cont_lbl) {
+						block->c.cont_lbl = ++tr->lbl_counter;
+					}
+				}
 				break;
 			}
 		}
@@ -3969,15 +4035,10 @@ success:
 }
 
 static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *allocr, Identifiers *idents, File *main_file) {
-	tr->block = NULL;
-	tr->blocks = NULL;
-	tr->fn = NULL;
-	tr->nms = NULL;
+	memset(tr, 0, sizeof *tr);
 	tr->evalr = ev;
 	tr->main_file = main_file;
 	tr->err_ctx = err_ctx;
-	tr->in_decls = NULL;
-	tr->had_include_err = false;
 	tr->allocr = allocr;
 	tr->globals = idents;
 	typer_arr_add(tr, tr->blocks, NULL);

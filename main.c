@@ -8,6 +8,7 @@
 
 /* 
 @TODO:
+get rid of blocks returning values
 initialization statements (maybe #init(-50), where -50 is the priority and <0 is reserved for standard library)
 if we do #include "foo.toc", bar; and foo.toc fails, bar should be declared as TYPE_UNKNOWN (right now it's undeclared)
 improve type_to_str:
@@ -43,10 +44,10 @@ once you have a bunch of test code:
 error on x ::= {return; 3}
 struct param inference
 maybe macros are just inline functions
+passing untyped expressions to macros
 #returns_code (struct body is a block, to be evaluated at compile time, which returns the actual statements)
 	- struct varargs
-	- also use with functions for macros
-passing untyped expressions to macros
+	- also use with functions for macros?
 */
 
 #if defined __unix__ || (defined __APPLE__ && defined __MACH__)
@@ -258,7 +259,7 @@ int main(int argc, char **argv) {
 	if (verbose) printf("Generating C code...\n");
 	CGenerator g;
 	cgen_create(&g, out, &globals, &main_allocr);
-	cgen_file(&g, &f);
+	cgen_file(&g, &f, &tr);
 	
 	if (verbose) printf("Cleaning up...\n");
 	fclose(out);

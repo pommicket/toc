@@ -174,10 +174,7 @@ static void ffmgr_create(ForeignFnManager *ffmgr, Allocator *allocr) {
 #include "infer.c"
 #include "types.c"
 #include "eval.c"
-static void cgen_decls_file(CGenerator *g, ParsedFile *f);
-static void cgen_sdecls_file(CGenerator *g, ParsedFile *f);
 #include "cgen.c"
-#include "decls_cgen.c"
 
 #if RUN_TESTS
 #include "tests.c"

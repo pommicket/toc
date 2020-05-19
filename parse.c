@@ -3073,3 +3073,7 @@ char *location_to_str(Location *where) {
 static inline bool struct_is_template(StructDef *s) {
 	return s->params && !(s->params[0].flags & DECL_FOUND_VAL);
 }
+
+static inline bool fn_is_template(FnExpr *f) {
+	return f->instances && !f->instance_id;
+}

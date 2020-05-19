@@ -514,7 +514,7 @@ typedef struct Block {
 	BlockKind kind; /* set during the parsing phase, but don't access while this specific block is being
 	                   parsed, because sometimes it's set after parse_block */
 	struct {
-		IdentID break_lbl, cont_lbl; /* initially 0, set to non-zero values if needed (++g->lbl_counter); set by sdecls_cgen. */
+		IdentID break_lbl, cont_lbl; /* initially 0, set to non-zero values if needed (tr->lbl_counter); set during typing */
 	} c;
 	Location where;
 	Identifiers idents;
@@ -528,9 +528,6 @@ typedef Block *BlockPtr;
 
 enum {
 	STRUCT_DEF_FOUND_OFFSETS = 0x01,
-	STRUCT_DEF_CGEN_DECLARED = 0x02,
-	STRUCT_DEF_CGEN_DEFINED = 0x04,
-	STRUCT_DEF_CGEN_FN_DEFS = 0x08, /* have the functions contained in this struct been defined? */
 	STRUCT_DEF_RESOLVED = 0x10,
 	STRUCT_DEF_RESOLVING = 0x20,
 	STRUCT_DEF_RESOLVING_FAILED = 0x40
@@ -562,7 +559,7 @@ typedef struct StructDef {
 	} c;
 	StructFlags flags;
 } StructDef;
-
+typedef StructDef *StructDefPtr;
 
 typedef enum {
 	EXPR_LITERAL_FLOAT,
@@ -688,7 +685,7 @@ typedef struct FnExpr {
 		struct {
 			struct Declaration *params; /* declarations of the parameters to this function */
 			struct Declaration *ret_decls; /* array of decls, if this has named return values. otherwise, NULL */
-			U64 instance_id;
+			U64 instance_id; /* 0 if not an instance */
 			Type ret_type;	
 			Block body;
 		};
@@ -709,7 +706,6 @@ typedef struct FnExpr {
 	HashTable *instances; /* for fns with constant parameters. the key is a tuple where
 							 the first element is a u64 value whose ith bit (1<<i) is 1
 							 if the ith semi-constant parameter is constant.
-							 cgen relies on this being here even for foreign fns.
 						  */
 	struct {
 		/* if name = NULL, this is an anonymous function, and id will be the ID of the fn. */
@@ -718,6 +714,7 @@ typedef struct FnExpr {
 	} c;
 	U8 flags;
 } FnExpr; /* an expression such as fn(x: int) int { 2 * x } */
+typedef FnExpr *FnExprPtr;
 
 typedef struct Instance {
 	Value val; /* key into hash table */
@@ -772,7 +769,7 @@ typedef struct Namespace {
 	Identifier associated_ident; /* if this is foo ::= nms { ... }, then associated_ident is foo; can be NULL. used by cgen. only non-null if the namespace isn't in a non-namespace block */
 	struct IncludedFile *inc_file; /* NULL if this is not generated from an include to nms */
 	struct {
-		char *prefix; /* generated during sdecls_cgen */
+		char *prefix; /* generated during typing */
 	} c;
 } Namespace;
 typedef Namespace *NamespacePtr;
@@ -899,7 +896,7 @@ enum {
 };
 enum {
 	FN_EXPR_FOREIGN = 0x01,
-	FN_EXPR_EXPORT = 0x02, /* set by sdecls_cgen.c */
+	FN_EXPR_EXPORT = 0x02, /* set during typing */
 	FN_EXPR_HAS_VARARGS = 0x04
 };
 typedef struct ForExpr {
@@ -1050,6 +1047,23 @@ typedef struct Evaluator {
 	ForeignFnManager ffmgr;
 } Evaluator;
 
+
+/* 
+	so there are loops in cgen that generate all the function declarations/definitions 
+	and they need to know what namespace they're in (because we name mangle stuff in namespaces)
+*/
+typedef struct {
+	FnExpr *fn;
+	Namespace *nms;
+	Block *block;
+} FnWithCtx;
+
+typedef struct {
+	Declaration *d;
+	Namespace *nms;
+	Block *block;
+} DeclWithCtx;
+
 typedef struct Typer {
 	Allocator *allocr;
 	Evaluator *evalr;
@@ -1063,6 +1077,11 @@ typedef struct Typer {
 	ErrCtx *err_ctx;
 	ParsedFile *parsed_file;
 	Namespace *nms;
+	FnWithCtx *all_fns; /* does not include templates */
+	StructDef **all_structs;
+	DeclWithCtx *all_globals; /* includes stuff in namespaces, as long as it's not in a function */
+	IdentID lbl_counter;
+	unsigned long nms_counter; /* counter for namespace IDs */
 	StrHashTable included_files; /* maps to IncludedFile */
 	/* 
 		have we had an error because we couldn't find a file that was #include'd 
