@@ -128,13 +128,6 @@ static bool cgen_fn_is_direct(CGenerator *g, Declaration *d) {
 	return (!g->block || g->block->kind == BLOCK_NMS) && (d->flags & DECL_IS_CONST) && (d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_FN && arr_len(d->idents) == 1;
 }
 
-static bool fn_has_instances(FnExpr *f) {
-	if (f->flags & FN_EXPR_FOREIGN) return false;
-	if (fn_has_any_const_params(f)) return true;
-	if (!arr_len(f->params)) return false;
-	return type_is_builtin(&arr_last(f->params).type, BUILTIN_VARARGS);
-}
-
 static bool cgen_uses_ptr(Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {

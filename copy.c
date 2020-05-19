@@ -77,6 +77,7 @@ static void copy_val(Allocator *a, Value *out, Value in, Type *t) {
 	}
 }
 
+#if 0
 static void copy_val_full(Copier *c, Value *out, Value in, Type *t) {
 	if (type_is_builtin(t, BUILTIN_TYPE)) {
 		Type *new_type = allocr_malloc(c->allocr, sizeof *new_type);
@@ -86,6 +87,7 @@ static void copy_val_full(Copier *c, Value *out, Value in, Type *t) {
 		copy_val(c->allocr, out, in, t);
 	}
 }
+#endif
 
 static void copy_struct(Copier *c, StructDef *out, StructDef *in) {
 	*out = *in;
