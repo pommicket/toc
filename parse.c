@@ -823,7 +823,6 @@ static Status parse_block(Parser *p, Block *b, U8 flags) {
 	b->flags = 0;
 	b->kind = BLOCK_OTHER;
 	b->uses = NULL;
-	b->ret_expr = NULL;
 	assert(p->block != b);
 	b->parent = p->block;
 	p->block = b;
@@ -2295,7 +2294,8 @@ static Status parse_decl(Parser *p, Declaration *d, U16 flags) {
 					tokr_err(t, "Expected %s at end of declaration.", end_str);
 					goto ret_false;
 				}
-				if (!parse_expr(p, &d->expr, end)) {
+				Expression *e = &d->expr;
+				if (!parse_expr(p, e, end)) {
 					t->token = end; /* move to ; */
 					goto ret_false;
 				}
@@ -2322,6 +2322,7 @@ static Status parse_decl(Parser *p, Declaration *d, U16 flags) {
 		tokr_err(t, "You must have an expression at the end of this constant declaration.");
 		goto ret_false;
 	}
+
 	
 	parser_put_end(p, &d->where);
 	if (!token_is_kw(t->token, KW_SEMICOLON))
@@ -2548,12 +2549,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 		bool valid = parse_expr(p, s->expr = parser_malloc(p, sizeof *s->expr), end);
 		
 		/* go past end of expr regardless of whether successful or not */
-		if (token_is_kw(end, KW_SEMICOLON)) {
-			t->token = end + 1;	/* skip ; */
-		} else  {
-			s->flags |= STMT_EXPR_NO_SEMICOLON;
-			t->token = end;
-		}
+		t->token = end + 1;	/* skip ; */
 		
 		if (!valid) return false;
 	}
@@ -2616,11 +2612,6 @@ static void fprint_block(FILE *out,  Block *b) {
 		fprint_stmt(out, stmt);
 	}
 	fprintf(out, "}");
-	if (b->ret_expr) {
-		fprintf(out, " returns ");
-		fprint_expr(out, b->ret_expr);
-	}
-	
 }
 
 static void print_block(Block *b) {

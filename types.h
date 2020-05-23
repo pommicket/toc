@@ -519,7 +519,6 @@ typedef struct Block {
 	Location where;
 	Identifiers idents;
 	struct Statement *stmts;
-	struct Expression *ret_expr; /* the return expression of this block, e.g. {foo(); 3} => 3  NULL for no expression. */
 	struct Block *parent;
 	struct Statement **deferred; /* deferred stuff from this block; used by both eval and cgen */
 	struct Use **uses; /* use statements (for types.c) */
@@ -681,6 +680,7 @@ typedef struct {
 
 typedef struct FnExpr {
 	Location where;
+	Block *declaration_block; /* block wherein this function is declared */
 	union {
 		struct {
 			struct Declaration *params; /* declarations of the parameters to this function */
@@ -713,7 +713,7 @@ typedef struct FnExpr {
 		IdentID id;
 	} c;
 	U8 flags;
-} FnExpr; /* an expression such as fn(x: int) int { 2 * x } */
+} FnExpr; /* an expression such as fn(x: int) int { return 2 * x; } */
 typedef FnExpr *FnExprPtr;
 
 typedef struct Instance {
@@ -982,8 +982,7 @@ typedef struct Use {
 typedef Use *UsePtr;
 
 enum {
-	STMT_EXPR_NO_SEMICOLON = 0x01,
-	STMT_TYPED = 0x02
+	STMT_TYPED = 0x01
 };
 typedef struct Statement {
 	Location where;
@@ -1072,7 +1071,6 @@ typedef struct Typer {
 	Use **uses; /* global used things */
 	Declaration **in_decls; /* array of declarations we are currently inside */
 	Block *block;
-	Block **blocks; /* dyn array of all the block's we're in ([0] = NULL for global scope) */
 	FnExpr *fn; /* the function we're currently parsing. */
 	ErrCtx *err_ctx;
 	ParsedFile *parsed_file;

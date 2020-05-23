@@ -19,7 +19,7 @@ static void cgen_stmt(CGenerator *g, Statement *s);
 enum {
 	  CGEN_BLOCK_NOBRACES = 0x01 /* should it use braces? */
 };
-static void cgen_block(CGenerator *g, Block *b, const char *ret_name, uint16_t flags);
+static void cgen_block(CGenerator *g, Block *b, uint16_t flags);
 static void cgen_expr_pre(CGenerator *g, Expression *e);
 static void cgen_expr(CGenerator *g, Expression *e);
 static void cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, Expression *to_expr,
@@ -827,50 +827,16 @@ static void cgen_truthiness(CGenerator *g, Expression *e) {
 }
 
 static void cgen_expr_pre(CGenerator *g, Expression *e) {
-	IdentID id = 0;
-	char ret_name[CGEN_IDENT_ID_STR_SIZE+20];
-	switch (e->kind) {
-	case EXPR_IF:
-	case EXPR_BLOCK: {
-		id = ++g->ident_counter;
-		
-		cgen_ident_id_to_str(ret_name, id);
-		char *p = ret_name + strlen(ret_name);
-		if (!type_is_void(&e->type)) {
-			if (e->type.kind == TYPE_TUPLE) {
-				for (unsigned long i = 0; i < arr_len(e->type.tuple); ++i) {
-					sprintf(p, "%lu", i);
-					cgen_type_pre(g, &e->type.tuple[i]);
-					cgen_write(g, " %s", ret_name);
-					cgen_type_post(g, &e->type.tuple[i]);
-					cgen_write(g, "; ");
-				}
-			
-			} else {
-				cgen_type_pre(g, &e->type);
-				cgen_write(g, " %s", ret_name);
-				cgen_type_post(g, &e->type);
-				cgen_write(g, ";");
-				cgen_nl(g);
-			}
-		}
-		*p = 0; /* clear tuple suffixes */
-		
-	} break;
-	default: break;
-	}
-	
 	switch (e->kind) {
 	case EXPR_IF: {
 		IfExpr *curr = e->if_;
-		e->cgen.id = id;
 		while (1) {
 			if (curr->cond) {
 				cgen_write(g, "if (");
 				cgen_truthiness(g, curr->cond);
 				cgen_write(g, ") ");
 			}
-			cgen_block(g, &curr->body, ret_name, 0);
+			cgen_block(g, &curr->body, 0);
 			if (curr->next_elif) {
 				cgen_write(g, " else ");
 				curr = curr->next_elif->if_;
@@ -878,8 +844,7 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 		}
 	} break;
 	case EXPR_BLOCK:
-		e->cgen.id = id;
-		cgen_block(g, e->block, ret_name, 0);
+		cgen_block(g, e->block, 0);
 		break;
 	case EXPR_CALL: {
 		cgen_expr_pre(g, e->call.fn);
@@ -925,7 +890,7 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 			}
 			cgen_write(g, ");");
 		} else if (cgen_uses_ptr(&e->type)) {
-			e->cgen.id = id = ++g->ident_counter;
+			IdentID id = e->cgen.id = ++g->ident_counter;
 			cgen_type_pre(g, &e->type);
 			cgen_write(g, " ");
 			cgen_ident_id(g, id);
@@ -1286,7 +1251,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		cgen_write(g, "while (");
 		cgen_expr(g, w->cond);
 		cgen_write(g, ") ");
-		cgen_block(g, &w->body, NULL, 0);
+		cgen_block(g, &w->body, 0);
 	} break;
 	case EXPR_FOR: {
 		ForExpr *fo = e->for_;
@@ -1473,7 +1438,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 				}
 			}
 		}
-		cgen_block(g, &fo->body, NULL, CGEN_BLOCK_NOBRACES);
+		cgen_block(g, &fo->body, CGEN_BLOCK_NOBRACES);
 		cgen_deferred_from_block(g, &fo->body);
 		cgen_write(g, "}}");
 		if (fo->body.c.break_lbl) {
@@ -1587,12 +1552,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 	}
 }
 
-/*
-  ret_name = variable to store block return value in; NULL for none. NOTE:
-  functions always call with NULL as ret_name, even if they use out params, for now
-  at least. 
-*/
-static void cgen_block(CGenerator *g, Block *b, const char *ret_name, U16 flags) {
+static void cgen_block(CGenerator *g, Block *b, U16 flags) {
 	Block *prev_block = g->block;
 	g->block = b;
 	b->deferred = NULL;
@@ -1605,15 +1565,6 @@ static void cgen_block(CGenerator *g, Block *b, const char *ret_name, U16 flags)
 	
 	arr_foreach(b->stmts, Statement, s)
 		cgen_stmt(g, s);
-	if (b->ret_expr && ret_name) {
-		cgen_expr_pre(g, b->ret_expr);
-		if (b->ret_expr->type.kind == TYPE_TUPLE) {
-			cgen_set_tuple(g, NULL, NULL, ret_name, b->ret_expr);
-		} else {
-			cgen_set(g, NULL, ret_name, b->ret_expr, NULL);
-		}
-		cgen_nl(g);
-	}
 	if (b->c.cont_lbl) {
 		cgen_lbl(g, b->c.cont_lbl);
 		cgen_writeln(g, ":;");
@@ -1720,8 +1671,7 @@ static void cgen_fn(CGenerator *g, FnExpr *f) {
 		cgen_decl(g, d);
 	}
 	
-	cgen_block(g, &f->body, NULL, CGEN_BLOCK_NOBRACES);
-	cgen_ret(g, &f->body, f->body.ret_expr);
+	cgen_block(g, &f->body, CGEN_BLOCK_NOBRACES);
 	cgen_writeln(g, "}");
 	g->block = prev_block;
 	g->fn = prev_fn;

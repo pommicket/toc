@@ -33,13 +33,11 @@ static inline void *typer_calloc(Typer *tr, size_t n, size_t sz) {
 #define typer_arr_add_ptr(tr, a) arr_adda_ptr(a, tr->allocr)
 
 static inline void typer_block_enter(Typer *tr, Block *b) {
-	typer_arr_add(tr, tr->blocks, b);
 	tr->block = b;
 }
 
 static inline void typer_block_exit(Typer *tr) {
-	arr_remove_lasta(tr->blocks, tr->allocr);
-	tr->block = arr_last(tr->blocks);
+	tr->block = tr->block->parent;
 }
 
 static size_t compiler_sizeof_builtin(BuiltinType b) {
@@ -628,7 +626,8 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	/* reserve space for return type */
 	typer_arr_add_ptr(tr, t->fn.types);
 	tr->fn = f;
-	typer_block_enter(tr, &f->body);
+	Block *prev_block = tr->block;
+	tr->block = &f->body;
 	f->body.uses = NULL;
 	size_t nparams = arr_len(f->params);
 	entered_fn = true;
@@ -760,7 +759,7 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 
  ret:
 	/* cleanup */
-	typer_block_exit(tr);
+	tr->block = prev_block;
 	if (entered_fn) {
 		tr->fn = prev_fn;
 	}
@@ -779,9 +778,9 @@ top:;
 		if (decl_scope && decl_scope->kind != BLOCK_NMS) {
 			if (decl_scope->kind != BLOCK_NMS) {
 				/* go back through scopes */
-				arr_foreach_reversed(tr->blocks, BlockPtr, block) {
-					if (*block == NULL || *block == decl_scope) break;
-					if ((*block)->kind == BLOCK_FN) {
+				for (Block *block = tr->block; block; block = block->parent) {
+					if (block == decl_scope) break;
+					if (block->kind == BLOCK_FN) {
 						captured = true;
 						break;
 					}
@@ -1156,6 +1155,7 @@ static bool arg_is_const(Expression *arg, Constness constness) {
 
 /* pass NULL for instance if this isn't an instance */
 static Status types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
+	f->declaration_block = tr->block;
 	if (f->flags & FN_EXPR_FOREIGN) {
 		FnWithCtx fn_ctx = {f, tr->nms, tr->block};
 		typer_arr_add(tr, tr->all_fns, fn_ctx);
@@ -1163,7 +1163,6 @@ static Status types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 	}
 	FnExpr *prev_fn = tr->fn;
 	bool success = true;
-	Expression *ret_expr;
 	Type *ret_type;
 	bool has_named_ret_vals;
 	assert(t->kind == TYPE_FN);
@@ -1182,30 +1181,9 @@ static Status types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 		success = false;
 		goto ret;
 	}
-	ret_expr = f->body.ret_expr;
 	ret_type = t->fn.types;
 	has_named_ret_vals = f->ret_decls != NULL;
-	if (ret_expr) {
-		if (ret_expr->type.kind == TYPE_UNKNOWN) {
-			if (ret_type->kind == TYPE_UNKNOWN) {
-				err_print(ret_expr->where, "Can't determine type of return value. Try assigning it to a variable before returning it.");
-				return false;
-			}
-			if (!tr->err_ctx->have_errored) /* if we've had an error, this could be a placeholder because something failed earlier */
-				ret_expr->type = *ret_type;
-		} else if (!type_eq_implicit(&ret_expr->type, ret_type)) {
-			char *got = type_to_str(&ret_expr->type);
-			char *expected = type_to_str(ret_type);
-			err_print(ret_expr->where, "Returning type %s, but function returns type %s.", got, expected);
-			if (!instance) /* where will only actually be at the function declaration if it isn't
-							  an instance. otherwise, where will be at the calling site, which will already be
-							  printed */
-				info_print(f->where, "Function declaration is here.");
-			free(got); free(expected);
-			success = false;
-			goto ret;
-		}
-	} else if (!type_is_builtin(ret_type, BUILTIN_VOID) && !has_named_ret_vals) {
+	if (!type_is_builtin(ret_type, BUILTIN_VOID) && !has_named_ret_vals) {
 		Statement *stmts = f->body.stmts;
 		if (arr_len(stmts)) {
 			Statement *last_stmt = (Statement *)stmts + (arr_len(stmts) - 1);
@@ -1985,16 +1963,12 @@ static Status types_expr(Typer *tr, Expression *e) {
 		}
 
 		if (!types_block(tr, &fo->body)) goto for_fail;
-		if (fo->body.ret_expr) {
-			err_print(fo->body.ret_expr->where, "for loops can't return values -- you're missing a semicolon (;).");
-			goto for_fail;
-		}
 		
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_VOID;
 		
 		typer_block_exit(tr);
-		}break;
+		} break;
 		for_fail:
 		if (in_header)
 			arr_remove_lasta(tr->in_decls, tr->allocr);
@@ -2153,13 +2127,9 @@ static Status types_expr(Typer *tr, Expression *e) {
 			err_print(e->where, "You can't use #if in this way. It has to be a statement on its own, and can't return a value.");
 			return false;
 		}
-		Type *curr_type = t;
-		bool has_else = false;
 		if (!types_block(tr, &curr->body))
 			return false;
-		if (curr->body.ret_expr) {
-			*t = curr->body.ret_expr->type;
-		} else {
+		{
 			t->kind = TYPE_BUILTIN; t->builtin = BUILTIN_VOID;
 			t->flags |= TYPE_IS_RESOLVED;
 		}
@@ -2173,8 +2143,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 					free(s);
 					return false;
 				}
-			} else {
-				has_else = true;
 			}
 			if (curr->next_elif) {
 				IfExpr *nexti = curr->next_elif->if_;
@@ -2183,30 +2151,14 @@ static Status types_expr(Typer *tr, Expression *e) {
 				if (!types_block(tr, &nexti->body)) {
 					return false;
 				}
-				if (nexti->body.ret_expr) {
-					*next_type = nexti->body.ret_expr->type;
-				} else {
+				{
 					next_type->kind = TYPE_BUILTIN; next_type->builtin = BUILTIN_VOID;
 					next_type->flags = TYPE_IS_RESOLVED;
 				}
-				if (!type_eq_implicit(next_type, curr_type)) {
-					char *currstr = type_to_str(curr_type);
-					char *nextstr = type_to_str(next_type);
-					err_print(curr->next_elif->where, "Mismatched types in if/elif/else chain. Previous block was of type %s, but this one is of type %s.", currstr, nextstr);
-					free(currstr);
-					free(nextstr);
-					return false;
-				}
 				curr = nexti;
-				
 			} else {
 				break;
 			}
-		}
-		
-		if (!has_else && !type_is_builtin(t, BUILTIN_VOID)) {
-			err_print(e->where, "Non-void if block with no else.");
-			return false;
 		}
 	} break;
 	case EXPR_WHILE: {
@@ -2217,11 +2169,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 		if (!types_block(tr, &w->body))
 			ret = false;
 		if (!ret) return false;
-		
-		if (w->body.ret_expr) {
-			err_print(w->body.ret_expr->where, "while loops can't return values -- you're missing a semicolon (;)");
-			return false;
-		}
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_VOID;
 	} break;
@@ -2816,12 +2763,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 		Block *b = e->block;
 		if (!types_block(tr, b))
 			return false;
-		if (b->ret_expr) {
-			*t = b->ret_expr->type;
-		} else {
-			t->kind = TYPE_BUILTIN;
-			t->builtin = BUILTIN_VOID;
-		}
+		t->kind = TYPE_BUILTIN;
+		t->builtin = BUILTIN_VOID;
 	} break;
 	case EXPR_C: {
 		Expression *code = e->c.code;
@@ -3400,32 +3343,8 @@ static Status types_block(Typer *tr, Block *b) {
 			}
 			continue;
 		}
-		if (s->kind == STMT_EXPR && (s->flags & STMT_EXPR_NO_SEMICOLON)) {
-			/* not voided */
-			Expression *e = s->expr;
-			if (type_is_builtin(&e->type, BUILTIN_VOID)) {
-				if (!(e->kind == EXPR_BLOCK
-					  || e->kind == EXPR_IF
-					  || e->kind == EXPR_WHILE
-					  || e->kind == EXPR_FOR)) {
-					err_print(e->where, "void expression must be followed by ;");
-					success = false;
-					goto ret;
-				}
-			} else {
-				if (s != (Statement *)arr_last_ptr(b->stmts)) {
-					err_print(e->where, "Return value must be the last statement in a block.");
-					success = false;
-					goto ret;
-				}
-				b->ret_expr = typer_malloc(tr, sizeof *b->ret_expr);
-				*b->ret_expr = *e;
-				arr_remove_lasta(b->stmts, tr->allocr);
-			}
-		}
-		
 	}
- ret:
+	assert(tr->block == b);
 	typer_block_exit(tr);
 	b->flags |= BLOCK_FOUND_TYPES;
 	b->flags &= (BlockFlags)~(BlockFlags)BLOCK_FINDING_TYPES;
@@ -3434,8 +3353,8 @@ static Status types_block(Typer *tr, Block *b) {
 }
 
 static bool is_at_top_level(Typer *tr) {
-	arr_foreach(tr->blocks, BlockPtr, b) {
-		if (*b && (*b)->kind != BLOCK_NMS) {
+	for (Block *b = tr->block; b; b = b->parent) {
+		if (b && b->kind != BLOCK_NMS) {
 			return false;
 		}
 	}
@@ -3465,19 +3384,20 @@ static Status types_decl(Typer *tr, Declaration *d) {
 	size_t n_idents; n_idents = arr_len(d->idents);
 
 	if (e) {
-		if (e->kind == EXPR_FN && tr->block && tr->block->kind == BLOCK_STRUCT && !tr->in_decls /* don't include params */) {
-			warn_print(d->where, "This function is in the body of a struct. Are you trying to declare a method, because they don't exist in this language.\n"
+		if (e->kind == EXPR_FN) {
+			if (tr->block == NULL || tr->block->kind == BLOCK_NMS) {
+				e->fn->c.name = d->idents[0];
+			} else if (tr->block->kind == BLOCK_STRUCT && !tr->in_decls /* don't include params */) {
+				warn_print(d->where, "This function is in the body of a struct. Are you trying to declare a method, because they don't exist in this language.\n"
 					"Try moving the function outside of the struct, otherwise you might run into problems.");
-		}
-		if (e->kind == EXPR_TYPE
+			}
+		} else if (e->kind == EXPR_NMS) {
+			if (is_at_top_level(tr))
+				e->nms->associated_ident = d->idents[0];
+		} else if (e->kind == EXPR_TYPE
 			&& e->typeval->kind == TYPE_STRUCT
 			&& tr->fn == NULL) {
 			e->typeval->struc->name = d->idents[0];
-		}
-		
-		if (e->kind == EXPR_NMS) {
-			if (is_at_top_level(tr))
-				e->nms->associated_ident = d->idents[0];
 		}
 		
 		if (!types_expr(tr, e)) {
@@ -3532,9 +3452,6 @@ static Status types_decl(Typer *tr, Declaration *d) {
 					}
 					typer_arr_add(tr, d->val_stack, copy);
 				}
-			}
-			if ((tr->block == NULL || tr->block->kind == BLOCK_NMS) && e->kind == EXPR_FN && n_idents == 1) {
-				e->fn->c.name = d->idents[0];
 			}
 		}
 	} else if (!tr->block || tr->block->kind == BLOCK_NMS) {
@@ -3726,11 +3643,6 @@ static Status types_stmt(Typer *tr, Statement *s) {
 				}
 				if (!cond || val_truthiness(v, &cond->type)) {
 					Block *true_block = &curr->body;
-					Statement *last = arr_last_ptr(true_block->stmts);
-					if (last && last->kind == STMT_EXPR && (last->flags & STMT_EXPR_NO_SEMICOLON)) {
-						err_print(last->where, "#ifs can't return values.");
-						return false;
-					}
 					s->kind = STMT_INLINE_BLOCK;
 					s->inline_block = true_block->stmts;
 					if (!fix_ident_decls_inline_block(tr, s->inline_block))
@@ -3766,7 +3678,7 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			return false;
 		}
 
-		if (!(s->flags & STMT_EXPR_NO_SEMICOLON)) {
+		{
 			if (e->kind == EXPR_TUPLE) {
 				err_print(s->where, "Statement of a tuple is not allowed. Use a semicolon instead of a comma here.");
 				return false;
@@ -3778,6 +3690,7 @@ static Status types_stmt(Typer *tr, Statement *s) {
 				free(str);
 			}
 		}
+		
 		if (tr->block == NULL) {
 			/* evaluate expression statements at global scope */
 			if (e->kind != EXPR_C) {
@@ -4041,7 +3954,6 @@ static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *a
 	tr->err_ctx = err_ctx;
 	tr->allocr = allocr;
 	tr->globals = idents;
-	typer_arr_add(tr, tr->blocks, NULL);
 	str_hash_table_create(&tr->included_files, sizeof(IncludedFile), tr->allocr);
 }
 
@@ -4059,7 +3971,6 @@ static Status types_file(Typer *tr, ParsedFile *f) {
 		}
 	}
 	assert(tr->block == NULL);
-	assert(arr_len(tr->blocks) && tr->blocks[0] == NULL);
 	return ret;
 }
 

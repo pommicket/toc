@@ -1,14 +1,10 @@
 
 main ::= fn() {
-	nums : []int;
-	l := slice_to_ll(nums);
+	a ::= foo(3);
+	b := foo(5);
 }
 
-slice_to_ll ::= fn(t::=, slice: []t) use ll: LinkedList(t) {
-}
-
-LinkedList ::= struct (of :: Type) {
-	head: of;
-	tail: &LinkedList(of);
+foo ::= fn(x: int) int {
+	return 3*x;
 }
 

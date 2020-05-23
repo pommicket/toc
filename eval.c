@@ -4,7 +4,7 @@
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
 
-static Status eval_block(Evaluator *ev, Block *b, Value *v);
+static Status eval_block(Evaluator *ev, Block *b);
 static Status eval_address_of(Evaluator *ev, Expression *e, void **ptr);
 static Value get_builtin_val(BuiltinVal val);
 
@@ -22,7 +22,7 @@ static inline void *evalr_calloc(Evaluator *ev, size_t n, size_t bytes) {
 	return allocr_calloc(ev->allocr, n, bytes);
 }
 
-static bool builtin_truthiness(Value v, BuiltinType b) {
+static inline bool builtin_truthiness(Value v, BuiltinType b) {
 	switch (b) {
 	case BUILTIN_I8: return v.i8 != 0;
 	case BUILTIN_I16: return v.i16 != 0;
@@ -45,7 +45,7 @@ static bool builtin_truthiness(Value v, BuiltinType b) {
 	assert(0); return false;
 }
 
-static bool val_truthiness(Value v, Type *t) {
+static inline bool val_truthiness(Value v, Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_UNKNOWN: assert(0); return false;
@@ -1024,7 +1024,12 @@ static Status eval_ident(Evaluator *ev, Identifier ident, Value *v, Location whe
 		v->type->struc = d->expr.typeval->struc;
 		return true;
 	} else {
+		Typer *tr = ev->typer;
+		Block *prev_block = tr->block;
+		/* make sure we're in the right block for typing the declaration */
+		tr->block = ident->idents->scope;
 		if (!types_decl(ev->typer, d)) return false;
+		tr->block = prev_block;
 		assert(d->type.flags & TYPE_IS_RESOLVED);
 	}
 	Value *ival = ident_val(ev, ident, where);
@@ -1218,13 +1223,14 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			}
 			if (!eval_expr(ev, i->cond, &cond)) return false;
 			if (val_truthiness(cond, &i->cond->type)) {
-				if (!eval_block(ev, &i->body, v)) return false;
+				if (!eval_block(ev, &i->body)) return false;
 			} else if (i->next_elif && !ev->returning) {
 				if (!eval_expr(ev, i->next_elif, v)) return false;
 			}
 		} else {
-			if (!eval_block(ev, &i->body, v)) return false;
+			if (!eval_block(ev, &i->body)) return false;
 		}
+		memset(v, 0, sizeof *v);
 	} break;
 	case EXPR_WHILE: {
 		Value cond;
@@ -1243,7 +1249,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				if (!val_truthiness(cond, cond_type))
 					break;
 			}
-			if (!eval_block(ev, &w->body, v)) return false;
+			if (!eval_block(ev, &w->body)) return false;
 			if (ev->returning) {
 				if (ev->returning == &w->body) {
 					ev->returning = NULL;
@@ -1252,6 +1258,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				} else break;
 			}
 		}
+		memset(v, 0, sizeof *v);
 	} break;
 	case EXPR_FOR: {
 		ForExpr *fo = e->for_;
@@ -1292,7 +1299,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				}
 				if (value_val) *value_val = x;
 
-				if (!eval_block(ev, &fo->body, v)) return false;
+				if (!eval_block(ev, &fo->body)) return false;
 				
 				if (ev->returning) {
 					if (ev->returning == &fo->body) {
@@ -1345,7 +1352,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 					value_val->ptr = ptr;
 				else
 					eval_deref(value_val, ptr, value_type);
-				if (!eval_block(ev, &fo->body, v))
+				if (!eval_block(ev, &fo->body))
 					return false;
 				if (ev->returning) {
 					if (ev->returning == &fo->body) {
@@ -1359,9 +1366,10 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		}
 		arr_remove_last(header->val_stack);
 		free(for_valp);
+		memset(v, 0, sizeof *v);
 	} break;
 	case EXPR_BLOCK:
-		if (!eval_block(ev, e->block, v)) return false;
+		if (!eval_block(ev, e->block)) return false;
 		break;
 	case EXPR_LITERAL_BOOL:
 		v->boolv = e->booll;
@@ -1480,11 +1488,20 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			}
 		}
 			
+
+
 		/* make sure function body is typed before calling it */
-		if (!types_block(ev->typer, &fn->body))
-			return false;
-		
-		if (!eval_block(ev, &fn->body, v)) {
+		/* @TODO: is this necessary? see also types_decl call in eval_ident */
+		if (!(fn->body.flags & BLOCK_FOUND_TYPES)) {
+			Typer *tr = ev->typer;
+			Block *prev_block = tr->block;
+			tr->block = fn->declaration_block; 
+			if (!types_block(tr, &fn->body))
+				return false;
+			tr->block = prev_block;
+		}
+
+		if (!eval_block(ev, &fn->body)) {
 			return false;
 		}
 		if (fn->ret_decls) {
@@ -1694,7 +1711,7 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 	return true;
 }
 
-static Status eval_block(Evaluator *ev, Block *b, Value *v) {
+static Status eval_block(Evaluator *ev, Block *b) {
 	Block *prev = ev->typer->block;
 	ev->typer->block = b;
 	b->deferred = NULL;
@@ -1709,27 +1726,6 @@ static Status eval_block(Evaluator *ev, Block *b, Value *v) {
 			last_reached = stmt;
 			break;
 		}
-	}
-	if (b->ret_expr) {
-		if (ev->returning) {
-			/* return 0 from this block */
-			*v = val_zero(&b->ret_expr->type);
-		} else {
-			Value r;
-			if (!eval_expr(ev, b->ret_expr, &r)) {
-				success = false;
-				goto ret;
-			}
-			if (!type_is_builtin(&b->ret_expr->type, BUILTIN_TYPE)) {
-				/* make a copy so that r's data isn't freed when we exit the block */
-				copy_val(NULL, v, r, &b->ret_expr->type);
-				if (b->ret_expr->kind == EXPR_TUPLE)
-					free(r.tuple);
-			} else {
-				*v = r;
-			}
-		}
-	
 	}
 	{
 		/* deal with deferred stmts */

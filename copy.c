@@ -430,8 +430,6 @@ static void copy_block(Copier *c, Block *out, Block *in, U8 flags) {
 	out->stmts = NULL;
 	Block *prev = c->block;
 	c->block = out;
-	if (in->ret_expr)
-		out->ret_expr = copy_expr_(c, in->ret_expr);
 	if (!(flags & COPY_BLOCK_DONT_CREATE_IDENTS))
 		idents_create(&out->idents, c->allocr, out);
 	arr_set_lena(out->stmts, nstmts, c->allocr);
