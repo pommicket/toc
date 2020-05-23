@@ -398,9 +398,7 @@ static Token *expr_find_end(Parser *p, ExprEndFlags flags)  {
 			case KW_RBRACE:
 				--brace_level;
 				if (paren_level == 0 && brace_level == 0 && square_level == 0) {
-					/* if there's an else/elif, the expr must continue */
-					if (!(token_is_kw(token + 1, KW_ELSE) || token_is_kw(token + 1, KW_ELIF)))
-						return token + 1; /* token afer } is end */
+					return token + 1; /* token afer } is end */
 				}
 				if (brace_level < 0)
 					return token;

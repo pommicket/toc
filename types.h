@@ -104,22 +104,10 @@ typedef double F64;
 #define F64_MANT_DIG DBL_MANT_DIG
 #define F64_DIG DBL_DIG
 
-#define F32_FMT "%.16f"
-#define F64_FMT "%.16f"
+#define F32_FMT "%.10f"
+#define F64_FMT "%.18f"
 
-typedef U32 IdentID; /* identifier ID for cgen (anonymous variables). not to be confused with IdentTree.id */
-
-/* for keeping track of whence something came */
-#ifdef TOC_DEBUG
-#define SOURCE_LOCATION char *src_file; int src_line;
-#define SOURCE_LOCATION_PARAMS char *src_file, int src_line,
-#define DEBUG_UNDERSCORE(x) x##_
-#else
-#define SOURCE_LOCATION
-#define SOURCE_LOCATION_PARAMS
-#define DEBUG_UNDERSCORE(x) x
-#endif
-
+typedef U32 IdentID; /* identifier ID for cgen (anonymous variables). */
 
 typedef struct ErrCtx {
 	bool enabled;
@@ -764,13 +752,12 @@ enum {
 	EXPR_FOUND_TYPE = 0x01
 };
 
-
 typedef U8 ExprFlags;
 
 typedef struct Expression {
 	Type type;
 	Location where;
-	ExprKind kind : 8;
+	ExprKind kind;
 	ExprFlags flags;
 	struct {
 		IdentID id; /* cgen ID used for this expression */

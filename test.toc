@@ -8,7 +8,7 @@ foo ::= fn(x: int) int {
 	if x == 3 {
 		return 7;
 	} else {
-		return 3*x;
+		return #C("3*x");
 	}
 }
 

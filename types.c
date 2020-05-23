@@ -3715,6 +3715,10 @@ top:
 				err_print(s->where, "Returning type %s in function which returns %s.", got, expected);
 				return false;
 			}
+			/* e.g. return #C("3+6"); */
+			if (r->expr.type.kind == TYPE_UNKNOWN) {
+				r->expr.type = tr->fn->ret_type;
+			}
 		} else {
 			if (!type_is_void(&tr->fn->ret_type) || tr->fn->ret_decls) {
 				err_print(s->where, "No return value in non-void function.");

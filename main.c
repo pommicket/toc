@@ -8,9 +8,6 @@
 
 /* 
 @TODO:
-fix expr_find_end
-see if you can get rid of Expression.cgen.id--would mean that kind doesn't have to be a bitfield anymore
-check return #C("3");
 initialization statements (maybe #init(-50), where -50 is the priority and <0 is reserved for standard library)
 if we do #include "foo.toc", bar; and foo.toc fails, bar should be declared as TYPE_UNKNOWN (right now it's undeclared)
 improve type_to_str:
@@ -28,6 +25,7 @@ don't bother generating ret_ if nothing's deferred
 X ::= newtype(int); or something
 any odd number of "s for a string
 give each warning a number; #no_warn(warning), #no_warn_throughout_this_file(warning) 
+test various parse errors; see if they can be improved, e.g. if else { 3; }
 use point #except x;
 optional -Wshadow
 format errors so that vim/emacs can jump to them
@@ -43,7 +41,6 @@ once you have a bunch of test code:
 - try making Value.slice a pointer
 - should val_stack be on the allocator? what about temporary arrays?
 	-->on the contrary, should in_decls be off the allocator?
-error on x ::= {return; 3}
 struct param inference
 maybe macros are just inline functions
 passing untyped expressions to macros
