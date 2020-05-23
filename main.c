@@ -8,10 +8,8 @@
 
 /* 
 @TODO:
-get rid of blocks returning values
-turn if, while, for, block into statements
+fix expr_find_end
 see if you can get rid of Expression.cgen.id--would mean that kind doesn't have to be a bitfield anymore
-make sure functions which should return things do
 check return #C("3");
 initialization statements (maybe #init(-50), where -50 is the priority and <0 is reserved for standard library)
 if we do #include "foo.toc", bar; and foo.toc fails, bar should be declared as TYPE_UNKNOWN (right now it's undeclared)

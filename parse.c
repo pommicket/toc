@@ -42,9 +42,6 @@ static const char *expr_kind_to_str(ExprKind k) {
 	case EXPR_LITERAL_STR: return "string literal";
 	case EXPR_LITERAL_BOOL: return "boolean literal";
 	case EXPR_LITERAL_CHAR: return "character literal";
-	case EXPR_IF: return "if expression";
-	case EXPR_WHILE: return "while expression";
-	case EXPR_FOR: return "for expression";
 	case EXPR_CALL: return "function call";
 	case EXPR_C: return "C code";
 	case EXPR_BUILTIN: return "#builtin value";
@@ -53,7 +50,6 @@ static const char *expr_kind_to_str(ExprKind k) {
 	case EXPR_BINARY_OP: return "binary operator";
 	case EXPR_FN: return "function expression";
 	case EXPR_TUPLE: return "tuple";
-	case EXPR_BLOCK: return "block";
 	case EXPR_IDENT: return "identifier";
 	case EXPR_SLICE: return "slice";
 	case EXPR_TYPE: return "type";
@@ -867,6 +863,11 @@ static Status parse_block(Parser *p, Block *b, U8 flags) {
 	parser_put_end(p, &b->where);
  end:
 	p->block = prev_block;
+	if (!ret) {
+		/* @TODO: better way of skipping to end of block */
+		while (t->token->kind != TOKEN_EOF && !token_is_kw(t->token, KW_RBRACE))
+			++t->token;
+	}
 	return ret;
 }
 
@@ -1315,9 +1316,6 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 
 
 		Token *start = t->token;
-		if (token_is_direct(t->token, DIRECT_IF)) {
-			goto if_expr;
-		}
 		if (t->token->kind == TOKEN_KW) switch (t->token->kw) {
 			case KW_FN: {
 				/* this is a function */
@@ -1344,157 +1342,6 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					return false;
 				n->body.kind = BLOCK_NMS;
  				goto success;
-			}
-			case KW_IF:
-			if_expr: {
-				IfExpr *i = e->if_ = parser_malloc(p, sizeof *i);
-				i->flags = 0;
-				if (t->token->kind == TOKEN_DIRECT) {
-					i->flags |= IF_STATIC;
-				}
-				e->kind = EXPR_IF;
-				++t->token;
-				Token *cond_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE);
-				if (!cond_end) return false;
-				if (!token_is_kw(cond_end, KW_LBRACE)) {
-					t->token = cond_end;
-					tokr_err(t, "Expected { to open if body.");
-					return false;
-				}
-				i->cond = parser_new_expr(p);
-				if (!parse_expr(p, i->cond, cond_end)) return false;
-				if (!parse_block(p, &i->body, 0)) return false;
-				IfExpr *curr = i;
-				while (1) {
-					bool is_else = token_is_kw(t->token, KW_ELSE);
-					bool is_elif = token_is_kw(t->token, KW_ELIF);
-					if (!is_else && !is_elif) {
-						curr->next_elif = NULL;
-						break;
-					}
-					if (curr->cond == NULL) {
-						tokr_err(t, "You can't have more elif/elses after an else.");
-						return false;
-					}
-					Expression *next = parser_new_expr(p);
-					next->flags = 0;
-					next->kind = EXPR_IF;
-					next->where = parser_mk_loc(p);
-					curr->next_elif = next;
-					IfExpr *nexti = next->if_ = parser_malloc(p, sizeof *nexti);
-					nexti->flags = 0;
-					if (is_else) {
-						++t->token;
-						nexti->cond = NULL;
-						if (!parse_block(p, &nexti->body, 0)) return false;
-					} else {
-						/* elif */
-						++t->token;
-						cond_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE);
-						if (!cond_end) return false;
-						if (!token_is_kw(cond_end, KW_LBRACE)) {
-							t->token = cond_end;
-							tokr_err(t, "Expected { to open elif body.");
-							return false;
-						}
-						Expression *cond = parser_new_expr(p);
-						if (!parse_expr(p, cond, cond_end))
-							return false;
-						nexti->cond = cond;
-						if (!parse_block(p, &nexti->body, 0)) return false;
-					}
-					parser_put_end(p, &next->where);
-					curr = nexti;
-				}
-				goto success;
-			}
-			case KW_WHILE: {
-				e->kind = EXPR_WHILE;
-				WhileExpr *w = e->while_ = parser_malloc(p, sizeof *w);
-				++t->token;
-				Token *cond_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE);
-				if (!cond_end) return false;
-				if (!token_is_kw(cond_end, KW_LBRACE)) {
-					t->token = cond_end;
-					tokr_err(t, "Expected { to open while body.");
-					return false;
-				}
-				Expression *cond = parser_new_expr(p);
-				w->cond = cond;
-			
-				if (!parse_expr(p, cond, cond_end))
-					return false;
-				if (!parse_block(p, &w->body, 0)) return false;
-				w->body.kind = BLOCK_WHILE;
-				goto success;
-			}
-			case KW_FOR: {
-				e->kind = EXPR_FOR;
-				ForExpr *fo = e->for_ = parser_malloc(p, sizeof *fo);
-				fo->flags = 0;
-				Block *prev_block = p->block;
-				fo->body.parent = p->block;
-				p->block = &fo->body;
-				Declaration *header_decl = &fo->header;
-				idents_create(&p->block->idents, p->allocr, p->block);
-				++t->token;
-				if (!parse_decl(p, header_decl, PARSE_DECL_IGNORE_EXPR | DECL_CAN_END_WITH_LBRACE))
-					goto for_fail;
-
-				if (!token_is_kw(t->token, KW_EQ)) {
-					tokr_err(t, "Expected = to follow for declaration.");
-					goto for_fail;
-				}
-				++t->token;
-				Token *first_end; first_end = expr_find_end(p, EXPR_CAN_END_WITH_COMMA|EXPR_CAN_END_WITH_DOTDOT|EXPR_CAN_END_WITH_LBRACE);
-				Expression *first; first = parser_new_expr(p);
-				if (!parse_expr(p, first, first_end))
-					goto for_fail;
-				if (token_is_kw(first_end, KW_LBRACE)) {
-					fo->of = first;
-				} else if (token_is_kw(first_end, KW_DOTDOT) || token_is_kw(first_end, KW_COMMA)) {
-					fo->flags |= FOR_IS_RANGE;
-					fo->range.from = first;
-					if (token_is_kw(first_end, KW_COMMA)) {
-						/* step */
-						++t->token;
-						fo->range.step = parser_new_expr(p);
-						Token *step_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE|EXPR_CAN_END_WITH_DOTDOT);
-						if (!parse_expr(p, fo->range.step, step_end))
-							goto for_fail;
-						if (!token_is_kw(step_end, KW_DOTDOT)) {
-							err_print(token_location(p->file, step_end), "Expected .. to follow step in for statement.");
-							goto for_fail;
-						}
-					} else {
-						fo->range.step = NULL;
-					}
-					++t->token; /* move past .. */
-					if (token_is_kw(t->token, KW_LBRACE)) {
-						fo->range.to = NULL; /* infinite loop! */
-					} else {
-						fo->range.to = parser_new_expr(p);
-						Token *to_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE);
-						if (!parse_expr(p, fo->range.to, to_end))
-							goto for_fail;
-						if (!token_is_kw(t->token, KW_LBRACE)) {
-							tokr_err(t, "Expected { to open body of for statement.");
-							goto for_fail;
-						}
-					}
-				} else {
-					err_print(token_location(p->file, first_end), "Expected { or .. to follow expression in for statement.");
-					goto for_fail;
-				}
-				parser_put_end(p, &fo->header.where);
-				p->block = prev_block;
-				if (!parse_block(p, &fo->body, PARSE_BLOCK_DONT_CREATE_IDENTS))
-					goto for_fail;
-				fo->body.kind = BLOCK_FOR;
-				goto success;
-				for_fail:
-				p->block = prev_block;
-				return false;
 			}
 			default: break;
 			}
@@ -2090,17 +1937,6 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				}
 			}
 
-			if (token_is_kw(t->token, KW_LBRACE)) {
-				/* it's a block */
-				e->kind = EXPR_BLOCK;
-				if (!parse_block(p, e->block = parser_malloc(p, sizeof *e->block), 0)) return false;
-				if (t->token != end) {
-					tokr_err(t, "Expression continues after end of block."); /* @TODO: improve this err message */
-					return false;
-				}
-				goto success;
-			}
-
 			if (dot) {
 				e->kind = EXPR_BINARY_OP;
 				e->binary.lhs = parser_new_expr(p);
@@ -2378,6 +2214,11 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			*was_a_statement = false;
 			++t->token;
 			break;
+		case KW_LBRACE:
+			/* it's a block */
+			s->kind = STMT_BLOCK;
+			if (!parse_block(p, s->block = parser_malloc(p, sizeof *s->block), 0)) return false;
+			break;
 		case KW_RETURN: {
 			s->kind = STMT_RET;
 			++t->token;
@@ -2402,8 +2243,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			bool parsed = parse_expr(p, &r->expr, end);
 			t->token = end + 1;
 			if (!parsed) return false;
-			break;
-		}
+		} break;
 		case KW_BREAK:
 			s->kind = STMT_BREAK;
 			++t->token;
@@ -2443,6 +2283,168 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				return false;
 			break;
 		}
+		case KW_IF:
+		if_stmt: {
+			If *i = s->if_ = parser_malloc(p, sizeof *i);
+			i->flags = 0;
+			if (t->token->kind == TOKEN_DIRECT) {
+				i->flags |= IF_STATIC;
+			}
+			s->kind = STMT_IF;
+			++t->token;
+			Token *cond_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE);
+			if (!cond_end) {
+				tokr_skip_to_eof(t);
+				return false;
+			}
+			if (!token_is_kw(cond_end, KW_LBRACE)) {
+				t->token = cond_end;
+				tokr_err(t, "Expected { to open if body.");
+				tokr_skip_to_eof(t);
+				return false;
+			}
+			i->cond = parser_new_expr(p);
+			bool cond_success = parse_expr(p, i->cond, cond_end);
+			t->token = cond_end;
+			if (!parse_block(p, &i->body, 0)) return false;
+			if (!cond_success) return false;
+			If *curr = i;
+			while (1) {
+				bool is_else = token_is_kw(t->token, KW_ELSE);
+				bool is_elif = token_is_kw(t->token, KW_ELIF);
+				if (!is_else && !is_elif) {
+					curr->next_elif = NULL;
+					break;
+				}
+				if (curr->cond == NULL) {
+					tokr_err(t, "You can't have more elif/elses after an else.");
+					tokr_skip_to_eof(t);
+					return false;
+				}
+				If *next = parser_calloc(p, 1, sizeof *next);
+				curr->next_elif = next;
+				if (is_else) {
+					++t->token;
+					next->cond = NULL;
+					if (!parse_block(p, &next->body, 0)) return false;
+				} else {
+					/* elif */
+					++t->token;
+					cond_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE);
+					if (!cond_end) {
+						tokr_skip_to_eof(t);
+						return false;
+					}
+					if (!token_is_kw(cond_end, KW_LBRACE)) {
+						t->token = cond_end;
+						tokr_err(t, "Expected { to open elif body.");
+						tokr_skip_to_eof(t);
+						return false;
+					}
+					Expression *cond = next->cond = parser_new_expr(p);
+					cond_success = parse_expr(p, cond, cond_end);
+					t->token = cond_end;
+					if (!parse_block(p, &next->body, 0)) return false;
+					if (!cond_success) return false;
+				}
+				curr = next;
+			}
+		} break;
+		case KW_WHILE: {
+			s->kind = STMT_WHILE;
+			While *w = s->while_ = parser_malloc(p, sizeof *w);
+			++t->token;
+			Token *cond_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE);
+			if (!cond_end) return false;
+			if (!token_is_kw(cond_end, KW_LBRACE)) {
+				t->token = cond_end;
+				tokr_err(t, "Expected { to open while body.");
+				tokr_skip_to_eof(t);
+				return false;
+			}
+			Expression *cond = parser_new_expr(p);
+			w->cond = cond;
+			/* parse the body even if the condition fails */
+			bool cond_success = parse_expr(p, cond, cond_end);
+			t->token = cond_end;
+			if (!parse_block(p, &w->body, 0)) return false;
+			if (!cond_success) return false;
+			w->body.kind = BLOCK_WHILE;
+		} break;
+		case KW_FOR: {
+			s->kind = STMT_FOR;
+			For *fo = s->for_ = parser_malloc(p, sizeof *fo);
+			fo->flags = 0;
+			Block *prev_block = p->block;
+			fo->body.parent = p->block;
+			p->block = &fo->body;
+			Declaration *header_decl = &fo->header;
+			idents_create(&p->block->idents, p->allocr, p->block);
+			++t->token;
+			if (!parse_decl(p, header_decl, PARSE_DECL_IGNORE_EXPR | DECL_CAN_END_WITH_LBRACE)) {
+				tokr_skip_to_eof(t);
+				goto for_fail;
+			}
+
+			if (!token_is_kw(t->token, KW_EQ)) {
+				tokr_err(t, "Expected = to follow for declaration.");
+				tokr_skip_to_eof(t);
+				goto for_fail;
+			}
+			++t->token;
+			Token *first_end; first_end = expr_find_end(p, EXPR_CAN_END_WITH_COMMA|EXPR_CAN_END_WITH_DOTDOT|EXPR_CAN_END_WITH_LBRACE);
+			Expression *first; first = parser_new_expr(p);
+			if (!parse_expr(p, first, first_end))
+				goto for_fail;
+			if (token_is_kw(first_end, KW_LBRACE)) {
+				fo->of = first;
+			} else if (token_is_kw(first_end, KW_DOTDOT) || token_is_kw(first_end, KW_COMMA)) {
+				fo->flags |= FOR_IS_RANGE;
+				fo->range.from = first;
+				if (token_is_kw(first_end, KW_COMMA)) {
+					/* step */
+					++t->token;
+					fo->range.step = parser_new_expr(p);
+					Token *step_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE|EXPR_CAN_END_WITH_DOTDOT);
+					if (!parse_expr(p, fo->range.step, step_end))
+						goto for_fail;
+					if (!token_is_kw(step_end, KW_DOTDOT)) {
+						err_print(token_location(p->file, step_end), "Expected .. to follow step in for statement.");
+						tokr_skip_to_eof(t);
+						goto for_fail;
+					}
+				} else {
+					fo->range.step = NULL;
+				}
+				++t->token; /* move past .. */
+				if (token_is_kw(t->token, KW_LBRACE)) {
+					fo->range.to = NULL; /* infinite loop! */
+				} else {
+					fo->range.to = parser_new_expr(p);
+					Token *to_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE);
+					if (!parse_expr(p, fo->range.to, to_end))
+						goto for_fail;
+					if (!token_is_kw(t->token, KW_LBRACE)) {
+						tokr_err(t, "Expected { to open body of for statement.");
+						tokr_skip_to_eof(t);
+						goto for_fail;
+					}
+				}
+			} else {
+				err_print(token_location(p->file, first_end), "Expected { or .. to follow expression in for statement.");
+				tokr_skip_to_eof(t);
+				goto for_fail;
+			}
+			parser_put_end(p, &fo->header.where);
+			p->block = prev_block;
+			if (!parse_block(p, &fo->body, PARSE_BLOCK_DONT_CREATE_IDENTS))
+				goto for_fail;
+			fo->body.kind = BLOCK_FOR;
+			break;
+			for_fail:
+			p->block = prev_block;
+			return false;
+		}
 		default: goto stmt_expr;
 		}
 	} else if (t->token->kind == TOKEN_DIRECT) {
@@ -2478,6 +2480,8 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			}
 			++t->token;
 		} break;
+		case DIRECT_IF:
+			goto if_stmt;
 		case DIRECT_ERROR:
 		case DIRECT_WARN:
 		case DIRECT_INFO: {
@@ -2733,52 +2737,6 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprint_type(out, &e->cast.type);
 		fprintf(out, ")");
 		break;
-	case EXPR_IF: {
-		IfExpr *i = e->if_;
-		if (i->cond) {
-			fprintf(out, "(else)? if ");
-			fprint_expr(out, i->cond);
-		} else {
-			fprintf(out, "else");
-		}
-		fprint_block(out, &i->body);
-		if (i->next_elif)
-			fprint_expr(out, i->next_elif);
-	} break;
-	case EXPR_WHILE: {
-		WhileExpr *w = e->while_;
-		fprintf(out, "while ");
-		fprint_expr(out, w->cond);
-		fprint_block(out, &w->body);
-	} break;
-	case EXPR_FOR: {
-		ForExpr *fo = e->for_;
-		fprintf(out, "for ");
-		fprint_decl(out, &fo->header);
-		fprintf(out, "= ");
-		if (fo->flags & FOR_IS_RANGE) {
-			fprint_expr(out, fo->range.from);
-			if (found_type) {
-				if (fo->range.stepval) {
-					fprintf(out, ",");
-					fprint_val(out, *fo->range.stepval, &fo->header.type.tuple[0]);
-				}
-			} else {
-				if (fo->range.step) {
-					fprintf(out, ",");
-					fprint_expr(out, fo->range.step);
-				}
-			}
-			fprintf(out, "..");
-			if (fo->range.to) {
-				fprint_expr(out, fo->range.to);
-			}
-			fprintf(out, " ");
-		} else {
-			fprint_expr(out, fo->of);
-		}
-		fprint_block(out, &fo->body);
-	} break;
 	case EXPR_CALL:
 		fprint_expr(out, e->call.fn);
 		if (found_type) {
@@ -2786,9 +2744,6 @@ static void fprint_expr(FILE *out, Expression *e) {
 		} else {
 			fprint_args(out, e->call.args);
 		}
-		break;
-	case EXPR_BLOCK:
-		fprint_block(out, e->block);
 		break;
 	case EXPR_TUPLE:
 		fprintf(out, "(");
@@ -2876,6 +2831,7 @@ static void print_decl(Declaration *d) {
 
 static void fprint_stmt(FILE *out, Statement *s) {
 	PARSE_PRINT_LOCATION(s->where);
+	bool typed = (s->flags & STMT_TYPED) != 0;
 	switch (s->kind) {
 	case STMT_DECL:
 		fprint_decl(out, s->decl);
@@ -2928,6 +2884,57 @@ static void fprint_stmt(FILE *out, Statement *s) {
 		fprintf(out, "use ");
 		fprint_expr(out, &s->use->expr);
 		fprintf(out, ";\n");
+		break;
+	case STMT_IF: {
+		If *i = s->if_;
+		bool first = true;
+		while (i) {
+			if (i->cond) {
+				fprintf(out, "%sif ", first ? "" : "el");
+				fprint_expr(out, i->cond);
+			} else {
+				fprintf(out, "else");
+			}
+			fprint_block(out, &i->body);
+			first = false;
+		}
+	} break;
+	case STMT_WHILE: {
+		While *w = s->while_;
+		fprintf(out, "while ");
+		fprint_expr(out, w->cond);
+		fprint_block(out, &w->body);
+	} break;
+	case STMT_FOR: {
+		For *fo = s->for_;
+		fprintf(out, "for ");
+		fprint_decl(out, &fo->header);
+		fprintf(out, "= ");
+		if (fo->flags & FOR_IS_RANGE) {
+			fprint_expr(out, fo->range.from);
+			if (typed) {
+				if (fo->range.stepval) {
+					fprintf(out, ",");
+					fprint_val(out, *fo->range.stepval, &fo->header.type.tuple[0]);
+				}
+			} else {
+				if (fo->range.step) {
+					fprintf(out, ",");
+					fprint_expr(out, fo->range.step);
+				}
+			}
+			fprintf(out, "..");
+			if (fo->range.to) {
+				fprint_expr(out, fo->range.to);
+			}
+			fprintf(out, " ");
+		} else {
+			fprint_expr(out, fo->of);
+		}
+		fprint_block(out, &fo->body);
+	} break;
+	case STMT_BLOCK:
+		fprint_block(out, s->block);
 		break;
 	case STMT_INLINE_BLOCK:
 		arr_foreach(s->inline_block, Statement, sub)
@@ -3002,15 +3009,11 @@ static bool expr_is_definitely_const(Expression *e) {
 	case EXPR_VAL:
 	case EXPR_NMS:
 		return true;
-	case EXPR_IF:
-	case EXPR_WHILE:
 	case EXPR_C:
 	case EXPR_BUILTIN:
 	case EXPR_CAST:
 	case EXPR_CALL:
-	case EXPR_BLOCK:
 	case EXPR_TUPLE:
-	case EXPR_FOR:
 	case EXPR_FN:
 		return false;
 	case EXPR_UNARY_OP:

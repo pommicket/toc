@@ -250,41 +250,6 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		out->binary.lhs = copy_expr_(c, in->binary.lhs);
 		out->binary.rhs = copy_expr_(c, in->binary.rhs);
 		break;
-	case EXPR_IF: {
-		IfExpr *iin = in->if_;
-		IfExpr *iout = out->if_ = allocr_malloc(a, sizeof *iout);
-		*iout = *iin;
-		if (iin->cond)
-			iout->cond = copy_expr_(c, iin->cond);
-		if (iin->next_elif)
-			iout->next_elif = copy_expr_(c, iin->next_elif);
-		copy_block(c, &iout->body, &iin->body, 0);
-	} break;
-	case EXPR_WHILE: {
-		WhileExpr *win = in->while_;
-		WhileExpr *wout = out->while_ = allocr_malloc(a, sizeof *wout);
-		*wout = *win;
-		wout->cond = copy_expr_(c, win->cond);
-		copy_block(c, &wout->body, &win->body, 0);
-	} break;
-	case EXPR_FOR: {
-		ForExpr *fin = in->for_;
-		ForExpr *fout = out->for_ = allocr_malloc(a, sizeof *fout);
-		*fout = *fin;
-		Block *prev = c->block;
-		c->block = &fout->body;
-		idents_create(&fout->body.idents, c->allocr, &fout->body);
-		copy_decl(c, &fout->header, &fin->header);
-		if (fin->flags & FOR_IS_RANGE) {
-			fout->range.from = copy_expr_(c, fin->range.from);
-			if (fin->range.to) fout->range.to = copy_expr_(c, fin->range.to);
-			if (fin->range.step) fout->range.step = copy_expr_(c, fin->range.step);
-		} else {
-			fout->of = copy_expr_(c, fin->of);
-		}
-		c->block = prev;
-		copy_block(c, &fout->body, &fin->body, COPY_BLOCK_DONT_CREATE_IDENTS);
-	} break;
 	case EXPR_FN:
 		copy_fn_expr(c, out->fn = allocr_malloc(a, sizeof *out->fn), in->fn, 0);
 		break;
@@ -308,9 +273,6 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 			copy_expr(c, &arg_out->val, &arg_in->val);
 		}
 	} break;
-	case EXPR_BLOCK:
-		copy_block(c, out->block = allocr_malloc(a, sizeof *out->block), in->block, 0);
-		break;
 	case EXPR_TUPLE: {
 		size_t nexprs = arr_len(in->tuple);
 		out->tuple = NULL;
@@ -412,6 +374,53 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 		out->use = copier_malloc(c, sizeof *in->use);
 		*out->use = *in->use;
 		copy_expr(c, &out->use->expr, &in->use->expr);
+		break;
+	case STMT_IF: {
+		If *iin = in->if_;
+		If *iout = out->if_ = copier_malloc(c, sizeof *iout);
+		while (1) {
+			*iout = *iin;
+			
+			if (iin->cond)
+				iout->cond = copy_expr_(c, iin->cond);
+			copy_block(c, &iout->body, &iin->body, 0);
+
+			if (iin->next_elif) {
+				iout->next_elif = copier_malloc(c, sizeof *iout->next_elif);
+				iout = iout->next_elif;
+				iin = iin->next_elif;
+			} else {
+				break;
+			}
+		}
+	} break;
+	case STMT_WHILE: {
+		While *win = in->while_;
+		While *wout = out->while_ = copier_malloc(c, sizeof *wout);
+		*wout = *win;
+		wout->cond = copy_expr_(c, win->cond);
+		copy_block(c, &wout->body, &win->body, 0);
+	} break;
+	case STMT_FOR: {
+		For *fin = in->for_;
+		For *fout = out->for_ = copier_malloc(c, sizeof *fout);
+		*fout = *fin;
+		Block *prev = c->block;
+		c->block = &fout->body;
+		idents_create(&fout->body.idents, c->allocr, &fout->body);
+		copy_decl(c, &fout->header, &fin->header);
+		if (fin->flags & FOR_IS_RANGE) {
+			fout->range.from = copy_expr_(c, fin->range.from);
+			if (fin->range.to) fout->range.to = copy_expr_(c, fin->range.to);
+			if (fin->range.step) fout->range.step = copy_expr_(c, fin->range.step);
+		} else {
+			fout->of = copy_expr_(c, fin->of);
+		}
+		c->block = prev;
+		copy_block(c, &fout->body, &fin->body, COPY_BLOCK_DONT_CREATE_IDENTS);
+	} break;
+	case STMT_BLOCK:
+		copy_block(c, out->block = copier_malloc(c, sizeof *out->block), in->block, 0);
 		break;
 	case STMT_INLINE_BLOCK:
 		assert(0); /* only exists after typing */

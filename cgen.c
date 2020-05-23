@@ -768,34 +768,9 @@ static void cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 		arr_clear(underscore_ids);
 		cgen_writeln(g, "); ");
 	} break;
-	case EXPR_IF:
-	case EXPR_BLOCK: {
-		IdentID prefix_id = to->cgen.id = ++g->ident_counter;
-		if (exprs) {
-			for (size_t i = 0; i < arr_len(to->type.tuple); ++i) {
-				cgen_expr_pre(g, &exprs[i]);
-			}
-		}
-		for (unsigned long i = 0; i < (unsigned long)arr_len(to->type.tuple); ++i) {
-			cgen_write(g, "(");
-			if (exprs) {
-				cgen_expr(g, &exprs[i]);
-			} else if (idents) {
-				cgen_ident(g, idents[i]);
-			} else {
-				cgen_write(g, "%s%lu", prefix, i);
-			}
-			cgen_write(g, ") = ");
-			cgen_ident_id(g, prefix_id);
-			cgen_write(g, "%lu", i);
-			cgen_write(g, "; ");
-		}
-	} break;
 		/* things which can never be tuples */
 	case EXPR_SLICE:
 	case EXPR_IDENT:
-	case EXPR_WHILE:
-	case EXPR_FOR: 
 	case EXPR_LITERAL_INT:
 	case EXPR_LITERAL_CHAR:
 	case EXPR_LITERAL_BOOL:
@@ -828,24 +803,6 @@ static void cgen_truthiness(CGenerator *g, Expression *e) {
 
 static void cgen_expr_pre(CGenerator *g, Expression *e) {
 	switch (e->kind) {
-	case EXPR_IF: {
-		IfExpr *curr = e->if_;
-		while (1) {
-			if (curr->cond) {
-				cgen_write(g, "if (");
-				cgen_truthiness(g, curr->cond);
-				cgen_write(g, ") ");
-			}
-			cgen_block(g, &curr->body, 0);
-			if (curr->next_elif) {
-				cgen_write(g, " else ");
-				curr = curr->next_elif->if_;
-			} else break;
-		}
-	} break;
-	case EXPR_BLOCK:
-		cgen_block(g, e->block, 0);
-		break;
 	case EXPR_CALL: {
 		cgen_expr_pre(g, e->call.fn);
 		size_t i = 0;
@@ -1026,8 +983,6 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 	case EXPR_C:
 	case EXPR_TYPE:
 	case EXPR_NMS:
-	case EXPR_FOR:
-	case EXPR_WHILE:
 		break;
 	}
 }
@@ -1246,211 +1201,6 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		cgen_expr(g, e->unary.of);
 		cgen_write(g, ")");
 	} break;
-	case EXPR_WHILE: {
-		WhileExpr *w = e->while_;
-		cgen_write(g, "while (");
-		cgen_expr(g, w->cond);
-		cgen_write(g, ") ");
-		cgen_block(g, &w->body, 0);
-	} break;
-	case EXPR_FOR: {
-		ForExpr *fo = e->for_;
-		int is_range = fo->flags & FOR_IS_RANGE;
-		Declaration *header_decl = &fo->header;
-		Identifier val_ident = header_decl->idents[0];
-		Identifier index_ident = header_decl->idents[1];
-		Type *fo_type = &header_decl->type;
-		assert(fo_type->kind == TYPE_TUPLE && arr_len(fo_type->tuple) == 2);
-		Type *val_type = &fo_type->tuple[0];
-		Type *index_type = &fo_type->tuple[1];
-		bool has_val = !ident_eq_str(val_ident, "_");
-		bool has_index = !ident_eq_str(index_ident, "_");
-
-		Type *of_type = NULL;
-		bool uses_ptr = false;
-
-		if (is_range) {
-			cgen_expr_pre(g, fo->range.from);
-			if (fo->range.to)
-				cgen_expr_pre(g, fo->range.to);
-		} else {
-			cgen_expr_pre(g, fo->of);
-		}
-		cgen_write(g, "{");
-		if (is_range) {
-			if (fo->range.to) {
-				/* pre generate to */
-				cgen_type_pre(g, val_type);
-				cgen_write(g, " to_");
-				cgen_type_post(g, val_type);
-				cgen_write(g, " = ");
-				cgen_expr(g, fo->range.to);
-				cgen_write(g, "; ");
-			}
-			
-			/* set value to from */
-			if (has_val) {
-				cgen_type_pre(g, val_type);
-				cgen_write(g, " ");
-				cgen_ident(g, val_ident);
-				cgen_type_post(g, val_type);
-				cgen_write(g, "; ");
-				Expression val_expr = {0};
-				val_expr.flags = EXPR_FOUND_TYPE;
-				val_expr.kind = EXPR_IDENT;
-				val_expr.ident = val_ident;
-				val_expr.type = *val_type;
-				cgen_set(g, &val_expr, NULL, fo->range.from, NULL);
-			} else {
-				cgen_type_pre(g, val_type);
-				cgen_write(g, " val_");
-				cgen_type_post(g, val_type);
-				cgen_write(g, "; ");
-				cgen_set(g, NULL, "val_", fo->range.from, NULL);
-			}
-		} else {
-			of_type = &fo->of->type;
-			if (of_type->kind == TYPE_PTR) {
-				uses_ptr = true;
-				of_type = of_type->ptr;
-			}
-			
-			/* pre-generate of */
-			switch (of_type->kind) {
-			case TYPE_SLICE:
-				cgen_type_pre(g, of_type);
-				cgen_write(g, " of_");
-				cgen_type_post(g, of_type);
-				cgen_write(g, " = ");
-				if (uses_ptr) cgen_write(g, "*");
-				cgen_expr(g, fo->of);
-				cgen_write(g, "; ");
-				break;
-			case TYPE_ARR:
-				cgen_type_pre(g, of_type->arr.of);
-				cgen_write(g, " (* of_)");
-				cgen_type_post(g, of_type->arr.of);
-				cgen_write(g, " = ");
-				if (uses_ptr) cgen_write(g, "*");
-				cgen_expr(g, fo->of);
-				cgen_write(g, "; ");
-				break;
-			default: assert(0); break;
-			}
-		}
-
-		if (has_index) {
-			cgen_type_pre(g, index_type);
-			cgen_write(g, " ");
-			cgen_ident(g, index_ident);
-			cgen_type_post(g, index_type); /* not needed yet, but keeping it here to prevent potential future problems */
-			cgen_write(g, " = 0; ");
-		}
-
-		cgen_write(g, "for (");
-		
-		if (!is_range) {
-			cgen_type_pre(g, val_type);
-			cgen_write(g, "(%sp_)", uses_ptr ? "" : "*");
-			cgen_type_post(g, val_type);
-			cgen_write(g, " = ");
-			switch (of_type->kind) {
-			case TYPE_ARR:
-				cgen_write(g, "of_");
-				break;
-			case TYPE_SLICE:
-				cgen_write(g, "of_.data");
-				break;
-			default: assert(0); break;
-			}
-			cgen_write(g, ", (*end_) = p_ + ");
-			switch (of_type->kind) {
-			case TYPE_ARR:
-				cgen_write(g, U64_FMT, (U64)of_type->arr.n);
-				break;
-			case TYPE_SLICE:
-				cgen_write(g, "of_.len");
-				break;
-			default: assert(0); break;
-			}
-		}
-
-		cgen_write(g, "; ");
-		if (!(is_range && !fo->range.to)) { /* if it's finite */
-			if (is_range) {
-				if (has_val)
-					cgen_ident(g, val_ident);
-				else
-					cgen_write(g, "val_");
-				bool positive_step
-					= fo->range.stepval == NULL || val_is_nonnegative(*fo->range.stepval, val_type);
-				cgen_write(g, " %c= to_", positive_step ? '<' : '>');
-			} else {
-				cgen_write(g, "p_ != end_");
-			}
-		}
-		cgen_write(g, "; ");
-		if (is_range) {
-			if (fo->range.stepval) {
-				cgen_val_pre(g, fo->range.stepval, val_type);
-			}
-			if (has_val)
-				cgen_ident(g, val_ident);
-			else
-				cgen_write(g, "val_");
-			cgen_write(g, " += ");
-			if (fo->range.stepval) {
-				cgen_val(g, fo->range.stepval, val_type);
-			} else {
-				cgen_write(g, "1");
-			}
-			if (has_index) cgen_write(g, ", ");
-		} else {
-			cgen_write(g, "++p_");
-			if (has_index) cgen_write(g, ", ");
-		}
-		if (has_index) {
-			cgen_write(g, "++");
-			cgen_ident(g, index_ident);
-		}
-		cgen_write(g, ") {");
-		cgen_nl(g);
-		if (has_val) {
-			if (!is_range) {
-				cgen_type_pre(g, val_type);
-				cgen_write(g, " ");
-				cgen_ident(g, val_ident);
-				cgen_type_post(g, val_type);
-				cgen_write(g, "; ");
-				if (uses_ptr) {
-					cgen_ident(g, val_ident);
-					cgen_write(g, " = p_;");
-					cgen_nl(g);
-				} else {
-					Expression set_expr = {0};
-					set_expr.kind = EXPR_IDENT;
-					set_expr.ident = val_ident;
-					set_expr.type = *val_type;
-					set_expr.flags = EXPR_FOUND_TYPE;
-				
-					cgen_set(g, &set_expr, NULL, NULL, "(*p_)");
-					cgen_nl(g);
-				}
-			}
-		}
-		cgen_block(g, &fo->body, CGEN_BLOCK_NOBRACES);
-		cgen_deferred_from_block(g, &fo->body);
-		cgen_write(g, "}}");
-		if (fo->body.c.break_lbl) {
-			cgen_lbl(g, fo->body.c.break_lbl);
-			cgen_writeln(g, ":;");
-		}
-	} break;
-	case EXPR_BLOCK:
-	case EXPR_IF:
-		if (!type_is_void(&e->type))
-			cgen_ident_id(g, e->cgen.id);
-		break;
 	case EXPR_CALL:
 		if (e->type.kind == TYPE_TUPLE) {
 			/* the only situation in which this could happen is if the return value doesn't matter */
@@ -1910,6 +1660,224 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 	case STMT_INLINE_BLOCK:
 		arr_foreach(s->inline_block, Statement, sub)
 			cgen_stmt(g, sub);
+		break;
+	case STMT_IF: {
+		If *curr = s->if_;
+		while (1) {
+			if (curr->cond) {
+				cgen_write(g, "if (");
+				cgen_truthiness(g, curr->cond);
+				cgen_write(g, ") ");
+			}
+			cgen_block(g, &curr->body, 0);
+			if (curr->next_elif) {
+				cgen_write(g, " else ");
+				curr = curr->next_elif;
+			} else break;
+		}
+	} break;
+	case STMT_WHILE: {
+		While *w = s->while_;
+		cgen_write(g, "while (");
+		cgen_expr(g, w->cond);
+		cgen_write(g, ") ");
+		cgen_block(g, &w->body, 0);
+	} break;
+	case STMT_FOR: {
+		For *fo = s->for_;
+		int is_range = fo->flags & FOR_IS_RANGE;
+		Declaration *header_decl = &fo->header;
+		Identifier val_ident = header_decl->idents[0];
+		Identifier index_ident = header_decl->idents[1];
+		Type *fo_type = &header_decl->type;
+		assert(fo_type->kind == TYPE_TUPLE && arr_len(fo_type->tuple) == 2);
+		Type *val_type = &fo_type->tuple[0];
+		Type *index_type = &fo_type->tuple[1];
+		bool has_val = !ident_eq_str(val_ident, "_");
+		bool has_index = !ident_eq_str(index_ident, "_");
+
+		Type *of_type = NULL;
+		bool uses_ptr = false;
+
+		if (is_range) {
+			cgen_expr_pre(g, fo->range.from);
+			if (fo->range.to)
+				cgen_expr_pre(g, fo->range.to);
+		} else {
+			cgen_expr_pre(g, fo->of);
+		}
+		cgen_write(g, "{");
+		if (is_range) {
+			if (fo->range.to) {
+				/* pre generate to */
+				cgen_type_pre(g, val_type);
+				cgen_write(g, " to_");
+				cgen_type_post(g, val_type);
+				cgen_write(g, " = ");
+				cgen_expr(g, fo->range.to);
+				cgen_write(g, "; ");
+			}
+			
+			/* set value to from */
+			if (has_val) {
+				cgen_type_pre(g, val_type);
+				cgen_write(g, " ");
+				cgen_ident(g, val_ident);
+				cgen_type_post(g, val_type);
+				cgen_write(g, "; ");
+				Expression val_expr = {0};
+				val_expr.flags = EXPR_FOUND_TYPE;
+				val_expr.kind = EXPR_IDENT;
+				val_expr.ident = val_ident;
+				val_expr.type = *val_type;
+				cgen_set(g, &val_expr, NULL, fo->range.from, NULL);
+			} else {
+				cgen_type_pre(g, val_type);
+				cgen_write(g, " val_");
+				cgen_type_post(g, val_type);
+				cgen_write(g, "; ");
+				cgen_set(g, NULL, "val_", fo->range.from, NULL);
+			}
+		} else {
+			of_type = &fo->of->type;
+			if (of_type->kind == TYPE_PTR) {
+				uses_ptr = true;
+				of_type = of_type->ptr;
+			}
+			
+			/* pre-generate of */
+			switch (of_type->kind) {
+			case TYPE_SLICE:
+				cgen_type_pre(g, of_type);
+				cgen_write(g, " of_");
+				cgen_type_post(g, of_type);
+				cgen_write(g, " = ");
+				if (uses_ptr) cgen_write(g, "*");
+				cgen_expr(g, fo->of);
+				cgen_write(g, "; ");
+				break;
+			case TYPE_ARR:
+				cgen_type_pre(g, of_type->arr.of);
+				cgen_write(g, " (* of_)");
+				cgen_type_post(g, of_type->arr.of);
+				cgen_write(g, " = ");
+				if (uses_ptr) cgen_write(g, "*");
+				cgen_expr(g, fo->of);
+				cgen_write(g, "; ");
+				break;
+			default: assert(0); break;
+			}
+		}
+
+		if (has_index) {
+			cgen_type_pre(g, index_type);
+			cgen_write(g, " ");
+			cgen_ident(g, index_ident);
+			cgen_type_post(g, index_type); /* not needed yet, but keeping it here to prevent potential future problems */
+			cgen_write(g, " = 0; ");
+		}
+
+		cgen_write(g, "for (");
+		
+		if (!is_range) {
+			cgen_type_pre(g, val_type);
+			cgen_write(g, "(%sp_)", uses_ptr ? "" : "*");
+			cgen_type_post(g, val_type);
+			cgen_write(g, " = ");
+			switch (of_type->kind) {
+			case TYPE_ARR:
+				cgen_write(g, "of_");
+				break;
+			case TYPE_SLICE:
+				cgen_write(g, "of_.data");
+				break;
+			default: assert(0); break;
+			}
+			cgen_write(g, ", (*end_) = p_ + ");
+			switch (of_type->kind) {
+			case TYPE_ARR:
+				cgen_write(g, U64_FMT, (U64)of_type->arr.n);
+				break;
+			case TYPE_SLICE:
+				cgen_write(g, "of_.len");
+				break;
+			default: assert(0); break;
+			}
+		}
+
+		cgen_write(g, "; ");
+		if (!(is_range && !fo->range.to)) { /* if it's finite */
+			if (is_range) {
+				if (has_val)
+					cgen_ident(g, val_ident);
+				else
+					cgen_write(g, "val_");
+				bool positive_step
+					= fo->range.stepval == NULL || val_is_nonnegative(*fo->range.stepval, val_type);
+				cgen_write(g, " %c= to_", positive_step ? '<' : '>');
+			} else {
+				cgen_write(g, "p_ != end_");
+			}
+		}
+		cgen_write(g, "; ");
+		if (is_range) {
+			if (fo->range.stepval) {
+				cgen_val_pre(g, fo->range.stepval, val_type);
+			}
+			if (has_val)
+				cgen_ident(g, val_ident);
+			else
+				cgen_write(g, "val_");
+			cgen_write(g, " += ");
+			if (fo->range.stepval) {
+				cgen_val(g, fo->range.stepval, val_type);
+			} else {
+				cgen_write(g, "1");
+			}
+			if (has_index) cgen_write(g, ", ");
+		} else {
+			cgen_write(g, "++p_");
+			if (has_index) cgen_write(g, ", ");
+		}
+		if (has_index) {
+			cgen_write(g, "++");
+			cgen_ident(g, index_ident);
+		}
+		cgen_write(g, ") {");
+		cgen_nl(g);
+		if (has_val) {
+			if (!is_range) {
+				cgen_type_pre(g, val_type);
+				cgen_write(g, " ");
+				cgen_ident(g, val_ident);
+				cgen_type_post(g, val_type);
+				cgen_write(g, "; ");
+				if (uses_ptr) {
+					cgen_ident(g, val_ident);
+					cgen_write(g, " = p_;");
+					cgen_nl(g);
+				} else {
+					Expression set_expr = {0};
+					set_expr.kind = EXPR_IDENT;
+					set_expr.ident = val_ident;
+					set_expr.type = *val_type;
+					set_expr.flags = EXPR_FOUND_TYPE;
+				
+					cgen_set(g, &set_expr, NULL, NULL, "(*p_)");
+					cgen_nl(g);
+				}
+			}
+		}
+		cgen_block(g, &fo->body, CGEN_BLOCK_NOBRACES);
+		cgen_deferred_from_block(g, &fo->body);
+		cgen_write(g, "}}");
+		if (fo->body.c.break_lbl) {
+			cgen_lbl(g, fo->body.c.break_lbl);
+			cgen_writeln(g, ":;");
+		}
+	} break;
+	case STMT_BLOCK:
+		cgen_block(g, s->block, 0);
 		break;
 	case STMT_INCLUDE:
 		assert(0);

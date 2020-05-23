@@ -1028,8 +1028,9 @@ static Status eval_ident(Evaluator *ev, Identifier ident, Value *v, Location whe
 		Block *prev_block = tr->block;
 		/* make sure we're in the right block for typing the declaration */
 		tr->block = ident->idents->scope;
-		if (!types_decl(ev->typer, d)) return false;
+		bool success = types_decl(ev->typer, d);
 		tr->block = prev_block;
+		if (!success) return false;
 		assert(d->type.flags & TYPE_IS_RESOLVED);
 	}
 	Value *ival = ident_val(ev, ident, where);
@@ -1210,167 +1211,6 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			assert(0);
 		}
 		break;
-	case EXPR_IF: {
-		IfExpr *i = e->if_;
-		if (i->cond) {
-			Value cond;
-			if (i->cond->type.kind == TYPE_UNKNOWN) {
-				if (!i->cond->where.file->ctx->have_errored) {
-					err_print(i->cond->where, "Couldn't determine type of if condition, but need to evaluate it.");
-					return false;
-				}
-				return false;
-			}
-			if (!eval_expr(ev, i->cond, &cond)) return false;
-			if (val_truthiness(cond, &i->cond->type)) {
-				if (!eval_block(ev, &i->body)) return false;
-			} else if (i->next_elif && !ev->returning) {
-				if (!eval_expr(ev, i->next_elif, v)) return false;
-			}
-		} else {
-			if (!eval_block(ev, &i->body)) return false;
-		}
-		memset(v, 0, sizeof *v);
-	} break;
-	case EXPR_WHILE: {
-		Value cond;
-		WhileExpr *w = e->while_;
-		while (1) {
-			if (w->cond) {
-				if (w->cond->type.kind == TYPE_UNKNOWN) {
-					if (!w->cond->where.file->ctx->have_errored) {
-						err_print(w->cond->where, "Couldn't determine type of while condition, but need to evaluate it.");
-						return false;
-					}
-					return false;
-				}
-				if (!eval_expr(ev, w->cond, &cond)) return false;
-				Type *cond_type = &w->cond->type;
-				if (!val_truthiness(cond, cond_type))
-					break;
-			}
-			if (!eval_block(ev, &w->body)) return false;
-			if (ev->returning) {
-				if (ev->returning == &w->body) {
-					ev->returning = NULL;
-					if (ev->is_break)
-						break;
-				} else break;
-			}
-		}
-		memset(v, 0, sizeof *v);
-	} break;
-	case EXPR_FOR: {
-		ForExpr *fo = e->for_;
-		Declaration *header = &fo->header;
-		Value *for_valp = err_malloc(sizeof *for_valp);
-		arr_add(header->val_stack, for_valp);
-		/* make a tuple */
-		Value for_val_tuple[2];
-		for_valp->tuple = for_val_tuple;
-		Value *value_val = &for_val_tuple[0];
-		Value *index_val = &for_val_tuple[1];
-		Type *value_type = &header->type.tuple[0];
-		if (fo->flags & FOR_IS_RANGE) {
-			assert(value_type->kind == TYPE_BUILTIN);
-			Value from, to;
-			Value stepval;
-			i64_to_val(&stepval, value_type->builtin, 1);
-			if (!eval_expr(ev, fo->range.from, &from)) return false;
-			if (fo->range.to && !eval_expr(ev, fo->range.to, &to)) return false;
-			if (fo->range.stepval)
-				stepval = *fo->range.stepval;
-			Value x = from;
-			bool step_is_negative = fo->range.stepval && !val_is_nonnegative(stepval, value_type);
-			if (index_val) index_val->i64 = 0;
-			while (1) {
-				if (fo->range.to) {
-					/* check if loop has ended */
-					Value lhs = x;
-					Value rhs = to;
-					Type boolt = {0};
-					boolt.flags = TYPE_IS_RESOLVED;
-					boolt.kind = TYPE_BUILTIN;
-					boolt.builtin = BUILTIN_BOOL;
-					Value cont;
-					
-					eval_numerical_bin_op(lhs, value_type, step_is_negative ? BINARY_GE : BINARY_LE, rhs, &fo->range.to->type, &cont, &boolt);
-					if (!cont.boolv) break;
-				}
-				if (value_val) *value_val = x;
-
-				if (!eval_block(ev, &fo->body)) return false;
-				
-				if (ev->returning) {
-					if (ev->returning == &fo->body) {
-						ev->returning = NULL;
-						if (ev->is_break)
-							break;
-					} else break;
-				}
-				if (index_val) {
-					++index_val->i64;
-				}
-				eval_numerical_bin_op(x, value_type, BINARY_ADD, stepval, value_type, &x, value_type);
-			}
-				
-		} else {
-			Value x;
-			Value *index = index_val ? index_val : &x;
-			Value of;
-			if (!eval_expr(ev, fo->of, &of)) return false;
-			I64 len;
-			bool uses_ptr = false;
-			Type *of_type = &fo->of->type;
-			if (of_type->kind == TYPE_PTR) {
-				uses_ptr = true;
-				of_type = of_type->ptr;
-			}
-			switch (of_type->kind) {
-			case TYPE_ARR:
-				len = (I64)of_type->arr.n;
-				if (uses_ptr) {
-					of.arr = of.ptr;
-				}
-				
-				break;
-			case TYPE_SLICE:
-				if (uses_ptr) {
-					of.slice = *(Slice *)of.ptr;
-				}
-				len = of.slice.len;
-				break;
-			default: assert(0); return false;
-			}
-			
-			index->i64 = 0;
-			while (index->i64 < len) {
-				void *ptr = NULL;
-				if (!eval_val_ptr_at_index(e->where, &of, (U64)index->i64, of_type, &ptr, NULL))
-					return false;
-				if (uses_ptr)
-					value_val->ptr = ptr;
-				else
-					eval_deref(value_val, ptr, value_type);
-				if (!eval_block(ev, &fo->body))
-					return false;
-				if (ev->returning) {
-					if (ev->returning == &fo->body) {
-						ev->returning = NULL;
-						if (ev->is_break)
-							break;
-					} else break;
-				}
-				++index->i64;
-			}
-		}
-		arr_remove_last(header->val_stack);
-		free(for_valp);
-		memset(v, 0, sizeof *v);
-	} break;
-	case EXPR_BLOCK:
-		if (!eval_block(ev, e->block)) return false;
-		break;
 	case EXPR_LITERAL_BOOL:
 		v->boolv = e->booll;
 		break;
@@ -1486,19 +1326,6 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				}
 				++idx;
 			}
-		}
-			
-
-
-		/* make sure function body is typed before calling it */
-		/* @TODO: is this necessary? see also types_decl call in eval_ident */
-		if (!(fn->body.flags & BLOCK_FOUND_TYPES)) {
-			Typer *tr = ev->typer;
-			Block *prev_block = tr->block;
-			tr->block = fn->declaration_block; 
-			if (!types_block(tr, &fn->body))
-				return false;
-			tr->block = prev_block;
 		}
 
 		if (!eval_block(ev, &fn->body)) {
@@ -1704,6 +1531,166 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 		}
 		eval_exit_stmts(stmts, last_reached);
 	} break;
+	case STMT_IF: {
+		for (If *i = stmt->if_; i; i = i->next_elif) {
+			if (i->cond) {
+				Value cond;
+				if (i->cond->type.kind == TYPE_UNKNOWN) {
+					if (!i->cond->where.file->ctx->have_errored) {
+						err_print(i->cond->where, "Couldn't determine type of if condition, but need to evaluate it.");
+						return false;
+					}
+					return false;
+				}
+				if (!eval_expr(ev, i->cond, &cond)) return false;
+				if (val_truthiness(cond, &i->cond->type)) {
+					/* condition is true */
+					if (!eval_block(ev, &i->body)) return false;
+					break;
+				}
+			} else {
+				assert(!i->next_elif);
+				if (!eval_block(ev, &i->body)) return false;
+			}
+		}
+	} break;
+	case STMT_WHILE: {
+		Value cond;
+		While *w = stmt->while_;
+		while (1) {
+			if (w->cond) {
+				if (w->cond->type.kind == TYPE_UNKNOWN) {
+					if (!w->cond->where.file->ctx->have_errored) {
+						err_print(w->cond->where, "Couldn't determine type of while condition, but need to evaluate it.");
+						return false;
+					}
+					return false;
+				}
+				if (!eval_expr(ev, w->cond, &cond)) return false;
+				Type *cond_type = &w->cond->type;
+				if (!val_truthiness(cond, cond_type))
+					break;
+			}
+			if (!eval_block(ev, &w->body)) return false;
+			if (ev->returning) {
+				if (ev->returning == &w->body) {
+					ev->returning = NULL;
+					if (ev->is_break)
+						break;
+				} else break;
+			}
+		}
+	} break;
+	case STMT_FOR: {
+		For *fo = stmt->for_;
+		Declaration *header = &fo->header;
+		Value *for_valp = err_malloc(sizeof *for_valp);
+		arr_add(header->val_stack, for_valp);
+		/* make a tuple */
+		Value for_val_tuple[2];
+		for_valp->tuple = for_val_tuple;
+		Value *value_val = &for_val_tuple[0];
+		Value *index_val = &for_val_tuple[1];
+		Type *value_type = &header->type.tuple[0];
+		if (fo->flags & FOR_IS_RANGE) {
+			assert(value_type->kind == TYPE_BUILTIN);
+			Value from, to;
+			Value stepval;
+			i64_to_val(&stepval, value_type->builtin, 1);
+			if (!eval_expr(ev, fo->range.from, &from)) return false;
+			if (fo->range.to && !eval_expr(ev, fo->range.to, &to)) return false;
+			if (fo->range.stepval)
+				stepval = *fo->range.stepval;
+			Value x = from;
+			bool step_is_negative = fo->range.stepval && !val_is_nonnegative(stepval, value_type);
+			if (index_val) index_val->i64 = 0;
+			while (1) {
+				if (fo->range.to) {
+					/* check if loop has ended */
+					Value lhs = x;
+					Value rhs = to;
+					Type boolt = {0};
+					boolt.flags = TYPE_IS_RESOLVED;
+					boolt.kind = TYPE_BUILTIN;
+					boolt.builtin = BUILTIN_BOOL;
+					Value cont;
+					
+					eval_numerical_bin_op(lhs, value_type, step_is_negative ? BINARY_GE : BINARY_LE, rhs, &fo->range.to->type, &cont, &boolt);
+					if (!cont.boolv) break;
+				}
+				if (value_val) *value_val = x;
+
+				if (!eval_block(ev, &fo->body)) return false;
+				
+				if (ev->returning) {
+					if (ev->returning == &fo->body) {
+						ev->returning = NULL;
+						if (ev->is_break)
+							break;
+					} else break;
+				}
+				if (index_val) {
+					++index_val->i64;
+				}
+				eval_numerical_bin_op(x, value_type, BINARY_ADD, stepval, value_type, &x, value_type);
+			}
+				
+		} else {
+			Value x;
+			Value *index = index_val ? index_val : &x;
+			Value of;
+			if (!eval_expr(ev, fo->of, &of)) return false;
+			I64 len;
+			bool uses_ptr = false;
+			Type *of_type = &fo->of->type;
+			if (of_type->kind == TYPE_PTR) {
+				uses_ptr = true;
+				of_type = of_type->ptr;
+			}
+			switch (of_type->kind) {
+			case TYPE_ARR:
+				len = (I64)of_type->arr.n;
+				if (uses_ptr) {
+					of.arr = of.ptr;
+				}
+				
+				break;
+			case TYPE_SLICE:
+				if (uses_ptr) {
+					of.slice = *(Slice *)of.ptr;
+				}
+				len = of.slice.len;
+				break;
+			default: assert(0); return false;
+			}
+			
+			index->i64 = 0;
+			while (index->i64 < len) {
+				void *ptr = NULL;
+				if (!eval_val_ptr_at_index(stmt->where, &of, (U64)index->i64, of_type, &ptr, NULL))
+					return false;
+				if (uses_ptr)
+					value_val->ptr = ptr;
+				else
+					eval_deref(value_val, ptr, value_type);
+				if (!eval_block(ev, &fo->body))
+					return false;
+				if (ev->returning) {
+					if (ev->returning == &fo->body) {
+						ev->returning = NULL;
+						if (ev->is_break)
+							break;
+					} else break;
+				}
+				++index->i64;
+			}
+		}
+		arr_remove_last(header->val_stack);
+		free(for_valp);
+	} break;
+	case STMT_BLOCK:
+		if (!eval_block(ev, stmt->block)) return false;
+		break;
 	case STMT_INCLUDE:
 		assert(0);
 		break;
@@ -1712,6 +1699,7 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 }
 
 static Status eval_block(Evaluator *ev, Block *b) {
+	assert(b->flags & BLOCK_FOUND_TYPES);
 	Block *prev = ev->typer->block;
 	ev->typer->block = b;
 	b->deferred = NULL;

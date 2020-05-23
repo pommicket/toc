@@ -5,6 +5,10 @@ main ::= fn() {
 }
 
 foo ::= fn(x: int) int {
-	return 3*x;
+	if x == 3 {
+		return 7;
+	} else {
+		return 3*x;
+	}
 }
 

@@ -1152,6 +1152,26 @@ static bool arg_is_const(Expression *arg, Constness constness) {
 	return false;
 }
 
+/* does this statement no matter what result in a return? */
+static Status definitely_returns(Statement *s) {
+	if (s->kind == STMT_RET) return true; /* of course */
+	if (s->kind == STMT_IF) {
+		/* if foo { return 5; } else { return 6; } */
+		bool has_else = false;
+		for (If *i = s->if_; i; i = i->next_elif) {
+			Statement *last_stmt = arr_last_ptr(i->body.stmts);
+			if (!definitely_returns(last_stmt))
+				return false;
+			if (!i->cond) has_else = true;
+		}
+		return has_else;
+	} else if (s->kind == STMT_BLOCK) {
+		/* { return 7; } */
+		Statement *last_stmt = arr_last_ptr(s->block->stmts);
+		return definitely_returns(last_stmt);
+	}
+	return false;
+}
 
 /* pass NULL for instance if this isn't an instance */
 static Status types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
@@ -1186,19 +1206,13 @@ static Status types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 	if (!type_is_builtin(ret_type, BUILTIN_VOID) && !has_named_ret_vals) {
 		Statement *stmts = f->body.stmts;
 		if (arr_len(stmts)) {
-			Statement *last_stmt = (Statement *)stmts + (arr_len(stmts) - 1);
-			if (last_stmt->kind == STMT_RET) {
-				/*
-				  last statement is a return, so it doesn't matter that the function has no return value
-				  ideally this would handle if foo { return 5; } else { return 6; }
-				*/
-				success = true;
+			Statement *last_stmt = arr_last_ptr(stmts);
+			if (definitely_returns(last_stmt))
 				goto ret;
-			}
 		}
 		char *expected = type_to_str(ret_type);
 		err_print(token_location(f->body.where.file, &f->body.where.file->tokens[f->body.where.end-1]), 
-				"No return value in function which returns %s.", expected);
+				"Function which should return %s is missing a return statement (or it does not clearly always return).", expected);
 		free(expected);
 		info_print(f->where, "Function was declared here:");
 		success = false;
@@ -1640,341 +1654,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_CHAR;
 		break;
-	case EXPR_FOR: {
-		bool in_header = true;{ /* additional block because c++ */
-		ForExpr *fo = e->for_;
-		Declaration *header = &fo->header;
-		U32 is_range = fo->flags & FOR_IS_RANGE;
-		typer_arr_add(tr, tr->in_decls, header);
-		fo->body.uses = NULL;
-		typer_block_enter(tr, &fo->body);
-		bool annotated_index = true;
-		{
-			size_t nidents = arr_len(header->idents);
-			if (nidents > 2) {
-				err_print(header->where, "Expected at most 2 identifiers in for declaration (index and value) but got %lu.", 
-					(unsigned long)nidents);
-				goto for_fail;
-			}
-			if (nidents < 2) {
-				annotated_index = false;
-				assert(nidents == 1);
-				/* turn value := arr to value, _ := arr to simplify things */
-				typer_arr_add(tr, header->idents, ident_insert_with_len(typer_get_idents(tr), "_", 1));
-			}
-		}
-		
-		Type *fo_type_tuple = NULL;
-		/* fo_type is (val_type, index_type) */
-		arr_set_lena(fo_type_tuple, 2, tr->allocr);
-		memset(fo_type_tuple, 0, 2*sizeof *fo_type_tuple);
-		Type *val_type = &fo_type_tuple[0];
-		Type *index_type = &fo_type_tuple[1];
-
-		if (header->flags & DECL_ANNOTATES_TYPE) {
-			Type *header_type = &header->type;
-			if (!type_resolve(tr, header_type, header->where))
-				goto for_fail;
-			if (annotated_index) {
-				if (header_type->kind != TYPE_TUPLE || arr_len(header_type->tuple) != 2) {
-					char *s = type_to_str(header_type);
-					err_print(header->where, "Expected annotated for loop type to be (val_type, index_type), but got %s instead.", s);
-					free(s);
-					goto for_fail;
-				}
-				fo_type_tuple = header_type->tuple;
-				val_type = &fo_type_tuple[0];
-				index_type = &fo_type_tuple[1];
-				assert(val_type->flags & TYPE_IS_RESOLVED);
-				assert(index_type->flags & TYPE_IS_RESOLVED);
-				if (!type_is_int(index_type)) {
-					char *s = type_to_str(index_type);
-					err_print(header->where, "Expected index type of for loop to be a builtin integer type, but it's %s.", s);
-					free(s);
-					goto for_fail;
-				}
-			} else {
-				*val_type = header->type;
-			}
-		}
-		Type *fo_type = &header->type;
-		fo_type->flags = TYPE_IS_RESOLVED;
-		fo_type->kind = TYPE_TUPLE;
-		fo_type->tuple = fo_type_tuple;
-
-		assert(fo_type->flags & TYPE_IS_RESOLVED);
-		
-		if (!index_type->flags) {
-			construct_resolved_builtin_type(index_type, BUILTIN_I64);
-		}
-
-		if (is_range) {
-			if (!types_expr(tr, fo->range.from)) goto for_fail;
-			{
-				Type *ft = &fo->range.from->type;
-
-				if (ft->kind != TYPE_BUILTIN || !type_builtin_is_numerical(ft->builtin)) {
-					char *s = type_to_str(ft);
-					err_print(e->where, "from expression of for loop must be a builtin numerical type, not %s", s);
-					free(s);
-					goto for_fail;
-				}
-			}
-			if (fo->range.step) {
-				if (!types_expr(tr, fo->range.step)) goto for_fail;
-				Type *st = &fo->range.step->type;
-				if (st->kind != TYPE_BUILTIN || !type_builtin_is_numerical(st->builtin)) {
-					char *s = type_to_str(st);
-					err_print(e->where, "step expression of for loop must be a builtin numerical type, not %s", s);
-					free(s);
-					goto for_fail;
-				}
-			}
-			if (fo->range.to) {
-				if (!types_expr(tr, fo->range.to)) goto for_fail;
-				Type *tt = &fo->range.to->type;
-				if (tt->kind != TYPE_BUILTIN || !type_builtin_is_numerical(tt->builtin)) {
-					char *s = type_to_str(tt);
-					err_print(e->where, "to expression of for loop must be a builtin numerical type, not %s", s);
-					free(s);
-					goto for_fail;
-				}
-			}
-
-			if (val_type->flags) {
-				if (type_eq_implicit(&fo->range.from->type, val_type)) {
-					*val_type = *overriding_type(&fo->range.from->type, val_type);
-				} else {
-					char *exp = type_to_str(val_type);
-					char *got = type_to_str(&fo->range.from->type);
-					err_print(e->where, "Type of from expression does not match type of for loop. Expected %s, but got %s.", exp, got);
-					free(exp); free(got);
-					goto for_fail;
-				}
-			} else {
-				*val_type = fo->range.from->type;
-			}
-
-			if (fo->range.step) {
-				if (type_eq_implicit(&fo->range.step->type, val_type)) {
-					*val_type = *overriding_type(&fo->range.step->type, val_type);
-				} else {
-					char *exp = type_to_str(val_type);
-					char *got = type_to_str(&fo->range.step->type);
-					err_print(e->where, "Type of step expression does not match type of for loop. Expected %s, but got %s.", exp, got);
-					free(exp); free(got);
-					goto for_fail;
-				}
-			}
-
-			if (fo->range.to) {
-				if (type_eq_implicit(&fo->range.to->type, val_type)) {
-					*val_type = *overriding_type(&fo->range.to->type, val_type);
-				} else {
-					char *exp = type_to_str(val_type);
-					char *got = type_to_str(&fo->range.to->type);
-					err_print(e->where, "Type of to expression does not match type of for loop. Expected %s, but got %s.", exp, got);
-					free(exp); free(got);
-					goto for_fail;
-				}
-			}
-			
-			val_type->flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE;
-			
-			if (fo->range.step) {
-				/* we can't put this above because *val_type might have changed. */
-				Value *stepval = typer_malloc(tr, sizeof *fo->range.stepval);
-				if (!eval_expr(tr->evalr, fo->range.step, stepval)) {
-					info_print(fo->range.step->where, "Note that the step of a for loop must be a compile-time constant.");
-					goto for_fail;
-				}
-				val_cast(stepval, &fo->range.step->type, stepval, val_type);
-				fo->range.stepval = stepval;
-			}
-		} else {
-			if (!types_expr(tr, fo->of))
-				goto for_fail;
-
-			Type *iter_type = &fo->of->type;
-
-			bool uses_ptr = false;
-			if (iter_type->kind == TYPE_PTR) {
-				uses_ptr = true;
-				iter_type = iter_type->ptr;
-			}
-			switch (iter_type->kind) {
-			case TYPE_SLICE:
-				iter_type = iter_type->slice;
-				break;
-			case TYPE_ARR:
-				iter_type = iter_type->arr.of;
-				break;
-			case TYPE_BUILTIN:
-				switch (iter_type->builtin) {
-				case BUILTIN_VARARGS: {
-					/* exit for body */
-					typer_block_exit(tr);
-					arr_remove_lasta(tr->in_decls, tr->allocr);
-					/* create one block, containing a block for each vararg */
-					/* e.g. for x := varargs { total += x; } => { { x := varargs[0]; total += x; } { x := varargs[0]; total += x; } } */
-					assert(fo->of->kind == EXPR_IDENT);
-					Identifier varargs_ident = fo->of->ident;
-					Declaration *idecl = varargs_ident->decl;
-					VarArg *varargs = idecl->val.varargs;
-					size_t nvarargs = arr_len(varargs);
-					/* create surrounding block */
-					e->kind = EXPR_BLOCK;
-					Block *b = e->block = typer_calloc(tr, 1, sizeof *e->block);
-					idents_create(&b->idents, tr->allocr, b);
-					b->stmts = NULL;
-					b->parent = tr->block;
-					b->where = e->where;
-					arr_set_lena(b->stmts, nvarargs, tr->allocr);
-					Statement *stmt = b->stmts;
-					size_t nstmts = arr_len(fo->body.stmts);
-					Declaration *header_decl = &fo->header;
-					
-					assert(arr_len(header_decl->idents) == 2);
-					Identifier val_ident = header_decl->idents[0];
-					Identifier index_ident = header_decl->idents[1];
-					bool has_val = !ident_eq_str(val_ident, "_");
-					bool has_index = !ident_eq_str(index_ident, "_");
-					
-					for (size_t i = 0; i < nvarargs; ++i, ++stmt) {
-						/* create sub-block #i */
-						memset(stmt, 0, sizeof *stmt);
-						stmt->kind = STMT_EXPR;
-						stmt->expr = typer_calloc(tr, 1, sizeof *stmt->expr);
-						stmt->expr->kind = EXPR_BLOCK;
-						Block *sub = stmt->expr->block = typer_calloc(tr, 1, sizeof *sub);
-						sub->parent = b;
-						idents_create(&sub->idents, tr->allocr, sub);
-						sub->stmts = NULL;
-						sub->where = e->where;
-						size_t total_nstmts = nstmts + has_val + has_index;
-						arr_set_lena(sub->stmts, total_nstmts, tr->allocr);
-						Copier copier = copier_create(tr->allocr, sub);
-						if (has_val) {
-							/* @TODO(eventually): don't put a decl in each block, just put one at the start */
-							Statement *s = &sub->stmts[0];
-							s->flags = 0;
-							s->kind = STMT_DECL;
-							s->where = e->where;
-
-							/* declare value */
-							Declaration *decl = s->decl = typer_calloc(tr, 1, sizeof *decl);
-							decl->where = fo->of->where;
-							Identifier ident = ident_translate_forced(val_ident, &sub->idents);
-							typer_arr_add(tr, decl->idents, ident);
-							ident->decl = decl;
-							
-							decl->flags |= DECL_HAS_EXPR;
-							decl->expr.kind = EXPR_BINARY_OP;
-							decl->expr.binary.op = BINARY_AT_INDEX;
-							decl->expr.binary.lhs = fo->of;
-							decl->expr.where = fo->of->where;
-							Expression *index = decl->expr.binary.rhs = typer_calloc(tr, 1, sizeof *decl->expr.binary.rhs);
-							index->kind = EXPR_LITERAL_INT;
-							index->intl = (U64)i;
-							index->where = fo->of->where;
-						}
-						if (has_index) {
-							/* @TODO(eventually): don't put a decl in each block, just put one at the start */
-							Statement *s = &sub->stmts[has_val];
-							s->flags = 0;
-							s->kind = STMT_DECL;
-							s->where = e->where;
-
-							/* declare value */
-							Declaration *decl = s->decl = typer_calloc(tr, 1, sizeof *decl);
-							decl->where = fo->of->where;
-							Identifier ident = ident_translate_forced(index_ident, &sub->idents);
-							typer_arr_add(tr, decl->idents, ident);
-							ident->decl = decl;
-							
-							decl->flags |= DECL_HAS_EXPR;
-							decl->expr.kind = EXPR_LITERAL_INT;
-							decl->expr.intl = (U64)i;
-							decl->expr.where = fo->of->where;
-						}
-						
-						size_t start = total_nstmts - nstmts;
-						for (size_t s = start; s < total_nstmts; ++s) {
-							copy_stmt(&copier, &sub->stmts[s], &fo->body.stmts[s-start]);
-						}
-					}
-					e->flags &= (ExprFlags)~(ExprFlags)EXPR_FOUND_TYPE;
-					/* type this new big block */
-					if (!types_expr(tr, e))
-						return false;
-					return true;
-				}
-				default: break;
-				}
-				/* fallthrough */
-			default: {
-				if (fo->of->type.kind == TYPE_UNKNOWN && tr->err_ctx->have_errored) {
-					/* silently fail */
-					goto for_fail;
-				}
-				char *s = type_to_str(&fo->of->type);
-				err_print(e->where, "Cannot iterate over non-array non-slice type %s.", s);
-				free(s);
-				goto for_fail;
-			}
-			}
-			Type *ptr_type = typer_calloc(tr, 1, sizeof *ptr_type);
-			if (uses_ptr) {
-				ptr_type->flags = TYPE_IS_RESOLVED;
-				ptr_type->kind = TYPE_PTR;
-				ptr_type->ptr = iter_type;
-				iter_type = ptr_type;
-			}
-			if (header->flags & DECL_ANNOTATES_TYPE) {
-				if (type_eq_implicit(iter_type, val_type)) {
-					*val_type = *overriding_type(iter_type, val_type);
-				} else {
-					char *exp = type_to_str(iter_type);
-					char *got = type_to_str(val_type);
-					err_print(e->where, "Expected to iterate over type %s, but it was annotated as iterating over type %s.", exp, got);
-					free(exp); free(got);
-					goto for_fail;
-				}
-			} else *val_type = *iter_type;
-		}
-		
-		arr_remove_lasta(tr->in_decls, tr->allocr);
-		in_header = false;
-		
-		assert(header->type.flags & TYPE_IS_RESOLVED);
-		assert(index_type->flags & TYPE_IS_RESOLVED);
-		assert(val_type->flags & TYPE_IS_RESOLVED);
-
-		header->flags |= DECL_FOUND_TYPE;
-			
-		if (header->flags & DECL_USE) {
-			if (ident_eq_str(header->idents[0], "_")) {
-				err_print(header->where, "You have to name your for loop variable in order to use it (sorry).");
-				return false;
-			}
-			if (!use_ident(tr, header->idents[0], val_type, header->where)) {
-				return false;
-			}
-		}
-
-		if (!types_block(tr, &fo->body)) goto for_fail;
-		
-		t->kind = TYPE_BUILTIN;
-		t->builtin = BUILTIN_VOID;
-		
-		typer_block_exit(tr);
-		} break;
-		for_fail:
-		if (in_header)
-			arr_remove_lasta(tr->in_decls, tr->allocr);
-		typer_block_exit(tr);
-		return false;
-	}
 	case EXPR_IDENT: {
 		Block *b = tr->block;
 		String i = e->ident_str;
@@ -2118,59 +1797,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 				return false;
 		}
 		*t = c->type;
-	} break;
-	case EXPR_IF: {
-		IfExpr *i = e->if_;
-		IfExpr *curr = i;
-		if (curr->flags & IF_STATIC) {
-			/* handled in types_stmt unless there's a problem */
-			err_print(e->where, "You can't use #if in this way. It has to be a statement on its own, and can't return a value.");
-			return false;
-		}
-		if (!types_block(tr, &curr->body))
-			return false;
-		{
-			t->kind = TYPE_BUILTIN; t->builtin = BUILTIN_VOID;
-			t->flags |= TYPE_IS_RESOLVED;
-		}
-		while (1) {
-			if (curr->cond) {
-				if (!types_expr(tr, curr->cond))
-					return false;
-				if (!type_can_be_truthy(&curr->cond->type)) {
-					char *s = type_to_str(&curr->cond->type);
-					err_print(curr->cond->where, "Type %s cannot be the condition of an if statement.", s);
-					free(s);
-					return false;
-				}
-			}
-			if (curr->next_elif) {
-				IfExpr *nexti = curr->next_elif->if_;
-				Type *next_type = &curr->next_elif->type;
-				curr->next_elif->flags |= EXPR_FOUND_TYPE;
-				if (!types_block(tr, &nexti->body)) {
-					return false;
-				}
-				{
-					next_type->kind = TYPE_BUILTIN; next_type->builtin = BUILTIN_VOID;
-					next_type->flags = TYPE_IS_RESOLVED;
-				}
-				curr = nexti;
-			} else {
-				break;
-			}
-		}
-	} break;
-	case EXPR_WHILE: {
-		WhileExpr *w = e->while_;
-		bool ret = true;
-		if (!types_expr(tr, w->cond))
-			ret = false;
-		if (!types_block(tr, &w->body))
-			ret = false;
-		if (!ret) return false;
-		t->kind = TYPE_BUILTIN;
-		t->builtin = BUILTIN_VOID;
 	} break;
 	case EXPR_CALL: {
 		CallExpr *c = &e->call;
@@ -2758,13 +2384,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 		}
 		free(order);
 		*t = *ret_type;
-	} break;
-	case EXPR_BLOCK: {
-		Block *b = e->block;
-		if (!types_block(tr, b))
-			return false;
-		t->kind = TYPE_BUILTIN;
-		t->builtin = BUILTIN_VOID;
 	} break;
 	case EXPR_C: {
 		Expression *code = e->c.code;
@@ -3624,16 +3243,370 @@ static Status include_stmts_link_to_nms(Typer *tr, Namespace *nms, Statement *st
 }
 
 static Status types_stmt(Typer *tr, Statement *s) {
+top:
 	if (s->flags & STMT_TYPED) return true;
 	switch (s->kind) {
 	case STMT_EXPR: {
 		Expression *e = s->expr;
-		if (e->kind == EXPR_IF && (e->if_->flags & IF_STATIC)) {
+		if (!types_expr(tr, e)) {
+			return false;
+		}
+
+		{
+			if (e->kind == EXPR_TUPLE) {
+				err_print(s->where, "Statement of a tuple is not allowed. Use a semicolon instead of a comma here.");
+				return false;
+			}
+			Type *t = &e->type;
+			if (type_is_compileonly(t)) {
+				char *str = type_to_str(t);
+				warn_print(s->where, "This expression has a compile-only type (%s), so this statement will not actually be outputted in C code.", str);
+				free(str);
+			}
+		}
+		if (tr->block == NULL) {
+			/* evaluate expression statements at global scope */
+			if (e->kind != EXPR_C) {
+				if (!eval_stmt(tr->evalr, s))
+					return false;
+			}
+		}
+	} break;
+
+	case STMT_FOR: {
+		bool in_header = true;{ /* additional block because c++ */
+		For *fo = s->for_;
+		Declaration *header = &fo->header;
+		U32 is_range = fo->flags & FOR_IS_RANGE;
+		typer_arr_add(tr, tr->in_decls, header);
+		fo->body.uses = NULL;
+		typer_block_enter(tr, &fo->body);
+		bool annotated_index = true;
+		{
+			size_t nidents = arr_len(header->idents);
+			if (nidents > 2) {
+				err_print(header->where, "Expected at most 2 identifiers in for declaration (index and value) but got %lu.", 
+					(unsigned long)nidents);
+				goto for_fail;
+			}
+			if (nidents < 2) {
+				annotated_index = false;
+				assert(nidents == 1);
+				/* turn value := arr to value, _ := arr to simplify things */
+				typer_arr_add(tr, header->idents, ident_insert_with_len(typer_get_idents(tr), "_", 1));
+			}
+		}
+		
+		Type *fo_type_tuple = NULL;
+		/* fo_type is (val_type, index_type) */
+		arr_set_lena(fo_type_tuple, 2, tr->allocr);
+		memset(fo_type_tuple, 0, 2*sizeof *fo_type_tuple);
+		Type *val_type = &fo_type_tuple[0];
+		Type *index_type = &fo_type_tuple[1];
+
+		if (header->flags & DECL_ANNOTATES_TYPE) {
+			Type *header_type = &header->type;
+			if (!type_resolve(tr, header_type, header->where))
+				goto for_fail;
+			if (annotated_index) {
+				if (header_type->kind != TYPE_TUPLE || arr_len(header_type->tuple) != 2) {
+					char *str = type_to_str(header_type);
+					err_print(header->where, "Expected annotated for loop type to be (val_type, index_type), but got %s instead.", str);
+					free(str);
+					goto for_fail;
+				}
+				fo_type_tuple = header_type->tuple;
+				val_type = &fo_type_tuple[0];
+				index_type = &fo_type_tuple[1];
+				assert(val_type->flags & TYPE_IS_RESOLVED);
+				assert(index_type->flags & TYPE_IS_RESOLVED);
+				if (!type_is_int(index_type)) {
+					char *str = type_to_str(index_type);
+					err_print(header->where, "Expected index type of for loop to be a builtin integer type, but it's %s.", str);
+					free(s);
+					goto for_fail;
+				}
+			} else {
+				*val_type = header->type;
+			}
+		}
+		Type *fo_type = &header->type;
+		fo_type->flags = TYPE_IS_RESOLVED;
+		fo_type->kind = TYPE_TUPLE;
+		fo_type->tuple = fo_type_tuple;
+
+		assert(fo_type->flags & TYPE_IS_RESOLVED);
+		
+		if (!index_type->flags) {
+			construct_resolved_builtin_type(index_type, BUILTIN_I64);
+		}
+
+		if (is_range) {
+			if (!types_expr(tr, fo->range.from)) goto for_fail;
+			{
+				Type *ft = &fo->range.from->type;
+
+				if (ft->kind != TYPE_BUILTIN || !type_builtin_is_numerical(ft->builtin)) {
+					char *str = type_to_str(ft);
+					err_print(s->where, "from expression of for loop must be a builtin numerical type, not %s", str);
+					free(str);
+					goto for_fail;
+				}
+			}
+			if (fo->range.step) {
+				if (!types_expr(tr, fo->range.step)) goto for_fail;
+				Type *st = &fo->range.step->type;
+				if (st->kind != TYPE_BUILTIN || !type_builtin_is_numerical(st->builtin)) {
+					char *str = type_to_str(st);
+					err_print(s->where, "step expression of for loop must be a builtin numerical type, not %s", str);
+					free(str);
+					goto for_fail;
+				}
+			}
+			if (fo->range.to) {
+				if (!types_expr(tr, fo->range.to)) goto for_fail;
+				Type *tt = &fo->range.to->type;
+				if (tt->kind != TYPE_BUILTIN || !type_builtin_is_numerical(tt->builtin)) {
+					char *str = type_to_str(tt);
+					err_print(s->where, "to expression of for loop must be a builtin numerical type, not %s", str);
+					free(str);
+					goto for_fail;
+				}
+			}
+
+			if (val_type->flags) {
+				if (type_eq_implicit(&fo->range.from->type, val_type)) {
+					*val_type = *overriding_type(&fo->range.from->type, val_type);
+				} else {
+					char *exp = type_to_str(val_type);
+					char *got = type_to_str(&fo->range.from->type);
+					err_print(s->where, "Type of from expression does not match type of for loop. Expected %s, but got %s.", exp, got);
+					free(exp); free(got);
+					goto for_fail;
+				}
+			} else {
+				*val_type = fo->range.from->type;
+			}
+
+			if (fo->range.step) {
+				if (type_eq_implicit(&fo->range.step->type, val_type)) {
+					*val_type = *overriding_type(&fo->range.step->type, val_type);
+				} else {
+					char *exp = type_to_str(val_type);
+					char *got = type_to_str(&fo->range.step->type);
+					err_print(s->where, "Type of step expression does not match type of for loop. Expected %s, but got %s.", exp, got);
+					free(exp); free(got);
+					goto for_fail;
+				}
+			}
+
+			if (fo->range.to) {
+				if (type_eq_implicit(&fo->range.to->type, val_type)) {
+					*val_type = *overriding_type(&fo->range.to->type, val_type);
+				} else {
+					char *exp = type_to_str(val_type);
+					char *got = type_to_str(&fo->range.to->type);
+					err_print(s->where, "Type of to expression does not match type of for loop. Expected %s, but got %s.", exp, got);
+					free(exp); free(got);
+					goto for_fail;
+				}
+			}
+			
+			val_type->flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE;
+			
+			if (fo->range.step) {
+				/* we can't put this above because *val_type might have changed. */
+				Value *stepval = typer_malloc(tr, sizeof *fo->range.stepval);
+				if (!eval_expr(tr->evalr, fo->range.step, stepval)) {
+					info_print(fo->range.step->where, "Note that the step of a for loop must be a compile-time constant.");
+					goto for_fail;
+				}
+				val_cast(stepval, &fo->range.step->type, stepval, val_type);
+				fo->range.stepval = stepval;
+			}
+		} else {
+			if (!types_expr(tr, fo->of))
+				goto for_fail;
+
+			Type *iter_type = &fo->of->type;
+
+			bool uses_ptr = false;
+			if (iter_type->kind == TYPE_PTR) {
+				uses_ptr = true;
+				iter_type = iter_type->ptr;
+			}
+			switch (iter_type->kind) {
+			case TYPE_SLICE:
+				iter_type = iter_type->slice;
+				break;
+			case TYPE_ARR:
+				iter_type = iter_type->arr.of;
+				break;
+			case TYPE_BUILTIN:
+				switch (iter_type->builtin) {
+				case BUILTIN_VARARGS: {
+					/* exit for body */
+					typer_block_exit(tr);
+					arr_remove_lasta(tr->in_decls, tr->allocr);
+					/* create one block, containing a block for each vararg */
+					/* e.g. for x := varargs { total += x; } => { { x := varargs[0]; total += x; } { x := varargs[0]; total += x; } } */
+					assert(fo->of->kind == EXPR_IDENT);
+					Identifier varargs_ident = fo->of->ident;
+					Declaration *idecl = varargs_ident->decl;
+					VarArg *varargs = idecl->val.varargs;
+					size_t nvarargs = arr_len(varargs);
+					/* create surrounding block */
+					s->kind = STMT_BLOCK;
+					Block *b = s->block = typer_calloc(tr, 1, sizeof *s->block);
+					idents_create(&b->idents, tr->allocr, b);
+					b->stmts = NULL;
+					b->parent = tr->block;
+					b->where = s->where;
+					arr_set_lena(b->stmts, nvarargs, tr->allocr);
+					Statement *stmt = b->stmts;
+					size_t nstmts = arr_len(fo->body.stmts);
+					Declaration *header_decl = &fo->header;
+					
+					assert(arr_len(header_decl->idents) == 2);
+					Identifier val_ident = header_decl->idents[0];
+					Identifier index_ident = header_decl->idents[1];
+					bool has_val = !ident_eq_str(val_ident, "_");
+					bool has_index = !ident_eq_str(index_ident, "_");
+					
+					for (size_t i = 0; i < nvarargs; ++i, ++stmt) {
+						/* create sub-block #i */
+						memset(stmt, 0, sizeof *stmt);
+						stmt->kind = STMT_BLOCK;
+						Block *sub = stmt->block = typer_calloc(tr, 1, sizeof *sub);
+						sub->parent = b;
+						idents_create(&sub->idents, tr->allocr, sub);
+						sub->stmts = NULL;
+						sub->where = s->where;
+						size_t total_nstmts = nstmts + has_val + has_index;
+						arr_set_lena(sub->stmts, total_nstmts, tr->allocr);
+						Copier copier = copier_create(tr->allocr, sub);
+						if (has_val) {
+							/* @TODO(eventually): don't put a decl in each block, just put one at the start */
+							Statement *decl_stmt = &sub->stmts[0];
+							decl_stmt->flags = 0;
+							decl_stmt->kind = STMT_DECL;
+							decl_stmt->where = s->where;
+
+							/* declare value */
+							Declaration *decl = decl_stmt->decl = typer_calloc(tr, 1, sizeof *decl);
+							decl->where = fo->of->where;
+							Identifier ident = ident_translate_forced(val_ident, &sub->idents);
+							typer_arr_add(tr, decl->idents, ident);
+							ident->decl = decl;
+							
+							decl->flags |= DECL_HAS_EXPR;
+							decl->expr.kind = EXPR_BINARY_OP;
+							decl->expr.binary.op = BINARY_AT_INDEX;
+							decl->expr.binary.lhs = fo->of;
+							decl->expr.where = fo->of->where;
+							Expression *index = decl->expr.binary.rhs = typer_calloc(tr, 1, sizeof *decl->expr.binary.rhs);
+							index->kind = EXPR_LITERAL_INT;
+							index->intl = (U64)i;
+							index->where = fo->of->where;
+						}
+						if (has_index) {
+							/* @TODO(eventually): don't put a decl in each block, just put one at the start */
+							Statement *decl_stmt = &sub->stmts[has_val];
+							decl_stmt->flags = 0;
+							decl_stmt->kind = STMT_DECL;
+							decl_stmt->where = s->where;
+
+							/* declare value */
+							Declaration *decl = decl_stmt->decl = typer_calloc(tr, 1, sizeof *decl);
+							decl->where = fo->of->where;
+							Identifier ident = ident_translate_forced(index_ident, &sub->idents);
+							typer_arr_add(tr, decl->idents, ident);
+							ident->decl = decl;
+							
+							decl->flags |= DECL_HAS_EXPR;
+							decl->expr.kind = EXPR_LITERAL_INT;
+							decl->expr.intl = (U64)i;
+							decl->expr.where = fo->of->where;
+						}
+						
+						size_t start = total_nstmts - nstmts;
+						for (size_t idx = start; idx < total_nstmts; ++idx) {
+							copy_stmt(&copier, &sub->stmts[idx], &fo->body.stmts[idx-start]);
+						}
+					}
+					goto top;
+				}
+				default: break;
+				}
+				/* fallthrough */
+			default: {
+				if (fo->of->type.kind == TYPE_UNKNOWN && tr->err_ctx->have_errored) {
+					/* silently fail */
+					goto for_fail;
+				}
+				char *str = type_to_str(&fo->of->type);
+				err_print(s->where, "Cannot iterate over non-array non-slice type %s.", str);
+				free(str);
+				goto for_fail;
+			}
+			}
+			Type *ptr_type = typer_calloc(tr, 1, sizeof *ptr_type);
+			if (uses_ptr) {
+				ptr_type->flags = TYPE_IS_RESOLVED;
+				ptr_type->kind = TYPE_PTR;
+				ptr_type->ptr = iter_type;
+				iter_type = ptr_type;
+			}
+			if (header->flags & DECL_ANNOTATES_TYPE) {
+				if (type_eq_implicit(iter_type, val_type)) {
+					*val_type = *overriding_type(iter_type, val_type);
+				} else {
+					char *exp = type_to_str(iter_type);
+					char *got = type_to_str(val_type);
+					err_print(s->where, "Expected to iterate over type %s, but it was annotated as iterating over type %s.", exp, got);
+					free(exp); free(got);
+					goto for_fail;
+				}
+			} else *val_type = *iter_type;
+		}
+		
+		arr_remove_lasta(tr->in_decls, tr->allocr);
+		in_header = false;
+		
+		assert(header->type.flags & TYPE_IS_RESOLVED);
+		assert(index_type->flags & TYPE_IS_RESOLVED);
+		assert(val_type->flags & TYPE_IS_RESOLVED);
+
+		header->flags |= DECL_FOUND_TYPE;
+			
+		if (header->flags & DECL_USE) {
+			if (ident_eq_str(header->idents[0], "_")) {
+				err_print(header->where, "You have to name your for loop variable in order to use it (sorry).");
+				return false;
+			}
+			if (!use_ident(tr, header->idents[0], val_type, header->where)) {
+				return false;
+			}
+		}
+
+		if (!types_block(tr, &fo->body)) goto for_fail;
+		
+		typer_block_exit(tr);
+		} break;
+		for_fail:
+		if (in_header)
+			arr_remove_lasta(tr->in_decls, tr->allocr);
+		typer_block_exit(tr);
+		return false;
+	}
+	case STMT_IF: {
+		If *i = s->if_;
+		If *curr = i;
+		if (curr->flags & IF_STATIC) {
 			/* handle #if */
-			IfExpr *curr = e->if_;
 			while (1) {
 				Expression *cond = curr->cond;
-				Expression *next = curr->next_elif;
+				If *next = curr->next_elif;
 				Value v;
 				if (cond) {
 					if (!types_expr(tr, cond))
@@ -3663,9 +3636,9 @@ static Status types_stmt(Typer *tr, Statement *s) {
 					goto success;
 				}
 				if (!next) break;
-				curr = next->if_;
+				curr = next;
 			}
-			if (e->kind == EXPR_IF) {
+			if (s->kind == STMT_IF) {
 				/* all conds were false */
 				/* empty inline block */
 				s->kind = STMT_INLINE_BLOCK;
@@ -3674,30 +3647,44 @@ static Status types_stmt(Typer *tr, Statement *s) {
 			break;
 		}
 
-		if (!types_expr(tr, e)) {
+		if (!types_block(tr, &curr->body))
 			return false;
-		}
 
-		{
-			if (e->kind == EXPR_TUPLE) {
-				err_print(s->where, "Statement of a tuple is not allowed. Use a semicolon instead of a comma here.");
-				return false;
-			}
-			Type *t = &e->type;
-			if (type_is_compileonly(t)) {
-				char *str = type_to_str(t);
-				warn_print(s->where, "This expression has a compile-only type (%s), so this statement will not actually be outputted in C code.", str);
-				free(str);
-			}
-		}
-		
-		if (tr->block == NULL) {
-			/* evaluate expression statements at global scope */
-			if (e->kind != EXPR_C) {
-				if (!eval_stmt(tr->evalr, s))
+		while (1) {
+			if (curr->cond) {
+				if (!types_expr(tr, curr->cond))
 					return false;
+				if (!type_can_be_truthy(&curr->cond->type)) {
+					char *str = type_to_str(&curr->cond->type);
+					err_print(curr->cond->where, "Type %s cannot be the condition of an if statement.", str);
+					free(str);
+					return false;
+				}
+			}
+			if (curr->next_elif) {
+				If *nexti = curr->next_elif;
+				if (!types_block(tr, &nexti->body)) {
+					return false;
+				}
+				curr = nexti;
+			} else {
+				break;
 			}
 		}
+	} break;
+	case STMT_BLOCK: {
+		Block *b = s->block;
+		if (!types_block(tr, b))
+			return false;
+	} break;
+	case STMT_WHILE: {
+		While *w = s->while_;
+		bool ret = true;
+		if (!types_expr(tr, w->cond))
+			ret = false;
+		if (!types_block(tr, &w->body))
+			ret = false;
+		if (!ret) return false;
 	} break;
 	case STMT_DECL:
 		if (!types_decl(tr, s->decl)) {

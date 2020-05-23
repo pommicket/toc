@@ -523,6 +523,7 @@ typedef struct Block {
 	struct Statement **deferred; /* deferred stuff from this block; used by both eval and cgen */
 	struct Use **uses; /* use statements (for types.c) */
 } Block;
+
 typedef Block *BlockPtr;
 
 enum {
@@ -569,13 +570,9 @@ typedef enum {
 	EXPR_IDENT, /* variable or constant */
 	EXPR_BINARY_OP,
 	EXPR_UNARY_OP,
-	EXPR_IF,
-	EXPR_WHILE,
-	EXPR_FOR,
 	EXPR_FN,
 	EXPR_CAST,
 	EXPR_CALL,
-	EXPR_BLOCK,
 	EXPR_TUPLE,
 	EXPR_C,
 	EXPR_BUILTIN,
@@ -635,22 +632,6 @@ typedef struct CallExpr {
 	struct Instance *instance; /* NULL = ordinary function, no compile time args */
 } CallExpr;
 
-enum {
-	IF_STATIC = 0x01
-};
-
-typedef struct IfExpr {
-	U8 flags;
-	struct Expression *cond; /* NULL = this is an else */
-	struct Expression *next_elif; /* next elif/else of this statement */
-	Block body;
-} IfExpr;
-
-typedef struct WhileExpr {
-	struct Expression *cond;
-	Block body;
-} WhileExpr;
-
 
 typedef enum {
 	CTYPE_NONE = 0x00,
@@ -678,6 +659,11 @@ typedef struct {
 	char *points_to; /* if kind == CTYPE_PTR, ident string of C type which it points to */
 } CType;
 
+enum {
+	FN_EXPR_FOREIGN = 0x01,
+	FN_EXPR_EXPORT = 0x02, /* set during typing */
+	FN_EXPR_HAS_VARARGS = 0x04
+};
 typedef struct FnExpr {
 	Location where;
 	Block *declaration_block; /* block wherein this function is declared */
@@ -824,9 +810,6 @@ typedef struct Expression {
 		struct {
 			Type type;
 		} del;
-		IfExpr *if_;
-		WhileExpr *while_;
-		struct ForExpr *for_;
 		FnExpr *fn;
 		CastExpr cast;
 		SliceExpr slice;
@@ -892,44 +875,42 @@ typedef struct Declaration {
 typedef Declaration *DeclarationPtr;
 
 enum {
+	IF_STATIC = 0x01
+};
+
+typedef struct If {
+	U8 flags;
+	Expression *cond; /* NULL = this is an else */
+	struct If *next_elif; /* next elif/else of this statement */
+	Block body;
+} If;
+
+typedef struct While {
+	Expression *cond;
+	Block body;
+} While;
+
+enum {
 	FOR_IS_RANGE = 0x01
 };
-enum {
-	FN_EXPR_FOREIGN = 0x01,
-	FN_EXPR_EXPORT = 0x02, /* set during typing */
-	FN_EXPR_HAS_VARARGS = 0x04
-};
-typedef struct ForExpr {
+typedef struct For {
 	U8 flags;
 	Declaration header;
 	Block body;
 	union {
 		struct {
-			struct Expression *from; /* can't be null */
-			struct Expression *to; /* can be null */
+			Expression *from; /* can't be null */
+			Expression *to; /* can be null */
 			union {
 				/* (either) can be null */
-				struct Expression *step; /* before typing */
+				Expression *step; /* before typing */
 				Value *stepval; /* after typing. the type of this is header.type.tuple[0] (i.e. the value type for this for loop),
 					NOTE: this might be different from the original ForExpr.step.type, because of implicit type conversions. */
 			};
 		} range;
-		struct Expression *of;
+		Expression *of;
 	};
-} ForExpr;
-
-typedef enum {
-	STMT_DECL,
-	STMT_EXPR,
-	STMT_RET,
-	STMT_BREAK,
-	STMT_CONT,
-	STMT_INCLUDE, /* turns into STMT_INLINE_BLOCK after typing */
-	STMT_MESSAGE,
-	STMT_DEFER,
-	STMT_USE,
-	STMT_INLINE_BLOCK /* a group of statements acting as one statement */
-} StatementKind;
+} For;
 
 enum {
 	RET_HAS_EXPR = 0x01
@@ -981,6 +962,22 @@ typedef struct Use {
 } Use;
 typedef Use *UsePtr;
 
+typedef enum {
+	STMT_DECL,
+	STMT_EXPR,
+	STMT_RET,
+	STMT_BREAK,
+	STMT_CONT,
+	STMT_INCLUDE, /* turns into STMT_INLINE_BLOCK after typing */
+	STMT_MESSAGE,
+	STMT_DEFER,
+	STMT_USE,
+	STMT_IF,
+	STMT_FOR,
+	STMT_WHILE,
+	STMT_BLOCK,
+	STMT_INLINE_BLOCK /* a group of statements acting as one statement, e.g. all the statements from a #include */
+} StatementKind;
 enum {
 	STMT_TYPED = 0x01
 };
@@ -998,6 +995,10 @@ typedef struct Statement {
 		struct Statement *defer;
 		struct Statement *inline_block; /* statements in an inline block (dynamic array) */
 		Use *use;
+		If *if_;
+		While *while_;
+		For *for_;
+		Block *block;
 	};
 } Statement;
 
