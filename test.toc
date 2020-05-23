@@ -1,14 +1,70 @@
+#include "tests/std/io.toc", io;
+#include "tests/std/mem.toc";
 
-main ::= fn() {
-	a ::= foo(3);
-	b := foo(5);
-}
+z ::= nms {
+	Foo ::= struct(f ::= fn() int { return 7; }) {
+		x: int;
+	}
 
-foo ::= fn(x: int) int {
-	if x == 3 {
-		return 7;
-	} else {
-		return #C("3*x");
+	Bar ::= fn() &(struct { x, y: int; f ::= fn() int { return 13; } } ) {
+		x : u64;
+		return &x as &void;
+	}
+
+
+	foo ::= fn() total : int = 0 {
+		f: Foo();
+		total += f.f();
+		total += Bar().f();
 	}
 }
 
+
+main ::= fn() {
+	nums := news(int, 10);
+	for x, i := &nums {
+		*x = i*i;
+	}
+	l := slice_to_ll(nums);
+	p := &l;
+	while p {
+		io.puti(p.head);
+		p = p.tail;
+	}
+	f: Foo;
+	f.k = -173;
+	f.b = new(Bar);
+	f.b.f.b = new(Bar);
+	f.b.f.b.f.k = 9;
+	io.puti(f.k);
+	io.puti(f.b.f.k);
+	io.puti(f.b.f.b.f.k);
+	x := z.foo();
+	y ::= z.foo();
+	io.puti(x);
+	io.puti(y);
+}
+
+slice_to_ll ::= fn(t::=, slice: []t) use ll: LinkedList(t) {
+	head = slice[0];
+	if slice.len == 1 {
+		tail = null;
+	} else {
+		tail = new(LinkedList(t));
+		*tail = slice_to_ll(slice[1:]);
+	}
+}
+
+LinkedList ::= struct (of :: Type) {
+	head: of;
+	tail: &LinkedList(of);
+}
+
+Foo ::= struct {
+	k: int;
+	b: &Bar;
+}
+
+Bar ::= struct {
+	f: Foo;
+}

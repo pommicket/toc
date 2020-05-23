@@ -16,51 +16,51 @@ extern void exit(int);
 	contents_len : int;
 	buffer : [1024]char;
 	while #C("fgets(buffer, 1024, fp)") {
-	      buffer_len : int;
-	      while buffer[buffer_len] {
-	   		 buffer_len = buffer_len + 1;
-	      }
-	      if contents_sz < contents_len + buffer_len {
-	   	  old_contents := contents;
-	   	  contents_sz = 2*contents_sz + 1024;
-	   	  contents = news(char, contents_sz);
-	   	  i := 0;
-	   	  while i < contents_len {
-	   			contents[i] = old_contents[i];
-	   			i = i + 1;
-	   	  }
-	   	  dels(old_contents);
-	      }
-	      i := 0;
-	      while i < buffer_len {
-	   		 contents[contents_len] = buffer[i];
-	   		 contents_len = contents_len + 1;
-	   		 i = i + 1;
-	      }
+		buffer_len : int;
+		while buffer[buffer_len] {
+			buffer_len = buffer_len + 1;
+		}
+		if contents_sz < contents_len + buffer_len {
+			old_contents := contents;
+			contents_sz = 2*contents_sz + 1024;
+			contents = news(char, contents_sz);
+			i := 0;
+			while i < contents_len {
+				contents[i] = old_contents[i];
+				i = i + 1;
+			}
+			dels(old_contents);
+		}
+		i := 0;
+		while i < buffer_len {
+			contents[contents_len] = buffer[i];
+			contents_len = contents_len + 1;
+			i = i + 1;
+		}
 	}
 	contents[contents_len] = 0 as char;
-	contents
+	return contents;
 };
 
 runfile ::= fn(filename: []char) {
-	 #C("extern int putchar(int c);");
-	 code := readfile(filename);
-	 tape_sz := 3;
-	 tape := news(int, tape_sz);
-	 ptr := tape_sz / 2;
-	 i := 0;
-	 while code[i] {
-	 	   // puti(ptr);
-		   // puti(tape_sz);
-	 	   if code[i] == '+' {
-		   	  tape[ptr] = tape[ptr]+1;
-		   } elif code[i] == '-' {
-		   	 tape[ptr] = tape[ptr]-1;
-		   } elif code[i] == '>' {
-		   	 ptr = ptr + 1;
-			 if ptr >= tape_sz {
-			 	// extend to the right
-			 	newtape := news(int, 2*tape_sz);
+	#C("extern int putchar(int c);");
+	code := readfile(filename);
+	tape_sz := 3;
+	tape := news(int, tape_sz);
+	ptr := tape_sz / 2;
+	i := 0;
+	while code[i] {
+		// puti(ptr);
+	    // puti(tape_sz);
+		if code[i] == '+' {
+	    	tape[ptr] = tape[ptr]+1;
+	    } elif code[i] == '-' {
+	    	tape[ptr] = tape[ptr]-1;
+		} elif code[i] == '>' {
+	    	ptr = ptr + 1;
+			if ptr >= tape_sz {
+				// extend to the right
+				newtape := news(int, 2*tape_sz);
 				j := 0;
 				while j < tape_sz {
 					  newtape[j] = tape[j];
@@ -69,12 +69,12 @@ runfile ::= fn(filename: []char) {
 				tape_sz = tape_sz * 2;
 				dels(tape);
 				tape = newtape;
-			 }
-		   } elif code[i] == '<' {
-		   	 ptr = ptr - 1;
-			 if ptr < 0 {
-			 	// extend to the left
-			 	newtape := news(int, 2*tape_sz);
+			}
+	    } elif code[i] == '<' {
+	     	 ptr = ptr - 1;
+			if ptr < 0 {
+				// extend to the left
+				newtape := news(int, 2*tape_sz);
 				j := 0;
 				while j < tape_sz {
 					  newtape[j+tape_sz] = tape[j];
@@ -84,36 +84,44 @@ runfile ::= fn(filename: []char) {
 				dels(tape);
 				tape = newtape;
 				ptr = ptr + tape_sz;
-			 }
-		   } elif code[i] == '[' {
-		   	 if !tape[ptr] {
-			 	// jump to matching ]
+			}
+		} elif code[i] == '[' {
+			if !tape[ptr] {
+				// jump to matching ]
 				level := 0;
 				while level >= 0 {
-					  i = i + 1;
-					  level = level + (if code[i] == '[' { 1 } elif code[i] == ']' { -1 } else {0});
+					i = i + 1;
+					if code[i] == '[' {
+						level += 1;
+					} elif code[i] == ']' { 
+						level -= 1;
+					}
 				}
-			 }
-		   } elif code[i] == ']' {
-		   	 if tape[ptr] {
-			 	// jump to matching [
+			}
+		} elif code[i] == ']' {
+			if tape[ptr] {
+				// jump to matching [
 				level := 0;
 				while level <= 0 {
-					  i = i - 1;
-					  level = level + (if code[i] == '[' { 1 } elif code[i] == ']' { -1 } else {0});
+					i = i - 1;
+					if code[i] == '[' {
+						level += 1;
+					} elif code[i] == ']' { 
+						level -= 1;
+					}
 				}
-			 }
-		   } elif code[i] == '.' {
-		   	 c := tape[ptr] as char;
-		   	 #C("putchar(c);");
-		   } elif code[i] == ',' {
-		   	 // Input doesn't really work, because you
-			 // need to send an EOF to end the program.
-		   }
-		   i = i + 1;
-	 }
-	 dels(tape);
-	 dels(code);
+			}
+		} elif code[i] == '.' {
+			c := tape[ptr] as char;
+			#C("putchar(c);");
+		} elif code[i] == ',' {
+			// Input doesn't really work, because you
+			// need to send an EOF to end the program.
+		}
+		i = i + 1;
+	}
+	dels(tape);
+	dels(code);
 };
 
 main ::= fn() {

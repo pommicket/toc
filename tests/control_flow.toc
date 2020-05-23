@@ -21,7 +21,7 @@ f ::= fn() int {
 			return total;
 		}
 	}
-	0
+	return 0;
 }
 
 main ::= fn() {

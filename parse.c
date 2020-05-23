@@ -153,6 +153,12 @@ static inline bool type_is_float(Type *t) {
 	return t->kind == TYPE_BUILTIN && type_builtin_is_float(t->builtin);
 }
 
+static inline void mklocation(Location *l, File *f, Token *start, Token *end) {
+	l->file = f;
+	l->start = (U32)(start - f->tokens);
+	l->end = (U32)(end - f->tokens);
+}
+
 /* returns -1 on failure */
 static int kw_to_builtin_type(Keyword kw) {
 	switch (kw) {
@@ -850,8 +856,11 @@ static Status parse_block(Parser *p, Block *b, U8 flags) {
 				break;
 			}
 			if (t->token->kind == TOKEN_EOF) {
-				tokr_err(t, "Expected '}' to close function body.");
-				ret = false;
+				/* sometimes we skip to the end of the file to give up on parsing, so if there's already been an error, don't give this one. */
+				if (ret) {
+					tokr_err(t, "Expected '}' to close function body.");
+					ret = false;
+				}
 				goto end;
 			}
 			
@@ -1222,9 +1231,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 #if 0
 	{
 		Location where;
-		where.file = p->file;
-		where.start = t->token;
-		where.end = end;
+		mklocation(&where, p->file, t->token, end);
 		printf("PARSING ");
 		fprint_location(stdout, where);
 	}
@@ -2543,8 +2550,10 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 	stmt_expr:
 		s->kind = STMT_EXPR;
 		Token *end = expr_find_end(p, 0);
-		if (!end) {
-			tokr_err(t, "No semicolon found at end of statement.");
+		if (!end || !token_is_kw(end, KW_SEMICOLON)) {
+			Location loc;
+			mklocation(&loc, p->file, t->token, end);
+			err_print(loc, "No semicolon found at end of statement.");
 			tokr_skip_to_eof(t);
 			return false;
 		}

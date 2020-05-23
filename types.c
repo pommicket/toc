@@ -3582,16 +3582,16 @@ top:
 		if (header->flags & DECL_USE) {
 			if (ident_eq_str(header->idents[0], "_")) {
 				err_print(header->where, "You have to name your for loop variable in order to use it (sorry).");
-				return false;
+				goto for_fail;
 			}
 			if (!use_ident(tr, header->idents[0], val_type, header->where)) {
-				return false;
+				goto for_fail;
 			}
 		}
 
+		typer_block_exit(tr);
 		if (!types_block(tr, &fo->body)) goto for_fail;
 		
-		typer_block_exit(tr);
 		} break;
 		for_fail:
 		if (in_header)

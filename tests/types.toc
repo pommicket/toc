@@ -2,13 +2,13 @@
 #include "std/mem.toc";
 
 z ::= nms {
-	Foo ::= struct(f ::= fn() int { 7 }) {
+	Foo ::= struct(f ::= fn() int { return 7; }) {
 		x: int;
 	}
 
-	Bar ::= fn() &(struct { x, y: int; f ::= fn() int { 13 } } ) {
+	Bar ::= fn() &(struct { x, y: int; f ::= fn() int { return 13; } } ) {
 		x : u64;
-		&x as &void
+		return &x as &void;
 	}
 
 
