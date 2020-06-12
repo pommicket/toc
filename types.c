@@ -2963,7 +2963,20 @@ static Status types_block(Typer *tr, Block *b) {
 			continue;
 		}
 	}
-	assert(tr->block == b);
+#ifdef TOC_DEBUG
+	if (tr->block != b) {
+		printf(TEXT_ERR_START "Block mismatch." TEXT_ERR_END " After typing block:\n");
+		print_location(b->where);
+		printf("tr->block is:");
+		if (tr->block) {
+			printf(" (null)\n");
+		} else {
+			printf("\n");
+			print_location(tr->block->where);
+		}
+		assert(0);
+	}
+#endif
 	typer_block_exit(tr);
 	b->flags |= BLOCK_FOUND_TYPES;
 	b->flags &= (BlockFlags)~(BlockFlags)BLOCK_FINDING_TYPES;
