@@ -36,10 +36,6 @@ static inline void typer_block_enter(Typer *tr, Block *b) {
 	tr->block = b;
 }
 
-static inline void typer_block_exit(Typer *tr) {
-	tr->block = tr->block->parent;
-}
-
 static size_t compiler_sizeof_builtin(BuiltinType b) {
 	switch (b) {
 	case BUILTIN_I8: return sizeof(I8);
@@ -1865,10 +1861,11 @@ static Status types_expr(Typer *tr, Expression *e) {
 					int ident_idx = 0;
 					/* temporarily add this instance to the stack, while we type the decl, in case you, e.g., pass t = float to struct(t::Type, u::t = "hello") */
 					arr_add(err_ctx->instance_stack, e->where);
+					Block *prev = tr->block;
 					typer_block_enter(tr, &struc.body);
 					bool success = types_decl(tr, param);
 					arr_remove_last(err_ctx->instance_stack);
-					typer_block_exit(tr);
+					tr->block = prev;
 					if (!success) return false;
 					
 					arr_foreach(param->idents, Identifier, ident) {
@@ -2951,6 +2948,7 @@ static Status types_block(Typer *tr, Block *b) {
 	if (b->kind != BLOCK_FOR && b->kind != BLOCK_FN)
 		b->uses = NULL;
 	
+	Block *prev = tr->block;
 	typer_block_enter(tr, b);
 	bool success = true;
 	arr_foreach(b->stmts, Statement, s) {
@@ -2969,15 +2967,15 @@ static Status types_block(Typer *tr, Block *b) {
 		print_location(b->where);
 		printf("tr->block is:");
 		if (tr->block) {
-			printf(" (null)\n");
-		} else {
 			printf("\n");
 			print_location(tr->block->where);
+		} else {
+			printf(" (null)\n");
 		}
 		assert(0);
 	}
 #endif
-	typer_block_exit(tr);
+	tr->block = prev;
 	b->flags |= BLOCK_FOUND_TYPES;
 	b->flags &= (BlockFlags)~(BlockFlags)BLOCK_FINDING_TYPES;
 	
@@ -3287,7 +3285,8 @@ top:
 	} break;
 
 	case STMT_FOR: {
-		bool in_header = true;{ /* additional block because c++ */
+		bool in_header = true;
+		Block *prev_block = tr->block; { /* additional block because c++ */
 		For *fo = s->for_;
 		Declaration *header = &fo->header;
 		U32 is_range = fo->flags & FOR_IS_RANGE;
@@ -3459,7 +3458,7 @@ top:
 				switch (iter_type->builtin) {
 				case BUILTIN_VARARGS: {
 					/* exit for body */
-					typer_block_exit(tr);
+					tr->block = prev_block;
 					arr_remove_lasta(tr->in_decls, tr->allocr);
 					/* create one block, containing a block for each vararg */
 					/* e.g. for x := varargs { total += x; } => { { x := varargs[0]; total += x; } { x := varargs[0]; total += x; } } */
@@ -3602,14 +3601,14 @@ top:
 			}
 		}
 
-		typer_block_exit(tr);
+		tr->block = prev_block;
 		if (!types_block(tr, &fo->body)) goto for_fail;
 		
 		} break;
 		for_fail:
 		if (in_header)
 			arr_remove_lasta(tr->in_decls, tr->allocr);
-		typer_block_exit(tr);
+		tr->block = prev_block;
 		return false;
 	}
 	case STMT_IF: {
@@ -3745,6 +3744,7 @@ top:
 		if (!filename)
 			return false;
 		Namespace *prev_nms = tr->nms;
+		Block *prev_block = tr->block;
 		IncludedFile *inc_f = NULL;
 		Namespace *inc_nms = NULL; /* non-NULL if this is an include to nms */
 		bool success = true;
@@ -3866,7 +3866,7 @@ top:
 	nms_done:
 		if (inc_nms) {
 			tr->nms = prev_nms;
-			typer_block_exit(tr);
+			tr->block = prev_block;
 		}
 		if (inc_f) inc_f->flags &= (IncFileFlags)~(IncFileFlags)INC_FILE_INCLUDING;
 		if (!success) return false;
