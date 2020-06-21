@@ -7,14 +7,14 @@ plusone ::= fn(n : int) x := n {
 same ::= fn(n : int) int {
 	x := n;
 	defer x += 1;
-	x
+	return x;
 }
 
 thing1 ::= fn() (int, int) {
 	x := 5;
 	y := 6;
 	defer x += 1;
-	x, y
+	return x, y;
 }
 
 thing2 ::= fn() x := 5, y := 6 {

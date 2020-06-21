@@ -19,6 +19,7 @@ enums
 unions
 bitwise operations
 ---
+#compile_only for functions only used at compile time
 switch to / add as an alternative: libffi
 	- better yet, inline assembly
 don't bother generating ret_ if nothing's deferred

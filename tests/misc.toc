@@ -3,7 +3,7 @@
 main ::= fn() {
 	x ::= 3;
 	#if x > 2 {
-		 io.puts("Hello!");
+		io.puts("Hello!");
 	} else {
 		foo("yes");
 	}
@@ -17,7 +17,7 @@ main ::= fn() {
 		for x := a {
 			total += x;
 		}
-		total
+		return total;
 	};
 
 	mk_arr ::= fn(x:int, y:int, z:int) a:[3]int {

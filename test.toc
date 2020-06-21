@@ -1,5 +1,5 @@
-#include "std/io.toc", io;
-#include "std/mem.toc";
+#include "tests/std/io.toc", io;
+#include "tests/std/mem.toc";
 
 z ::= nms {
 	Foo ::= struct(f ::= fn() int { return 7; }) {

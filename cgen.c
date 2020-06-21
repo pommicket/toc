@@ -1422,6 +1422,8 @@ static void cgen_fn(CGenerator *g, FnExpr *f) {
 	}
 	
 	cgen_block(g, &f->body, CGEN_BLOCK_NOBRACES);
+	cgen_deferred_from_block(g, &f->body);
+	if (f->ret_decls) cgen_ret(g, NULL, NULL); /* for example, if function is fn() x: int, we need to generate return x; at the end */
 	cgen_writeln(g, "}");
 	g->block = prev_block;
 	g->fn = prev_fn;
@@ -1538,6 +1540,7 @@ static void cgen_decl(CGenerator *g, Declaration *d) {
 	}
 }
 
+/* pass NULL as returning_from if you don't want to run any deferred things */
 static void cgen_ret(CGenerator *g, Block *returning_from, Expression *ret_expr) {
 	FnExpr *f = g->fn;
 	if (ret_expr) {
@@ -1559,7 +1562,7 @@ static void cgen_ret(CGenerator *g, Block *returning_from, Expression *ret_expr)
 		}
 
 	}
-	cgen_deferred_up_to(g, returning_from);
+	if (returning_from) cgen_deferred_up_to(g, returning_from);
 	if (f->ret_decls) {
 		if (f->ret_type.kind == TYPE_TUPLE) {
 			Expression tuple_expr = {0};
@@ -2083,7 +2086,7 @@ static void cgen_file(CGenerator *g, ParsedFile *f, Typer *tr) {
 	}
 
 	cgen_write(g, "/* code */\n");
-	cgen_write(g, "int main() {\n\tmain_();\n\treturn 0;\n}\n\n");
+	cgen_write(g, "int main(void) {\n\tmain_();\n\treturn 0;\n}\n\n");
 	/* function definitions */
 	arr_foreach(tr->all_fns, FnWithCtx, fn_ctx) {
 		g->nms = fn_ctx->nms;

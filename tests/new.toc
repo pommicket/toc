@@ -17,7 +17,7 @@ calculation ::= fn() int {
 	total += *i;
 	mem.del(i);
 	mem.dels(ns);
-	total
+	return total;
 }
 
 main ::= fn() {

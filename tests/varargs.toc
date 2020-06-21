@@ -9,7 +9,7 @@ sum ::= fn(x: ..) int {
 	for a, i := x { 
 		total += a + i - i + 1;
 	}
-	total - x.len
+	return total - x.len;
 };
 
 sumc ::= fn(x:: ..) int {
@@ -17,7 +17,7 @@ sumc ::= fn(x:: ..) int {
 	for a, i := x { 
 		total += a + i - i + 1;
 	}
-	total - x.len
+	return total - x.len;
 };
 
 do_printing ::= fn(x::..) {

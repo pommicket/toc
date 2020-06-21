@@ -6,8 +6,8 @@ Point3D ::= struct {
 
 calculation ::= fn() int {
 	p: Point3D;
-	(#sizeof Point3D) * (#sizeof typeof p) * (sizeof Point3D) * (sizeof typeof p)
-	* (#alignof Point3D) * (#alignof typeof p) * (alignof Point3D) * (alignof typeof p)
+	return (#sizeof Point3D) * (#sizeof typeof p) * (sizeof Point3D) * (sizeof typeof p)
+	* (#alignof Point3D) * (#alignof typeof p) * (alignof Point3D) * (alignof typeof p);
 }
 
 main ::= fn() {

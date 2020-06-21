@@ -18,7 +18,7 @@ tprintf_valid ::= fn(fmt :: []char, nargs: int) bool {
 			}
 		}
 	}
-	count == nargs
+	return count == nargs;
 };
 	
 

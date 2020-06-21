@@ -36,7 +36,7 @@ thing ::= fn() int {
 	defer dels(bar);
 	fill_slice(&bar);
 	b := sum_slice(&bar);
-	a+b
+	return a+b;
 }
 
 main ::= fn() {
