@@ -10,8 +10,6 @@ tags
 std/*.c
 std/*.o
 *.so
-README.html
-docs/*.html
 *.dll
 *.exp
 *.lib

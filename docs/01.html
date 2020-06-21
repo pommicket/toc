@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="docs.css">
+<title>A first program</title>
+</head>
+<body>
+<h2>A first program</h2>
+
+<p><a href="contents.html">Table of contents</a> &middot; <a href="00.html">Prev</a></p>
+
+<p>The <c>main</c> function in toc corresponds to the <c>main</c> function in C. This function is called when your program is run. So, this is a valid toc program which does nothing:</p>
+
+<pre>
+main ::= fn() {
+}
+</pre>
+
+<p>It declares a constant, <c>main</c>, which is a function with an empty body. Note that the syntax for declaring functions is the same as the syntax for declaring constants (it isn't something like <c>fn main() { ... }</c>).</p>
+
+<p>Note that you do not need a semicolon at the end of this declaration (for convenience, if a declaration ends with a closing brace (<c>}</c>), you do not need a semicolon).</p>
+
+<p>Assuming you have compiled the compiler (see <c>README.md</c> for instructions about that), you can compile it with</p>
+
+<pre>
+toc &lt;your filename&gt;
+</pre>
+
+<p>You will get a file called <c>out.c</c>, which you can then put through your C compiler to get an executable file which does nothing. Congratulations! You've written your first toc program.</p>
+</body>
+</html>

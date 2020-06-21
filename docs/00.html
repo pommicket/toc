@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="docs.css">
+<title>Declarations</title>
+</head>
+<body>
+<h2>Declarations</h2>
+
+<p><a href="contents.html">Table of contents</a> &middot; <a href="01.html">Next</a></p>
+
+Variable declarations have the following syntax:
+<pre>
+&lt;name&gt; :[:] [type] [= expression];
+</pre>
+
+<p>The square brackets (<c>[]</c>) indicate something optional.</p>
+
+<p>
+All of the following statements
+declare an new variable <c>x</c> which is an integer, and has a value of 0:
+<pre>
+x : int;
+x : int = 0;
+x := 0;
+</pre>
+Note that in the first of those statements, although no expression
+is specified, it defaults to 0.
+</p>
+
+<p>If you wanted <c>x</c> to be a floating-point number, you could use:</p>
+
+<pre>
+x : float;
+x : float = 0;
+x := 0.0;
+</pre>
+
+<p>Note that <c>0</c> can be used as both a <c>float</c> and an <c>int</c>eger, but
+when no type is specified, it defaults to an <c>int</c>, whereas <c>0.0</c>
+defaults to a <c>float</c>.</p>
+
+<p>Here are all of toc's basic builtin types and their ranges of values:</p>
+
+<ul>
+<li><c>int</c> - A 64-bit signed integer (always), -9223372036854775808 to 9223372036854775807</li>
+<li><c>i8</c> - An 8-bit signed integer, -128 to 128</li>
+<li><c>i16</c> - 16-bit signed integer, -32768 to 32767</li>
+<li><c>i32</c> - 32-bit signed integer, -2147483648 to 2147483647</li>
+<li><c>i64</c> - 64-bit signed integer (same as <c>int</c>, but more explicit about the size), -9223372036854775808 to 9223372036854775807</li>
+<li><c>u8</c> - An 8-bit unsigned integer, 0 to 255</li>
+<li><c>u16</c> - 16-bit unsigned integer, 0 to 65535</li>
+<li><c>u32</c> - 32-bit unsigned integer, 0 to 4294967295</li>
+<li><c>u64</c> - 64-bit unsigned integer, 0 to 18446744073709551615</li>
+<li><c>float</c> - A 32-bit floating-point number, -3.40282347e+38 to 3.40282347e+38</li>
+<li><c>f32</c> - A 32-bit floating-point number (same as <c>float</c>, but more explicit about the size)</li>
+<li><c>f64</c> - A 64-bit floating-point number, -1.7976931348623157e+308 to 1.7976931348623157e+308</li>
+<li><c>bool</c> - A boolean value, either <c>false</c> or <c>true</c>.</li>
+<li><c>char</c> - A character (usually either -128 to 127 or 0 to 255).</li>
+</ul>
+
+<p>To make declarations constant, use <c>::</c> instead of <c>:</c>. e.g.</p>
+
+<p><c>
+x ::= 5+3;
+y :: float = 5.123;
+</c></p>
+
+<p>Here, "constant" means constant at compile time, not read-only as it does in C. One interesting thing about toc is that normal functions can run at compile time, so pretty much any expression is a valid initializer for a constant, e.g. doing <c>x ::= some_function();</c> runs <c>some_function</c> at compile time, not at run time.</p>
+</body>
+</html>
