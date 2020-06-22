@@ -57,7 +57,8 @@ static const char *token_kind_to_str(TokenKind t) {
 	case TOKEN_KW: return "keyword";
 	case TOKEN_IDENT: return "identifier";
 	case TOKEN_DIRECT: return "directive";
-	case TOKEN_LITERAL_NUM: return "numerical literal";
+	case TOKEN_LITERAL_INT: return "integer literal";
+	case TOKEN_LITERAL_FLOAT: return "floating-point literal";
 	case TOKEN_LITERAL_CHAR: return "character literal";
 	case TOKEN_LITERAL_STR: return "string literal";
 	case TOKEN_EOF: return "end of file";
@@ -76,16 +77,11 @@ static void fprint_token(FILE *out, Token *t) {
 		fprintf(out, "identifier: ");
 		fprint_ident_str(out, t->ident);
 	} break;
-	case TOKEN_LITERAL_NUM:
-		fprintf(out, "number: ");
-		switch (t->num.kind) {
-		case NUM_LITERAL_INT:
-			fprintf(out, U64_FMT, t->num.intval);
-			break;
-		case NUM_LITERAL_FLOAT:
-			fprintf(out, "%g", (double)t->num.floatval);
-			break;
-		}
+	case TOKEN_LITERAL_INT:
+		fprintf(out, U64_FMT, t->intl);
+		break;
+	case TOKEN_LITERAL_FLOAT:
+		fprintf(out, "%g", (double)t->floatl);
 		break;
 	case TOKEN_LITERAL_CHAR:
 		fprintf(out, "char: '%c' (%d)", t->chr, t->chr);
@@ -360,9 +356,8 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 			int base = 10;
 			Floating decimal_pow10 = 0;
 			Token *token = tokr_add(t);
-			NumLiteral *n = &token->num;
-			n->kind = NUM_LITERAL_INT;
-			n->intval = 0;
+			token->kind = TOKEN_LITERAL_INT;
+			token->intl = 0;
 			
 			if (*t->s == '0') {
 				tokr_nextchar(t);
@@ -392,7 +387,7 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 						/* .. (not a decimal point; end the number here) */
 						break;
 					}
-					if (n->kind == NUM_LITERAL_FLOAT) {
+					if (token->kind == TOKEN_LITERAL_FLOAT) {
 						tokenization_err(t, "Double . in number.");
 						goto err;
 					}
@@ -400,16 +395,18 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 						tokenization_err(t, "Decimal point in non base 10 number.");
 						goto err;
 					}
-					n->kind = NUM_LITERAL_FLOAT;
+					token->kind = TOKEN_LITERAL_FLOAT;
 					decimal_pow10 = 0.1;
-					n->floatval = (Floating)n->intval;
+					U64 i = token->intl;
+					token->floatl = (Floating)i;
 					tokr_nextchar(t);
 					continue;
 				} else if (*t->s == 'e' && base != 16) {
 					tokr_nextchar(t);
-					if (n->kind == NUM_LITERAL_INT) {
-						n->kind = NUM_LITERAL_FLOAT;
-						n->floatval = (Floating)n->intval;
+					if (token->kind == TOKEN_LITERAL_INT) {
+						token->kind = TOKEN_LITERAL_FLOAT;
+						U64 i = token->intl;
+						token->floatl = (Floating)i;
 					}
 					/* @TODO: check if exceeding maximum exponent */
 					int exponent = 0;
@@ -428,9 +425,9 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 					/* @OPTIM: Slow for very large exponents (unlikely to happen) */
 					for (int i = 0; i < exponent; ++i) {
 						if (negative_exponent)
-							n->floatval /= 10;
+							token->floatl /= 10;
 						else
-							n->floatval *= 10;
+							token->floatl *= 10;
 					}
 						
 					break;
@@ -455,26 +452,26 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 					/* end of numeric literal */
 					break;
 				}
-				switch (n->kind) {
-				case NUM_LITERAL_INT:
-					if (n->intval > U64_MAX / (U64)base ||
-						n->intval * (U64)base > U64_MAX - (U64)digit) {
+				switch (token->kind) {
+				case TOKEN_LITERAL_INT:
+					if (token->intl > U64_MAX / (U64)base ||
+						token->intl * (U64)base > U64_MAX - (U64)digit) {
 						/* too big! */
 						tokenization_err(t, "Number too big to fit in a numeric literal.");
 						goto err;
 					}
-					n->intval *= (U64)base;
-					n->intval += (U64)digit;
+					token->intl *= (U64)base;
+					token->intl += (U64)digit;
 					break;
-				case NUM_LITERAL_FLOAT:
-					n->floatval += decimal_pow10 * (Floating)digit;
+				case TOKEN_LITERAL_FLOAT:
+					token->floatl += decimal_pow10 * (Floating)digit;
 					decimal_pow10 /= 10;
 					break;
+				default: break;
 				}
 				tokr_nextchar(t);
 			}
 			tokr_put_end_pos(t, token);
-			token->kind = TOKEN_LITERAL_NUM;
 			continue;
 		}
 

@@ -8,6 +8,8 @@
 
 /* 
 @TODO:
+i think what we need to do is put all of the standalone statements (like main();) and all of the constant decls into an array,
+	and iterate over all of them after everything is typed, and after all the initializations are run.
 initialization statements (maybe #init(-50), where -50 is the priority and <0 is reserved for standard library)
 if we do #include "foo.toc", bar; and foo.toc fails, bar should be declared as TYPE_UNKNOWN (right now it's undeclared)
 improve type_to_str:

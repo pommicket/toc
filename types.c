@@ -3961,10 +3961,27 @@ static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *a
 	str_hash_table_create(&tr->included_files, sizeof(IncludedFile), tr->allocr);
 }
 
+static int compare_inits(const void *av, const void *bv) {
+	const Initialization *a = av, *b = bv;
+	if (a->priority < b->priority) return -1;
+	if (a->priority > b->priority) return +1;
+	return 0;
+}
+
 static Status types_file(Typer *tr, ParsedFile *f) {
 	bool ret = true;
 	tr->parsed_file = f;
 	tr->uses = NULL;
+	/* @TODO(eventually): better sorting algorithm - a radix sort, perhaps */
+	qsort(f->inits, arr_len(f->inits), sizeof *f->inits, compare_inits);
+	arr_foreach(f->inits, Initialization, init) {
+		if (!types_stmt(tr, &init->stmt))
+			return false;
+		if (!eval_stmt(tr->evalr, &init->stmt))
+			return false;
+	}
+	/* avoid accidentally using inits after they are run */
+	f->inits = NULL;
 	arr_foreach(f->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {
 			if (tr->had_include_err) {

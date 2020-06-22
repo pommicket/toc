@@ -802,7 +802,8 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 			}
 			} break;
 		case TOKEN_DIRECT:
-		case TOKEN_LITERAL_NUM:
+		case TOKEN_LITERAL_INT:
+		case TOKEN_LITERAL_FLOAT:
 		case TOKEN_LITERAL_CHAR:
 		case TOKEN_LITERAL_STR:
 		case TOKEN_EOF:
@@ -1260,19 +1261,15 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 		if (end - t->token == 1) {
 			/* 1-token expression */
 			switch (t->token->kind) {
-			case TOKEN_LITERAL_NUM: {
-				NumLiteral *num = &t->token->num;
-				switch (num->kind) {
-				case NUM_LITERAL_FLOAT:
-					e->kind = EXPR_LITERAL_FLOAT;
-					e->floatl = num->floatval;
-					break;
-				case NUM_LITERAL_INT:
-					e->kind = EXPR_LITERAL_INT;
-					e->intl = num->intval;
-					break;
-				}
-			} break;
+			case TOKEN_LITERAL_INT:
+				e->kind = EXPR_LITERAL_INT;
+				e->intl = t->token->intl;
+				break;
+			case TOKEN_LITERAL_FLOAT:
+				e->kind = EXPR_LITERAL_FLOAT;
+				e->floatl = t->token->floatl;
+				break;
+				break;
 			case TOKEN_IDENT:
 				e->kind = EXPR_IDENT;
 				e->ident_str.str = t->token->ident;
@@ -2523,10 +2520,29 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				return false;
 			}
 			++t->token;
-			if (!parse_expr(p, &init->priority_expr, expr_find_end(p, 0))) {
+			bool negative = false; /* negative priority? */
+			if (token_is_kw(t->token, KW_MINUS)) {
+				negative = true;
+				++t->token;
+			} else if (token_is_kw(t->token, KW_PLUS)) {
+				/* ignore unary + in priority */
+				++t->token;
+			}
+			if (t->token->kind != TOKEN_LITERAL_INT) {
+				tokr_err(t, "Priority for #init must be an integer literal (like 50).");
 				tokr_skip_semicolon(t);
 				return false;
 			}
+			U64 priority = t->token->intl;
+			++t->token;
+			if (priority > I64_MAX) {
+				tokr_err(t, "Priority must be less than 9223372036854775808.");
+				tokr_skip_semicolon(t);
+				return false;
+			}
+			I64 signed_priority = (I64)priority;
+			if (negative) signed_priority = -signed_priority;
+			init->priority = signed_priority;
 			if (!token_is_kw(t->token, KW_RPAREN)) {
 				tokr_err(t, "Expected ) after #init priority.");
 				tokr_skip_semicolon(t);

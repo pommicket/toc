@@ -217,7 +217,8 @@ typedef enum {
 	TOKEN_KW,
 	TOKEN_IDENT,
 	TOKEN_DIRECT,
-	TOKEN_LITERAL_NUM,
+	TOKEN_LITERAL_INT,
+	TOKEN_LITERAL_FLOAT,
 	TOKEN_LITERAL_CHAR,
 	TOKEN_LITERAL_STR,
 	TOKEN_EOF
@@ -334,20 +335,6 @@ static const char *const keywords[KW_COUNT] = {
 	"typeof", "sizeof", "alignof", "null"
 };
 
-
-typedef enum {
-	NUM_LITERAL_INT,
-	NUM_LITERAL_FLOAT
-} NumLiteralKind;
-
-typedef struct NumLiteral {
-	NumLiteralKind kind;
-	union {
-		U64 intval;
-		Floating floatval;
-	};
-} NumLiteral;
-
 typedef struct String {
 	char *str;
 	size_t len;
@@ -368,7 +355,8 @@ typedef struct Token {
 		Keyword kw;
 		Directive direct;
 		char *ident;
-		NumLiteral num;
+		U64 intl;
+		Floating floatl;
 		char chr;
 		StrLiteral str;
 	};
@@ -1000,14 +988,15 @@ typedef Statement *StatementPtr;
 */
 typedef struct {
 	Statement stmt;
-	union {
-		Expression priority_expr; /* before resolving */
-		I64 priority; /* after resolving */
-	};
+	I64 priority;
 } Initialization;
 
 typedef struct ParsedFile {
 	Statement *stmts;
+	/* 
+		statements run before any typing happens
+		after they are run, inits is set to NULL to avoid accidental usage 
+	*/
 	Initialization *inits;
 } ParsedFile;
 
