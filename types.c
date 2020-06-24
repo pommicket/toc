@@ -36,6 +36,17 @@ static inline void typer_block_enter(Typer *tr, Block *b) {
 	tr->block = b;
 }
 
+static inline bool block_is_at_top_level(Block *b) {
+	for (Block *bb = b; bb; bb = bb->parent)
+		if (bb->kind != BLOCK_NMS)
+			return false;
+	return true;
+}
+
+static bool is_at_top_level(Typer *tr) {
+	return block_is_at_top_level(tr->block);
+}
+
 static size_t compiler_sizeof_builtin(BuiltinType b) {
 	switch (b) {
 	case BUILTIN_I8: return sizeof(I8);
@@ -834,9 +845,21 @@ top:;
 				free(s);
 				return false;
 			}
-			if ((d->flags & DECL_IS_CONST) && (tr->block == NULL)) {
-				/* let's type the declaration, and redo this (for evaling future constants) */
+			Block *decl_block = i->idents->scope;
+			if (block_is_at_top_level(decl_block)) {
+				/* 
+					let's type the declaration, and redo this (for calling future functions at compile time)
+					this makes sure the error is right for:
+					foo();
+					bar : int;
+					foo ::= fn() { bar = 6; }
+					(it should be that you can't access non-constant bar at compile time, not that you're using before declaring)
+					This isn't needed if bar's block is non-NULL because functions can't capture variables
+				*/
+				Block *prev_block = tr->block;
+				tr->block = decl_block;
 				if (!types_decl(tr, d)) return false;
+				tr->block = prev_block;
 				goto top;
 			} else {
 				char *s = ident_to_str(i);
@@ -2980,15 +3003,6 @@ static Status types_block(Typer *tr, Block *b) {
 	b->flags &= (BlockFlags)~(BlockFlags)BLOCK_FINDING_TYPES;
 	
 	return success;
-}
-
-static bool is_at_top_level(Typer *tr) {
-	for (Block *b = tr->block; b; b = b->parent) {
-		if (b && b->kind != BLOCK_NMS) {
-			return false;
-		}
-	}
-	return true;
 }
 
 static Status types_decl(Typer *tr, Declaration *d) {

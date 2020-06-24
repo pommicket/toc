@@ -1,20 +1,18 @@
-init(3);
 
 #include "tests/std/io.toc";
 
-/*
 #init(-50) init(1);
 #init(30) init(2);
 #init(-7) init(3);
 #init(-42) init(4);
-*/
 
-x: int;
 init ::= fn(a: int) {
-	writes("Initializing... #");
-	writei(a);
+	//writes("Initializing... #");
+	//writei(a);
 	x = 5;
 }
+
+x: int;
 
 main ::= fn() {
 	writes("Main's value of x is: ");
