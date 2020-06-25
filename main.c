@@ -216,7 +216,7 @@ int main(int argc, char **argv) {
 
 	if (verbose) printf("Parsing...\n");
 	Parser p;
-	parser_create(&p, &globals, &t, &main_allocr);
+	parser_create(&p, &globals, &t, &main_allocr, &file);
 	ParsedFile f;
 	if (!parse_file(&p, &f)) {
 		err_text_important(&err_ctx, "Errors occured during parsing.\n");
@@ -234,7 +234,7 @@ int main(int argc, char **argv) {
 	Typer tr;
 	Evaluator ev;
 	evalr_create(&ev, &tr, &main_allocr);
-	typer_create(&tr, &ev, &err_ctx, &main_allocr, &globals, &file);
+	typer_create(&tr, &ev, &err_ctx, &main_allocr, &globals);;
 	
 	if (!types_file(&tr, &f)) {
 		err_text_important(&err_ctx, "Errors occured while determining types.\n");

@@ -1882,9 +1882,6 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 	case STMT_BLOCK:
 		cgen_block(g, s->block, 0);
 		break;
-	case STMT_INCLUDE:
-		assert(0);
-		break;
 	}
 }
 

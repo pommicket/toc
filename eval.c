@@ -1691,9 +1691,6 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 	case STMT_BLOCK:
 		if (!eval_block(ev, stmt->block)) return false;
 		break;
-	case STMT_INCLUDE:
-		assert(0);
-		break;
 	}
 	return true;
 }

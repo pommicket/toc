@@ -66,6 +66,11 @@ static inline char *str_to_cstr(String s) {
 	return cstr(s.str, s.len);
 }
 
+static void print_str(String s) {
+	fwrite(s.str, 1, s.len, stdout);
+	printf("\n");
+}
+
 static inline bool str_eq_cstr(String s, const char *str) {
 	return strncmp(s.str, str, s.len) == 0;
 }

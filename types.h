@@ -915,12 +915,6 @@ enum {
 	INC_TO_NMS = 0x02
 };
 
-typedef struct {
-	U8 flags;
-	Expression filename;
-	char *nms; /* NULL if this is just a plain old #include, otherwise string which can be used with ident_get */
-} Include;
-
 typedef enum {
 	MESSAGE_ERROR,
 	MESSAGE_WARN,
@@ -943,7 +937,6 @@ typedef enum {
 	STMT_RET,
 	STMT_BREAK,
 	STMT_CONT,
-	STMT_INCLUDE, /* turns into STMT_INLINE_BLOCK after typing */
 	STMT_MESSAGE,
 	STMT_DEFER,
 	STMT_USE,
@@ -964,7 +957,6 @@ typedef struct Statement {
 		Declaration *decl; /* we want the pointer to be fixed so that we can refer to it from an identifier */
 		Expression *expr;
 		Return *ret;
-		Include *inc;
 		Message *message; /* #error, #warn, #info */
 		Block *referring_to; /* for break/continue; set during typing */
 		struct Statement *defer;
@@ -1005,8 +997,11 @@ typedef struct Parser {
 	Allocator *allocr;
 	Identifiers *globals;
 	File *file;
+	File *main_file; /* this is the file which the compiler is invoked on. needed for checking for circular includes. */
 	Block *block; /* which block are we in? NULL = file scope */
+	Namespace *nms;
 	ParsedFile *parsed_file;
+	StrHashTable included_files; /* maps to IncludedFile */
 } Parser;
 
 typedef struct {
@@ -1044,7 +1039,6 @@ typedef struct Typer {
 	Allocator *allocr;
 	Evaluator *evalr;
 	Identifiers *globals;
-	File *main_file; /* this is the file which the compiler is invoked on. needed for checking for circular includes. */
 	Use **uses; /* global used things */
 	Declaration **in_decls; /* array of declarations we are currently inside */
 	Block *block;
@@ -1057,12 +1051,6 @@ typedef struct Typer {
 	DeclWithCtx *all_globals; /* includes stuff in namespaces, as long as it's not in a function */
 	IdentID lbl_counter;
 	unsigned long nms_counter; /* counter for namespace IDs */
-	StrHashTable included_files; /* maps to IncludedFile */
-	/* 
-		have we had an error because we couldn't find a file that was #include'd 
-		(so that we can stop compiling immediately)
-	*/
-	bool had_include_err; 
 } Typer;
 
 typedef struct CGenerator {

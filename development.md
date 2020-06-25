@@ -36,4 +36,3 @@ declaration).
 
 It is assumed that the number of identifiers in a declaration, or parameters to a function
 will fit in an int, since a function with (at least) 32768 parameters is ridiculous.
-
