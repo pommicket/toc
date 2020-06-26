@@ -1001,7 +1001,7 @@ typedef struct Parser {
 	Block *block; /* which block are we in? NULL = file scope */
 	Namespace *nms;
 	ParsedFile *parsed_file;
-	StrHashTable included_files; /* maps to IncludedFile */
+	StrHashTable *included_files; /* maps to IncludedFile. this is a pointer because all Parsers (i.e. the Parser for every file) have a common included_files */
 } Parser;
 
 typedef struct {

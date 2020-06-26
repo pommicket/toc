@@ -3,7 +3,7 @@
   This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
-static void parser_create(Parser *p, Identifiers *globals, Tokenizer *t, Allocator *allocr, File *main_file);
+static void parser_create(Parser *p, Identifiers *globals, Tokenizer *t, Allocator *allocr, File *main_file, StrHashTable *included_files);
 static Status parse_file(Parser *p, ParsedFile *f);
 static Status parse_expr(Parser *p, Expression *e, Token *end);
 static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement);
@@ -2576,7 +2576,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 					err_print(s->where, "Circular #include detected. You can add #force to this #include to force it to be included.");
 					success = false; goto nms_done;
 				}
-				inc_f = str_hash_table_get(&p->included_files, filename, filename_len);
+				inc_f = str_hash_table_get(p->included_files, filename, filename_len);
 				if (inc_f) {
 					/* has already been included */
 					if (inc_f->flags & INC_FILE_INCLUDING) {
@@ -2590,7 +2590,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 					}
 					goto nms_done;
 				}
-				inc_f = str_hash_table_insert(&p->included_files, filename, filename_len);
+				inc_f = str_hash_table_insert(p->included_files, filename, filename_len);
 				inc_f->flags |= INC_FILE_INCLUDING;
 				inc_f->main_nms = p->nms;
 			}
@@ -2619,7 +2619,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			#endif
 
 				Parser parser;
-				parser_create(&parser, p->globals, &tokr, p->allocr, p->main_file);
+				parser_create(&parser, p->globals, &tokr, p->allocr, p->main_file, p->included_files);
 				parser.block = p->block;
 				parser.nms = p->nms;
 				ParsedFile parsed_file;
@@ -2745,13 +2745,13 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 	return true;
 }
 
-static void parser_create(Parser *p, Identifiers *globals, Tokenizer *t, Allocator *allocr, File *main_file) {
+static void parser_create(Parser *p, Identifiers *globals, Tokenizer *t, Allocator *allocr, File *main_file, StrHashTable *included_files) {
 	p->tokr = t;
 	p->block = NULL;
 	p->globals = globals;
 	p->allocr = allocr;
 	p->main_file = main_file;
-	str_hash_table_create(&p->included_files, sizeof(IncludedFile), p->allocr);
+	p->included_files = included_files;
 }
 
 static Status parse_file(Parser *p, ParsedFile *f) {

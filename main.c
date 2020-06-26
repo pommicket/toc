@@ -215,8 +215,10 @@ int main(int argc, char **argv) {
 	}
 
 	if (verbose) printf("Parsing...\n");
+	StrHashTable included_files = {0};
+	str_hash_table_create(&included_files, sizeof(IncludedFile), &main_allocr);
 	Parser p;
-	parser_create(&p, &globals, &t, &main_allocr, &file);
+	parser_create(&p, &globals, &t, &main_allocr, &file, &included_files);
 	ParsedFile f;
 	if (!parse_file(&p, &f)) {
 		err_text_important(&err_ctx, "Errors occured during parsing.\n");
