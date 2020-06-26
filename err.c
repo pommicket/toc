@@ -86,7 +86,7 @@ static void print_location_highlight(FILE *out, Location where) {
 	assert(where.end >= where.start);
 	File *f = where.file;
 	ErrCtx *ctx = f->ctx;
-	if (where.start == 0 && where.end == 0) { err_fprint(ctx, "\n"); return; } /* null location */
+	if (where.start == 0 && where.end == 0) { fprintf(out, "\n"); return; } /* null location */
 	Token *first = &f->tokens[where.start];
 	Token *last = &f->tokens[where.end-1];
 	
@@ -96,8 +96,12 @@ static void print_location_highlight(FILE *out, Location where) {
 /* for debugging */
 static void fprint_location(FILE *out, Location location) {
 	File *f = location.file;
-	fprintf(out, "Line %ld of %s: ", (long)f->tokens[location.start].pos.line, f->filename);
-	print_location_highlight(out, location);
+	if (location.start == 0 && location.end == 0) {
+		fprintf(out, "In %s\n", f->filename);
+	} else {
+		fprintf(out, "Line %ld of %s: ", (long)f->tokens[location.start].pos.line, f->filename);
+		print_location_highlight(out, location);
+	}
 }
 
 static void print_location(Location location) {

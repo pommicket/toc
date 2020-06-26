@@ -2501,7 +2501,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				tokr_err(t, "#include file name must be string literal.");
 				return false;
 			}
-			char *filename = str_to_cstr(t->token->str);
+			char *filename = allocr_str_to_cstr(p->allocr, t->token->str);
 			++t->token;
 			Identifier nms_ident = NULL; /* identifier of namespace to include to */
 			if (token_is_kw(t->token, KW_COMMA)) {
@@ -2560,8 +2560,8 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				i->decl = d;
 				d->expr.kind = EXPR_NMS;
 				d->expr.nms = inc_nms;
-				d->expr.flags = EXPR_FOUND_TYPE;
 				d->expr.type = d->type;
+				parser_put_end(p, &s->where);
 				d->where = d->expr.where = s->where;
 				/* we need to be in the block to parse it properly */
 				p->block = &inc_nms->body;
@@ -2610,6 +2610,14 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				if (!tokenize_file(&tokr, file)) {
 					success = false; goto nms_done;
 				}
+				
+			#if 0
+				arr_foreach(tokr.tokens, Token, token) {
+					fprint_token(stdout, token);
+					printf("  ");
+				}
+			#endif
+
 				Parser parser;
 				parser_create(&parser, p->globals, &tokr, p->allocr, p->main_file);
 				parser.block = p->block;
@@ -2634,7 +2642,6 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			}
 			if (inc_f) inc_f->flags &= (IncFileFlags)~(IncFileFlags)INC_FILE_INCLUDING;
 			if (!success) return false;
-			free(filename);
 		} break;
 		case DIRECT_IF:
 			goto if_stmt;
@@ -2662,8 +2669,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				tokr_skip_semicolon(t);
 				return false;
 			}
-		    break;
-		}
+		} break;
 		case DIRECT_INIT: {
 			*was_a_statement = false;
 			Initialization *init = parser_arr_add_ptr(p, p->parsed_file->inits);
@@ -3063,6 +3069,8 @@ static void fprint_stmt(FILE *out, Statement *s) {
 		bool first = true;
 		while (i) {
 			if (i->cond) {
+				if (first && (i->flags & IF_STATIC))
+					fprintf(out, "#");
 				fprintf(out, "%sif ", first ? "" : "el");
 				fprint_expr(out, i->cond);
 			} else {
@@ -3070,6 +3078,7 @@ static void fprint_stmt(FILE *out, Statement *s) {
 			}
 			fprint_block(out, &i->body);
 			first = false;
+			i = i->next_elif;
 		}
 	} break;
 	case STMT_WHILE: {

@@ -3039,7 +3039,6 @@ static Status types_decl(Typer *tr, Declaration *d) {
 			&& tr->fn == NULL) {
 			e->typeval->struc->name = d->idents[0];
 		}
-		
 		if (!types_expr(tr, e)) {
 			success = false;
 			goto ret;
@@ -3266,7 +3265,6 @@ top:
 			}
 		}
 	} break;
-
 	case STMT_FOR: {
 		bool in_header = true;
 		Block *prev_block = tr->block; { /* additional block because c++ */
@@ -3792,9 +3790,14 @@ top:
 		else
 			typer_arr_add(tr, tr->uses, u);
 	} break;
-	case STMT_INLINE_BLOCK:
-		assert(0); /* only exists after typing */
-		break;
+	case STMT_INLINE_BLOCK: {
+		bool success = true;
+		arr_foreach(s->inline_block, Statement, sub) {
+			if (!types_stmt(tr, sub))
+				success = false;
+		}
+		if (!success) return false;
+	} break;
 	}
 success:
 	s->flags |= STMT_TYPED;

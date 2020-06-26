@@ -36,3 +36,24 @@ declaration).
 
 It is assumed that the number of identifiers in a declaration, or parameters to a function
 will fit in an int, since a function with (at least) 32768 parameters is ridiculous.
+
+
+#### Miscellaneous thoughts
+
+Wouldn't it be nice if `#include` could be done during typing, so that the filename wouldn't have to be a
+string literal? Well, unfortunately we end up in situations like this:
+```
+asdf ::= fn() {
+	x ::= bar();
+	a: [x]int;
+	// ...
+}
+#include "foo.toc"; // foo defined here
+bar ::= fn() int {
+	return foo(17);
+}
+```
+The way we evaluate `bar()` is by typing the function `bar` when we come across it in the declaration `x ::= bar();`.
+In order to evaluate `foo`, we need to know what it refers to, and we don't know at this point that it comes from the
+include, because we haven't expanded it yet. We could potentially expand all includes preceding any function which
+is evaluated during typing, but that seems a bit cumbersome and would probably cause other problems.

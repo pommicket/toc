@@ -419,6 +419,7 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 		break;
 	case STMT_INLINE_BLOCK: {
 		size_t nstmts = arr_len(in->inline_block);	
+		out->inline_block = NULL;
 		arr_set_lena(out->inline_block, nstmts, c->allocr);
 		for (size_t i = 0; i < nstmts; ++i) {
 			copy_stmt(c, &out->inline_block[i], &in->inline_block[i]);
