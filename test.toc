@@ -1,1 +1,5 @@
-#include "tests/std/mem.toc";
+#include "tests/std/io.toc", io;
+
+main ::= fn() {
+	io.puts("hi");
+}

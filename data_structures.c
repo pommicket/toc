@@ -378,6 +378,23 @@ static inline void *str_hash_table_get(StrHashTable *t, const char *str, size_t 
 	return slot->data;
 }
 
+static void str_hash_table_fprint(StrHashTable *t, FILE *out) {
+	fprintf(out, "------- Hash table @ %p\n", (void *)t);
+	arr_foreach(t->slots, StrHashTableSlotPtr, slotp) {
+		StrHashTableSlot *slot = *slotp;
+		if (slot) {
+			fprintf(out, "| ");
+			fwrite(slot->str, 1, slot->len, out);
+			fprintf(out, "\n");
+		}
+	}
+	fprintf(out, "------\n");
+}
+
+static void str_hash_table_print(StrHashTable *t) {
+	str_hash_table_fprint(t, stdout);
+}
+
 #if RUN_TESTS
 static void str_hash_table_test(void) {
 	StrHashTable t;

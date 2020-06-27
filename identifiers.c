@@ -212,6 +212,10 @@ static void idents_test(void) {
 }
 #endif
 
+static void idents_print_all(Identifiers *idents) {
+	str_hash_table_print(&idents->table);
+}
+
 static int ident_index_in_decl(Identifier i, Declaration *d) {
 	int index = 0;
 	arr_foreach(d->idents, Identifier, j) {
