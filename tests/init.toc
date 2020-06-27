@@ -1,0 +1,25 @@
+#init(-10) init(10);
+#init(44) init(44);
+#init(22) init(22);
+#init(88) init(88);
+#init(1002389) for i := 89..100 {init(i);}
+#init(-20) init(0);
+
+
+#include "std/io.toc";
+
+total : int;
+
+init ::= fn(x: int) {
+	if #builtin("compiling") { return; }
+	writes("Initializing... ");
+	writei(x);
+	puts("% complete");
+	total += x;
+}
+
+
+main ::= fn() {
+	writes("hello from main. total is ");
+	puti(total);
+}

@@ -8,8 +8,6 @@
 
 /* 
 @TODO:
-#includes during parsing
-initialization statements (maybe #init(-50), where -50 is the priority and <0 is reserved for standard library)
 if we do #include "foo.toc", bar; and foo.toc fails, bar should be declared as TYPE_UNKNOWN (right now it's undeclared)
 improve type_to_str:
 	Foo ::= struct(t::Type) {}
@@ -94,7 +92,7 @@ static void signal_handler(int num) {
 	}
 	fprintf(stderr, "Stack trace:\n");
 
-	static void *addrs[30];
+	static void *addrs[300];
 	int naddrs = (int)(sizeof addrs / sizeof *addrs);
 	naddrs = backtrace(addrs, naddrs);
 	/* char **syms = backtrace_symbols(addrs, naddrs); */

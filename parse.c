@@ -2589,10 +2589,11 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 						success = false; goto nms_done;
 					}
 					goto nms_done;
+				} else {
+					inc_f = str_hash_table_insert(p->included_files, filename, filename_len);
+					inc_f->flags |= INC_FILE_INCLUDING;
+					inc_f->main_nms = p->nms;
 				}
-				inc_f = str_hash_table_insert(p->included_files, filename, filename_len);
-				inc_f->flags |= INC_FILE_INCLUDING;
-				inc_f->main_nms = p->nms;
 			}
 			{
 				char *contents = read_file_contents(p->allocr, filename, s->where);

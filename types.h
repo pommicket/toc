@@ -654,14 +654,11 @@ typedef struct FnExpr {
 		struct {
 			Type type; /* type of this function */
 			CType *ctypes; /* ctypes[i] = CTYPE_NONE if this isn't a ctype, or the specified CType. don't use this as a dynamic array. */
-			union {
-				const char *name;
-				struct Expression *name_expr; /* before typing */
-			};
-			union {
-				const char *lib;
-				struct Expression *lib_expr;
-			};
+			const char *name;
+			/* name of foreign function and dynamic library file it comes from (dll/so) */
+			struct Expression *name_expr; /* STILL VALID even after running type_of_fn, because sometimes we run type_of_fn multiple times on a function */
+			const char *lib;
+			struct Expression *lib_expr; /* see name_expr */
 			FnPtr fn_ptr;
 		} foreign;
 	};
@@ -987,7 +984,7 @@ typedef struct ParsedFile {
 	Statement *stmts;
 	/* 
 		statements run before any typing happens
-		after they are run, inits is set to NULL to avoid accidental usage 
+		after typing, these will be in sorted order (for cgen)
 	*/
 	Initialization *inits;
 } ParsedFile;

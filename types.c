@@ -592,7 +592,6 @@ enum {
 };
 
 static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
-
 	if (f->flags & FN_EXPR_FOREIGN) {
 		/* we've already mostly determined the type in parse_expr */
 		if (!type_resolve(tr, &f->foreign.type, f->where))
@@ -3823,16 +3822,15 @@ static Status types_file(Typer *tr, ParsedFile *f) {
 	bool ret = true;
 	tr->parsed_file = f;
 	tr->uses = NULL;
-	/* @TODO(eventually): better sorting algorithm - a radix sort, perhaps */
 	qsort(f->inits, arr_len(f->inits), sizeof *f->inits, compare_inits);
 	arr_foreach(f->inits, Initialization, init) {
-		if (!types_stmt(tr, &init->stmt))
+		Statement *s = &init->stmt;
+		if (!types_stmt(tr, s))
 			return false;
-		if (!eval_stmt(tr->evalr, &init->stmt))
-			return false;
+		if (s->kind != STMT_EXPR) /* already evaluated in types_stmt */
+			if (!eval_stmt(tr->evalr, s))
+				return false;
 	}
-	/* avoid accidentally using inits after they are run */
-	f->inits = NULL;
 	arr_foreach(f->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {
 			ret = false;

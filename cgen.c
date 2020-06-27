@@ -2083,7 +2083,20 @@ static void cgen_file(CGenerator *g, ParsedFile *f, Typer *tr) {
 	}
 
 	cgen_write(g, "/* code */\n");
-	cgen_write(g, "int main(void) {\n\tmain_();\n\treturn 0;\n}\n\n");
+	cgen_write(g, "int main(void) {\n");
+	g->indent_lvl = 1;
+	arr_foreach(f->inits, Initialization, init) {
+		Statement *s = &init->stmt;
+		if (s->kind == STMT_EXPR) { /* these wouldn't be generated otherwise */
+			cgen_expr(g, s->expr);
+			cgen_writeln(g, ";");
+		} else {
+			cgen_stmt(g, s);
+		}
+	}
+	cgen_nl(g);
+	cgen_write(g, "main_();\n\treturn 0;\n}\n\n");
+	g->indent_lvl = 0;
 	/* function definitions */
 	arr_foreach(tr->all_fns, FnWithCtx, fn_ctx) {
 		g->nms = fn_ctx->nms;

@@ -1,16 +1,1 @@
-#include "tests/std/io.toc", io;
-#include "tests/std/io.toc", foo;
-#include "tests/std/io.toc", bar;
-#include "tests/std/io.toc", baz;
-#include "tests/std/io.toc";
-#include "tests/included.toc", inc;
-
-main ::= fn() {
-	puts("hello");
-	io.puts("hello");
-	foo.puts("hello");
-	bar.puts("hello");
-	baz.puts("hello");
-	inc.puts("hello");
-	inc.foo.puts("hello");
-}
+#include "tests/std/mem.toc";
