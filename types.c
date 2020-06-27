@@ -36,14 +36,7 @@ static inline void typer_block_enter(Typer *tr, Block *b) {
 	tr->block = b;
 }
 
-static inline bool block_is_at_top_level(Block *b) {
-	for (Block *bb = b; bb; bb = bb->parent)
-		if (bb->kind != BLOCK_NMS)
-			return false;
-	return true;
-}
-
-static bool is_at_top_level(Typer *tr) {
+static bool typer_is_at_top_level(Typer *tr) {
 	return block_is_at_top_level(tr->block);
 }
 
@@ -940,7 +933,7 @@ static Status type_resolve(Typer *tr, Type *t, Location where) {
 		Expression *expr = t->expr;
 		if (!types_expr(tr, expr))
 			return false;
-		if (expr->type.kind == TYPE_UNKNOWN && tr->err_ctx->have_errored)
+		if (expr->type.kind == TYPE_UNKNOWN && tr->gctx->err_ctx->have_errored)
 			return false; /* silently fail (e.g. if a function couldn't be typed) */
 		if (!type_is_builtin(&expr->type, BUILTIN_TYPE)) {
 			/* ok maybe it's a tuple of types, which we'll convert to a TYPE_TUPLE */
@@ -1561,7 +1554,7 @@ static Status expr_must_usable(Typer *tr, Expression *e) {
 	if (t->kind != TYPE_STRUCT && !type_is_builtin(t, BUILTIN_NMS)) {
 		if (!(t->kind == TYPE_PTR && t->ptr->kind == TYPE_STRUCT)) {
 			if (t->kind == TYPE_UNKNOWN) {
-				if (tr->err_ctx->have_errored) {
+				if (tr->gctx->err_ctx->have_errored) {
 					/* silently fail; this could've been because of an earlier error */
 					return false;
 				}
@@ -1875,7 +1868,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				Type *arg_types = NULL;
 				arr_set_len(arg_types, nparams);
 				Value *arg_vals = typer_malloc(tr, nparams * sizeof *arg_vals);
-				ErrCtx *err_ctx = tr->err_ctx;
+				ErrCtx *err_ctx = tr->gctx->err_ctx;
 				size_t p = 0;
 				arr_foreach(struc.params, Declaration, param) {
 					Value param_val = {0};
@@ -3031,7 +3024,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 					"Try moving the function outside of the struct, otherwise you might run into problems.");
 			}
 		} else if (e->kind == EXPR_NMS) {
-			if (is_at_top_level(tr))
+			if (typer_is_at_top_level(tr))
 				e->nms->associated_ident = d->idents[0];
 		} else if (e->kind == EXPR_TYPE
 			&& e->typeval->kind == TYPE_STRUCT
@@ -3195,7 +3188,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 			d->expr.fn->flags |= FN_EXPR_EXPORT;
 	}
 
-	if (is_at_top_level(tr)) {
+	if (typer_is_at_top_level(tr)) {
 		DeclWithCtx dctx = {d, tr->nms, tr->block};
 		typer_arr_add(tr, tr->all_globals, dctx);
 	}
@@ -3532,7 +3525,7 @@ top:
 				}
 				/* fallthrough */
 			default: {
-				if (fo->of->type.kind == TYPE_UNKNOWN && tr->err_ctx->have_errored) {
+				if (fo->of->type.kind == TYPE_UNKNOWN && tr->gctx->err_ctx->have_errored) {
 					/* silently fail */
 					goto for_fail;
 				}
@@ -3803,12 +3796,12 @@ success:
 	return true;
 }
 
-static void typer_create(Typer *tr, Evaluator *ev, ErrCtx *err_ctx, Allocator *allocr, Identifiers *idents) {
+static void typer_create(Typer *tr, Evaluator *ev, Allocator *allocr, Identifiers *idents, GlobalCtx *gctx) {
 	memset(tr, 0, sizeof *tr);
 	tr->evalr = ev;
-	tr->err_ctx = err_ctx;
 	tr->allocr = allocr;
 	tr->globals = idents;
+	tr->gctx = gctx;
 }
 
 static int compare_inits(const void *av, const void *bv) {
@@ -3822,8 +3815,9 @@ static Status types_file(Typer *tr, ParsedFile *f) {
 	bool ret = true;
 	tr->parsed_file = f;
 	tr->uses = NULL;
-	qsort(f->inits, arr_len(f->inits), sizeof *f->inits, compare_inits);
-	arr_foreach(f->inits, Initialization, init) {
+	Initialization *inits = tr->gctx->inits;
+	qsort(inits, arr_len(inits), sizeof *inits, compare_inits);
+	arr_foreach(inits, Initialization, init) {
 		Statement *s = &init->stmt;
 		if (!types_stmt(tr, s))
 			return false;

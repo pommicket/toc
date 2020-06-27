@@ -982,23 +982,35 @@ typedef struct {
 
 typedef struct ParsedFile {
 	Statement *stmts;
+} ParsedFile;
+
+typedef struct {
+	Statement *stmt;
+	Block *block;
+	Namespace *nms;
+} StatementWithCtx;
+
+typedef struct {
 	/* 
 		statements run before any typing happens
 		after typing, these will be in sorted order (for cgen)
 	*/
 	Initialization *inits;
-} ParsedFile;
+	StrHashTable included_files; /* maps to IncludedFile. */
+	File *main_file; /* this is the file which the compiler is invoked on. needed for checking for circular includes. */
+	StatementWithCtx *static_ifs; /* all the #ifs */
+	ErrCtx *err_ctx;
+} GlobalCtx;
 
 typedef struct Parser {
 	Tokenizer *tokr;
 	Allocator *allocr;
 	Identifiers *globals;
+	GlobalCtx *gctx;
 	File *file;
-	File *main_file; /* this is the file which the compiler is invoked on. needed for checking for circular includes. */
 	Block *block; /* which block are we in? NULL = file scope */
 	Namespace *nms;
 	ParsedFile *parsed_file;
-	StrHashTable *included_files; /* maps to IncludedFile. this is a pointer because all Parsers (i.e. the Parser for every file) have a common included_files */
 } Parser;
 
 typedef struct {
@@ -1040,7 +1052,7 @@ typedef struct Typer {
 	Declaration **in_decls; /* array of declarations we are currently inside */
 	Block *block;
 	FnExpr *fn; /* the function we're currently parsing. */
-	ErrCtx *err_ctx;
+	GlobalCtx *gctx;
 	ParsedFile *parsed_file;
 	Namespace *nms;
 	FnWithCtx *all_fns; /* does not include templates */

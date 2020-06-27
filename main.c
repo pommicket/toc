@@ -213,10 +213,12 @@ int main(int argc, char **argv) {
 	}
 
 	if (verbose) printf("Parsing...\n");
-	StrHashTable included_files = {0};
-	str_hash_table_create(&included_files, sizeof(IncludedFile), &main_allocr);
+	GlobalCtx global_ctx = {0};
+	str_hash_table_create(&global_ctx.included_files, sizeof(IncludedFile), &main_allocr);
+	global_ctx.main_file = &file;
+	global_ctx.err_ctx = &err_ctx;
 	Parser p;
-	parser_create(&p, &globals, &t, &main_allocr, &file, &included_files);
+	parser_create(&p, &globals, &t, &main_allocr, &global_ctx);
 	ParsedFile f;
 	if (!parse_file(&p, &f)) {
 		err_text_important(&err_ctx, "Errors occured during parsing.\n");
@@ -234,7 +236,7 @@ int main(int argc, char **argv) {
 	Typer tr;
 	Evaluator ev;
 	evalr_create(&ev, &tr, &main_allocr);
-	typer_create(&tr, &ev, &err_ctx, &main_allocr, &globals);;
+	typer_create(&tr, &ev, &main_allocr, &globals, &global_ctx);
 	
 	if (!types_file(&tr, &f)) {
 		err_text_important(&err_ctx, "Errors occured while determining types.\n");

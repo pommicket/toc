@@ -671,7 +671,7 @@ static Value *ident_val(Evaluator *ev, Identifier i, Location where) {
 	Declaration *decl = i->decl;
 	assert(decl);
 	int idx = decl_ident_index(decl, i);
-	if (decl->type.kind == TYPE_UNKNOWN && ev->typer->err_ctx->have_errored)
+	if (decl->type.kind == TYPE_UNKNOWN && ev->typer->gctx->err_ctx->have_errored)
 		return NULL; /* silently fail (something went wrong when we typed this decl) */
 	if (decl->flags & DECL_IS_PARAM) {
 		if (decl->val_stack) {

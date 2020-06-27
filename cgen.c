@@ -2085,7 +2085,7 @@ static void cgen_file(CGenerator *g, ParsedFile *f, Typer *tr) {
 	cgen_write(g, "/* code */\n");
 	cgen_write(g, "int main(void) {\n");
 	g->indent_lvl = 1;
-	arr_foreach(f->inits, Initialization, init) {
+	arr_foreach(tr->gctx->inits, Initialization, init) {
 		Statement *s = &init->stmt;
 		if (s->kind == STMT_EXPR) { /* these wouldn't be generated otherwise */
 			cgen_expr(g, s->expr);

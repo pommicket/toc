@@ -3,7 +3,7 @@
   This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
-static void parser_create(Parser *p, Identifiers *globals, Tokenizer *t, Allocator *allocr, File *main_file, StrHashTable *included_files);
+static void parser_create(Parser *p, Identifiers *globals, Tokenizer *t, Allocator *allocr, GlobalCtx *gctx);
 static Status parse_file(Parser *p, ParsedFile *f);
 static Status parse_expr(Parser *p, Expression *e, Token *end);
 static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement);
@@ -343,6 +343,18 @@ static inline void parser_put_end(Parser *p, Location *l) {
 static inline Identifiers *parser_get_idents(Parser *p) {
 	return p->block == NULL ? p->globals : &p->block->idents;
 }
+
+static inline bool block_is_at_top_level(Block *b) {
+	for (Block *bb = b; bb; bb = bb->parent)
+		if (bb->kind != BLOCK_NMS)
+			return false;
+	return true;
+}
+
+static inline bool parser_is_at_top_level(Parser *p) {
+	return block_is_at_top_level(p->block);
+}
+
 
 #define parser_arr_add_ptr(p, a) arr_adda_ptr(a, p->allocr)
 #define parser_arr_add(p, a, x) arr_adda(a, x, p->allocr)
@@ -2329,6 +2341,8 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			i->flags = 0;
 			if (t->token->kind == TOKEN_DIRECT) {
 				i->flags |= IF_STATIC;
+				StatementWithCtx sctx = {s, p->block, p->nms};
+				parser_arr_add(p, p->gctx->static_ifs, sctx);
 			}
 			s->kind = STMT_IF;
 			++t->token;
@@ -2572,11 +2586,12 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 
 			if (!forced) {
 				size_t filename_len = strlen(filename);
-				if (streq(filename, p->main_file->filename)) {
+				if (streq(filename, p->gctx->main_file->filename)) {
 					err_print(s->where, "Circular #include detected. You can add #force to this #include to force it to be included.");
 					success = false; goto nms_done;
 				}
-				inc_f = str_hash_table_get(p->included_files, filename, filename_len);
+				StrHashTable *included_files = &p->gctx->included_files;
+				inc_f = str_hash_table_get(included_files, filename, filename_len);
 				if (inc_f) {
 					/* has already been included */
 					if (inc_f->flags & INC_FILE_INCLUDING) {
@@ -2590,7 +2605,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 					}
 					goto nms_done;
 				} else {
-					inc_f = str_hash_table_insert(p->included_files, filename, filename_len);
+					inc_f = str_hash_table_insert(included_files, filename, filename_len);
 					inc_f->flags |= INC_FILE_INCLUDING;
 					inc_f->main_nms = p->nms;
 				}
@@ -2620,7 +2635,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			#endif
 
 				Parser parser;
-				parser_create(&parser, p->globals, &tokr, p->allocr, p->main_file, p->included_files);
+				parser_create(&parser, p->globals, &tokr, p->allocr, p->gctx);
 				parser.block = p->block;
 				parser.nms = p->nms;
 				ParsedFile parsed_file;
@@ -2672,8 +2687,13 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			}
 		} break;
 		case DIRECT_INIT: {
+			if (!parser_is_at_top_level(p)) {
+				tokr_err(t, "#init directives can't be inside a block.");
+				tokr_skip_semicolon(t);
+				return false;
+			}
 			*was_a_statement = false;
-			Initialization *init = parser_arr_add_ptr(p, p->parsed_file->inits);
+			Initialization *init = parser_arr_add_ptr(p, p->gctx->inits);
 			++t->token;
 			if (!token_is_kw(t->token, KW_LPAREN)) {
 				tokr_err(t, "Expected ( after #init.");
@@ -2746,19 +2766,17 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 	return true;
 }
 
-static void parser_create(Parser *p, Identifiers *globals, Tokenizer *t, Allocator *allocr, File *main_file, StrHashTable *included_files) {
+static void parser_create(Parser *p, Identifiers *globals, Tokenizer *t, Allocator *allocr, GlobalCtx *gctx) {
 	p->tokr = t;
 	p->block = NULL;
 	p->globals = globals;
 	p->allocr = allocr;
-	p->main_file = main_file;
-	p->included_files = included_files;
+	p->gctx = gctx;
 }
 
 static Status parse_file(Parser *p, ParsedFile *f) {
 	Tokenizer *t = p->tokr;
 	f->stmts = NULL;
-	f->inits = NULL;
 	p->file = t->file;
 	p->parsed_file = f;
 	bool ret = true;
