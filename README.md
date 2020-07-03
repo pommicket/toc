@@ -101,6 +101,7 @@ Here are the major versions of `toc`.
 <tr><td>0.4</td><td>Variadic functions</td><td>2020 Mar 13</td></tr>
 <tr><td>0.5</td><td><code>break</code>, <code>continue</code>, <code>defer</code></td><td>2020 Mar 19</td></tr>
 <tr><td>0.6</td><td><code>use</code></td><td>2020 Apr 26</td></tr>
+<tr><td>0.7</td><td>Many bugfixes, the beginning of a standard library</td></tr>
 </table>
 
 ---
