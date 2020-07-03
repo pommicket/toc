@@ -96,6 +96,14 @@ static Status val_to_word(Value v, Type *t, Location where, U64 *w) {
 static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, Type *arg_types, size_t arg_types_stride, Value *args, size_t nargs, Location call_where, Value *ret) {
 	possibly_static_assert(sizeof(double) == 8); /* if either of these assertions fails, you'll need to use libffcall */
 	possibly_static_assert(sizeof(float) == 4);
+
+#if 0
+#define FOREIGN_DEBUGGING 1
+#endif
+#if FOREIGN_DEBUGGING
+	printf("Foreign call: %s(", fn->foreign.name);
+#endif
+
 	FnPtr fn_ptr = foreign_get_fn_ptr(ffmgr, fn, call_where);
 	if (!fn_ptr) return false;
 	/* @OPTIM: use alloca/_malloca if available */
@@ -104,6 +112,10 @@ static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, 
 	U64 *word = words;
 	char *type = (char *)arg_types;
 	for (size_t i = 0; i < nargs; ++i) {
+	#if FOREIGN_DEBUGGING
+		if (i) printf(", ");
+		fprint_val(stdout, args[i], (Type *)type);
+	#endif
 		if (!val_to_word(args[i], (Type *)type, call_where, word))
 			return false;
 		is_float[i] = type_is_float((Type *)type);
@@ -181,6 +193,14 @@ static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, 
 		ret->f64 = foreign_calld(fn_ptr, words, (I64)nargs, is_float);
 		break;
 	}
+#if FOREIGN_DEBUGGING
+	printf(") => ");
+	fprint_val(stdout, *ret, ret_type);
+#if 1
+	printf(" (errno: %d)", errno);
+#endif
+	printf("\n");
+#endif
 	free(words);
 	free(is_float);
 	return true;

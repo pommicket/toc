@@ -23,4 +23,17 @@ PLATFORM ::= #builtin("platform");
 PLATFORM_IS_UNIX :: bool = PLATFORM == PLATFORM_LINUX || PLATFORM == PLATFORM_OSX || PLATFORM == PLATFORM_FREEBSD
 	|| PLATFORM == PLATFORM_OPENBSD || PLATFORM == PLATFORM_MISC_UNIX;
 
+fwrite ::= #foreign("fwrite", libc) fn(#C &"const void", #C size_t, #C size_t, &void) #C size_t;
+stderr_write ::= fn(s: []char) {
+	fwrite(&s[0], 1, s.len as #C size_t, #builtin("stderr"));
+}
 
+exit ::= #foreign("exit", libc) fn(#C int);
+
+error ::= fn(s: []char) {
+	stderr_write("Fatal error: ");
+	stderr_write(s);
+	// @TODO: backtrace
+	stderr_write("\nExiting.\n");
+	exit(1);
+}

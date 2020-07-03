@@ -1035,7 +1035,8 @@ static Status eval_ident(Evaluator *ev, Identifier ident, Value *v, Location whe
 		if (!success) return false;
 		assert(d->type.flags & TYPE_IS_RESOLVED);
 	#else
-		err_print(where, "Use of identifier at compile time before it is declared. This isn't allowed. Sorry.");
+		if (!where.file->ctx->have_errored)
+			err_print(where, "Use of identifier at compile time before it is declared. This isn't allowed. Sorry.");
 		return false;
 	#endif
 	}
@@ -1338,7 +1339,16 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			return false;
 		}
 		if (fn->ret_decls) {
+			size_t nret_decls = 0;
+			arr_foreach(fn->ret_decls, Declaration, d) {
+				nret_decls += arr_len(d->idents);
+			}
+			
 			Value *tuple = NULL;
+			if (nret_decls > 1)
+				tuple = err_malloc(nret_decls * sizeof *tuple);
+			size_t tuple_idx = 0;
+
 			arr_foreach(fn->ret_decls, Declaration, d) {
 				int i = 0;
 				arr_foreach(d->idents, Identifier, ident) {
@@ -1349,16 +1359,13 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 					expr.ident = *ident;
 					if (!eval_expr(ev, &expr, &this_one))
 						return false;
-					Value *element = arr_add_ptr(tuple);
+					Value *element = tuple ? &tuple[tuple_idx++] : v;
 					Type *type = decl_type_at_index(d, i);
 					copy_val(NULL, element, this_one, type);
 					++i;
 				}
 			}
-			if (arr_len(tuple) == 1) {
-				*v = tuple[0];
-				arr_clear(tuple);
-			} else {
+			if (tuple) {
 				v->tuple = tuple;
 			}
 		}

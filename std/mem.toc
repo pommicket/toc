@@ -1,6 +1,6 @@
 #include "std/base.toc", base;
 
-// TODO: check for failed calloc
+// @TODO: check for failed calloc
 calloc ::= #foreign("calloc", base.libc) fn(#C size_t, #C size_t) #C &"void";
 free ::= #foreign("free", base.libc) fn(#C &"void");
 
@@ -15,11 +15,22 @@ news ::= fn(t :: Type, n : int) []t {
 	return s;
 }
 
-// TODO(eventually): use type information to make this just one function
 del ::= fn(t::=, x: &t) {
 	free(x);
 }
 
 dels ::= fn(t::=, x: []t) {
 	free(x.data);
+}
+
+
+// @OPTIM @OPTIM @OPTIM
+mem_copy ::= fn(out: &void, in: &void, n : int) {
+	out_u8 : &u8 = out;
+	in_u8 : &u8 = in;
+	for i := 0..n-1 {
+		*out_u8 = *in_u8;
+		out_u8 += 1;
+		in_u8 += 1;
+	}
 }

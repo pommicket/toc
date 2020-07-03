@@ -2007,6 +2007,7 @@ static inline bool ends_decl(Token *t, U16 flags) {
 static Status parse_decl(Parser *p, Declaration *d, U16 flags) {
 	Tokenizer *t = p->tokr;
 	d->where = parser_mk_loc(p);
+	parser_set_end_to_token(p, &d->where, t->token+1); /* set temporary end in case this fails and we need to know the location of this declaration */
 	d->idents = NULL;
 	d->flags = 0;
 	d->val_stack = NULL;

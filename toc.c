@@ -15,6 +15,7 @@
 #include <limits.h>
 #include <float.h>
 #include <inttypes.h>
+#include <errno.h>
 
 #ifndef COMPILE_TIME_FOREIGN_FN_SUPPORT
 #define COMPILE_TIME_FOREIGN_FN_SUPPORT 1

@@ -1,16 +1,36 @@
+
 #include "std/base.toc", base;
 #include "std/mem.toc", mem;
 
 str_to_cstr ::= fn(s: []char) []char {
 	ret := mem.news(char, s.len+1);
 	mem.mem_copy(&ret[0], &s[0], s.len);
-	ret
+	return ret;
 }
 
+// @TODO(eventually): enum
+FileError ::= int;
+FILE_ERR_OK ::= 0;
+FILE_ERR_MISC ::= 1;
+// @TODO: more of these
+
+/*
+the raw file interface:
+raw_stdout - standard output
+raw_stderr - standard error
+raw_file_write - write to a raw file
+raw_file_open_write - open a raw file for writing
+raw_file_close - flush and close a raw file
+*/
+
+
 #if base.PLATFORM_IS_UNIX {
-	// @TODO: use syscall instead
+	// @TODO: use syscall instead (it'll allow other functions called write)
 	write ::= #foreign("write", base.libc) fn(#C int, #C &"const void", #C size_t) #C long;
-	open ::= #foreign("open", base.libc) fn (#C &"const char", #C int) #C int;
+	open ::= #foreign("open", base.libc) fn (#C &"const char", #C int, #C unsigned) #C int;
+	close ::= #foreign("close", base.libc) fn (#C int) #C int;
+
+	DEFAULT_MODE ::= 0o644;
 
 	O_RDONLY ::= 0x00;
 	O_WRONLY ::= 0x01;
@@ -26,20 +46,27 @@ str_to_cstr ::= fn(s: []char) []char {
 			size -= bytes_written;
 			buf += bytes_written;
 		}
-		true
+		return true;
 	}
 	raw_stdout ::= fn() RawFile {
-		1
+		return 1;
 	}
 	raw_stderr ::= fn() RawFile {
-		2
+		return 2;
 	}
-	file_open_write ::= fn(name: []char) f: RawFile, success: bool {
+	raw_file_open_write ::= fn(name: []char) f: RawFile, err := FILE_ERR_OK {
 		cstr := str_to_cstr(name);
 		defer mem.dels(cstr);
 		// @TODO: switch to bitwise or when that exists
-		f = open(&cstr[0], (O_WRONLY + O_CREAT) as #C int) as RawFile;
-		success = f != -1;
+		f = open(&cstr[0], (O_WRONLY + O_CREAT) as #C int, DEFAULT_MODE as #C unsigned) as RawFile;
+		if f == -1 {
+			err = FILE_ERR_MISC; // @TODO
+		}
+	}
+	raw_file_close ::= fn(f: RawFile) err := FILE_ERR_OK {
+		if close(f as #C int) == -1 {
+			err = FILE_ERR_MISC; // @TODO
+		}
 	}
 } else {
 	// @TODO: on windows, use WriteFile
@@ -47,65 +74,97 @@ str_to_cstr ::= fn(s: []char) []char {
 	RawFile ::= &void;
 	raw_file_write ::= fn(file: RawFile, buf: &void, size: int) bool {
 		bytes_written := fwrite(buf, 1, size, file) as int;
-		bytes_written == size
+		return bytes_written == size;
 	}
 	raw_stdout ::= fn() RawFile {
-		#builtin("stdout")
+		return #builtin("stdout");
 	}
 	raw_stderr ::= fn() RawFile {
-		#builtin("stdout")
+		return #builtin("stderr");
 	}
-	file_open_write ::= fn(name: []char) f: RawFile, success: bool {
+	raw_file_open_write ::= fn(name: []char) f: RawFile, err := FILE_ERR_OK {
 		cstr := base.str_to_cstr(name);
 		defer mem.dels(cstr);
 		mode := "w\0";
 		f = fopen(&cstr[0], &mode[0]);
-		success = f != null;
+		if f == null {
+			err = FILE_ERR_MISC; // @TODO
+		}
+	}
+	raw_file_close ::= fn(f: RawFile) err := FILE_ERR_OK {
+		if fclose(f) != 0 {
+			err = FILE_ERR_MISC; // @TODO
+		}
 	}
 }
-
 
 File ::= struct {
 	BUFSZ ::= 4096;
 	raw : RawFile;
-	written : int; // ranges from 0 to FILE_BUFSZ-1
+	buffer_used : int; // ranges from 0 to FILE_BUFSZ-1
 	nobuffer : bool; // if true, flush after every write
 	buffer : [BUFSZ]char;
 }
 
-raw_file_to_file ::= fn(raw : RawFile) f: File {
+raw_file_to_file ::= fn(raw : RawFile, f: &File) {
 	f.raw = raw;
 }
 
 std_out, std_err : File;
 
-file_flush ::= fn(use f: &File) {
-	raw_file_write(raw, &buffer[0], written);
-	written = 0;
+fopen_write ::= fn(name: []char) f: &File, error: FileError {
+	raw : RawFile;
+	raw, error = raw_file_open_write(name);
+	if !error {
+		f = mem.new(File);
+		raw_file_to_file(raw, f);
+	}
 }
 
-file_writes ::= fn(use f: &File, s : []char) {
+flush ::= fn(use f: &File) {
+	raw_file_write(raw, &buffer[0], buffer_used);
+	buffer_used = 0;
+}
+
+fclose ::= fn(f: &File) err: FileError {
+	err = raw_file_close(f.raw);
+	mem.del(f);
+}
+
+fwrites ::= fn(use f: &File, s : []char) {
 	if f.nobuffer {
 		raw_file_write(raw, &s[0], s.len);
 		return;
 	}
-	if written + s.len > BUFSZ {
-		file_flush(f);
+	if buffer_used + s.len > BUFSZ {
+		flush(f);
 		if s.len > BUFSZ {
 			raw_file_write(raw, &s[0], s.len);
 		} else {
 			mem.mem_copy(&buffer[0], &s[0], s.len);
-			written = s.len;
+			buffer_used = s.len;
 		}
 	} else {
-		mem.mem_copy(&buffer[written], &s[0], s.len);
-		written += s.len;
+		mem.mem_copy(&buffer[buffer_used], &s[0], s.len);
+		buffer_used += s.len;
 	}
 }
 
+fputs ::= fn(f: &File, s: []char) {
+	fwrites(f, s);
+	fwrites(f, "\n");
+}
+
+puts ::= fn(s: []char) {
+	fputs(&std_out, s);
+}
+
+
 io_init ::= fn() {
-	std_out	= raw_file_to_file(raw_stdout());
+	raw_file_to_file(raw_stdout(), &std_out);
 	std_out.nobuffer = true;
-	std_err	= raw_file_to_file(raw_stderr());
+	raw_file_to_file(raw_stderr(), &std_err);
 	std_err.nobuffer = true;
 }
+
+#init io_init();

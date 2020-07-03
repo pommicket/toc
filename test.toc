@@ -1,5 +1,22 @@
-f();
+#include "std/io.toc", io;
+#include "std/base.toc", base;
 
-f ::= fn( ) int {
-	return 3;
+main ::= fn() {
+	file, err := io.fopen_write("test.txt");
+	if err {
+		base.error("Couldn't open file!");
+	}
+	io.fputs(file, "This file has some stuff in it.");
+	io.puts("Hello!");
+	io.puts("yes");
+	io.fputs(file, "here is more stuff for the file.");
+	for i := 1..1000 {
+		io.fwrites(file, "Here's a line in the file");
+		for j := 1..i {
+			io.fwrites(file, "!");
+		}
+		io.fwrites(file, "\n");
+	}
+	io.fclose(file);
 }
+main();

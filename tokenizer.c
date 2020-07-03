@@ -375,6 +375,10 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 						base = 16;
 						tokr_nextchar(t);
 						break;
+					case 'o':
+						base = 8;
+						tokr_nextchar(t);
+						break;
 					default:
 						/* it's 0/0.something etc.  */
 						break;

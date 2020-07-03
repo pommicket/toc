@@ -768,7 +768,6 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 
 /* doesn't do any translation on ident or check if it's declared or anything, so make sure it's in the right scope */
 static Status type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
-top:;
 	Declaration *d = i->decl;
 	assert(d);
 	if (!(d->flags & DECL_IS_CONST)) {
@@ -838,6 +837,7 @@ top:;
 				free(s);
 				return false;
 			}
+			#if 0
 			Block *decl_block = i->idents->scope;
 			if (block_is_at_top_level(decl_block)) {
 				/* 
@@ -855,12 +855,12 @@ top:;
 				tr->block = prev_block;
 				goto top;
 			} else {
-				char *s = ident_to_str(i);
-				err_print(where, "Use of %s before its declaration.", s);
-				info_print(d->where, "%s will be declared here.", s);
-				free(s);
-				return false;
-			}
+			#endif
+			char *s = ident_to_str(i);
+			err_print(where, "Use of %s before its declaration.", s);
+			info_print(d->where, "%s will be declared here.", s);
+			free(s);
+			return false;
 		}
 	}
 	return true;
@@ -2856,7 +2856,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				Identifier i = rhs->ident = ident_get_with_len(&nms->body.idents, str.str, str.len);
 				if (!i) {
 					char *s = cstr(str.str, str.len);
-					err_print(e->where, "\"%s\" is not a member of this namespace.", s);
+					err_print(e->where, "'%s' is not a member of this namespace.", s);
 					free(s);
 					return false;
 				}
@@ -3194,7 +3194,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 			d->expr.fn->flags |= FN_EXPR_EXPORT;
 	}
 
-	if (typer_is_at_top_level(tr)) {
+	if (tr->block == NULL || tr->block->kind == BLOCK_NMS) {
 		DeclWithCtx dctx = {d, tr->nms, tr->block};
 		typer_arr_add(tr, tr->all_globals, dctx);
 	}
@@ -3948,7 +3948,7 @@ top:
 	}
 success:
 	s->flags |= STMT_TYPED;
-	if (tr->block == NULL) {
+	if (tr->block == NULL || tr->block->kind == BLOCK_NMS) {
 		/* evaluate statements at global scope */
 		switch (s->kind) {
 		case STMT_DECL:

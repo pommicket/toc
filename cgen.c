@@ -277,11 +277,12 @@ static void cgen_type_post(CGenerator *g, Type *t) {
 }
 
 static void cgen_ctype(CGenerator *g, CType *c) {
-	if (c->kind & CTYPE_UNSIGNED) {
-		c->kind &= (CTypeKind)~(CTypeKind)CTYPE_UNSIGNED;
+	CTypeKind k = c->kind;
+	if (k & CTYPE_UNSIGNED) {
+		k &= (CTypeKind)~(CTypeKind)CTYPE_UNSIGNED;
 		cgen_write(g, "unsigned ");
 	}
-	switch (c->kind) {
+	switch (k) {
 	case CTYPE_CHAR:
 		cgen_write(g, "char");
 		break;

@@ -18,3 +18,4 @@ std/*.o
 *.obj
 *.exe
 .vs
+test.txt
