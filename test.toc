@@ -1,5 +1,5 @@
-#include "tests/std/io.toc", io;
+f();
 
-main ::= fn() {
-	io.puts("hi");
+f ::= fn( ) int {
+	return 3;
 }

@@ -1,11 +1,3 @@
-#init(-10) init(10);
-#init(44) init(44);
-#init(22) init(22);
-#init(88) init(88);
-#init(1002389) for i := 89..100 {init(i);}
-#init(-20) init(0);
-
-
 #include "std/io.toc";
 
 total : int;
@@ -23,3 +15,10 @@ main ::= fn() {
 	writes("hello from main. total is ");
 	puti(total);
 }
+
+#init init(0);
+#init init(10);
+#init init(22);
+#init init(44);
+#init init(88);
+#init for i := 89..100 {init(i);}

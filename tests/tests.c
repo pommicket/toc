@@ -10,6 +10,7 @@ static const char *tests[] = {
 	"bf",
 	"control_flow",
 	"types",
+	"init",
 	"include",
 	"arrs_slices",
 	"ptr_arithmetic",

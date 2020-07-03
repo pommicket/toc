@@ -1628,7 +1628,7 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 		break;
 	case STMT_EXPR: {
 		Expression *e = s->expr;
-		if ((g->block != NULL || e->kind == EXPR_C) && !type_is_compileonly(&e->type)) {
+		if (!type_is_compileonly(&e->type)) {
 			cgen_expr_pre(g, e);
 			cgen_expr(g, e);
 			if (e->kind != EXPR_C)
@@ -1882,6 +1882,9 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 	case STMT_BLOCK:
 		cgen_block(g, s->block, 0);
 		break;
+	case STMT_INCLUDE:
+		assert(0);
+		break;
 	}
 }
 
@@ -1997,38 +2000,39 @@ static void cgen_file(CGenerator *g, ParsedFile *f, Typer *tr) {
 	g->fn = NULL;
 	g->file = f;
 
-	cgen_write(g, "#include <stdint.h>\n"
-			   "#include <stddef.h>\n"
-			   "typedef int8_t i8;\n"
-			   "typedef int16_t i16;\n"
-			   "typedef int32_t i32;\n"
-			   "typedef int64_t i64;\n"
-			   "typedef uint8_t u8;\n"
-			   "typedef uint16_t u16;\n"
-			   "typedef uint32_t u32;\n"
-			   "typedef uint64_t u64;\n"
-			   "typedef float f32;\n"
-			   "typedef double f64;\n"
-			   "typedef u8 bool;\n"
-			   "typedef struct { void *data; i64 len; } slice_;\n"
-			   "#define false ((bool)0)\n"
-			   "#define true ((bool)1)\n"
-			   "#ifdef __linux__\n" /* see also toc.c */
-			   "#define platform__ " stringify(PLATFORM_LINUX) "\n"
-			   "#elif defined _WIN32\n"
-			   "#define platform__ " stringify(PLATFORM_WINDOWS) "\n"
-			   "#elif defined __APPLE__\n"
-			   "#define platform__ " stringify(PLATFORM_OSX) "\n"
-			   "#elif defined __FreeBSD__\n"
-			   "#define platform__ " stringify(PLATFORM_FREEBSD) "\n"
-			   "#elif defined __OpenBSD__\n"
-			   "#define platform__ " stringify(PLATFORM_OPENBSD) "\n"
-			   "#elif defined __unix__\n"
-			   "#define platform__ " stringify(PLATFORM_MISC_UNIX) "\n"
-			   "#else\n"
-			   "#define platform__ " stringify(PLATFORM_OTHER) "\n"
-			   "#endif\n"
-			   "static slice_ mkslice_(void *data, i64 len) { slice_ ret; ret.data = data; ret.len = len; return ret; }\n");
+	cgen_write(g, 
+		"#include <stdint.h>\n"
+		"#include <stddef.h>\n"
+		"typedef int8_t i8;\n"
+		"typedef int16_t i16;\n"
+		"typedef int32_t i32;\n"
+		"typedef int64_t i64;\n"
+		"typedef uint8_t u8;\n"
+		"typedef uint16_t u16;\n"
+		"typedef uint32_t u32;\n"
+		"typedef uint64_t u64;\n"
+		"typedef float f32;\n"
+		"typedef double f64;\n"
+		"typedef u8 bool;\n"
+		"typedef struct { void *data; i64 len; } slice_;\n"
+		"#define false ((bool)0)\n"
+		"#define true ((bool)1)\n"
+		"#ifdef __linux__\n" /* see also toc.c */
+		"#define platform__ " stringify(PLATFORM_LINUX) "\n"
+		"#elif defined _WIN32\n"
+		"#define platform__ " stringify(PLATFORM_WINDOWS) "\n"
+		"#elif defined __APPLE__\n"
+		"#define platform__ " stringify(PLATFORM_OSX) "\n"
+		"#elif defined __FreeBSD__\n"
+		"#define platform__ " stringify(PLATFORM_FREEBSD) "\n"
+		"#elif defined __OpenBSD__\n"
+		"#define platform__ " stringify(PLATFORM_OPENBSD) "\n"
+		"#elif defined __unix__\n"
+		"#define platform__ " stringify(PLATFORM_MISC_UNIX) "\n"
+		"#else\n"
+		"#define platform__ " stringify(PLATFORM_OTHER) "\n"
+		"#endif\n"
+		"static slice_ mkslice_(void *data, i64 len) { slice_ ret; ret.data = data; ret.len = len; return ret; }\n");
 	cgen_write(g, "/* types */\n");
 	/* struct declarations */
 	arr_foreach(tr->all_structs, StructDefPtr, sdefp) {
@@ -2083,20 +2087,6 @@ static void cgen_file(CGenerator *g, ParsedFile *f, Typer *tr) {
 	}
 
 	cgen_write(g, "/* code */\n");
-	cgen_write(g, "int main(void) {\n");
-	g->indent_lvl = 1;
-	arr_foreach(tr->gctx->inits, Initialization, init) {
-		Statement *s = &init->stmt;
-		if (s->kind == STMT_EXPR) { /* these wouldn't be generated otherwise */
-			cgen_expr(g, s->expr);
-			cgen_writeln(g, ";");
-		} else {
-			cgen_stmt(g, s);
-		}
-	}
-	cgen_nl(g);
-	cgen_write(g, "main_();\n\treturn 0;\n}\n\n");
-	g->indent_lvl = 0;
 	/* function definitions */
 	arr_foreach(tr->all_fns, FnWithCtx, fn_ctx) {
 		g->nms = fn_ctx->nms;
@@ -2106,7 +2096,13 @@ static void cgen_file(CGenerator *g, ParsedFile *f, Typer *tr) {
 	g->nms = NULL;
 	g->block = NULL;
 
-	arr_foreach(f->stmts, Statement, s) {
+	cgen_write(g, "int main(void) {\n");
+	g->indent_lvl = 1;
+	arr_foreach(tr->gctx->inits, Initialization, init) {
+		Statement *s = init->stmt;
 		cgen_stmt(g, s);
 	}
+	cgen_nl(g);
+	cgen_write(g, "main_();\n\treturn 0;\n}\n\n");
+	g->indent_lvl = 0;
 }

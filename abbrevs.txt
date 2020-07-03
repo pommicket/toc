@@ -17,7 +17,6 @@ eval - evaluate
 evalr - evaluator
 expr - expression
 fn - function
-gctx - global context
 ident - identifier
 inc - include
 init - initialization

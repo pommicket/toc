@@ -585,6 +585,7 @@ enum {
 };
 
 static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
+
 	if (f->flags & FN_EXPR_FOREIGN) {
 		/* we've already mostly determined the type in parse_expr */
 		if (!type_resolve(tr, &f->foreign.type, f->where))
@@ -2969,6 +2970,10 @@ static Status types_block(Typer *tr, Block *b) {
 	arr_foreach(b->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {
 			success = false;
+			if (tr->had_include_err) {
+				/* stop immediately; prevent too many "undeclared identifier" errors */
+				break;
+			}
 			continue;
 		}
 	}
@@ -3031,6 +3036,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 			&& tr->fn == NULL) {
 			e->typeval->struc->name = d->idents[0];
 		}
+		
 		if (!types_expr(tr, e)) {
 			success = false;
 			goto ret;
@@ -3227,6 +3233,33 @@ static Status fix_ident_decls_inline_block(Typer *tr, Statement *stmts) {
 	return true;
 }
 
+/* introduce identifiers from stmts into current scope, setting their "nms" field to nms */
+static Status include_stmts_link_to_nms(Typer *tr, Namespace *nms, Statement *stmts) {
+	Identifiers *idents = typer_get_idents(tr);
+	arr_foreach(stmts, Statement, s) {
+		if (s->kind == STMT_INLINE_BLOCK) {
+			if (!include_stmts_link_to_nms(tr, nms, s->inline_block))
+				return false;
+		} else if (s->kind == STMT_DECL) {
+			Declaration *d = s->decl;
+			arr_foreach(d->idents, Identifier, ident) {
+				/* @OPTIM: only hash once */
+				Identifier preexisting = ident_translate(*ident, idents);
+				if (preexisting && preexisting->decl != d) {
+					char *istr = ident_to_str(preexisting);
+					err_print(d->where, "Redeclaration of identifier %s.", istr);
+					info_print(preexisting->decl->where, "%s was first declared here.", istr);
+					free(istr);
+				}
+				Identifier i = ident_translate_forced(*ident, idents);
+				i->nms = nms;
+				i->decl = d;
+			}
+		}
+	}
+	return true;
+}
+
 static Status types_stmt(Typer *tr, Statement *s) {
 top:
 	if (s->flags & STMT_TYPED) return true;
@@ -3249,14 +3282,8 @@ top:
 				free(str);
 			}
 		}
-		if (tr->block == NULL) {
-			/* evaluate expression statements at global scope */
-			if (e->kind != EXPR_C) {
-				if (!eval_stmt(tr->evalr, s))
-					return false;
-			}
-		}
 	} break;
+
 	case STMT_FOR: {
 		bool in_header = true;
 		Block *prev_block = tr->block; { /* additional block because c++ */
@@ -3711,6 +3738,139 @@ top:
 			}
 		}
 	} break;
+	case STMT_INCLUDE: {
+		Include *inc = s->inc;
+		char *filename = eval_expr_as_cstr(tr, &inc->filename, "import filename");
+		if (!filename)
+			return false;
+		Namespace *prev_nms = tr->nms;
+		Block *prev_block = tr->block;
+		IncludedFile *inc_f = NULL;
+		Namespace *inc_nms = NULL; /* non-NULL if this is an include to nms */
+		bool success = true;
+		if (inc->nms) {
+			inc_nms = typer_calloc(tr, 1, sizeof *inc_nms);
+			
+			Block *body = &inc_nms->body;
+			body->kind = BLOCK_NMS;
+			body->where = s->where;
+			idents_create(&body->idents, tr->allocr, body);
+			body->parent = tr->block;
+
+			inc_nms->inc_file = inc_f;
+			/* turn #include "foo", bar into bar ::= nms { ... } */
+			s->kind = STMT_DECL;
+			Declaration *d = s->decl = typer_calloc(tr, 1, sizeof *d);
+			d->flags = DECL_FOUND_TYPE | DECL_HAS_EXPR | DECL_IS_CONST | DECL_FOUND_VAL;
+			construct_resolved_builtin_type(&d->type, BUILTIN_NMS);
+			char *ident_str = inc->nms;
+			Identifier i = ident_insert(typer_get_idents(tr), &ident_str);
+			if (i->decl) {
+				Declaration *d2 = i->decl;
+				/* maybe they included it twice into one namespace */
+				if ((d2->flags & DECL_HAS_EXPR) && (d2->expr.kind == EXPR_NMS) && 
+					(d2->expr.nms->inc_file == inc_f)) {
+					/* that's okay; get rid of this declaration */
+					s->kind = STMT_INLINE_BLOCK;
+					s->inline_block = NULL;
+					break;
+				} else {
+					char *istr = ident_to_str(i);
+					err_print(s->where, "Redeclaration of identifier %s.", istr);
+					info_print(ident_decl_location(i), "Previous declaration was here.");
+					free(istr);
+					return false; /* NOT goto inc_fail; */
+				}
+			}
+			typer_arr_add(tr, d->idents, i);
+			i->decl = d;
+			if (typer_is_at_top_level(tr)) inc_nms->associated_ident = i;
+			typer_gen_nms_prefix(tr, inc_nms);
+
+			d->expr.kind = EXPR_NMS;
+			d->expr.nms = inc_nms;
+			d->expr.flags = EXPR_FOUND_TYPE;
+			d->expr.type = d->type;
+			d->val.nms = inc_nms;
+			d->where = d->expr.where = s->where;
+
+			/* go inside namespace and block (it'll help to be there later on) */
+			tr->nms = inc_nms;
+			typer_block_enter(tr, &inc_nms->body);
+		} else {
+			s->kind = STMT_INLINE_BLOCK;
+		}
+
+		if (!(inc->flags & INC_FORCED)) {
+			size_t filename_len = strlen(filename);
+			if (streq(filename, tr->gctx->main_file->filename)) {
+				err_print(s->where, "Circular #include detected. You can add #force to this #include to force it to be included.");
+				success = false; goto nms_done;
+			}
+			inc_f = str_hash_table_get(&tr->included_files, filename, filename_len);
+			if (inc_f) {
+				/* has already been included */
+				if (inc_f->flags & INC_FILE_INCLUDING) {
+					err_print(s->where, "Circular #include detected. You can add #force to this #include to force it to be included.");
+					success = false; goto nms_done;
+				}
+				if (s->kind == STMT_INLINE_BLOCK) s->inline_block = NULL; /* nothing needed here */
+				/* just set ident declarations */
+				if (!include_stmts_link_to_nms(tr, inc_f->main_nms, inc_f->stmts)) {
+					success = false; goto nms_done;
+				}
+				goto nms_done;
+			}
+			inc_f = str_hash_table_insert(&tr->included_files, filename, filename_len);
+			inc_f->flags |= INC_FILE_INCLUDING;
+			inc_f->main_nms = tr->nms;
+		}
+		{
+			char *contents = read_file_contents(tr->allocr, filename, s->where);
+			if (!contents) {
+				tr->had_include_err = true;
+				success = false; goto nms_done;
+			}
+
+			Tokenizer tokr;
+			tokr_create(&tokr, tr->gctx->err_ctx, tr->allocr);
+			File *file = typer_calloc(tr, 1, sizeof *file);
+			file->filename = filename;
+			file->contents = contents;
+			file->ctx = tr->gctx->err_ctx;
+			
+			if (!tokenize_file(&tokr, file)) {
+				success = false; goto nms_done;
+			}
+			Parser parser;
+			parser_create(&parser, tr->globals, &tokr, tr->allocr, tr->gctx);
+			parser.block = tr->block;
+			ParsedFile parsed_file;
+			if (!parse_file(&parser, &parsed_file)) {
+				success = false; goto nms_done;
+			}
+			Statement *stmts_inc = parsed_file.stmts;
+			if (inc_f) {
+				inc_f->stmts = stmts_inc;
+			}
+			if (s->kind == STMT_INLINE_BLOCK) s->inline_block = stmts_inc;
+			arr_foreach(stmts_inc, Statement, s_incd) {
+				if (!types_stmt(tr, s_incd)) {
+					success = false; goto nms_done;
+				}
+			}
+			if (inc_nms) {
+				inc_nms->body.stmts = stmts_inc;
+			}
+		}
+	nms_done:
+		if (inc_nms) {
+			tr->nms = prev_nms;
+			tr->block = prev_block;
+		}
+		if (inc_f) inc_f->flags &= (IncFileFlags)~(IncFileFlags)INC_FILE_INCLUDING;
+		if (!success) return false;
+	} break;
 	case STMT_MESSAGE: {
 		Message *m = s->message;
 	    char *text = eval_expr_as_cstr(tr, &m->text, "message");
@@ -3782,51 +3942,65 @@ top:
 		else
 			typer_arr_add(tr, tr->uses, u);
 	} break;
-	case STMT_INLINE_BLOCK: {
-		bool success = true;
-		arr_foreach(s->inline_block, Statement, sub) {
-			if (!types_stmt(tr, sub))
-				success = false;
-		}
-		if (!success) return false;
-	} break;
+	case STMT_INLINE_BLOCK:
+		assert(0); /* only exists after typing */
+		break;
 	}
 success:
 	s->flags |= STMT_TYPED;
+	if (tr->block == NULL) {
+		/* evaluate statements at global scope */
+		switch (s->kind) {
+		case STMT_DECL:
+		case STMT_USE:
+		case STMT_INLINE_BLOCK: /* have already been evaluated */
+		case STMT_MESSAGE:
+			break;
+		case STMT_EXPR:
+		case STMT_IF:
+		case STMT_FOR:
+		case STMT_WHILE:
+		case STMT_BLOCK:
+			if (s->expr->kind != EXPR_C) {
+				if (!eval_stmt(tr->evalr, s))
+					return false;
+			}
+			break;
+		case STMT_RET:
+		case STMT_BREAK:
+		case STMT_CONT:
+		case STMT_INCLUDE:
+		case STMT_DEFER:
+			assert(0);
+			break;
+		}
+	}
+	if (s->flags & STMT_IS_INIT) {
+		Initialization *init = typer_arr_add_ptr(tr, tr->gctx->inits);
+		init->stmt = s;
+	}
 	return true;
 }
 
-static void typer_create(Typer *tr, Evaluator *ev, Allocator *allocr, Identifiers *idents, GlobalCtx *gctx) {
+static void typer_create(Typer *tr, Evaluator *ev, Allocator *allocr, Identifiers *globals, GlobalCtx *gctx) {
 	memset(tr, 0, sizeof *tr);
 	tr->evalr = ev;
 	tr->allocr = allocr;
-	tr->globals = idents;
+	tr->globals = globals;
 	tr->gctx = gctx;
-}
-
-static int compare_inits(const void *av, const void *bv) {
-	const Initialization *a = av, *b = bv;
-	if (a->priority < b->priority) return -1;
-	if (a->priority > b->priority) return +1;
-	return 0;
+	str_hash_table_create(&tr->included_files, sizeof(IncludedFile), tr->allocr);
 }
 
 static Status types_file(Typer *tr, ParsedFile *f) {
 	bool ret = true;
 	tr->parsed_file = f;
 	tr->uses = NULL;
-	Initialization *inits = tr->gctx->inits;
-	qsort(inits, arr_len(inits), sizeof *inits, compare_inits);
-	arr_foreach(inits, Initialization, init) {
-		Statement *s = &init->stmt;
-		if (!types_stmt(tr, s))
-			return false;
-		if (s->kind != STMT_EXPR) /* already evaluated in types_stmt */
-			if (!eval_stmt(tr->evalr, s))
-				return false;
-	}
 	arr_foreach(f->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {
+			if (tr->had_include_err) {
+				/* stop immediately; prevent too many "undeclared identifier" errors */
+				return false;
+			}
 			ret = false;
 		}
 	}

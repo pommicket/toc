@@ -1023,7 +1023,9 @@ static Status eval_ident(Evaluator *ev, Identifier ident, Value *v, Location whe
 		v->type->kind = TYPE_STRUCT;
 		v->type->struc = d->expr.typeval->struc;
 		return true;
+	} else if (d->flags & DECL_FOUND_TYPE) {
 	} else {
+	#if 0
 		Typer *tr = ev->typer;
 		Block *prev_block = tr->block;
 		/* make sure we're in the right block for typing the declaration */
@@ -1032,6 +1034,10 @@ static Status eval_ident(Evaluator *ev, Identifier ident, Value *v, Location whe
 		tr->block = prev_block;
 		if (!success) return false;
 		assert(d->type.flags & TYPE_IS_RESOLVED);
+	#else
+		err_print(where, "Use of identifier at compile time before it is declared. This isn't allowed. Sorry.");
+		return false;
+	#endif
 	}
 	Value *ival = ident_val(ev, ident, where);
 	if (!ival) return false;
@@ -1690,6 +1696,9 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 	} break;
 	case STMT_BLOCK:
 		if (!eval_block(ev, stmt->block)) return false;
+		break;
+	case STMT_INCLUDE:
+		assert(0);
 		break;
 	}
 	return true;

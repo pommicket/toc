@@ -912,6 +912,12 @@ enum {
 	INC_TO_NMS = 0x02
 };
 
+typedef struct {
+	U8 flags;
+	Expression filename;
+	char *nms; /* NULL if this is just a plain old #include, otherwise string which can be used with ident_get */
+} Include;
+
 typedef enum {
 	MESSAGE_ERROR,
 	MESSAGE_WARN,
@@ -934,6 +940,7 @@ typedef enum {
 	STMT_RET,
 	STMT_BREAK,
 	STMT_CONT,
+	STMT_INCLUDE, /* turns into STMT_INLINE_BLOCK after typing */
 	STMT_MESSAGE,
 	STMT_DEFER,
 	STMT_USE,
@@ -944,7 +951,8 @@ typedef enum {
 	STMT_INLINE_BLOCK /* a group of statements acting as one statement, e.g. all the statements from a #include */
 } StatementKind;
 enum {
-	STMT_TYPED = 0x01
+	STMT_TYPED = 0x01,
+	STMT_IS_INIT = 0x02 /* is this an initialization statement? if so, during typing it will be added to gctx->inits (this can't be done at parsing because the statements array is changing) */
 };
 typedef struct Statement {
 	Location where;
@@ -954,6 +962,7 @@ typedef struct Statement {
 		Declaration *decl; /* we want the pointer to be fixed so that we can refer to it from an identifier */
 		Expression *expr;
 		Return *ret;
+		Include *inc;
 		Message *message; /* #error, #warn, #info */
 		Block *referring_to; /* for break/continue; set during typing */
 		struct Statement *defer;
@@ -971,13 +980,9 @@ typedef Statement *StatementPtr;
 	Statements to be run before any code in main is called.
 	This is mainly for the standard library, so you don't have to do something weird
 	like io.init(); 
-	Each initialization has a "priority", with lower priorities being executed first.
-	Priorities <0 are reserved for the standard library (you can use them if you want,
-	but standard library functions might not work)
 */
 typedef struct {
-	Statement stmt;
-	I64 priority;
+	Statement *stmt;
 } Initialization;
 
 typedef struct ParsedFile {
@@ -992,8 +997,8 @@ typedef struct {
 
 typedef struct {
 	/* 
-		statements run before any typing happens
-		after typing, these will be in sorted order (for cgen)
+		statements to be run before main function is called.
+		these are in order of appearance (which is the order in which they are called)
 	*/
 	Initialization *inits;
 	StrHashTable included_files; /* maps to IncludedFile. */
@@ -1006,11 +1011,10 @@ typedef struct Parser {
 	Tokenizer *tokr;
 	Allocator *allocr;
 	Identifiers *globals;
-	GlobalCtx *gctx;
 	File *file;
 	Block *block; /* which block are we in? NULL = file scope */
-	Namespace *nms;
 	ParsedFile *parsed_file;
+	GlobalCtx *gctx;
 } Parser;
 
 typedef struct {
@@ -1060,6 +1064,12 @@ typedef struct Typer {
 	DeclWithCtx *all_globals; /* includes stuff in namespaces, as long as it's not in a function */
 	IdentID lbl_counter;
 	unsigned long nms_counter; /* counter for namespace IDs */
+	StrHashTable included_files; /* maps to IncludedFile */
+	/* 
+		have we had an error because we couldn't find a file that was #include'd 
+		(so that we can stop compiling immediately)
+	*/
+	bool had_include_err; 
 } Typer;
 
 typedef struct CGenerator {

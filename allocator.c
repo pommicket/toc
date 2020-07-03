@@ -114,10 +114,3 @@ static void allocr_free_all(Allocator *a) {
 		page = next;
 	}
 }
-
-static char *allocr_str_to_cstr(Allocator *a, String s) {
-	char *ret = allocr_malloc(a, s.len + 1);
-	memcpy(ret, s.str, s.len);
-	ret[s.len] = 0;
-	return ret;
-}

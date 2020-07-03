@@ -19,6 +19,29 @@ z ::= nms {
 	}
 }
 
+slice_to_ll ::= fn(t::=, slice: []t) use ll: LinkedList(t) {
+	head = slice[0];
+	if slice.len == 1 {
+		tail = null;
+	} else {
+		tail = new(LinkedList(t));
+		*tail = slice_to_ll(slice[1:]);
+	}
+}
+
+LinkedList ::= struct (of :: Type) {
+	head: of;
+	tail: &LinkedList(of);
+}
+
+Foo ::= struct {
+	k: int;
+	b: &Bar;
+}
+
+Bar ::= struct {
+	f: Foo;
+}
 
 main ::= fn() {
 	nums := news(int, 10);
@@ -45,26 +68,3 @@ main ::= fn() {
 	io.puti(y);
 }
 
-slice_to_ll ::= fn(t::=, slice: []t) use ll: LinkedList(t) {
-	head = slice[0];
-	if slice.len == 1 {
-		tail = null;
-	} else {
-		tail = new(LinkedList(t));
-		*tail = slice_to_ll(slice[1:]);
-	}
-}
-
-LinkedList ::= struct (of :: Type) {
-	head: of;
-	tail: &LinkedList(of);
-}
-
-Foo ::= struct {
-	k: int;
-	b: &Bar;
-}
-
-Bar ::= struct {
-	f: Foo;
-}

@@ -3,8 +3,6 @@
   This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
-static void parser_create(Parser *p, Identifiers *globals, Tokenizer *t, Allocator *allocr, GlobalCtx *gctx);
-static Status parse_file(Parser *p, ParsedFile *f);
 static Status parse_expr(Parser *p, Expression *e, Token *end);
 static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement);
 enum {
@@ -340,6 +338,7 @@ static inline void parser_put_end(Parser *p, Location *l) {
 	parser_set_end_to_token(p, l, p->tokr->token);
 }
 
+
 static inline Identifiers *parser_get_idents(Parser *p) {
 	return p->block == NULL ? p->globals : &p->block->idents;
 }
@@ -354,7 +353,6 @@ static inline bool block_is_at_top_level(Block *b) {
 static inline bool parser_is_at_top_level(Parser *p) {
 	return block_is_at_top_level(p->block);
 }
-
 
 #define parser_arr_add_ptr(p, a) arr_adda_ptr(a, p->allocr)
 #define parser_arr_add(p, a, x) arr_adda(a, x, p->allocr)
@@ -1358,13 +1356,8 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				Namespace *n = e->nms = parser_calloc(p, 1, sizeof *n);
 				e->kind = EXPR_NMS;
 				++t->token;
-				Namespace *prev = p->nms;
-				p->nms = n;
-				if (!parse_block(p, &n->body, 0)) {
-					p->nms = prev;
+				if (!parse_block(p, &n->body, 0))
 					return false;
-				}
-				p->nms = prev;
 				n->body.kind = BLOCK_NMS;
  				goto success;
 			}
@@ -2218,33 +2211,6 @@ static bool is_decl(Tokenizer *t) {
 	}
 }
 
-/* introduce identifiers from stmts into current scope, setting their "nms" field to nms */
-static Status include_stmts_link_to_nms(Parser *p, Namespace *nms, Statement *stmts) {
-	Identifiers *idents = parser_get_idents(p);
-	arr_foreach(stmts, Statement, s) {
-		if (s->kind == STMT_INLINE_BLOCK) {
-			if (!include_stmts_link_to_nms(p, nms, s->inline_block))
-				return false;
-		} else if (s->kind == STMT_DECL) {
-			Declaration *d = s->decl;
-			arr_foreach(d->idents, Identifier, ident) {
-				/* @OPTIM: only hash once */
-				Identifier preexisting = ident_translate(*ident, idents);
-				if (preexisting && preexisting->decl != d) {
-					char *istr = ident_to_str(preexisting);
-					err_print(d->where, "Redeclaration of identifier %s.", istr);
-					info_print(preexisting->decl->where, "%s was first declared here.", istr);
-					free(istr);
-				}
-				Identifier i = ident_translate_forced(*ident, idents);
-				i->nms = nms;
-				i->decl = d;
-			}
-		}
-	}
-	return true;
-}
-
 /* sets *was_a_statement to false if s was not filled, but the token was advanced */
 static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 	Tokenizer *t = p->tokr;
@@ -2341,8 +2307,6 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			i->flags = 0;
 			if (t->token->kind == TOKEN_DIRECT) {
 				i->flags |= IF_STATIC;
-				StatementWithCtx sctx = {s, p->block, p->nms};
-				parser_arr_add(p, p->gctx->static_ifs, sctx);
 			}
 			s->kind = STMT_IF;
 			++t->token;
@@ -2504,28 +2468,28 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 	} else if (t->token->kind == TOKEN_DIRECT) {
 		switch (t->token->direct) {
 		case DIRECT_INCLUDE: {
+			Include *i = s->inc = parser_malloc(p, sizeof *i);
 			++t->token;
-			s->kind = STMT_INLINE_BLOCK;
-			bool forced = false;
+			s->kind = STMT_INCLUDE;
+			i->flags = 0;
 			if (token_is_direct(t->token, DIRECT_FORCE)) {
-				forced = true;
+				i->flags |= INC_FORCED;
 				++t->token;
 			}
-			if (t->token->kind != TOKEN_LITERAL_STR) {
-				tokr_err(t, "#include file name must be string literal.");
+			if (!parse_expr(p, &i->filename, expr_find_end(p, EXPR_CAN_END_WITH_COMMA))) {
+				tokr_skip_semicolon(t);
 				return false;
 			}
-			char *filename = allocr_str_to_cstr(p->allocr, t->token->str);
-			++t->token;
-			Identifier nms_ident = NULL; /* identifier of namespace to include to */
 			if (token_is_kw(t->token, KW_COMMA)) {
 				++t->token;
 				if (t->token->kind != TOKEN_IDENT) {
 					tokr_err(t, "Expected identifier after , in #include (to specify include namespace).");
 					return false;
 				}
-				nms_ident = parser_ident_insert(p, t->token->ident);
+				i->nms = t->token->ident;
 				++t->token;
+			} else {
+				i->nms = NULL;
 			}
 			if (!token_is_kw(t->token, KW_SEMICOLON)) {
 				tokr_err(t, "Expected ; after #include directive");
@@ -2533,131 +2497,6 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				return false;
 			}
 			++t->token;
-
-			Block *prev_block = p->block;
-			Namespace *prev_nms = p->nms;
-			IncludedFile *inc_f = NULL;
-			Namespace *inc_nms = NULL; /* non-NULL if this is an include to nms */
-			bool success = true;
-			if (nms_ident) {
-				inc_nms = parser_calloc(p, 1, sizeof *inc_nms);
-				Block *body = &inc_nms->body;
-				body->kind = BLOCK_NMS;
-				body->where = s->where;
-				idents_create(&body->idents, p->allocr, body);
-				body->parent = prev_block;
-				/* turn #include "foo", bar into bar ::= nms { ... } */
-				s->kind = STMT_DECL;
-				Declaration *d = s->decl = parser_calloc(p, 1, sizeof *d);
-				d->flags = DECL_HAS_EXPR | DECL_IS_CONST;
-				d->type.kind = TYPE_BUILTIN;
-				d->type.builtin = BUILTIN_NMS;
-				Identifier i = nms_ident;
-				if (i->decl) {
-					Declaration *d2 = i->decl;
-					/* maybe they included it twice into one namespace */
-					if ((d2->flags & DECL_HAS_EXPR) && (d2->expr.kind == EXPR_NMS) && 
-						(d2->expr.nms->inc_file == inc_f)) {
-						/* that's okay; get rid of this declaration */
-						s->kind = STMT_INLINE_BLOCK;
-						s->inline_block = NULL;
-						break;
-					} else {
-						char *istr = ident_to_str(i);
-						err_print(s->where, "Redeclaration of identifier %s.", istr);
-						info_print(ident_decl_location(i), "Previous declaration was here.");
-						free(istr);
-						return false; /* NOT goto inc_fail; */
-					}
-				}
-				parser_arr_add(p, d->idents, i);
-				i->decl = d;
-				d->expr.kind = EXPR_NMS;
-				d->expr.nms = inc_nms;
-				d->expr.type = d->type;
-				parser_put_end(p, &s->where);
-				d->where = d->expr.where = s->where;
-				/* we need to be in the block to parse it properly */
-				p->block = &inc_nms->body;
-				p->nms = inc_nms;
-			} else {
-				s->kind = STMT_INLINE_BLOCK;
-			}
-
-			if (!forced) {
-				size_t filename_len = strlen(filename);
-				if (streq(filename, p->gctx->main_file->filename)) {
-					err_print(s->where, "Circular #include detected. You can add #force to this #include to force it to be included.");
-					success = false; goto nms_done;
-				}
-				StrHashTable *included_files = &p->gctx->included_files;
-				inc_f = str_hash_table_get(included_files, filename, filename_len);
-				if (inc_f) {
-					/* has already been included */
-					if (inc_f->flags & INC_FILE_INCLUDING) {
-						err_print(s->where, "Circular #include detected. You can add #force to this #include to force it to be included.");
-						success = false; goto nms_done;
-					}
-					if (s->kind == STMT_INLINE_BLOCK) s->inline_block = NULL; /* nothing needed here */
-					/* just set ident declarations */
-					if (!include_stmts_link_to_nms(p, inc_f->main_nms, inc_f->stmts)) {
-						success = false; goto nms_done;
-					}
-					goto nms_done;
-				} else {
-					inc_f = str_hash_table_insert(included_files, filename, filename_len);
-					inc_f->flags |= INC_FILE_INCLUDING;
-					inc_f->main_nms = p->nms;
-				}
-			}
-			{
-				char *contents = read_file_contents(p->allocr, filename, s->where);
-				if (!contents) {
-					success = false; goto nms_done;
-				}
-
-				Tokenizer tokr;
-				tokr_create(&tokr, p->file->ctx, p->allocr);
-				File *file = parser_calloc(p, 1, sizeof *file);
-				file->filename = filename;
-				file->contents = contents;
-				file->ctx = p->file->ctx;
-				
-				if (!tokenize_file(&tokr, file)) {
-					success = false; goto nms_done;
-				}
-				
-			#if 0
-				arr_foreach(tokr.tokens, Token, token) {
-					fprint_token(stdout, token);
-					printf("  ");
-				}
-			#endif
-
-				Parser parser;
-				parser_create(&parser, p->globals, &tokr, p->allocr, p->gctx);
-				parser.block = p->block;
-				parser.nms = p->nms;
-				ParsedFile parsed_file;
-				if (!parse_file(&parser, &parsed_file)) {
-					success = false; goto nms_done;
-				}
-				Statement *stmts_inc = parsed_file.stmts;
-				if (inc_f) {
-					inc_f->stmts = stmts_inc;
-				}
-				if (s->kind == STMT_INLINE_BLOCK) s->inline_block = stmts_inc;
-				if (inc_nms) {
-					inc_nms->body.stmts = stmts_inc;
-				}
-			}
-		nms_done:
-			if (inc_nms) {
-				p->nms = prev_nms;
-				p->block = prev_block;
-			}
-			if (inc_f) inc_f->flags &= (IncFileFlags)~(IncFileFlags)INC_FILE_INCLUDING;
-			if (!success) return false;
 		} break;
 		case DIRECT_IF:
 			goto if_stmt;
@@ -2685,55 +2524,29 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				tokr_skip_semicolon(t);
 				return false;
 			}
-		} break;
+		    break;
+		}
 		case DIRECT_INIT: {
 			if (!parser_is_at_top_level(p)) {
 				tokr_err(t, "#init directives can't be inside a block.");
 				tokr_skip_semicolon(t);
 				return false;
 			}
-			*was_a_statement = false;
-			Initialization *init = parser_arr_add_ptr(p, p->gctx->inits);
 			++t->token;
-			if (!token_is_kw(t->token, KW_LPAREN)) {
-				tokr_err(t, "Expected ( after #init.");
+			if (token_is_direct(t->token, DIRECT_INIT)) {
+				tokr_err(t, "You can't do #init #init.");
 				tokr_skip_semicolon(t);
 				return false;
 			}
-			++t->token;
-			bool negative = false; /* negative priority? */
-			if (token_is_kw(t->token, KW_MINUS)) {
-				negative = true;
-				++t->token;
-			} else if (token_is_kw(t->token, KW_PLUS)) {
-				/* ignore unary + in priority */
-				++t->token;
-			}
-			if (t->token->kind != TOKEN_LITERAL_INT) {
-				tokr_err(t, "Priority for #init must be an integer literal (like 50).");
-				tokr_skip_semicolon(t);
-				return false;
-			}
-			U64 priority = t->token->intl;
-			++t->token;
-			if (priority > I64_MAX) {
-				tokr_err(t, "Priority must be less than 9223372036854775808.");
-				tokr_skip_semicolon(t);
-				return false;
-			}
-			I64 signed_priority = (I64)priority;
-			if (negative) signed_priority = -signed_priority;
-			init->priority = signed_priority;
-			if (!token_is_kw(t->token, KW_RPAREN)) {
-				tokr_err(t, "Expected ) after #init priority.");
-				tokr_skip_semicolon(t);
-				return false;
-			}
-			++t->token;
 			Token *stmt_start = t->token;
 			bool was_stmt;
-			if (!parse_stmt(p, &init->stmt, &was_stmt))
+			if (!parse_stmt(p, s, &was_stmt))
 				return false;
+			if (s->kind == STMT_DECL || s->kind == STMT_INCLUDE || s->kind == STMT_USE || s->kind == STMT_MESSAGE) {
+				err_print(s->where, "Invalid use of #init.");
+				return false;
+			}
+			s->flags |= STMT_IS_INIT;
 			if (!was_stmt) {
 				err_print(token_location(p->file, stmt_start), "Invalid #init (are you missing a statement?).");
 				tokr_skip_semicolon(t);
@@ -3050,6 +2863,12 @@ static void fprint_stmt(FILE *out, Statement *s) {
 		fprintf(out, "return ");
 		if (r->flags & RET_HAS_EXPR)
 			fprint_expr(out, &r->expr);
+		fprintf(out, ";\n");
+	} break;
+	case STMT_INCLUDE: {
+		Include *i = s->inc;
+		fprintf(out, "#include ");
+		fprint_expr(out, &i->filename);
 		fprintf(out, ";\n");
 	} break;
 	case STMT_MESSAGE: {

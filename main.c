@@ -41,12 +41,8 @@ once you have a bunch of test code:
 - try making Value.slice a pointer
 - should val_stack be on the allocator? what about temporary arrays?
 	-->on the contrary, should in_decls be off the allocator?
-struct param inference
 maybe macros are just inline functions
 passing untyped expressions to macros
-#returns_code (struct body is a block, to be evaluated at compile time, which returns the actual statements)
-	- struct varargs
-	- also use with functions for macros?
 */
 
 #if defined __unix__ || (defined __APPLE__ && defined __MACH__)
@@ -213,10 +209,12 @@ int main(int argc, char **argv) {
 	}
 
 	if (verbose) printf("Parsing...\n");
+
 	GlobalCtx global_ctx = {0};
 	str_hash_table_create(&global_ctx.included_files, sizeof(IncludedFile), &main_allocr);
 	global_ctx.main_file = &file;
 	global_ctx.err_ctx = &err_ctx;
+
 	Parser p;
 	parser_create(&p, &globals, &t, &main_allocr, &global_ctx);
 	ParsedFile f;
