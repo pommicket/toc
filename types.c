@@ -3732,7 +3732,7 @@ top:
 				r->expr.type = tr->fn->ret_type;
 			}
 		} else {
-			if (!type_is_void(&tr->fn->ret_type) || tr->fn->ret_decls) {
+			if (!type_is_void(&tr->fn->ret_type) && !tr->fn->ret_decls) {
 				err_print(s->where, "No return value in non-void function.");
 				return false;
 			}

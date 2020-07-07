@@ -20,7 +20,7 @@ raw_stdout - standard output
 raw_stderr - standard error
 raw_file_write - write to a raw file
 raw_file_open_write - open a raw file for writing
-raw_file_close - flush and close a raw file
+raw_file_close - close a raw file
 */
 
 
@@ -37,16 +37,16 @@ raw_file_close - flush and close a raw file
 	O_CREAT  ::= 0x40;
 
 	RawFile ::= int;
-	raw_file_write ::= fn(file: RawFile, buf: &void, size: int) bool {
+	raw_file_write ::= fn(file: RawFile, buf: &void, size: int) err := FILE_ERR_OK {
 		while size > 0 {
 			bytes_written := write(file as #C int, buf, size as #C size_t);
 			if bytes_written < 0 {
-				return false;
+				err = FILE_ERR_MISC; // @TODO
+				return;
 			}
 			size -= bytes_written;
 			buf += bytes_written;
 		}
-		return true;
 	}
 	raw_stdout ::= fn() RawFile {
 		return 1;
@@ -121,42 +121,46 @@ fopen_write ::= fn(name: []char) f: &File, error: FileError {
 	}
 }
 
-flush ::= fn(use f: &File) {
-	raw_file_write(raw, &buffer[0], buffer_used);
+flush ::= fn(use f: &File) err: FileError {
+	err = raw_file_write(raw, &buffer[0], buffer_used);
 	buffer_used = 0;
 }
 
 fclose ::= fn(f: &File) err: FileError {
+	flush(f);
 	err = raw_file_close(f.raw);
 	mem.del(f);
 }
 
-fwrites ::= fn(use f: &File, s : []char) {
+fwrites ::= fn(use f: &File, s : []char) FileError {
 	if f.nobuffer {
-		raw_file_write(raw, &s[0], s.len);
-		return;
+		return raw_file_write(raw, &s[0], s.len);
 	}
 	if buffer_used + s.len > BUFSZ {
 		flush(f);
 		if s.len > BUFSZ {
-			raw_file_write(raw, &s[0], s.len);
+			return raw_file_write(raw, &s[0], s.len);
 		} else {
 			mem.mem_copy(&buffer[0], &s[0], s.len);
 			buffer_used = s.len;
+			return FILE_ERR_OK;
 		}
 	} else {
 		mem.mem_copy(&buffer[buffer_used], &s[0], s.len);
 		buffer_used += s.len;
+		return FILE_ERR_OK;
 	}
 }
 
-fputs ::= fn(f: &File, s: []char) {
-	fwrites(f, s);
-	fwrites(f, "\n");
+fputs ::= fn(f: &File, s: []char) err : FileError {
+	err = fwrites(f, s);
+	if !err {
+		err = fwrites(f, "\n");
+	}
 }
 
-puts ::= fn(s: []char) {
-	fputs(&std_out, s);
+puts ::= fn(s: []char) FileError {
+	return fputs(&std_out, s);
 }
 
 
