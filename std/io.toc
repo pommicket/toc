@@ -18,8 +18,10 @@ FILE_ERR_MISC ::= 1;
 the raw file interface:
 raw_stdout - standard output
 raw_stderr - standard error
+raw_file_read - read from a raw file - unlike raw_file_write, it's okay if the number of bytes read doesn't match the number of bytes requested.
 raw_file_write - write to a raw file
 raw_file_open_write - open a raw file for writing
+raw_file_open_read - open a raw file for reading
 raw_file_close - close a raw file
 */
 
@@ -27,6 +29,7 @@ raw_file_close - close a raw file
 #if base.PLATFORM_IS_UNIX {
 	// @TODO: use syscall instead (it'll allow other functions called write)
 	write ::= #foreign("write", base.libc) fn(#C int, #C &"const void", #C size_t) #C long;
+	read ::= #foreign("read", base.libc) fn(#C int, &void, #C size_t) #C long;
 	open ::= #foreign("open", base.libc) fn (#C &"const char", #C int, #C unsigned) #C int;
 	close ::= #foreign("close", base.libc) fn (#C int) #C int;
 
@@ -48,6 +51,14 @@ raw_file_close - close a raw file
 			buf += bytes_written;
 		}
 	}
+	raw_file_read ::= fn(file: RawFile, buf: &void, size: int) n: int, err := FILE_ERR_OK {
+		bytes_read := read(file as #C int, buf, size as #C size_t);
+		if bytes_read < 0 {
+			err = FILE_ERR_MISC;
+			return;
+		}
+		n = bytes_read;
+	}
 	raw_stdout ::= fn() RawFile {
 		return 1;
 	}
@@ -63,18 +74,34 @@ raw_file_close - close a raw file
 			err = FILE_ERR_MISC; // @TODO
 		}
 	}
+	raw_file_open_read ::= fn(name: []char) f: RawFile, err := FILE_ERR_OK {
+		cstr := str_to_cstr(name);
+		defer mem.dels(cstr);
+		f = open(&cstr[0], O_RDONLY as #C int, 0) as RawFile;
+		if f == -1 {
+			err = FILE_ERR_MISC; // @TODO
+		}
+	}
 	raw_file_close ::= fn(f: RawFile) err := FILE_ERR_OK {
 		if close(f as #C int) == -1 {
 			err = FILE_ERR_MISC; // @TODO
 		}
 	}
 } else {
+	// @TODO: test this interface
 	// @TODO: on windows, use WriteFile
 	fwrite ::= #foreign("fwrite", base.libc) fn(#C &"const void", #C size_t, #C size_t, &void) #C size_t;
+	fread ::= #foreign("fread", base.libc) fn(&void, #C size_t, #C size_t, &void) #C size_t;
 	RawFile ::= &void;
+	// @TODO: Use FileErrors
 	raw_file_write ::= fn(file: RawFile, buf: &void, size: int) bool {
 		bytes_written := fwrite(buf, 1, size, file) as int;
 		return bytes_written == size;
+	}
+	raw_file_read ::= fn(file: RawFile, buf: &void, size: int) bool {
+		bytes_read := fread(buf, 1, size, file) as int;
+		return bytes_read == size;
+
 	}
 	raw_stdout ::= fn() RawFile {
 		return #builtin("stdout");
@@ -85,7 +112,16 @@ raw_file_close - close a raw file
 	raw_file_open_write ::= fn(name: []char) f: RawFile, err := FILE_ERR_OK {
 		cstr := base.str_to_cstr(name);
 		defer mem.dels(cstr);
-		mode := "w\0";
+		mode := "wb\0";
+		f = fopen(&cstr[0], &mode[0]);
+		if f == null {
+			err = FILE_ERR_MISC; // @TODO
+		}
+	}
+	raw_file_open_read ::= fn(name: []char) f: RawFile, err := FILE_ERR_OK {
+		cstr := base.str_to_cstr(name);
+		defer mem.dels(cstr);
+		mode := "rb\0";
 		f = fopen(&cstr[0], &mode[0]);
 		if f == null {
 			err = FILE_ERR_MISC; // @TODO
@@ -98,10 +134,14 @@ raw_file_close - close a raw file
 	}
 }
 
+// @TODO: flush for read files -- discard buffer
+// @TODO: error flag
+// @TODO: locking?
+// @TODO: keep track of mode the file was opened in, #if DEBUG, check mode before read/writing
 File ::= struct {
 	BUFSZ ::= 4096;
 	raw : RawFile;
-	buffer_used : int; // ranges from 0 to FILE_BUFSZ-1
+	buffer_used, buffer_len : int; // ranges from 0 to FILE_BUFSZ-1
 	nobuffer : bool; // if true, flush after every write
 	buffer : [BUFSZ]char;
 }
@@ -110,7 +150,7 @@ raw_file_to_file ::= fn(raw : RawFile, f: &File) {
 	f.raw = raw;
 }
 
-std_out, std_err : File;
+std_in, std_out, std_err : File;
 
 fopen_write ::= fn(name: []char) f: &File, error: FileError {
 	raw : RawFile;
@@ -159,10 +199,61 @@ fputs ::= fn(f: &File, s: []char) err : FileError {
 	}
 }
 
+writes ::= fn(s: []char) FileError {
+	return fwrites(&std_out, s);
+}
+
 puts ::= fn(s: []char) FileError {
 	return fputs(&std_out, s);
 }
 
+// read into out, set its length appropriately
+fread ::= fn(use f: &File, out: &[]char) FileError {
+	to_read := out.len;
+	buffer_left := buffer_len - buffer_used;
+	if to_read <= buffer_left {
+		mem.mem_copy(&out[0], &buffer[buffer_used], to_read);
+		buffer_used += to_read;
+		return FILE_ERR_OK;
+	} else {
+		mem.mem_copy(&out[0], &buffer[buffer_used], buffer_left);
+		out_idx := buffer_left;
+		to_read -= buffer_left;
+		if to_read > BUFSZ {
+			// very big read, just do it directly
+			buffer_used = 0;
+			buffer_len = 0;
+			n, err := raw_file_read(raw, &out[out_idx], to_read);
+			out.len = n + buffer_left;
+			if err {
+				return err;
+			}
+		} elif to_read > 0 {
+			n, err := raw_file_read(raw, &buffer[0], BUFSZ);
+			buffer_len = n;
+			if n < to_read {
+				// we didn't read out.len bytes
+				out.len = n + buffer_left;
+			}
+			if err {
+				buffer_used = 0;
+				return err;
+			}
+			mem.mem_copy(&out[out_idx], &buffer[0], to_read);
+			buffer_used = to_read;
+		}
+		return FILE_ERR_OK;
+	}
+}
+
+
+// read a line of standard input. does not include newline
+gets ::= fn(out: &[]char) {
+	fread(&std_in, out);
+	if out[out.len-1] == '\n' {
+		out.len -= 1;
+	}
+}
 
 io_init ::= fn() {
 	raw_file_to_file(raw_stdout(), &std_out);

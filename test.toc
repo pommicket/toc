@@ -2,12 +2,10 @@
 #include "std/base.toc", base;
 
 main ::= fn() {
-	file, err := io.fopen_write("test.txt");
-	if err {
-		base.error("Couldn't open file!");
-	}
-	for i := 1..100000000 {
-		io.fputs(file, "Hello");
-	}
-	io.fclose(file);
+	s: [64]char;
+	buf := s[:];
+	io.writes("What is your name? ");
+	io.gets(&buf);
+	io.writes("Hello, ");
+	io.puts(buf);
 }
