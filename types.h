@@ -716,12 +716,13 @@ typedef enum {
 	BUILTIN_STDERR,
 	BUILTIN_STDIN,
 	BUILTIN_COMPILING,
+	BUILTIN_DEBUG,
 	BUILTIN_PLATFORM
 #define BUILTIN_VAL_COUNT (BUILTIN_PLATFORM+1)
 } BuiltinVal;
 
 const char *const builtin_val_names[BUILTIN_VAL_COUNT] =
-	{"stdout", "stderr", "stdin", "compiling", "platform"};
+	{"stdout", "stderr", "stdin", "compiling", "debug", "platform"};
 
 typedef struct Namespace {
 	Block body;
@@ -1005,6 +1006,7 @@ typedef struct {
 	File *main_file; /* this is the file which the compiler is invoked on. needed for checking for circular includes. */
 	StatementWithCtx *static_ifs; /* all the #ifs */
 	ErrCtx *err_ctx;
+	bool debug_build;
 } GlobalCtx;
 
 typedef struct Parser {
@@ -1085,4 +1087,5 @@ typedef struct CGenerator {
 	Identifier main_ident;
 	Identifiers *globals;
 	char **nms_prefixes; /* dynamic (null-terminated) array of namespace prefixes */
+	GlobalCtx *gctx;
 } CGenerator;

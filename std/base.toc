@@ -6,6 +6,8 @@ PLATFORM_FREEBSD ::= 4;
 PLATFORM_OPENBSD ::= 5;
 PLATFORM_MISC_UNIX ::= 6;
 
+DEBUG ::= #builtin("debug");
+
 PLATFORM ::= #builtin("platform");
 #if PLATFORM == PLATFORM_LINUX {
 	libc ::= "libc.so.6";

@@ -6,7 +6,7 @@
 
 static Status eval_block(Evaluator *ev, Block *b);
 static Status eval_address_of(Evaluator *ev, Expression *e, void **ptr);
-static Value get_builtin_val(BuiltinVal val);
+static Value get_builtin_val(GlobalCtx *gctx, BuiltinVal val);
 
 static void evalr_create(Evaluator *ev, Typer *tr, Allocator *allocr) {
 	ev->returning = NULL;
@@ -605,7 +605,7 @@ static Status eval_val_ptr_at_index(Location where, Value *arr, U64 i, Type *arr
 	switch (arr_type->kind) {
 	case TYPE_ARR: {
 		U64 arr_sz = (U64)arr_type->arr.n;
-		if (i >= arr_sz) {
+		if (i > arr_sz) { /* this is INTENTIONALLY > and not >=, because it's okay to have a pointer to one past the end of an array */
 			err_print(where, "Array out of bounds (index = %lu, array size = %lu)\n", (unsigned long)i, (unsigned long)arr_sz);
 			return false;
 		}
@@ -615,7 +615,7 @@ static Status eval_val_ptr_at_index(Location where, Value *arr, U64 i, Type *arr
 	case TYPE_SLICE: {
 		Slice slice = *(Slice *)arr_ptr;
 		U64 slice_sz = (U64)slice.len;
-		if (i >= slice_sz) {
+		if (i > slice_sz) { /* see above for why it's not >= */
 			err_print(where, "Slice out of bounds (index = %lu, slice size = %lu)\n", (unsigned long)i, (unsigned long)slice_sz);
 			return false;
 		}
@@ -1252,7 +1252,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		err_print(e->where, "Cannot run C code at compile time.");
 		return false;
 	case EXPR_BUILTIN:
-		*v = get_builtin_val(e->builtin.which.val);
+		*v = get_builtin_val(ev->typer->gctx, e->builtin.which.val);
 		break;
 	case EXPR_CALL: {
 		FnExpr *fn;

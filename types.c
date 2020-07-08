@@ -1453,7 +1453,7 @@ static Status parameterized_struct_arg_order(StructDef *struc, Argument *args, I
 	return true;
 }
 
-static Value get_builtin_val(BuiltinVal val) {
+static Value get_builtin_val(GlobalCtx *gctx, BuiltinVal val) {
 	Value v;
 	switch (val) {
 	case BUILTIN_STDOUT:
@@ -1470,6 +1470,9 @@ static Value get_builtin_val(BuiltinVal val) {
 		break;
 	case BUILTIN_PLATFORM:
 		v.i64 = platform__;
+		break;
+	case BUILTIN_DEBUG:
+		v.boolv = gctx->debug_build;
 		break;
 	}
 	return v;
@@ -1495,6 +1498,10 @@ static void get_builtin_val_type(Allocator *a, BuiltinVal val, Type *t) {
 	case BUILTIN_PLATFORM:
 		t->kind = TYPE_BUILTIN;
 		t->builtin = BUILTIN_I64;
+		break;
+	case BUILTIN_DEBUG:
+		t->kind = TYPE_BUILTIN;
+		t->builtin = BUILTIN_BOOL;
 		break;
 	}
 }
@@ -2199,8 +2206,11 @@ static Status types_expr(Typer *tr, Expression *e) {
 								if (counter < 0) break;
 								++decl;
 							}
-							err_print(decl->where, "Could not infer value of declaration.");
-							info_print(e->where, "While processing this call");
+							
+							if (!tr->gctx->err_ctx->have_errored) { /* something could've gone wrong elsewhere causing a strange error message here. for example, one of the arguments could be TYPE_UNKNOWN, because its declaration had a typing error */
+								err_print(decl->where, "Could not infer value of declaration.");
+								info_print(e->where, "While processing this call");
+							}
 							return false;
 						}
 						++type;
@@ -2428,9 +2438,19 @@ static Status types_expr(Typer *tr, Expression *e) {
 			err_print(e->where, "Unrecognized builtin value: %s.", builtin_name);
 			return false;
 		}
-		e->builtin.which.val = (BuiltinVal)which;
-		get_builtin_val_type(tr->allocr, e->builtin.which.val, t);
+		get_builtin_val_type(tr->allocr, which, t);
 		assert(t->flags & TYPE_IS_RESOLVED);
+		switch (which) {
+		/* immediately evaluate (things which do not differ between compile time & run time) */
+		case BUILTIN_DEBUG:
+			e->kind = EXPR_VAL;
+			e->val = get_builtin_val(tr->gctx, which);
+			break;
+		/* stuff that's different between compile & run time */
+		default:
+			e->builtin.which.val = (BuiltinVal)which;
+			break;
+		}
 	} break;
 	case EXPR_UNARY_OP: {
 		Expression *of = e->unary.of;

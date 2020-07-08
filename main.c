@@ -124,6 +124,7 @@ int main(int argc, char **argv) {
 	const char *out_filename = "out.c";
 	
 	bool verbose = false;
+	bool debug_build = true;
 
 	ErrCtx err_ctx = {0};
 	err_ctx.enabled = true;
@@ -156,6 +157,10 @@ int main(int argc, char **argv) {
 		} else if (streq(arg, "-v") || streq(arg, "-verbose")) {
 			printf("Verbose mode enabled\n");
 			verbose = true;
+		} else if (streq(arg, "-d") || streq(arg, "-debug")) {
+			debug_build = true;
+		} else if (streq(arg, "-r") || streq(arg, "-release")) {
+			debug_build = false;
 		} else {
 			if (arg[0] == '-') {
 				fprintf(stderr, "Unrecognized option: %s.\n", argv[i]);
@@ -215,6 +220,7 @@ int main(int argc, char **argv) {
 	str_hash_table_create(&global_ctx.included_files, sizeof(IncludedFile), &main_allocr);
 	global_ctx.main_file = &file;
 	global_ctx.err_ctx = &err_ctx;
+	global_ctx.debug_build = debug_build;
 
 	Parser p;
 	parser_create(&p, &globals, &t, &main_allocr, &global_ctx);

@@ -18,6 +18,7 @@ FILE_ERR_MISC ::= 1;
 the raw file interface:
 raw_stdout - standard output
 raw_stderr - standard error
+raw_stdin - standard input
 raw_file_read - read from a raw file - unlike raw_file_write, it's okay if the number of bytes read doesn't match the number of bytes requested.
 raw_file_write - write to a raw file
 raw_file_open_write - open a raw file for writing
@@ -65,6 +66,9 @@ raw_file_close - close a raw file
 	raw_stderr ::= fn() RawFile {
 		return 2;
 	}
+	raw_stdin ::= fn() RawFile {
+		return 0;
+	}
 	raw_file_open_write ::= fn(name: []char) f: RawFile, err := FILE_ERR_OK {
 		cstr := str_to_cstr(name);
 		defer mem.dels(cstr);
@@ -109,6 +113,9 @@ raw_file_close - close a raw file
 	raw_stderr ::= fn() RawFile {
 		return #builtin("stderr");
 	}
+	raw_stdin ::= fn() RawFile {
+		return #builtin("stdin");
+	}
 	raw_file_open_write ::= fn(name: []char) f: RawFile, err := FILE_ERR_OK {
 		cstr := base.str_to_cstr(name);
 		defer mem.dels(cstr);
@@ -134,20 +141,30 @@ raw_file_close - close a raw file
 	}
 }
 
+// file modes
+FileMode ::= u8;
+// @TODO: enum
+MODE_READ  :: FileMode = 1;
+MODE_WRITE :: FileMode = 2;
+
+
+IO_DEBUG ::= base.DEBUG;
+
 // @TODO: flush for read files -- discard buffer
 // @TODO: error flag
 // @TODO: locking?
-// @TODO: keep track of mode the file was opened in, #if DEBUG, check mode before read/writing
 File ::= struct {
 	BUFSZ ::= 4096;
 	raw : RawFile;
-	buffer_used, buffer_len : int; // ranges from 0 to FILE_BUFSZ-1
+	buffer_used, buffer_len : int; // range from 0 to FILE_BUFSZ-1
+	mode : FileMode;
 	nobuffer : bool; // if true, flush after every write
 	buffer : [BUFSZ]char;
 }
 
-raw_file_to_file ::= fn(raw : RawFile, f: &File) {
+raw_file_to_file ::= fn(raw : RawFile, mode : FileMode, f: &File) {
 	f.raw = raw;
+	f.mode = mode;
 }
 
 std_in, std_out, std_err : File;
@@ -157,13 +174,19 @@ fopen_write ::= fn(name: []char) f: &File, error: FileError {
 	raw, error = raw_file_open_write(name);
 	if !error {
 		f = mem.new(File);
-		raw_file_to_file(raw, f);
+		raw_file_to_file(raw, MODE_WRITE, f);
 	}
 }
 
 flush ::= fn(use f: &File) err: FileError {
-	err = raw_file_write(raw, &buffer[0], buffer_used);
-	buffer_used = 0;
+	if mode == MODE_READ {
+		// discard buffer
+		buffer_used = 0;
+		buffer_len = 0;
+	} else {
+		err = raw_file_write(raw, &buffer[0], buffer_used);
+		buffer_used = 0;
+	}
 }
 
 fclose ::= fn(f: &File) err: FileError {
@@ -173,6 +196,12 @@ fclose ::= fn(f: &File) err: FileError {
 }
 
 fwrites ::= fn(use f: &File, s : []char) FileError {
+	#if IO_DEBUG {
+		if mode != MODE_WRITE {
+			base.error("Writing to file which wasn't opened for writing.");
+		}
+	}
+
 	if f.nobuffer {
 		return raw_file_write(raw, &s[0], s.len);
 	}
@@ -209,6 +238,11 @@ puts ::= fn(s: []char) FileError {
 
 // read into out, set its length appropriately
 fread ::= fn(use f: &File, out: &[]char) FileError {
+	#if IO_DEBUG {
+		if mode != MODE_READ {
+			base.error("Reading from file which wasn't opened for reading.");
+		}
+	}
 	to_read := out.len;
 	buffer_left := buffer_len - buffer_used;
 	if to_read <= buffer_left {
@@ -247,19 +281,28 @@ fread ::= fn(use f: &File, out: &[]char) FileError {
 }
 
 
-// read a line of standard input. does not include newline
-gets ::= fn(out: &[]char) {
-	fread(&std_in, out);
-	if out[out.len-1] == '\n' {
+// read a line from in (default: standard input). does not include newline
+gets ::= fn(out: &[]char, in := &std_in) err : FileError {
+	err = fread(in, out);
+	if out.len && out[out.len-1] == '\n' {
 		out.len -= 1;
 	}
 }
 
+// read a line of file in (default: standard input), at most max_len (default: 256) characters
+// a read error might happen, but this function just ignores it
+read_line ::= fn(max_len := 256, in := &std_in) []char {
+	ret := mem.news(char, max_len);
+	gets(&ret, in);
+	return ret;
+}
+
 io_init ::= fn() {
-	raw_file_to_file(raw_stdout(), &std_out);
+	raw_file_to_file(raw_stdout(), MODE_WRITE, &std_out);
 	std_out.nobuffer = true;
-	raw_file_to_file(raw_stderr(), &std_err);
+	raw_file_to_file(raw_stderr(), MODE_WRITE, &std_err);
 	std_err.nobuffer = true;
+	raw_file_to_file(raw_stdin(), MODE_READ, &std_in);
 }
 
 #init io_init();

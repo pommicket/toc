@@ -1,11 +1,16 @@
+#include "std/mem.toc", mem;
 #include "std/io.toc", io;
 #include "std/base.toc", base;
 
 main ::= fn() {
-	s: [64]char;
-	buf := s[:];
+	file, _ := io.fopen_write("test.txt");
 	io.writes("What is your name? ");
-	io.gets(&buf);
+	b : [64]char;
+	name := b[:];
+	err := io.gets(&name, file);
+	if err {
+		base.error("File error");
+	}
 	io.writes("Hello, ");
-	io.puts(buf);
+	io.puts(name);
 }

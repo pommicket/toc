@@ -121,7 +121,7 @@ static inline void cgen_char(CGenerator *g, char c) {
 	if (isprint(c) && c != '"')
 		cgen_write(g, "%c", c);
 	else
-		cgen_write(g, "\\x%02x", c);
+		cgen_write(g, "\\%03o", c); /* can't use hex escape sequences, because they can be more than 2 characters "\xbafoo" is '\xbaf', 'o', 'o' */
 }
 /* should this declaration be a direct function declaration C? (as opposed to using a function pointer or not being a function) */
 static bool cgen_fn_is_direct(CGenerator *g, Declaration *d) {
@@ -1249,6 +1249,9 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			break;
 		case BUILTIN_PLATFORM:
 			cgen_write(g, "platform__");
+			break;
+		case BUILTIN_DEBUG: /* substituted for its value */
+			assert(0);
 			break;
 		}
 		break;
