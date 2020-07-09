@@ -8,7 +8,7 @@
 
 /* 
 @TODO:
-a ::= fn() (int, int) { return 3, 5; }     b ::=  fn() (int, int) { return a(); }
+figure out how printf is gonna work
 if we do #include "foo.toc", bar; and foo.toc fails, bar should be declared as TYPE_UNKNOWN (right now it's undeclared)
 fix #foreign not at global scope - right now the cgen'd definition doesn't use the proper type
 find out why file output is really slow at compile time; try to improve it
@@ -22,6 +22,7 @@ unions
 bitwise operations
 ---
 #compile_only for functions only used at compile time
+warn about x : u8 = 1283;
 switch to / add as an alternative: libffi
 	- better yet, inline assembly
 don't bother generating ret_ if nothing's deferred

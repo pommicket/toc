@@ -42,7 +42,7 @@ raw_file_close - close a raw file
 	O_CREAT  ::= 0x40;
 
 	RawFile ::= int;
-	raw_file_write ::= fn(file: RawFile, buf: &void, size: int) err := FILE_ERR_OK {
+	raw_file_write ::= fn(file: RawFile, buf: &void, size: int) err : FileError {
 		while size > 0 {
 			bytes_written := write(file as #C int, buf, size as #C size_t);
 			if bytes_written < 0 {
@@ -53,7 +53,7 @@ raw_file_close - close a raw file
 			buf += bytes_written;
 		}
 	}
-	raw_file_read ::= fn(file: RawFile, buf: &void, size: int) n: int, err := FILE_ERR_OK {
+	raw_file_read ::= fn(file: RawFile, buf: &void, size: int) n: int, err : FileError {
 		bytes_read := read(file as #C int, buf, size as #C size_t);
 		if bytes_read < 0 {
 			err = FILE_ERR_MISC;
@@ -70,7 +70,7 @@ raw_file_close - close a raw file
 	raw_stdin ::= fn() RawFile {
 		return 0;
 	}
-	raw_file_open_write ::= fn(name: []char) f: RawFile, err := FILE_ERR_OK {
+	raw_file_open_write ::= fn(name: []char) f: RawFile, err : FileError {
 		cstr := str_to_cstr(name);
 		defer mem.dels(cstr);
 		// @TODO: switch to bitwise or when that exists
@@ -79,7 +79,7 @@ raw_file_close - close a raw file
 			err = FILE_ERR_MISC; // @TODO
 		}
 	}
-	raw_file_open_read ::= fn(name: []char) f: RawFile, err := FILE_ERR_OK {
+	raw_file_open_read ::= fn(name: []char) f: RawFile, err : FileError {
 		cstr := str_to_cstr(name);
 		defer mem.dels(cstr);
 		f = open(&cstr[0], O_RDONLY as #C int, 0) as RawFile;
@@ -87,7 +87,7 @@ raw_file_close - close a raw file
 			err = FILE_ERR_MISC; // @TODO
 		}
 	}
-	raw_file_close ::= fn(f: RawFile) err := FILE_ERR_OK {
+	raw_file_close ::= fn(f: RawFile) err : FileError {
 		if close(f as #C int) == -1 {
 			err = FILE_ERR_MISC; // @TODO
 		}
@@ -117,7 +117,7 @@ raw_file_close - close a raw file
 	raw_stdin ::= fn() RawFile {
 		return #builtin("stdin");
 	}
-	raw_file_open_write ::= fn(name: []char) f: RawFile, err := FILE_ERR_OK {
+	raw_file_open_write ::= fn(name: []char) f: RawFile, err : FileError {
 		cstr := base.str_to_cstr(name);
 		defer mem.dels(cstr);
 		mode := "wb\0";
@@ -126,7 +126,7 @@ raw_file_close - close a raw file
 			err = FILE_ERR_MISC; // @TODO
 		}
 	}
-	raw_file_open_read ::= fn(name: []char) f: RawFile, err := FILE_ERR_OK {
+	raw_file_open_read ::= fn(name: []char) f: RawFile, err : FileError {
 		cstr := base.str_to_cstr(name);
 		defer mem.dels(cstr);
 		mode := "rb\0";
@@ -135,7 +135,7 @@ raw_file_close - close a raw file
 			err = FILE_ERR_MISC; // @TODO
 		}
 	}
-	raw_file_close ::= fn(f: RawFile) err := FILE_ERR_OK {
+	raw_file_close ::= fn(f: RawFile) err : FileError {
 		if fclose(f) != 0 {
 			err = FILE_ERR_MISC; // @TODO
 		}
@@ -206,9 +206,17 @@ fclose ::= fn(f: &File) err: FileError {
 	mem.del(f);
 }
 
+can_write ::= fn(mode: FileMode) bool {
+	return mode == MODE_WRITE;
+}
+
+can_read ::= fn(mode: FileMode) bool {
+	return mode == MODE_READ;
+}
+
 fwrites ::= fn(use f: &File, s : []char) FileError {
 	#if IO_DEBUG {
-		if mode != MODE_WRITE {
+		if !can_write(mode) {
 			base.error("Writing to file which wasn't opened for writing.");
 		}
 	}
@@ -247,10 +255,72 @@ puts ::= fn(s: []char) FileError {
 	return fputs(&std_out, s);
 }
 
+fwritei ::= fn(use f: &File, x: int) err : FileError {
+	#if IO_DEBUG {
+		if !can_write(mode) {
+			base.error("Writing to file which wasn't opened for writing.");
+		}
+	}
+	max_int_len ::= 20; // maximum length of a 64-bit integer, converted to a string
+	if buffer_used > BUFSZ - max_int_len {
+		err = flush(f);
+		if err { return; }
+	}
+
+	out := &buffer[buffer_used];
+	start := out;
+
+	defer buffer_used = out - start;
+
+	// flush at end if file is not buffered
+	defer if nobuffer {
+		err = flush(f);
+	}
+
+
+	x_unsigned : u64;
+
+	if x > 0 {
+		x_unsigned = x as u64;
+	} elif x < 0 {
+		*out = '-';
+		out += 1;
+		// get the absolute value of x in a u64. this complicated stuff is needed because -INT_MIN doesn't fit in a 64-bit signed integer 
+		x_unsigned = (x as u64) - 18446744073709551615 - 1; 
+	} else {
+		*out = '0';
+		out += 1;
+		return;
+	}	
+	
+	scan_digit : u64 = 1000000000000000000;
+	started := false;
+	while scan_digit > 0 {
+		digit := (x_unsigned / scan_digit) % 10;
+		if digit > 0 { started = true; }
+		if started {
+			*out = (('0' as u64) + digit) as char;
+			out += 1;
+		}
+		scan_digit /= 10;
+	}
+}
+
+writei ::= fn(x: int) FileError {
+	return fwritei(&std_out, x);
+}
+
+puti ::= fn(x: int) err : FileError {
+	err = writei(x);
+	if !err {
+		err = writes("\n");
+	}
+}
+
 // read into out, set its length appropriately
 fread ::= fn(use f: &File, out: &[]char) FileError {
 	#if IO_DEBUG {
-		if mode != MODE_READ {
+		if !can_read(mode) {
 			base.error("Reading from file which wasn't opened for reading.");
 		}
 	}

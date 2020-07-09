@@ -953,6 +953,10 @@ static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value 
 		break;
 	case BINARY_SUB:
 		if (lhs_type->kind == TYPE_PTR) {
+			if (rhs_type->kind == TYPE_PTR) {
+				out->i64 = (I64)((char *)rhs.ptr - (char *)lhs.ptr) / (I64)compiler_sizeof(lhs_type);
+
+			}
 			out->ptr = (char *)lhs.ptr - val_to_i64(rhs, rhs_type->builtin)
 				* (I64)compiler_sizeof(lhs_type->ptr);
 		} else {

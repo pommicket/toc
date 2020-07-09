@@ -1842,7 +1842,14 @@ static Status types_expr(Typer *tr, Expression *e) {
 		
 		if (expr_is_definitely_const(f) || type_is_builtin(&f->type, BUILTIN_TYPE) || has_varargs) {
 			Value val;
-			
+			if (f->kind == EXPR_IDENT) {
+				/* 
+					@TODO(eventually): this is a sort of cheat to avoid the fact that we can't evaluate future identifiers
+					this will cause problems
+				*/
+				if (!types_decl(tr, f->ident->decl))
+					return false;
+			}
 			if (!eval_expr(tr->evalr, f, &val))
 				return false;
 			if (type_is_builtin(&f->type, BUILTIN_TYPE)) {
@@ -2604,9 +2611,11 @@ static Status types_expr(Typer *tr, Expression *e) {
 		case BINARY_GE:
 		case BINARY_EQ:
 		case BINARY_NE: {
-			bool valid = false;
+			bool valid = false, errored = false;
 			assert(lhs_type->flags & TYPE_IS_RESOLVED);
 			assert(rhs_type->flags & TYPE_IS_RESOLVED);
+
+			t->kind = TYPE_UNKNOWN;
 			
 			if (o == BINARY_SET) {
 				valid = type_eq_implicit(lhs_type, rhs_type);
@@ -2621,6 +2630,23 @@ static Status types_expr(Typer *tr, Expression *e) {
 						rhs_type->kind == TYPE_BUILTIN &&
 						type_builtin_is_numerical(rhs_type->builtin)) {
 						valid = true;
+					}
+
+					if (o == BINARY_SUB && lhs_type->kind == TYPE_PTR
+						&& rhs_type->kind == TYPE_PTR) {
+						if (type_eq_exact(lhs_type->ptr, rhs_type->ptr)) {
+							valid = true;
+							t->kind = TYPE_BUILTIN;
+							t->builtin = BUILTIN_I64;
+						} else {
+							char *s1, *s2;
+							s1 = type_to_str(lhs_type);
+							s2 = type_to_str(rhs_type);
+							err_print(e->where, "Pointer subtraction between distinct types %s and %s.");
+							free(s1); free(s2);
+							errored = true;
+							valid = false;
+						}
 					}
 				}
 				if (o == BINARY_LT || o == BINARY_GT || o == BINARY_LE || o == BINARY_GE
@@ -2654,21 +2680,26 @@ static Status types_expr(Typer *tr, Expression *e) {
 					t->builtin = BUILTIN_BOOL;
 					break;
 				default: {
-					*t = *overriding_type(lhs_type, rhs_type);
-					if ((o == BINARY_MOD || o == BINARY_SET_MOD)
-						&& type_builtin_is_float(t->builtin)) {
-						err_print(e->where, "Cannot use operator % on floating-point numbers.");
-						valid = false;
+					if (t->kind == TYPE_UNKNOWN) { /* have not yet determined type */
+						*t = *overriding_type(lhs_type, rhs_type);
+						if ((o == BINARY_MOD || o == BINARY_SET_MOD)
+							&& type_builtin_is_float(t->builtin)) {
+							err_print(e->where, "Cannot use operator % on floating-point numbers.");
+							errored = true;
+							valid = false;
+						}
 					}
 				} break;
 				}
 			}
 			if (!valid) {
-				char *s1, *s2;
-				s1 = type_to_str(lhs_type);
-				s2 = type_to_str(rhs_type);
-				const char *op = binary_op_to_str(o);
-				err_print(e->where, "Invalid types to operator %s: %s and %s", op, s1, s2);
+				if (!errored) {
+					char *s1, *s2;
+					s1 = type_to_str(lhs_type);
+					s2 = type_to_str(rhs_type);
+					const char *op = binary_op_to_str(o);
+					err_print(e->where, "Invalid types to operator %s: %s and %s", op, s1, s2);
+				}
 				return false;
 			}
 			if (o == BINARY_SET_ADD ||

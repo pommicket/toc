@@ -57,9 +57,6 @@ static inline void cgen_write(CGenerator *g, const char *fmt, ...) {
 	va_start(args, fmt);
 	vfprintf(cgen_writing_to(g), fmt, args);
 	va_end(args);
-#ifdef TOC_DEBUG
-	fflush(cgen_writing_to(g));
-#endif
 }
 
 static inline void cgen_nl(CGenerator *g) {
@@ -708,7 +705,7 @@ static void cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 		Constness *constness = fn_type->constness;
 		int i = 0;
 		IdentID *underscore_ids = NULL;
-		int nout_params = (int)(exprs ? arr_len(exprs) : arr_len(idents));
+		int nout_params = (int)arr_len(ret_type->tuple);
 		
 		if (idents) {
 			for (i = 0; i < nout_params; ++i) {
@@ -749,7 +746,7 @@ static void cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 		}
 		/* out params */
 		IdentID *u = underscore_ids;
-		for (i = 0; i < (int)nout_params; ++i) {
+		for (i = 0; i < nout_params; ++i) {
 			if (any_args || i > 0)
 				cgen_write(g, ", ");
 			if (exprs) {
@@ -762,7 +759,7 @@ static void cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 				else
 					cgen_ident(g, idents[i]);
 			} else {
-				cgen_write(g, "&(%s%d_)", prefix, i);
+				cgen_write(g, "&(%s%d)", prefix, i);
 			}
 		}
 		arr_clear(underscore_ids);
@@ -966,6 +963,8 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		break;
 	case EXPR_LITERAL_INT:
 		cgen_write(g, U64_FMT, e->intl);
+		if (e->intl > I64_MAX)
+			cgen_write(g, "U"); /* prevent GCC warnings */
 		break;
 	case EXPR_LITERAL_STR: {
 		char *p = e->strl.str;
@@ -1973,7 +1972,10 @@ static void cgen_file(CGenerator *g, ParsedFile *f, Typer *tr) {
 	g->nms = NULL;
 	g->fn = NULL;
 	g->file = f;
-
+	#ifdef TOC_DEBUG
+	/* if in debug mode, don't buffer output C file */
+	setbuf(cgen_writing_to(g), NULL);
+	#endif
 	cgen_write(g, 
 		"#include <stdint.h>\n"
 		"#include <stddef.h>\n"

@@ -1,32 +1,15 @@
-#include "std/mem.toc", mem;
 #include "std/io.toc", io;
-#include "std/base.toc", base;
 
-main ::= fn() {
-	file, err := io.fopen_read("test.txt");
-	if err {
-		base.error("Couldn't open file.");
-	}
-	defer io.fclose(file);
-	buf : [3]char;
-	while !err {
-		s := buf[:];
-		err = io.fread(file, &s);
-		io.writes(s);
-	}
-}
-
-/*
-// @TODO: fix this
-
-bar ::= fn() (int, int) {
+bar ::= fn() (int, int, int) {
 	return foo();
 }
-foo ::= fn() (int, int) {
-	return 3, 5;
+foo ::= fn() (int, int, int) {
+	return -9223372036854775808, 32, 0;
 }
 
 main ::= fn() {
-	a, b := foo();
+	a, b, c := foo();
+	io.puti(a);
+	io.puti(b);
+	io.puti(c);
 }
-*/
