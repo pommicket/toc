@@ -8,6 +8,7 @@
 
 /* 
 @TODO:
+a..b should probably only go up to b-1
 figure out how printf is gonna work
 if we do #include "foo.toc", bar; and foo.toc fails, bar should be declared as TYPE_UNKNOWN (right now it's undeclared)
 fix #foreign not at global scope - right now the cgen'd definition doesn't use the proper type
@@ -109,6 +110,19 @@ static void signal_handler(int num) {
 	abort();
 }
 #endif
+
+static const char *replace_extension(Allocator *a, const char *filename, const char *new_extension, const char *dflt) {
+	char *new_filename = allocr_malloc(a, strlen(filename) + strlen(new_extension) + 1);
+	strcpy(new_filename, filename);
+	char *dot = strchr(new_filename, '.');
+	if (dot) {
+		strcpy(dot, new_extension);
+		return new_filename;
+	} else {
+		return dflt;
+	}
+}
+
 int main(int argc, char **argv) {
 #if BACKTRACE
 	program_name = argv[0];
@@ -124,10 +138,14 @@ int main(int argc, char **argv) {
 	test_all();
 #endif
 	const char *in_filename = NULL;
-	const char *out_filename = "out.c";
+	const char *out_filename = NULL, *c_filename = NULL;
+	const char *c_compiler = "cc";
+	char *env_CC = getenv("CC");
+	if (env_CC) c_compiler = env_CC;
 	
 	bool verbose = false;
 	bool debug_build = true;
+	bool compile_c = true;
 
 	ErrCtx err_ctx = {0};
 	err_ctx.enabled = true;
@@ -157,6 +175,13 @@ int main(int argc, char **argv) {
 			}
 			out_filename = argv[i+1];
 			++i;
+		} else if (streq(arg, "-O")) {
+			if (i == argc-1) {
+				fprintf(stderr, "-O cannot be the last argument to toc.\n");
+				return EXIT_FAILURE;
+			}
+			c_filename = argv[i+1];
+			++i;
 		} else if (streq(arg, "-v") || streq(arg, "-verbose")) {
 			printf("Verbose mode enabled\n");
 			verbose = true;
@@ -164,6 +189,15 @@ int main(int argc, char **argv) {
 			debug_build = true;
 		} else if (streq(arg, "-r") || streq(arg, "-release")) {
 			debug_build = false;
+		} else if (streq(arg, "-cc")) {
+			if (i == argc-1) {
+				fprintf(stderr, "-cc cannot be the last argument to toc.\n");
+				return EXIT_FAILURE;
+			}
+			c_compiler = argv[i+1];
+			++i;
+		} else if (streq(arg, "-c")) {
+			compile_c = false;
 		} else {
 			if (arg[0] == '-') {
 				fprintf(stderr, "Unrecognized option: %s.\n", argv[i]);
@@ -174,6 +208,7 @@ int main(int argc, char **argv) {
 		}
 	}
 	
+
 	if (!in_filename) {
 #ifdef TOC_DEBUG
 		in_filename = "test.toc";
@@ -182,9 +217,23 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 #endif
 	}
-	
 	Allocator main_allocr;
 	allocr_create(&main_allocr);
+
+	if (c_filename && out_filename && !compile_c) {
+		fprintf(stderr, "You can't set both -o and -O unless you're compiling the outputted C code.");
+		return EXIT_FAILURE;
+	}
+	if (!c_filename) {
+		if (out_filename && !compile_c) {
+			c_filename = out_filename;
+		} else {
+			c_filename = replace_extension(&main_allocr, in_filename, ".c", "out.c");
+		}
+	}
+	if (!out_filename) {
+		out_filename = replace_extension(&main_allocr, in_filename, "", "a.out");
+	}
 
 	File file = {0};
 	file.filename = in_filename;
@@ -258,11 +307,11 @@ int main(int argc, char **argv) {
 		printf("\n\n-----\n\n");
 	}
 
-	if (verbose) printf("Opening output file...\n");
-	FILE *out = fopen(out_filename, "w");
+	if (verbose) printf("Opening output file %s...\n", c_filename);
+	FILE *out = fopen(c_filename, "w");
 	if (!out) {
 		err_text_important(&err_ctx, "Could not open output file: ");
-		err_fprint(&err_ctx, "%s\n", out_filename);
+		err_fprint(&err_ctx, "%s\n", c_filename);
 		allocr_free_all(&main_allocr);
 		return EXIT_FAILURE;
 	}
@@ -271,9 +320,21 @@ int main(int argc, char **argv) {
 	CGenerator g;
 	cgen_create(&g, out, &globals, &main_allocr);
 	cgen_file(&g, &f, &tr);
-	
-	if (verbose) printf("Cleaning up...\n");
 	fclose(out);
+	
+	if (compile_c) {
+		if (verbose) printf("Compiling C code...\n");
+		char cmd[2048] = {0};
+		char const *cflags = debug_build ? "-O0 -g" : "-O3 -s";
+		snprintf(cmd, sizeof cmd, "%s -w %s %s -o %s", c_compiler, cflags, c_filename, out_filename);
+		int ret = system(cmd);
+		if (ret) {
+			fprintf(stderr, "Uh oh... C compiler failed...\n");
+			return EXIT_FAILURE;
+		}
+	}
+
+	if (verbose) printf("Cleaning up...\n");
 	allocr_free_all(&main_allocr);
 	return 0;
 }

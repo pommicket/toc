@@ -1,7 +1,7 @@
 toc
 *~
 a.out
-out.c
+out*.c
 *.swp
 vgcore*
 TAGS
@@ -22,3 +22,6 @@ test*.txt
 c_test
 toc_test
 test.c
+test2.c
+test
+test2

@@ -1,15 +1,26 @@
 #include "std/io.toc", io;
-
-bar ::= fn() (int, int, int) {
-	return foo();
-}
-foo ::= fn() (int, int, int) {
-	return -9223372036854775808, 32, 0;
-}
+#include "std/mem.toc";
 
 main ::= fn() {
-	a, b, c := foo();
-	io.puti(a);
-	io.puti(b);
-	io.puti(c);
+	n := 100000000;
+	sieve := news(bool, n);
+	sieve[0] = true;
+	sieve[1] = true;
+	i := 0;
+	while i*i <= n {
+		defer i += 1;
+		if sieve[i] { continue; }
+		j := 2*i;
+		while j < n {
+			sieve[j] = true;
+			j += i;
+		}
+	}
+	total := 0;
+	for is_composite, i := sieve {
+		if !is_composite {
+			total += i;
+		}
+	}
+	io.puti(total);
 }
