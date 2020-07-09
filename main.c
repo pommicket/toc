@@ -8,8 +8,10 @@
 
 /* 
 @TODO:
+a ::= fn() (int, int) { return 3, 5; }     b ::=  fn() (int, int) { return a(); }
 if we do #include "foo.toc", bar; and foo.toc fails, bar should be declared as TYPE_UNKNOWN (right now it's undeclared)
 fix #foreign not at global scope - right now the cgen'd definition doesn't use the proper type
+find out why file output is really slow at compile time; try to improve it
 improve type_to_str:
 	Foo ::= struct(t::Type) {}
 	type_to_str(Foo(int))

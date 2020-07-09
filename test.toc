@@ -3,14 +3,30 @@
 #include "std/base.toc", base;
 
 main ::= fn() {
-	file, _ := io.fopen_write("test.txt");
-	io.writes("What is your name? ");
-	b : [64]char;
-	name := b[:];
-	err := io.gets(&name, file);
+	file, err := io.fopen_read("test.txt");
 	if err {
-		base.error("File error");
+		base.error("Couldn't open file.");
 	}
-	io.writes("Hello, ");
-	io.puts(name);
+	defer io.fclose(file);
+	buf : [3]char;
+	while !err {
+		s := buf[:];
+		err = io.fread(file, &s);
+		io.writes(s);
+	}
 }
+
+/*
+// @TODO: fix this
+
+bar ::= fn() (int, int) {
+	return foo();
+}
+foo ::= fn() (int, int) {
+	return 3, 5;
+}
+
+main ::= fn() {
+	a, b := foo();
+}
+*/

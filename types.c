@@ -2438,17 +2438,18 @@ static Status types_expr(Typer *tr, Expression *e) {
 			err_print(e->where, "Unrecognized builtin value: %s.", builtin_name);
 			return false;
 		}
-		get_builtin_val_type(tr->allocr, which, t);
+		BuiltinVal builtin = (BuiltinVal)which;
+		get_builtin_val_type(tr->allocr, builtin, t);
 		assert(t->flags & TYPE_IS_RESOLVED);
-		switch (which) {
+		switch (builtin) {
 		/* immediately evaluate (things which do not differ between compile time & run time) */
 		case BUILTIN_DEBUG:
 			e->kind = EXPR_VAL;
-			e->val = get_builtin_val(tr->gctx, which);
+			e->val = get_builtin_val(tr->gctx, builtin);
 			break;
 		/* stuff that's different between compile & run time */
 		default:
-			e->builtin.which.val = (BuiltinVal)which;
+			e->builtin.which.val = builtin;
 			break;
 		}
 	} break;

@@ -605,8 +605,7 @@ static inline void cgen_deferred_up_to_not_including(CGenerator *g, Block *to) {
    Also, set_str and/or to_str should be NULL
    this DOES NOT call cgen_expr_pre for set_expr or to_expr
 */
-static void cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, Expression *to_expr,
-					 const char *to_str) {
+static void cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, Expression *to_expr, const char *to_str) {
 	Type *type;
 	if (set_expr) {
 		type = &set_expr->type;
@@ -817,36 +816,7 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 				++i;
 		}
 		if (e->type.kind == TYPE_TUPLE) {
-			Type *t = &e->type;
-			size_t ntypes = arr_len(t->tuple);
-			IdentID *ids = err_malloc(ntypes * sizeof *ids);
-			for (i = 0; i < ntypes; ++i) {
-				ids[i] = ++g->ident_counter;
-				cgen_type_pre(g, &t->tuple[i]);
-				cgen_write(g, " ");
-				cgen_ident_id(g, ids[i]);
-				cgen_type_post(g, &t->tuple[i]);
-				cgen_write(g, "; ");
-			}
-			cgen_expr(g, e->call.fn);
-			cgen_write(g, "(");
-			bool any_args = false;
-			i = 0;
-			arr_foreach(e->call.arg_exprs, Expression, arg) {
-				if (!constness || !arg_is_const(arg, constness[i])) {
-					if (any_args) cgen_write(g, ", ");
-					any_args = true;
-					cgen_arg(g, arg);
-				}
-				++i;
-			}
-			for (i = 0; i < ntypes; ++i) {
-				if (any_args) cgen_write(g, ", ");
-				any_args = true;
-				cgen_write(g, "&");
-				cgen_ident_id(g, ids[i]);
-			}
-			cgen_write(g, ");");
+			/* we actually don't ever need this; it's handled individually elsewhere */
 		} else if (cgen_uses_ptr(&e->type)) {
 			IdentID id = e->cgen.id = ++g->ident_counter;
 			cgen_type_pre(g, &e->type);

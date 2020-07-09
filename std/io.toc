@@ -11,7 +11,8 @@ str_to_cstr ::= fn(s: []char) []char {
 // @TODO(eventually): enum
 FileError ::= int;
 FILE_ERR_OK ::= 0;
-FILE_ERR_MISC ::= 1;
+FILE_ERR_EOF ::= 1;
+FILE_ERR_MISC ::= 2;
 // @TODO: more of these
 
 /*
@@ -19,7 +20,7 @@ the raw file interface:
 raw_stdout - standard output
 raw_stderr - standard error
 raw_stdin - standard input
-raw_file_read - read from a raw file - unlike raw_file_write, it's okay if the number of bytes read doesn't match the number of bytes requested.
+raw_file_read - read from a raw file - unlike raw_file_write, it's okay if the number of bytes read doesn't match the number of bytes requested, but if 0 bytes are read, it is assumed to be the end of the file
 raw_file_write - write to a raw file
 raw_file_open_write - open a raw file for writing
 raw_file_open_read - open a raw file for reading
@@ -158,6 +159,7 @@ File ::= struct {
 	raw : RawFile;
 	buffer_used, buffer_len : int; // range from 0 to FILE_BUFSZ-1
 	mode : FileMode;
+	eof : bool;
 	nobuffer : bool; // if true, flush after every write
 	buffer : [BUFSZ]char;
 }
@@ -175,6 +177,15 @@ fopen_write ::= fn(name: []char) f: &File, error: FileError {
 	if !error {
 		f = mem.new(File);
 		raw_file_to_file(raw, MODE_WRITE, f);
+	}
+}
+
+fopen_read ::= fn(name: []char) f: &File, error: FileError {
+	raw : RawFile;
+	raw, error = raw_file_open_read(name);
+	if !error {
+		f = mem.new(File);
+		raw_file_to_file(raw, MODE_READ, f);
 	}
 }
 
@@ -243,6 +254,10 @@ fread ::= fn(use f: &File, out: &[]char) FileError {
 			base.error("Reading from file which wasn't opened for reading.");
 		}
 	}
+	if eof {
+		out.len = 0;
+		return FILE_ERR_EOF;
+	}
 	to_read := out.len;
 	buffer_left := buffer_len - buffer_used;
 	if to_read <= buffer_left {
@@ -258,16 +273,23 @@ fread ::= fn(use f: &File, out: &[]char) FileError {
 			buffer_used = 0;
 			buffer_len = 0;
 			n, err := raw_file_read(raw, &out[out_idx], to_read);
+			if n == 0 {
+				eof = true;
+			}
 			out.len = n + buffer_left;
 			if err {
 				return err;
 			}
 		} elif to_read > 0 {
 			n, err := raw_file_read(raw, &buffer[0], BUFSZ);
+			if n == 0 {
+				eof = true;
+			}
 			buffer_len = n;
 			if n < to_read {
 				// we didn't read out.len bytes
 				out.len = n + buffer_left;
+				to_read = n;
 			}
 			if err {
 				buffer_used = 0;
@@ -281,19 +303,19 @@ fread ::= fn(use f: &File, out: &[]char) FileError {
 }
 
 
-// read a line from in (default: standard input). does not include newline
-gets ::= fn(out: &[]char, in := &std_in) err : FileError {
-	err = fread(in, out);
+// read a line from standard input. does not include newline
+gets ::= fn(out: &[]char) err : FileError {
+	err = fread(&std_in, out);
 	if out.len && out[out.len-1] == '\n' {
 		out.len -= 1;
 	}
 }
 
-// read a line of file in (default: standard input), at most max_len (default: 256) characters
+// read a line of standard input, at most max_len (default: 256) characters
 // a read error might happen, but this function just ignores it
-read_line ::= fn(max_len := 256, in := &std_in) []char {
+read_line ::= fn(max_len := 256) []char {
 	ret := mem.news(char, max_len);
-	gets(&ret, in);
+	gets(&ret);
 	return ret;
 }
 
