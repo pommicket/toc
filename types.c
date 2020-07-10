@@ -402,6 +402,9 @@ static bool type_eq_exact(Type *a, Type *b) {
 
 /* are a and b equal, allowing implicit conversions? */
 static bool type_eq_implicit(Type *a, Type *b) {
+	assert(a->flags & TYPE_IS_RESOLVED);
+	assert(b->flags & TYPE_IS_RESOLVED);
+	
 	if (a->kind == TYPE_UNKNOWN || b->kind == TYPE_UNKNOWN)
 		return true;
 	if (a->kind != b->kind) return false;
@@ -965,8 +968,7 @@ static Status type_resolve(Typer *tr, Type *t, Location where) {
 				return false;
 			}
 		}
-		if (!eval_expr(tr->evalr, expr, &typeval))
-			return false;
+		if (!eval_expr(tr->evalr, expr, &typeval)) return false;
 		*t = *typeval.type;
 		if (t->kind == TYPE_STRUCT) {
 			if (struct_is_template(t->struc)) {
@@ -1139,7 +1141,6 @@ static CastStatus type_cast_status(Type *from, Type *to) {
 			return CAST_STATUS_NONE;
 		if (to->kind == TYPE_FN)
 			return CAST_STATUS_WARN;
-		/* @TODO: Cast from ptr to arr */
 		return CAST_STATUS_ERR;
 	case TYPE_ARR:
 		return CAST_STATUS_ERR;
@@ -2259,10 +2260,11 @@ static Status types_expr(Typer *tr, Expression *e) {
 						if (!eval_expr(tr->evalr, expr, &arg_val))
 							return false;
 						Type *type = &expr->type;
-						arg_exprs[i].kind = EXPR_VAL;
-						arg_exprs[i].flags = EXPR_FOUND_TYPE;
-						arg_exprs[i].val = arg_val;
-						param_decl->flags |= DECL_FOUND_VAL;
+						expr->kind = EXPR_VAL;
+						expr->flags = EXPR_FOUND_TYPE;
+						expr->val = arg_val;
+						param_decl->expr = *expr;
+						param_decl->flags |= DECL_FOUND_VAL|DECL_HAS_EXPR;
 						copy_val(tr->allocr, &param_decl->val, arg_val, type);
 						if (!(param_decl->flags & DECL_ANNOTATES_TYPE)) {
 							param_decl->type = *type;
@@ -3057,15 +3059,16 @@ static Status types_decl(Typer *tr, Declaration *d) {
 	Type *dtype = &d->type;
 	if (d->flags & DECL_FOUND_TYPE) return true;
 	bool success = true;
-	Expression *e = (d->flags & DECL_HAS_EXPR) ? &d->expr : NULL;
+	DeclFlags flags = d->flags;
+	Expression *e = (flags & DECL_HAS_EXPR) ? &d->expr : NULL;
 
-	if (d->flags & DECL_INFER) {
+	if (flags & DECL_INFER) {
 		dtype->kind = TYPE_UNKNOWN;
 		dtype->flags = 0;
 		return true;
 	}
 	typer_arr_add(tr, tr->in_decls, d);
-	if (d->flags & DECL_ANNOTATES_TYPE) {
+	if (flags & DECL_ANNOTATES_TYPE) {
 		/* type supplied */
 		if (!type_resolve(tr, dtype, d->where)) {
 			success = false;
@@ -3097,11 +3100,15 @@ static Status types_decl(Typer *tr, Declaration *d) {
 			goto ret;
 		}
 		assert(d->expr.type.flags & TYPE_IS_RESOLVED);
-		if (d->flags & DECL_ANNOTATES_TYPE) {
+		if (flags & DECL_ANNOTATES_TYPE) {
 			if (!type_eq_implicit(&e->type, dtype)) {
 				char *decl_type = type_to_str(dtype),
 					*expr_type = type_to_str(&e->type);
-				err_print(e->where, "Declaration type %s does not match expression type %s.", decl_type, expr_type);
+				bool is_parameter = (flags & DECL_IS_PARAM) && (flags & DECL_FOUND_VAL); /* this can happen if the wrong type is passed to a template function */
+				if (is_parameter)
+					err_print(e->where, "Parameter type %s does not match argument type %s.", decl_type, expr_type);
+				else
+					err_print(e->where, "Declaration type %s does not match expression type %s.", decl_type, expr_type);
 				free(decl_type); free(expr_type);
 				success = false;
 				goto ret;
@@ -3116,17 +3123,17 @@ static Status types_decl(Typer *tr, Declaration *d) {
 			*dtype = e->type;
 			dtype->flags &= (TypeFlags)~(TypeFlags)TYPE_IS_FLEXIBLE; /* x := 5; => x is not flexible */
 		}
-		bool need_value = (d->flags & DECL_IS_CONST) || !tr->block || tr->block->kind == BLOCK_NMS;
+		bool need_value = (flags & DECL_IS_CONST) || !tr->block || tr->block->kind == BLOCK_NMS;
 		if (need_value) {
-			if (!(d->flags & DECL_FOUND_VAL)) {
+			if (!(flags & DECL_FOUND_VAL)) {
 				Value val;
 				if (!eval_expr(tr->evalr, e, &val)) {
 					success = false;
 					goto ret;
 				}
 				copy_val(tr->allocr, &d->val, val, dtype);
-				d->flags |= DECL_FOUND_VAL;
-				if (!(d->flags & DECL_IS_CONST)) {
+				flags |= DECL_FOUND_VAL;
+				if (!(flags & DECL_IS_CONST)) {
 					/* 
 						create a value stack for this declaration so that it can be modified by compile time execution,
 						but not permanently (i.e. output will still have old value)
@@ -3161,7 +3168,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 
 
 	if (type_is_compileonly(dtype)) {
-		if (!(d->flags & DECL_IS_CONST) && !type_is_builtin(dtype, BUILTIN_VARARGS)) {
+		if (!(flags & DECL_IS_CONST) && !type_is_builtin(dtype, BUILTIN_VARARGS)) {
 			char *s = type_to_str(dtype);
 			err_print(d->where, "Declarations with type %s must be constant.", s);
 			free(s);
@@ -3184,7 +3191,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 		goto ret;
 	}
 	if (dtype->kind == TYPE_BUILTIN) {
-		if (dtype->builtin == BUILTIN_VARARGS && !(d->flags & DECL_IS_PARAM)) {
+		if (dtype->builtin == BUILTIN_VARARGS && !(flags & DECL_IS_PARAM)) {
 			err_print(d->where, "Only parameters can be varargs.");
 			success = false;
 			goto ret;
@@ -3194,7 +3201,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 			goto ret;
 		}
 	}
-	if (d->flags & DECL_IS_CONST) {
+	if (flags & DECL_IS_CONST) {
 		if (dtype->kind == TYPE_PTR) {
 			err_print(d->where, "You can't have a constant pointer.");
 			success = false;
@@ -3206,7 +3213,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 	for (int i = 0, len = (int)n_idents; i < len; ++i) {
 		Type *t = decl_type_at_index(d, i);
 		if (type_is_builtin(t, BUILTIN_TYPE)) {
-			if (d->flags & DECL_HAS_EXPR) {
+			if (flags & DECL_HAS_EXPR) {
 				Value *val = decl_val_at_index(d, i);
 				if (val->type->kind == TYPE_STRUCT && val->type->struc->params) {
 					/* don't resolve it because it's not really complete */
@@ -3214,7 +3221,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 					if (!type_resolve(tr, val->type, d->where)) return false;
 				}
 			}
-		} else if (!(d->flags & DECL_IS_CONST) && t->kind == TYPE_FN && t->fn->constness) {
+		} else if (!(flags & DECL_IS_CONST) && t->kind == TYPE_FN && t->fn->constness) {
 			for (size_t p = 0; p < arr_len(t->fn->types)-1; ++p) {
 				if (t->fn->constness[p] == CONSTNESS_YES) {
 					err_print(d->where, "You can't have a pointer to a function with constant parameters.");
@@ -3227,7 +3234,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 		}
 	}
 
-	if (d->flags & DECL_USE) {
+	if (flags & DECL_USE) {
 		int idx = 0;
 		if (arr_len(d->idents) > 1) {
 			err_print(d->where, "Used declarations cannot have more than one identifier (you're trying to use two things at once).");
@@ -3244,9 +3251,9 @@ static Status types_decl(Typer *tr, Declaration *d) {
 		}
 	}
 
-	if (d->flags & DECL_EXPORT) {
-		if (d->expr.kind == EXPR_FN)
-			d->expr.fn->flags |= FN_EXPR_EXPORT;
+	if (flags & DECL_EXPORT) {
+		if (e->kind == EXPR_FN)
+			e->fn->flags |= FN_EXPR_EXPORT;
 	}
 
 	if (tr->block == NULL || tr->block->kind == BLOCK_NMS) {
@@ -3256,7 +3263,8 @@ static Status types_decl(Typer *tr, Declaration *d) {
 	
  ret:
 	/* pretend we found the type even if we didn't to prevent too many errors */
-	d->flags |= DECL_FOUND_TYPE;
+	flags |= DECL_FOUND_TYPE;
+	d->flags = flags;
 	if (!success) {
 		/* use unknown type if we didn't get the type */
 		dtype->flags = TYPE_IS_RESOLVED;

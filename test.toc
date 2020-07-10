@@ -1,4 +1,5 @@
-n ::= nms {
-	putchar ::= #foreign("putchar") fn(#C int) #C int;
+#include "std/mem.toc";
+main ::= fn(){
+	a : []int = news(int, 5);
 }
-main ::= fn(){}
+main();

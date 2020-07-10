@@ -484,9 +484,6 @@ static void val_cast(Value vin, Type *from, Value *vout, Type *to) {
 		case TYPE_PTR:
 			vout->ptr = vin.arr;
 			break;
-		case TYPE_ARR:
-			vout->arr = vin.arr;
-			break;
 		default:
 			assert(0); break;
 		}
