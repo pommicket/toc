@@ -553,8 +553,8 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 	assert(type->flags & TYPE_IS_RESOLVED);
 	switch (type->kind) {
 	case TYPE_PTR: *(void **)set = to->ptr; break;
-	case TYPE_ARR: memcpy(set, to->arr, compiler_sizeof(type)); break;
-	case TYPE_STRUCT: memcpy(set, to->struc, compiler_sizeof(type)); break;
+	case TYPE_ARR: memmove(set, to->arr, compiler_sizeof(type)); break;
+	case TYPE_STRUCT: memmove(set, to->struc, compiler_sizeof(type)); break;
 	case TYPE_FN: *(FnExpr **)set = to->fn; break;
 	case TYPE_TUPLE: *(Value **)set = to->tuple; break;
 	case TYPE_BUILTIN:
@@ -803,6 +803,7 @@ static Status eval_address_of(Evaluator *ev, Expression *e, void **ptr) {
 }
 
 static Status eval_set(Evaluator *ev, Expression *set, Value *to) {
+	Type *t = &set->type;
 	switch (set->kind) {
 	case EXPR_IDENT: {
 		Identifier i = set->ident;
@@ -810,14 +811,14 @@ static Status eval_set(Evaluator *ev, Expression *set, Value *to) {
 		if (!ival) {
 			return false;
 		}
-		*ival = *to;
+		eval_deref_set(val_get_ptr(ival, t), to, t);
 	} break;
 	case EXPR_UNARY_OP:
 		switch (set->unary.op) {
 		case UNARY_DEREF: {
 			Value ptr;
 			if (!eval_expr(ev, set->unary.of, &ptr)) return false;
-			eval_deref_set(ptr.ptr, to, &set->type);
+			eval_deref_set(ptr.ptr, to, t);
 		} break;
 		default: assert(0); break;
 		}
@@ -837,7 +838,7 @@ static Status eval_set(Evaluator *ev, Expression *set, Value *to) {
 			void *ptr;
 			if (!eval_ptr_to_struct_field(ev, set, &ptr))
 				return false;
-			eval_deref_set(ptr, to, &set->type);
+			eval_deref_set(ptr, to, t);
 		} break;
 		default: assert(0); break;
 		}

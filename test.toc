@@ -1,5 +1,24 @@
-#include "std/mem.toc";
+#include "std/io.toc", io;
+Point ::= struct {
+	x, y: int;
+}
 main ::= fn(){
-	a : []int = news(int, 5);
+	a, b: Point;
+	b.x = 15;
+	b.y = 12;
+	a = b;
+	a = a;
+	c, d: [5]int;
+	c[0] = 39;
+	
+	d = c;
+	d = d;
+	c = d;
+	io.puti(a.x);
+	io.puti(a.y);
+	io.puti(b.x);
+	io.puti(b.y);
+	io.puti(c[0]);
+	io.puti(d[0]);
 }
 main();
