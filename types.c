@@ -2263,7 +2263,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 						expr->kind = EXPR_VAL;
 						expr->flags = EXPR_FOUND_TYPE;
 						expr->val = arg_val;
-						param_decl->expr = *expr;
+						param_decl->expr = *expr; /* this is so that an error occurs if the type of expr doesn't match param_decl->type (we can't check here because param_decl->type isn't resolved yet) */
 						param_decl->flags |= DECL_FOUND_VAL|DECL_HAS_EXPR;
 						copy_val(tr->allocr, &param_decl->val, arg_val, type);
 						if (!(param_decl->flags & DECL_ANNOTATES_TYPE)) {
