@@ -46,13 +46,24 @@
 #endif
 
 
-#else
+#else /* __STDC_VERSION >= 201112 ... */
 
 #define toc_alignof sizeof
 
 #define possibly_static_assert(cond) assert(cond)
-#endif
+#endif /* __STDC_VERSION >= 201112 ... */
 
+/* this is to prevent erroneous warnings from GCC (v. 8.3.0) with -O3 */
+#if !defined(__clang__) && defined(__GNUC__)
+#define gcc_no_bounds_warnings_start _Pragma("GCC diagnostic push") \
+	_Pragma("GCC diagnostic ignored \"-Wstringop-overflow\"") \
+	_Pragma("GCC diagnostic ignored \"-Wrestrict\"") \
+	_Pragma("GCC diagnostic ignored \"-Warray-bounds\"")
+#define gcc_no_bounds_warnings_end _Pragma("GCC diagnostic pop")
+#else
+#define gcc_no_bounds_warnings_start
+#define gcc_no_bounds_warnings_end
+#endif
 
 #include "types.h"
 

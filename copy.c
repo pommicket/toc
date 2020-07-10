@@ -138,7 +138,9 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 		*outfn = *infn;
 		size_t constness_bytes = (ntypes-1) * sizeof *outfn->constness;
 		outfn->constness = allocr_malloc(c->allocr, constness_bytes);
+	gcc_no_bounds_warnings_start
 		memmove(outfn->constness, infn->constness, constness_bytes);
+	gcc_no_bounds_warnings_end
 
 		outfn->types = NULL;
 		arr_set_lena(outfn->types, ntypes, c->allocr);

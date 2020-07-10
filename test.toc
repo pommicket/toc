@@ -2,8 +2,12 @@
 #include "std/mem.toc";
 
 main ::= fn() {
-	for i, v : (float, int) = 10,-1,.0 {
-		io.puti(i as int);
+	file, err := io.fopen_write("test.txt");
+
+	for i := 0.,1000000 {
+		io.fputs(file, "!");
 	}
+
+	io.fclose(file);
 }
 main();

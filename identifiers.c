@@ -80,18 +80,9 @@ static char *ident_to_str(Identifier i) {
 	char *str = err_malloc(i->len + 1);
 	/* for some reason, GCC thinks that i->len is -1 when this is called from type_to_str_ (in release mode) */
 
-#if !defined(__clang__) && defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wstringop-overflow"
-#pragma GCC diagnostic ignored "-Wrestrict"
-#pragma GCC diagnostic ignored "-Warray-bounds"
-#endif
+gcc_no_bounds_warnings_start
 	memcpy(str, i->str, i->len);
-	
-
-#if !defined(__clang__) && defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif
+gcc_no_bounds_warnings_end
 	str[i->len] = 0;
 	return str;
 }

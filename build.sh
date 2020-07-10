@@ -47,10 +47,13 @@ if [ "$CC" = "gcc" ]; then
 elif [ "$CC" = "clang" ]; then
 	DEBUG_FLAGS="$DEBUG_FLAGS -no-pie -gdwarf-2 -pipe"
 fi
-RELEASE_FLAGS="-O3 -s -DNDEBUG $WARNINGS -std=c11"
+RELEASE_FLAGS="-O3 -s -DNDEBUG $WARNINGS"
+PROFILE_FLAGS="-O3 -g -pg -DNDEBUG $WARNINGS"
 
 if [ "$1" = "release" ]; then
 	FLAGS="$RELEASE_FLAGS $ADDITIONAL_FLAGS"
+elif [ "$1" = "profile" ]; then
+	FLAGS="$PROFILE_FLAGS $ADDITIONAL_FLAGS"
 else
 	FLAGS="$DEBUG_FLAGS $ADDITIONAL_FLAGS"
 fi
