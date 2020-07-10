@@ -1661,14 +1661,15 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 	} break;
 	case STMT_FOR: {
 		For *fo = s->for_;
-		int is_range = fo->flags & FOR_IS_RANGE;
+		ForFlags flags = fo->flags;
+		U32 is_range = flags & FOR_IS_RANGE;
 		Declaration *header_decl = &fo->header;
 		Identifier val_ident = header_decl->idents[0];
 		Identifier index_ident = header_decl->idents[1];
 		Type *fo_type = &header_decl->type;
 		assert(fo_type->kind == TYPE_TUPLE && arr_len(fo_type->tuple) == 2);
 		Type *val_type = &fo_type->tuple[0];
-		Type *index_type = &fo_type->tuple[1];
+		assert(type_is_builtin(&fo_type->tuple[1], BUILTIN_I64)); /* index type is always int */
 		bool has_val = !ident_eq_str(val_ident, "_");
 		bool has_index = !ident_eq_str(index_ident, "_");
 
@@ -1746,16 +1747,50 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 		}
 
 		if (has_index) {
-			cgen_type_pre(g, index_type);
-			cgen_write(g, " ");
+			cgen_write(g, "i64 ");
 			cgen_ident(g, index_ident);
-			cgen_type_post(g, index_type); /* not needed yet, but keeping it here to prevent potential future problems */
 			cgen_write(g, " = 0; ");
 		}
 
 		cgen_write(g, "for (");
-		
-		if (!is_range) {
+		if (is_range) {
+			bool positive_step
+				= fo->range.stepval == NULL || val_is_nonnegative(*fo->range.stepval, val_type);
+			if (!(flags & FOR_INCLUDES_FROM)) {
+				if (has_val)
+					cgen_ident(g, val_ident);
+				else
+					cgen_write(g, "val_");
+				cgen_write(g, " += ");
+				if (fo->range.stepval) {
+					cgen_val(g, fo->range.stepval, val_type);
+				} else {
+					cgen_write(g, "1");
+				}
+			}
+			cgen_write(g, "; ");
+			if (fo->range.to) { /* if finite */
+				if (has_val)
+					cgen_ident(g, val_ident);
+				else
+					cgen_write(g, "val_");
+				cgen_write(g, " %c%s to_; ", positive_step ? '<' : '>', (flags & FOR_INCLUDES_TO) ? "=" : "");
+			}
+			if (fo->range.stepval) {
+				cgen_val_pre(g, fo->range.stepval, val_type);
+			}
+			if (has_val)
+				cgen_ident(g, val_ident);
+			else
+				cgen_write(g, "val_");
+			cgen_write(g, " += ");
+			if (fo->range.stepval) {
+				cgen_val(g, fo->range.stepval, val_type);
+			} else {
+				cgen_write(g, "1");
+			}
+			if (has_index) { cgen_write(g, ", ++"); cgen_ident(g, index_ident); }
+		} else {
 			cgen_type_pre(g, val_type);
 			cgen_write(g, "(%sp_)", uses_ptr ? "" : "*");
 			cgen_type_post(g, val_type);
@@ -1779,46 +1814,10 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 				break;
 			default: assert(0); break;
 			}
+			cgen_write(g, "; p_ != end_; ++p_");
+			if (has_index) { cgen_write(g, ", ++"); cgen_ident(g, index_ident); }
 		}
-
-		cgen_write(g, "; ");
-		if (!(is_range && !fo->range.to)) { /* if it's finite */
-			if (is_range) {
-				if (has_val)
-					cgen_ident(g, val_ident);
-				else
-					cgen_write(g, "val_");
-				bool positive_step
-					= fo->range.stepval == NULL || val_is_nonnegative(*fo->range.stepval, val_type);
-				cgen_write(g, " %c= to_", positive_step ? '<' : '>');
-			} else {
-				cgen_write(g, "p_ != end_");
-			}
-		}
-		cgen_write(g, "; ");
-		if (is_range) {
-			if (fo->range.stepval) {
-				cgen_val_pre(g, fo->range.stepval, val_type);
-			}
-			if (has_val)
-				cgen_ident(g, val_ident);
-			else
-				cgen_write(g, "val_");
-			cgen_write(g, " += ");
-			if (fo->range.stepval) {
-				cgen_val(g, fo->range.stepval, val_type);
-			} else {
-				cgen_write(g, "1");
-			}
-			if (has_index) cgen_write(g, ", ");
-		} else {
-			cgen_write(g, "++p_");
-			if (has_index) cgen_write(g, ", ");
-		}
-		if (has_index) {
-			cgen_write(g, "++");
-			cgen_ident(g, index_ident);
-		}
+		
 		cgen_write(g, ") {");
 		cgen_nl(g);
 		if (has_val) {

@@ -250,7 +250,6 @@ static const char *directives[DIRECT_COUNT] = {
 typedef enum {
 	KW_SEMICOLON,
 	KW_COLON,
-	KW_COMMA,
 	KW_LPAREN,
 	KW_RPAREN,
 	KW_LBRACE,
@@ -278,6 +277,10 @@ typedef enum {
 	KW_SLASH,
 	KW_PERCENT,
 	KW_DOTDOT,
+	KW_DOTCOMMA,
+	KW_COMMADOT,
+	KW_COMMACOMMA,
+	KW_COMMA,
 	KW_DOT,
 	KW_EQ,
 	KW_LAST_SYMBOL = KW_EQ, /* last one entirely consisting of symbols */
@@ -322,10 +325,10 @@ typedef enum {
 } Keyword;
 
 static const char *const keywords[KW_COUNT] = {
-	";", ":", ",", "(", ")", "{", "}", "[", "]", "==",
+	";", ":", "(", ")", "{", "}", "[", "]", "==",
 	"+=", "-=", "*=", "/=", "%=",
 	"!=", "<=", "<", ">=", ">", "&&", "||",
-	"+", "-", "*", "!", "&", "/", "%", "..", ".",
+	"+", "-", "*", "!", "&", "/", "%", "..", ".,", ",.", ",,", ",", ".",
 	"=",
 	"if", "elif", "else", "while", "for", "return", "break",
 	"continue", "defer", "fn", "as", "struct",
@@ -864,10 +867,13 @@ typedef struct While {
 } While;
 
 enum {
-	FOR_IS_RANGE = 0x01
+	FOR_IS_RANGE = 0x01,
+	FOR_INCLUDES_FROM = 0x02,
+	FOR_INCLUDES_TO = 0x04
 };
+typedef U8 ForFlags;
 typedef struct For {
-	U8 flags;
+	ForFlags flags;
 	Declaration header;
 	Block body;
 	union {

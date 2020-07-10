@@ -430,6 +430,9 @@ static Token *expr_find_end(Parser *p, ExprEndFlags flags)  {
 					return token;
 				break;
 			case KW_DOTDOT:
+			case KW_DOTCOMMA:
+			case KW_COMMADOT:
+			case KW_COMMACOMMA:
 				if (all_levels_0 && (flags & EXPR_CAN_END_WITH_DOTDOT))
 					return token;
 				break;
@@ -2212,6 +2215,10 @@ static bool is_decl(Tokenizer *t) {
 	}
 }
 
+static bool is_for_range_separator(Keyword kw) {
+	return kw == KW_DOTDOT || kw == KW_DOTCOMMA || kw == KW_COMMADOT || kw == KW_COMMACOMMA;
+}
+
 /* sets *was_a_statement to false if s was not filled, but the token was advanced */
 static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 	Tokenizer *t = p->tokr;
@@ -2417,7 +2424,8 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				goto for_fail;
 			if (token_is_kw(first_end, KW_LBRACE)) {
 				fo->of = first;
-			} else if (token_is_kw(first_end, KW_DOTDOT) || token_is_kw(first_end, KW_COMMA)) {
+			} else if (first_end->kind == TOKEN_KW && 
+				(is_for_range_separator(first_end->kw) || first_end->kw == KW_COMMA)) {
 				fo->flags |= FOR_IS_RANGE;
 				fo->range.from = first;
 				if (token_is_kw(first_end, KW_COMMA)) {
@@ -2425,15 +2433,22 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 					++t->token;
 					fo->range.step = parser_new_expr(p);
 					Token *step_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE|EXPR_CAN_END_WITH_DOTDOT);
-					if (!parse_expr(p, fo->range.step, step_end))
-						goto for_fail;
-					if (!token_is_kw(step_end, KW_DOTDOT)) {
-						err_print(token_location(p->file, step_end), "Expected .. to follow step in for statement.");
+					if (step_end->kind != TOKEN_KW || !is_for_range_separator(step_end->kw)) {
+						err_print(token_location(p->file, step_end), "Expected .. / ., / ,. / ,, to follow step in for statement.");
 						tokr_skip_to_eof(t);
 						goto for_fail;
 					}
+					if (!parse_expr(p, fo->range.step, step_end))
+						goto for_fail;
 				} else {
 					fo->range.step = NULL;
+				}
+				{
+					Keyword separator = t->token->kw;
+					if (separator == KW_DOTDOT || separator == KW_DOTCOMMA)
+						fo->flags |= FOR_INCLUDES_FROM;
+					if (separator == KW_DOTDOT || separator == KW_COMMADOT)
+						fo->flags |= FOR_INCLUDES_TO;
 				}
 				++t->token; /* move past .. */
 				if (token_is_kw(t->token, KW_LBRACE)) {

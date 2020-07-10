@@ -8,11 +8,10 @@
 
 /* 
 @TODO:
-a..b should probably only go up to b-1
 figure out how printf is gonna work
 if we do #include "foo.toc", bar; and foo.toc fails, bar should be declared as TYPE_UNKNOWN (right now it's undeclared)
 fix #foreign not at global scope - right now the cgen'd definition doesn't use the proper type
-find out why file output is really slow at compile time; try to improve it
+find out why loop with file output is really slow at compile time; try to improve it
 improve type_to_str:
 	Foo ::= struct(t::Type) {}
 	type_to_str(Foo(int))

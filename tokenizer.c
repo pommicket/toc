@@ -387,8 +387,8 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 			}
 			while (1) {
 				if (*t->s == '.') {
-					if (t->s[1] == '.') {
-						/* .. (not a decimal point; end the number here) */
+					if (!isdigit(t->s[1])) {
+						/* not a decimal point; end the number here (could be .. or .,) */
 						break;
 					}
 					if (token->kind == TOKEN_LITERAL_FLOAT) {

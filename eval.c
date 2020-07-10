@@ -300,35 +300,35 @@ static inline void val_free_ptr(Value *v, Type *t) {
 
 #define builtin_casts_to_int(x) \
 	case BUILTIN_I8: \
-	vout->i8 = (I8)(I64)vin->x; break; \
+	vout->i8 = (I8)(I64)vin.x; break; \
 	case BUILTIN_I16: \
-	vout->i16 = (I16)(I64)vin->x; break; \
+	vout->i16 = (I16)(I64)vin.x; break; \
 	case BUILTIN_I32: \
-	vout->i32 = (I32)(I64)vin->x; break; \
+	vout->i32 = (I32)(I64)vin.x; break; \
 	case BUILTIN_I64: \
-	vout->i64 = (I64)vin->x; break; \
+	vout->i64 = (I64)vin.x; break; \
 	case BUILTIN_U8: \
-	vout->u8 = (U8)(U64)vin->x; break; \
+	vout->u8 = (U8)(U64)vin.x; break; \
 	case BUILTIN_U16: \
-	vout->u16 = (U16)(U64)vin->x; break; \
+	vout->u16 = (U16)(U64)vin.x; break; \
 	case BUILTIN_U32: \
-	vout->u32 = (U32)(U64)vin->x; break; \
+	vout->u32 = (U32)(U64)vin.x; break; \
 	case BUILTIN_U64: \
-	vout->u64 = (U64)vin->x; break
+	vout->u64 = (U64)vin.x; break
 
 #define builtin_casts_to_num(x) \
 	builtin_casts_to_int(x); \
 	case BUILTIN_F32: \
-	vout->f32 = (F32)vin->x; break; \
+	vout->f32 = (F32)vin.x; break; \
 	case BUILTIN_F64: \
-	vout->f64 = (F64)vin->x; break
+	vout->f64 = (F64)vin.x; break
 
 #define builtin_int_casts(low, up) \
 	case BUILTIN_##up: \
 	switch (to) { \
 		builtin_casts_to_num(low); \
-	case BUILTIN_CHAR: vout->charv = (char)vin->low; break; \
-	case BUILTIN_BOOL: vout->boolv = vin->low != 0; break; \
+	case BUILTIN_CHAR: vout->charv = (char)vin.low; break; \
+	case BUILTIN_BOOL: vout->boolv = vin.low != 0; break; \
 	case BUILTIN_NMS: \
 	case BUILTIN_VOID: \
 	case BUILTIN_TYPE: \
@@ -340,7 +340,7 @@ static inline void val_free_ptr(Value *v, Type *t) {
 	case BUILTIN_##up: \
 	switch (to) { \
 		builtin_casts_to_num(low); \
-	case BUILTIN_BOOL: vout->boolv = vin->low != 0.0f; break; \
+	case BUILTIN_BOOL: vout->boolv = vin.low != 0.0f; break; \
 	case BUILTIN_CHAR: \
 	case BUILTIN_TYPE: \
 	case BUILTIN_NMS: \
@@ -349,9 +349,9 @@ static inline void val_free_ptr(Value *v, Type *t) {
 		assert(0); break; \
 	} break
 	
-static void val_builtin_cast(Value *vin, BuiltinType from, Value *vout, BuiltinType to) {
+static void val_builtin_cast(Value vin, BuiltinType from, Value *vout, BuiltinType to) {
 	if (from == to) {
-		*vout = *vin;
+		*vout = vin;
 		return;
 	}
 	switch (from) {
@@ -366,7 +366,7 @@ static void val_builtin_cast(Value *vin, BuiltinType from, Value *vout, BuiltinT
 		builtin_float_casts(f32, F32);
 		builtin_float_casts(f64, F64);
 
-	case BUILTIN_BOOL: vout->boolv = builtin_truthiness(*vin, from); break;
+	case BUILTIN_BOOL: vout->boolv = builtin_truthiness(vin, from); break;
 	case BUILTIN_CHAR:
 		switch (to) {
 			builtin_casts_to_int(charv);
@@ -390,12 +390,12 @@ static void val_builtin_cast(Value *vin, BuiltinType from, Value *vout, BuiltinT
 	}
 }
 
-static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
+static void val_cast(Value vin, Type *from, Value *vout, Type *to) {
 	assert(from->flags & TYPE_IS_RESOLVED);
 	assert(to->flags & TYPE_IS_RESOLVED);
 	
 	if (to->kind == TYPE_BUILTIN && to->builtin == BUILTIN_BOOL) {
-		vout->boolv = val_truthiness(*vin, from);
+		vout->boolv = val_truthiness(vin, from);
 		return;
 	}
 	
@@ -412,14 +412,14 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 			break;
 		case TYPE_PTR:
 			switch (from->builtin) {
-			case BUILTIN_I8: vout->ptr = (void *)(U64)vin->i8; break;
-			case BUILTIN_I16: vout->ptr = (void *)(U64)vin->i16; break;
-			case BUILTIN_I32: vout->ptr = (void *)(U64)vin->i32; break;
-			case BUILTIN_I64: vout->ptr = (void *)(U64)vin->i64; break;
-			case BUILTIN_U8: vout->ptr = (void *)(U64)vin->u8; break;
-			case BUILTIN_U16: vout->ptr = (void *)(U64)vin->u16; break;
-			case BUILTIN_U32: vout->ptr = (void *)(U64)vin->u32; break;
-			case BUILTIN_U64: vout->ptr = (void *)(U64)vin->u64; break;
+			case BUILTIN_I8: vout->ptr = (void *)(U64)vin.i8; break;
+			case BUILTIN_I16: vout->ptr = (void *)(U64)vin.i16; break;
+			case BUILTIN_I32: vout->ptr = (void *)(U64)vin.i32; break;
+			case BUILTIN_I64: vout->ptr = (void *)(U64)vin.i64; break;
+			case BUILTIN_U8: vout->ptr = (void *)(U64)vin.u8; break;
+			case BUILTIN_U16: vout->ptr = (void *)(U64)vin.u16; break;
+			case BUILTIN_U32: vout->ptr = (void *)(U64)vin.u32; break;
+			case BUILTIN_U64: vout->ptr = (void *)(U64)vin.u64; break;
 			default: assert(0); break;
 			}
 			break;
@@ -438,10 +438,10 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 	case TYPE_FN:
 		switch (to->kind) {
 		case TYPE_PTR:
-			vout->ptr = (void *)vin->fn;
+			vout->ptr = (void *)vin.fn;
 			break;
 		case TYPE_FN:
-			vout->fn = vin->fn;
+			vout->fn = vin.fn;
 			break;
 		default:
 			assert(0); break;
@@ -465,13 +465,13 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 			}
 			break;
 		case TYPE_ARR:
-			vout->arr = vin->ptr;
+			vout->arr = vin.ptr;
 			break;
 		case TYPE_PTR:
-			vout->ptr = vin->ptr;
+			vout->ptr = vin.ptr;
 			break;
 		case TYPE_FN:
-			vout->fn = vin->ptr;
+			vout->fn = vin.ptr;
 			break;
 		default:
 			assert(0);
@@ -482,10 +482,10 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 	case TYPE_ARR:
 		switch (to->kind) {
 		case TYPE_PTR:
-			vout->ptr = vin->arr;
+			vout->ptr = vin.arr;
 			break;
 		case TYPE_ARR:
-			vout->arr = vin->arr;
+			vout->arr = vin.arr;
 			break;
 		default:
 			assert(0); break;
@@ -494,13 +494,13 @@ static void val_cast(Value *vin, Type *from, Value *vout, Type *to) {
 	case TYPE_SLICE:
 		switch (to->kind) {
 		case TYPE_PTR:
-			vout->ptr = vin->slice.data;
+			vout->ptr = vin.slice.data;
 			break;
 		case TYPE_ARR:
-			vout->arr = vin->slice.data;
+			vout->arr = vin.slice.data;
 			break;
 		case TYPE_SLICE:
-			vout->slice = vin->slice;
+			vout->slice = vin.slice;
 			break;
 		default:
 			assert(0); break;
@@ -858,6 +858,7 @@ static Status eval_set(Evaluator *ev, Expression *set, Value *to) {
 	return true;
 }
 
+/* @TODO(eventually): this could probably be made better */
 static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value rhs, Type *rhs_type, Value *out, Type *out_type) {
 	/* WARNING: macros ahead */
 
@@ -888,8 +889,8 @@ static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value 
 
 	
 #define eval_binary_op_nums_only(op)			\
-	val_cast(&lhs, lhs_type, &lhs, out_type);	\
-	val_cast(&rhs, rhs_type, &rhs, out_type);	\
+	val_cast(lhs, lhs_type, &lhs, out_type);	\
+	val_cast(rhs, rhs_type, &rhs, out_type);	\
 	assert(out_type->kind == TYPE_BUILTIN);		\
 	switch (builtin) {							\
 		eval_binary_op_nums(builtin, op);		\
@@ -897,8 +898,8 @@ static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value 
 	}
 
 #define eval_binary_op_ints_only(op)			\
-	val_cast(&lhs, lhs_type, &lhs, out_type);	\
-	val_cast(&rhs, rhs_type, &rhs, out_type);	\
+	val_cast(lhs, lhs_type, &lhs, out_type);	\
+	val_cast(rhs, rhs_type, &rhs, out_type);	\
 	assert(out_type->kind == TYPE_BUILTIN);		\
 	switch (builtin) {							\
 		eval_binary_op_ints(builtin, op);		\
@@ -927,8 +928,8 @@ static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value 
 #define eval_binary_bool_op_nums_only(op)						\
 	{Type *cast_to =	lhs_type->flags & TYPE_IS_FLEXIBLE ?	\
 			rhs_type : lhs_type;								\
-		val_cast(&lhs, lhs_type, &lhs, cast_to);				\
-		val_cast(&rhs, rhs_type, &rhs, cast_to);				\
+		val_cast(lhs, lhs_type, &lhs, cast_to);				\
+		val_cast(rhs, rhs_type, &rhs, cast_to);				\
 		assert(lhs_type->kind == TYPE_BUILTIN);					\
 		switch (cast_to->builtin) {								\
 			eval_binary_bool_op_nums(builtin, op);				\
@@ -954,11 +955,11 @@ static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value 
 	case BINARY_SUB:
 		if (lhs_type->kind == TYPE_PTR) {
 			if (rhs_type->kind == TYPE_PTR) {
-				out->i64 = (I64)((char *)rhs.ptr - (char *)lhs.ptr) / (I64)compiler_sizeof(lhs_type);
-
+				out->i64 = (I64)((char *)lhs.ptr - (char *)rhs.ptr) / (I64)compiler_sizeof(lhs_type->ptr);
+			} else {
+				out->ptr = (char *)lhs.ptr - val_to_i64(rhs, rhs_type->builtin)
+					* (I64)compiler_sizeof(lhs_type->ptr);
 			}
-			out->ptr = (char *)lhs.ptr - val_to_i64(rhs, rhs_type->builtin)
-				* (I64)compiler_sizeof(lhs_type->ptr);
 		} else {
 			eval_binary_op_nums_only(-);
 		}
@@ -1235,7 +1236,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	case EXPR_CAST: {
 		Value casted;
 		if (!eval_expr(ev, e->cast.expr, &casted)) return false;
-		val_cast(&casted, &e->cast.expr->type, v, &e->cast.type);
+		val_cast(casted, &e->cast.expr->type, v, &e->cast.type);
 	} break;
 	case EXPR_FN:
 		v->fn = e->fn;
@@ -1609,7 +1610,9 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 		Value *value_val = &for_val_tuple[0];
 		Value *index_val = &for_val_tuple[1];
 		Type *value_type = &header->type.tuple[0];
-		if (fo->flags & FOR_IS_RANGE) {
+		ForFlags flags = fo->flags;
+
+		if (flags & FOR_IS_RANGE) {
 			assert(value_type->kind == TYPE_BUILTIN);
 			Value from, to;
 			Value stepval;
@@ -1618,9 +1621,19 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 			if (fo->range.to && !eval_expr(ev, fo->range.to, &to)) return false;
 			if (fo->range.stepval)
 				stepval = *fo->range.stepval;
-			Value x = from;
+			Value x;
+			val_cast(from, &fo->range.from->type, &x, value_type);
 			bool step_is_negative = fo->range.stepval && !val_is_nonnegative(stepval, value_type);
 			if (index_val) index_val->i64 = 0;
+			BinaryOp compare_binop;
+			if (flags & FOR_INCLUDES_TO) {
+				compare_binop = step_is_negative ? BINARY_GE : BINARY_LE;
+			} else {
+				compare_binop = step_is_negative ? BINARY_GT : BINARY_LT;
+			}
+			if (!(flags & FOR_INCLUDES_FROM)) { 
+				eval_numerical_bin_op(x, value_type, BINARY_ADD, stepval, value_type, &x, value_type);
+			}
 			while (1) {
 				if (fo->range.to) {
 					/* check if loop has ended */
@@ -1632,7 +1645,7 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 					boolt.builtin = BUILTIN_BOOL;
 					Value cont;
 					
-					eval_numerical_bin_op(lhs, value_type, step_is_negative ? BINARY_GE : BINARY_LE, rhs, &fo->range.to->type, &cont, &boolt);
+					eval_numerical_bin_op(lhs, value_type, compare_binop, rhs, &fo->range.to->type, &cont, &boolt);
 					if (!cont.boolv) break;
 				}
 				if (value_val) *value_val = x;

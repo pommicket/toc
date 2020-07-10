@@ -8,7 +8,7 @@ static Status types_block(Typer *tr, Block *b);
 static Status types_decl(Typer *tr, Declaration *d);
 static Status type_resolve(Typer *tr, Type *t, Location where);
 static Status eval_expr(Evaluator *ev, Expression *e, Value *v);
-static void val_cast(Value *vin, Type *from, Value *vout, Type *to);
+static void val_cast(Value vin, Type *from, Value *vout, Type *to);
 static U64 val_to_u64(Value v, BuiltinType v_type);
 static I64 val_to_i64(Value v, BuiltinType v_type);
 static bool val_truthiness(Value v, Type *t);
@@ -660,7 +660,7 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 					if (param->expr.type.flags & TYPE_IS_FLEXIBLE) {
 						/* cast to the annotated type, if one exists */
 						if (param->flags & DECL_ANNOTATES_TYPE) {
-							val_cast(&param->expr.val, &param->expr.type, &param->expr.val, &param->type);
+							val_cast(param->expr.val, &param->expr.type, &param->expr.val, &param->type);
 							param->expr.type = param->type;
 						}
 					}
@@ -3384,10 +3384,10 @@ top:
 				index_type = &fo_type_tuple[1];
 				assert(val_type->flags & TYPE_IS_RESOLVED);
 				assert(index_type->flags & TYPE_IS_RESOLVED);
-				if (!type_is_int(index_type)) {
+				if (!type_is_builtin(index_type, BUILTIN_I64)) {
 					char *str = type_to_str(index_type);
-					err_print(header->where, "Expected index type of for loop to be a builtin integer type, but it's %s.", str);
-					free(s);
+					err_print(header->where, "Expected index type of for loop to be type int, but it's %s.", str);
+					free(str);
 					goto for_fail;
 				}
 			} else {
@@ -3485,7 +3485,7 @@ top:
 					info_print(fo->range.step->where, "Note that the step of a for loop must be a compile-time constant.");
 					goto for_fail;
 				}
-				val_cast(stepval, &fo->range.step->type, stepval, val_type);
+				val_cast(*stepval, &fo->range.step->type, stepval, val_type);
 				fo->range.stepval = stepval;
 			}
 		} else {

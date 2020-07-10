@@ -12,8 +12,8 @@ fi
 
 valgrind $FLAGS --track-origins=yes --exit-on-first-error=yes --error-exitcode=1 --malloc-fill=0xcd  --free-fill=0xef --num-callers=100 ./toc $tocf || exit 1
 if [ "$1" = "c" ]; then
-	gcc out.c -g -Wno-builtin-declaration-mismatch && ./a.out
+	./test
 elif [ "$1" = "pc" ]; then
-	cat out.c
+	cat test.c
 fi
 rm vgcore* 2> /dev/null

@@ -2,25 +2,8 @@
 #include "std/mem.toc";
 
 main ::= fn() {
-	n := 100000000;
-	sieve := news(bool, n);
-	sieve[0] = true;
-	sieve[1] = true;
-	i := 0;
-	while i*i <= n {
-		defer i += 1;
-		if sieve[i] { continue; }
-		j := 2*i;
-		while j < n {
-			sieve[j] = true;
-			j += i;
-		}
+	for i, v : (float, int) = 10,-1,.0 {
+		io.puti(i as int);
 	}
-	total := 0;
-	for is_composite, i := sieve {
-		if !is_composite {
-			total += i;
-		}
-	}
-	io.puti(total);
 }
+main();
