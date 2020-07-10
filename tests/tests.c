@@ -85,11 +85,11 @@ int main(int argc, char **argv) {
 		printf("Running test %s... ", test);
 		fflush(stdout);
 		if (windows) {
-			sprintf(command, "..\\toc %s.toc", test);
+			sprintf(command, "..\\toc -c %s.toc -o out.c", test);
 		} else if (valgrind) {
-			sprintf(command, "valgrind -q --error-exitcode=1 ../toc %s.toc", test);
+			sprintf(command, "valgrind -q --error-exitcode=1 ../toc -c %s.toc -o out.c", test);
 		} else {
-			sprintf(command, "../toc %s.toc", test);
+			sprintf(command, "../toc -c %s.toc -o out.c", test);
 		}
 		if (system(command)) {
 			fprintf(stderr, "%s (while compiling toc).\n", failed);
