@@ -1380,9 +1380,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			++t->token;
 			Type *fn_t = &fn->foreign.type;
 			fn_t->kind = TYPE_FN;
-			FnType *fn_type = fn_t->fn = parser_malloc(p, sizeof *fn_t);
-			fn_type->constness = NULL;
-			fn_type->types = NULL;
+			FnType *fn_type = fn_t->fn = parser_calloc(p, 1, sizeof *fn_type);
 			/* reserve space for return type (Type + CType) */
 			parser_arr_add_ptr(p, fn_type->types);
 			parser_arr_add_ptr(p, fn->foreign.ctypes);

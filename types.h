@@ -648,11 +648,11 @@ enum {
 typedef struct FnExpr {
 	Location where;
 	Block *declaration_block; /* block wherein this function is declared */
+	U64 instance_id; /* 0 if not an instance. needs to be available even for #foreign functions */
 	union {
 		struct {
 			struct Declaration *params; /* declarations of the parameters to this function */
 			struct Declaration *ret_decls; /* array of decls, if this has named return values. otherwise, NULL */
-			U64 instance_id; /* 0 if not an instance */
 			Type ret_type;	
 			Block body;
 		};
