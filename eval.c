@@ -735,7 +735,7 @@ static Status eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr, void
 		if (is_ptr) {
 			struc_data = struc.ptr;
 			if (struc_data == NULL) {
-				err_print(dot_expr->where, "Attempt to dereference NULL pointer.");
+				err_print(dot_expr->where, "Attempt to dereference null pointer.");
 				return false;
 			}
 		} else {
@@ -986,14 +986,14 @@ static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value 
 	}
 }
 
-static Value val_zero(Type *t) {
+static Value val_zero(Allocator *a, Type *t) {
 	Value val = {0};
 	switch (t->kind) {
 	case TYPE_STRUCT:
-		val.struc = err_calloc(1, compiler_sizeof(t));
+		val.struc = allocr_calloc(a, 1, compiler_sizeof(t));
 		break;
 	case TYPE_ARR:
-		val.arr = err_calloc((size_t)t->arr.n, compiler_sizeof(t->arr.of));
+		val.arr = allocr_calloc(a, (size_t)t->arr.n, compiler_sizeof(t->arr.of));
 		break;
 	default:
 		break;
@@ -1095,7 +1095,8 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 	switch (e->kind) {
 	case EXPR_UNARY_OP: {
 		Value of;
-		if (!eval_expr(ev, e->unary.of, &of)) return false;
+		if (e->unary.op != UNARY_ADDRESS)
+			if (!eval_expr(ev, e->unary.of, &of)) return false;
 		switch (e->unary.op) {
 		case UNARY_ADDRESS: {
 			Expression *o = e->unary.of;
@@ -1334,7 +1335,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				if (d->flags & DECL_HAS_EXPR) {
 					*ival = d->type.kind == TYPE_TUPLE ? ret_decl_val.tuple[idx] : ret_decl_val;
 				} else {
-					*ival = val_zero(type);
+					*ival = val_zero(NULL, type);
 				}
 				++idx;
 			}
@@ -1476,7 +1477,7 @@ static Status eval_decl(Evaluator *ev, Declaration *d) {
 						*ival = v;
 					}
 				} else {
-					*ival = val_zero(type);
+					*ival = val_zero(NULL, type);
 				}
 			}
 			++index;

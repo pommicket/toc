@@ -1342,8 +1342,9 @@ static void cgen_fn(CGenerator *g, FnExpr *f) {
 		return;
 	FnExpr *prev_fn = g->fn;
 	Block *prev_block = g->block;
+	Block *body = &f->body;
 	g->fn = f;
-	g->block = &f->body;
+	g->block = body;
 	cgen_fn_header(g, f);
 	cgen_write(g, " {");
 	cgen_nl(g);
@@ -1394,8 +1395,9 @@ static void cgen_fn(CGenerator *g, FnExpr *f) {
 		cgen_decl(g, d);
 	}
 	
-	cgen_block(g, &f->body, CGEN_BLOCK_NOBRACES);
-	cgen_deferred_from_block(g, &f->body);
+	cgen_block(g, body, CGEN_BLOCK_NOBRACES);
+	cgen_deferred_from_block(g, body);
+	arr_clear(body->deferred);
 	if (f->ret_decls) cgen_ret(g, NULL, NULL); /* for example, if function is fn() x: int, we need to generate return x; at the end */
 	cgen_writeln(g, "}");
 	g->block = prev_block;
@@ -1661,6 +1663,7 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 	} break;
 	case STMT_FOR: {
 		For *fo = s->for_;
+		Block *body = &fo->body;
 		ForFlags flags = fo->flags;
 		U32 is_range = flags & FOR_IS_RANGE;
 		Declaration *header_decl = &fo->header;
@@ -1843,8 +1846,9 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 				}
 			}
 		}
-		cgen_block(g, &fo->body, CGEN_BLOCK_NOBRACES);
-		cgen_deferred_from_block(g, &fo->body);
+		cgen_block(g, body, CGEN_BLOCK_NOBRACES);
+		cgen_deferred_from_block(g, body);
+		arr_clear(body->deferred);
 		cgen_write(g, "}}");
 		if (fo->body.c.break_lbl) {
 			cgen_lbl(g, fo->body.c.break_lbl);

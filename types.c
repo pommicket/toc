@@ -12,7 +12,7 @@ static void val_cast(Value vin, Type *from, Value *vout, Type *to);
 static U64 val_to_u64(Value v, BuiltinType v_type);
 static I64 val_to_i64(Value v, BuiltinType v_type);
 static bool val_truthiness(Value v, Type *t);
-static Value val_zero(Type *t); 
+static Value val_zero(Allocator *a, Type *t); 
 static Status eval_stmt(Evaluator *ev, Statement *stmt); 
 static Status struct_resolve(Typer *tr, StructDef *s);
 static Status expr_must_usable(Typer *tr, Expression *e);
@@ -1750,11 +1750,12 @@ static Status types_expr(Typer *tr, Expression *e) {
 						e->flags = 0;
 						e->binary.op = BINARY_DOT;
 						e->binary.lhs = used;
-						e->binary.rhs = typer_calloc(tr, 1, sizeof *e->binary.rhs);
-						e->binary.rhs->kind = EXPR_IDENT;
-						e->binary.rhs->flags = 0;
-						e->binary.rhs->ident_str.str = i_str;
-						e->binary.rhs->ident_str.len = i_len;
+						Expression *rhs = e->binary.rhs = typer_calloc(tr, 1, sizeof *e->binary.rhs);
+						rhs->where = e->where;
+						rhs->kind = EXPR_IDENT;
+						rhs->flags = 0;
+						rhs->ident_str.str = i_str;
+						rhs->ident_str.len = i_len;
 						/* re-type */
 						if (!types_expr(tr, e))
 							return false;
@@ -2366,7 +2367,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 							copy_val(tr->allocr, &varg->val, arg->val, varg->type);
 						} else {
 							/* use zero value everywhere */
-							varg->val = val_zero(varg->type);
+							varg->val = val_zero(tr->allocr, varg->type);
 						}
 					}
 				} else if (is_const) {
@@ -2845,6 +2846,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					/* foo.baz => (foo.bar).baz */
 					Expression *old_lhs = lhs;
 					lhs = e->binary.lhs = typer_malloc(tr, sizeof *lhs);
+					lhs->where = old_lhs->where;
 					lhs->kind = EXPR_BINARY_OP;
 					lhs->flags = 0;
 					lhs->binary.op = BINARY_DOT;
@@ -2852,6 +2854,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					Expression *middle = lhs->binary.rhs = typer_calloc(tr, 1, sizeof *lhs->binary.rhs);
 					middle->kind = EXPR_IDENT;
 					middle->flags = 0;
+					middle->where = e->where;
 					assert(arr_len(uf->use_decl->idents) == 1);
 					middle->ident_str = ident_to_string(uf->use_decl->idents[0]);
 					e->flags &= (ExprFlags)~(ExprFlags)EXPR_FOUND_TYPE;
@@ -3146,13 +3149,13 @@ static Status types_decl(Typer *tr, Declaration *d) {
 	} else if (!tr->block || tr->block->kind == BLOCK_NMS) {
 		/* give global variables without initializers a value stack */
 		Value *val = typer_malloc(tr, sizeof *val);
-		arr_add(d->val_stack, val);
+		arr_adda(d->val_stack, val, tr->allocr); /* arr_adda because this will never be freed */
 		if (n_idents > 1 && dtype->kind != TYPE_TUPLE) {
 			Value *tuple = val->tuple = typer_malloc(tr, n_idents * sizeof *tuple);
 			for (size_t i = 0; i < n_idents; ++i)	
-				tuple[i] = val_zero(dtype);
+				tuple[i] = val_zero(tr->allocr, dtype);
 		} else {
-			*val = val_zero(dtype);
+			*val = val_zero(tr->allocr, dtype);
 		}
 	}
 
