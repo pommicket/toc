@@ -434,8 +434,16 @@ typedef U8 Constness;
 
 typedef struct FnType {
 	struct Type *types; /* dynamic array [0] = ret_type, [1:] = param_types  */
-	Constness *constness; /* [i] = constness of param #i. iff no parameters are constant, this is NULL. don't use it as a dynamic array, because eventually it might not be. */
+	Constness *constness; /* [i] = constness of param #i. iff no parameters are constant, this is NULL. don't use it as a dynamic array, because it might not always be. */
 } FnType;
+
+typedef struct {
+	struct Type *of;
+	union {
+		U64 n; /* after resolving */
+		struct Expression *n_expr; /* before resolving */
+	};
+} ArrType;
 
 enum {
 	TYPE_IS_FLEXIBLE = 0x01,
@@ -447,15 +455,9 @@ typedef struct Type {
 	TypeFlags flags;
 	union {
 		BuiltinType builtin;
-		FnType fn;
+		FnType *fn;
 		struct Type *tuple;
-		struct {
-			struct Type *of;
-			union {
-				U64 n; /* after resolving */
-				struct Expression *n_expr; /* before resolving */
-			};
-		} arr;
+		ArrType *arr;
 		struct Type *ptr;
 		struct Type *slice;
 		struct StructDef *struc; /* multiple resolved types can refer to the same struct */

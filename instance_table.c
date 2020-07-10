@@ -97,7 +97,7 @@ static U64 type_hash(Type *t) {
 			hash = hash * type_hash(sub) + 0x16225b0aa9993299;
 		return hash;
 	case TYPE_FN:
-		arr_foreach(t->fn.types, Type, sub)
+		arr_foreach(t->fn->types, Type, sub)
 			hash = hash * type_hash(sub) + 0x2092d851ab2008de;
 		return hash;
 	case TYPE_PTR:
@@ -110,8 +110,8 @@ static U64 type_hash(Type *t) {
 		hash += (U64)t->struc;
 		return hash;
 	case TYPE_ARR:
-		hash += type_hash(t->arr.of) * 0x3b6256104800a414 + 0xa901e68bbd8968a1
-			+ 0xbf79c81a3e68e504 * t->arr.n;
+		hash += type_hash(t->arr->of) * 0x3b6256104800a414 + 0xa901e68bbd8968a1
+			+ 0xbf79c81a3e68e504 * t->arr->n;
 		return hash;
 	case TYPE_EXPR: break;
 	}
@@ -169,9 +169,9 @@ static U64 val_ptr_hash(void *v, Type *t) {
 	case TYPE_ARR: {
 		U32 x = 1;
 		U64 hash = 0;
-		U64 size = (U64)compiler_sizeof(t->arr.of);
-		for (U64 i = 0; i < (U64)t->arr.n; ++i) {
-			hash += (U64)x * val_ptr_hash((char *)v + i * size, t->arr.of);
+		U64 size = (U64)compiler_sizeof(t->arr->of);
+		for (U64 i = 0; i < (U64)t->arr->n; ++i) {
+			hash += (U64)x * val_ptr_hash((char *)v + i * size, t->arr->of);
 			x = rand_u32(x);
 		}
 		return hash;
@@ -259,10 +259,10 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 		return true;
 	}
 	case TYPE_ARR: {
-		U64 size = (U64)compiler_sizeof(t->arr.of);
+		U64 size = (U64)compiler_sizeof(t->arr->of);
 		char *uptr = u, *vptr = v;
-		for (U64 i = 0; i < t->arr.n; ++i) {
-			if (!val_ptr_eq(uptr, vptr, t->arr.of))
+		for (U64 i = 0; i < t->arr->n; ++i) {
+			if (!val_ptr_eq(uptr, vptr, t->arr->of))
 				return false;
 			uptr += size;
 			vptr += size;
@@ -270,7 +270,7 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 		return true;
 	}
 	case TYPE_SLICE: {
-		U64 size = (U64)compiler_sizeof(t->arr.of);
+		U64 size = (U64)compiler_sizeof(t->arr->of);
 		Slice *r = u;
 		Slice *s = v;
 		if (r->len != s->len) return false;

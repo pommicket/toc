@@ -220,14 +220,14 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 	}
 	case TYPE_FN: {
 		size_t written = str_copy(buffer, bufsize, "fn (");
-		Type *ret_type = t->fn.types;
+		Type *ret_type = t->fn->types;
 		Type *param_types = ret_type + 1;
-		size_t nparams = arr_len(t->fn.types) - 1;
+		size_t nparams = arr_len(t->fn->types) - 1;
 		for (size_t i = 0; i < nparams; ++i) {
 			if (i > 0)
 				written += str_copy(buffer + written, bufsize - written, ", ");
-			if (t->fn.constness) {
-				switch (t->fn.constness[i]) {
+			if (t->fn->constness) {
+				switch (t->fn->constness[i]) {
 				case CONSTNESS_NO: break;
 				case CONSTNESS_SEMI:
 					written += str_copy(buffer + written, bufsize - written, ":::");
@@ -275,13 +275,13 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 	case TYPE_ARR: {
 		size_t written = str_copy(buffer, bufsize, "[");
 		if (resolved) {
-			snprintf(buffer + written, bufsize - written, U64_FMT, t->arr.n);
+			snprintf(buffer + written, bufsize - written, U64_FMT, t->arr->n);
 			written += strlen(buffer + written);
 		} else {
 			written += str_copy(buffer + written, bufsize - written, "N");
 		}
 		written += str_copy(buffer + written, bufsize - written, "]");
-		written += type_to_str_(t->arr.of, buffer + written, bufsize - written);
+		written += type_to_str_(t->arr->of, buffer + written, bufsize - written);
 		return written;
 	}
 	case TYPE_SLICE: {
@@ -542,18 +542,17 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 		case KW_FN: {
 			/* function type */
 			type->kind = TYPE_FN;
-			type->fn.types = NULL;
-			type->fn.constness = NULL;
+			FnType *fn = type->fn = parser_calloc(p, 1, sizeof *type->fn);
 			++t->token;
 			if (!token_is_kw(t->token, KW_LPAREN)) {
 				tokr_err(t, "Expected ( to follow fn.");
 				return false;
 			}
-			parser_arr_add_ptr(p, type->fn.types); /* add return type */
+			parser_arr_add_ptr(p, fn->types); /* add return type */
 			++t->token;
 			if (!token_is_kw(t->token, KW_RPAREN)) {
 				while (1) {
-					Type *param_type = parser_arr_add_ptr(p, type->fn.types);
+					Type *param_type = parser_arr_add_ptr(p, fn->types);
 					Location type_where;
 					if (!parse_type(p, param_type, &type_where)) return false;
 					if (token_is_kw(t->token, KW_RPAREN))
@@ -566,7 +565,7 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 				}
 			}
 			++t->token;	/* move past ) */
-			Type *ret_type = type->fn.types;
+			Type *ret_type = fn->types;
 			/* if there's a symbol that isn't [, (, or &, that can't be the start of a type */
 			if ((t->token->kind == TOKEN_KW
 				 && t->token->kw <= KW_LAST_SYMBOL
@@ -587,6 +586,7 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 		case KW_LSQUARE: {
 			/* array/slice */
 			type->kind = TYPE_ARR;
+			ArrType *arr = type->arr = parser_malloc(p, sizeof *type->arr);
 			++t->token;	/* move past [ */
 			if (token_is_kw(t->token, KW_RSQUARE)) {
 				/* slice */
@@ -598,12 +598,12 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 				break;
 			}
 			Token *end = expr_find_end(p, 0);
-			type->arr.n_expr = parser_new_expr(p);
-			if (!parse_expr(p, type->arr.n_expr, end)) return false;
+			arr->n_expr = parser_new_expr(p);
+			if (!parse_expr(p, arr->n_expr, end)) return false;
 			t->token = end + 1;	/* go past ] */
-			type->arr.of = parser_malloc(p, sizeof *type->arr.of);
+			arr->of = parser_malloc(p, sizeof *arr->of);
 			Location of_where;
-			if (!parse_type(p, type->arr.of, &of_where)) return false;
+			if (!parse_type(p, arr->of, &of_where)) return false;
 		} break;
 		case KW_AMPERSAND: {
 			/* pointer */
@@ -1380,7 +1380,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			++t->token;
 			Type *fn_t = &fn->foreign.type;
 			fn_t->kind = TYPE_FN;
-			FnType *fn_type = &fn_t->fn;
+			FnType *fn_type = fn_t->fn = parser_malloc(p, sizeof *fn_t);
 			fn_type->constness = NULL;
 			fn_type->types = NULL;
 			/* reserve space for return type (Type + CType) */

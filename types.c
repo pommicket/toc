@@ -239,7 +239,7 @@ static size_t compiler_alignof(Type *t) {
 	case TYPE_TUPLE:
 		return toc_alignof(Value *);
 	case TYPE_ARR:
-		return compiler_alignof(t->arr.of);
+		return compiler_alignof(t->arr->of);
 	case TYPE_SLICE:
 		if (sizeof(void *) > sizeof(size_t))
 			return toc_alignof(void *);
@@ -267,7 +267,7 @@ static size_t compiler_sizeof(Type *t) {
 	case TYPE_PTR:
 		return sizeof v.ptr;
 	case TYPE_ARR:
-		return (size_t)t->arr.n * compiler_sizeof(t->arr.of);
+		return (size_t)t->arr->n * compiler_sizeof(t->arr->of);
 	case TYPE_TUPLE:
 		return sizeof v.tuple;
 	case TYPE_SLICE:
@@ -358,10 +358,11 @@ static bool type_eq_exact(Type *a, Type *b) {
 	case TYPE_STRUCT:
 		return a->struc == b->struc;
 	case TYPE_FN: {
-		if (arr_len(a->fn.types) != arr_len(b->fn.types)) return false;
-		Type *a_types = a->fn.types, *b_types = b->fn.types;
-		Constness *a_constness = a->fn.constness, *b_constness = b->fn.constness;
-		for (size_t i = 0; i < arr_len(a->fn.types); ++i) {
+		FnType *afn = a->fn, *bfn = b->fn;
+		if (arr_len(afn->types) != arr_len(bfn->types)) return false;
+		Type *a_types = afn->types, *b_types = bfn->types;
+		Constness *a_constness = afn->constness, *b_constness = bfn->constness;
+		for (size_t i = 0; i < arr_len(afn->types); ++i) {
 			Constness const_a = CONSTNESS_NO, const_b = CONSTNESS_NO;
 			if (a_constness)
 				const_a = a_constness[i];
@@ -386,8 +387,8 @@ static bool type_eq_exact(Type *a, Type *b) {
 		return true;
 	}
 	case TYPE_ARR:
-		if (a->arr.n != b->arr.n) return false;
-		return type_eq_exact(a->arr.of, b->arr.of);
+		if (a->arr->n != b->arr->n) return false;
+		return type_eq_exact(a->arr->of, b->arr->of);
 	case TYPE_SLICE:
 		return type_eq_exact(a->slice, b->slice);
 	case TYPE_PTR:
@@ -528,9 +529,9 @@ static bool type_is_compileonly(Type *t) {
 	case TYPE_SLICE:
 		return type_is_compileonly(t->slice);
 	case TYPE_ARR:
-		return type_is_compileonly(t->arr.of);
+		return type_is_compileonly(t->arr->of);
 	case TYPE_FN:
-		arr_foreach(t->fn.types, Type, sub) {
+		arr_foreach(t->fn->types, Type, sub) {
 			if (sub->flags & TYPE_IS_RESOLVED) /* for templates */ {
 				if (type_is_compileonly(sub))
 					return true;
@@ -607,8 +608,7 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	}
 
 	t->kind = TYPE_FN;
-	t->fn.types = NULL;
-	t->fn.constness = NULL; /* @OPTIM: constness doesn't need to be a dynamic array */
+	t->fn = typer_calloc(tr, 1, sizeof *t->fn);
 	t->flags = 0;
 	bool success = true;
 	bool entered_fn = false;
@@ -624,7 +624,7 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	size_t idx = 0;
 	bool has_constant_params = false;
 	/* reserve space for return type */
-	typer_arr_add_ptr(tr, t->fn.types);
+	typer_arr_add_ptr(tr, t->fn->types);
 	tr->fn = f;
 	Block *prev_block = tr->block;
 	tr->block = &f->body;
@@ -669,15 +669,15 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 		}
 		U32 is_at_all_const = param->flags & (DECL_IS_CONST | DECL_SEMI_CONST);
 		if (is_at_all_const) {
-			if (!t->fn.constness) {
+			if (!t->fn->constness) {
 				has_constant_params = true;
 				for (size_t i = 0; i < idx; ++i) {
-					typer_arr_add(tr, t->fn.constness, CONSTNESS_NO);
+					typer_arr_add(tr, t->fn->constness, CONSTNESS_NO);
 				}
 			}
 		}
 		for (size_t i = 0; i < arr_len(param->idents); ++i) {
-			Type *param_type = typer_arr_add_ptr(tr, t->fn.types);
+			Type *param_type = typer_arr_add_ptr(tr, t->fn->types);
 			if (param->flags & (DECL_ANNOTATES_TYPE|DECL_FOUND_TYPE))
 				*param_type = param->type;
 			else
@@ -691,7 +691,7 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 				} else {
 					constn = CONSTNESS_NO;
 				}
-				typer_arr_add(tr, t->fn.constness, constn);
+				typer_arr_add(tr, t->fn->constness, constn);
 			}
 			++idx;
 		}
@@ -753,7 +753,7 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 	}
 	
 	{
-		Type *ret_type = &t->fn.types[0];
+		Type *ret_type = &t->fn->types[0];
 		*ret_type = f->ret_type;
 	}
 
@@ -874,7 +874,7 @@ static Status type_resolve(Typer *tr, Type *t, Location where) {
 	case TYPE_ARR: {
 		/* it's an array */
 		Value val;
-		Expression *n_expr = t->arr.n_expr;
+		Expression *n_expr = t->arr->n_expr;
 		if (!types_expr(tr, n_expr)) return false;
 		if (n_expr->type.kind == TYPE_UNKNOWN) {
 			err_print(n_expr->where, "Cannot determine type of array size at compile time.");
@@ -893,19 +893,19 @@ static Status type_resolve(Typer *tr, Type *t, Location where) {
 		if (type_builtin_is_signed(n_expr->type.builtin)) {
 			I64 ssize = val_to_i64(val, n_expr->type.builtin);
 			if (ssize < 0) {
-				err_print(t->arr.n_expr->where, "Negative array length (" I64_FMT ")", ssize);
+				err_print(t->arr->n_expr->where, "Negative array length (" I64_FMT ")", ssize);
 				return false;
 			}
 			size = (U64)ssize;
 		} else {
 			size = val_to_u64(val, n_expr->type.builtin);
 		}
-		t->arr.n = (U64)size;
-		if (!type_resolve(tr, t->arr.of, where))
+		t->arr->n = (U64)size;
+		if (!type_resolve(tr, t->arr->of, where))
 			return false;
 	} break;
 	case TYPE_FN:
-		arr_foreach(t->fn.types, Type, child_type) {
+		arr_foreach(t->fn->types, Type, child_type) {
 			if (!type_resolve(tr, child_type, where))
 				return false;
 		}
@@ -1201,7 +1201,7 @@ static Status types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 	if (instance) {
 		f = instance->fn;
 	} else {
-		if (t->fn.constness)
+		if (t->fn->constness)
 			return true; /* don't type function body yet; we need to do that for every instance */
 	}
 	{
@@ -1213,7 +1213,7 @@ static Status types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 		success = false;
 		goto ret;
 	}
-	ret_type = t->fn.types;
+	ret_type = t->fn->types;
 	has_named_ret_vals = f->ret_decls != NULL;
 	if (!type_is_builtin(ret_type, BUILTIN_VOID) && !has_named_ret_vals) {
 		Statement *stmts = f->body.stmts;
@@ -1239,7 +1239,7 @@ static Status types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 static Status call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Location where, I16 **orderp) {
 	*orderp = NULL;
 	assert(fn_type->flags & TYPE_IS_RESOLVED);
-	size_t nparams = arr_len(fn_type->fn.types)-1;
+	size_t nparams = arr_len(fn_type->fn->types)-1;
 	size_t nargs = arr_len(args);
 	if (nargs > nparams && !(fn->flags & FN_EXPR_HAS_VARARGS)) {
 		err_print(where, "Expected at most %lu argument%s to function, but got %lu.",
@@ -1639,7 +1639,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		if (!type_of_fn(tr, fn, &e->type, 0)) {
 			return false;
 		}
-		if (!(fn->flags & FN_EXPR_FOREIGN) && (fn_has_any_const_params(fn) || fn_type_has_varargs(&e->type.fn))) {
+		if (!(fn->flags & FN_EXPR_FOREIGN) && (fn_has_any_const_params(fn) || fn_type_has_varargs(e->type.fn))) {
 			fn->instances = typer_calloc(tr, 1, sizeof *fn->instances);
 			t->flags |= TYPE_IS_RESOLVED; /* pretend this type is resolved, even though its children aren't to fix some assertions */
 		} else {
@@ -1839,7 +1839,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 			err_print(e->where, "Calling non-function (type %s).", type);
 			return false;
 		}
-		bool has_varargs = f->type.kind == TYPE_FN && fn_type_has_varargs(&f->type.fn);
+		bool has_varargs = f->type.kind == TYPE_FN && fn_type_has_varargs(f->type.fn);
 		
 		if (expr_is_definitely_const(f) || type_is_builtin(&f->type, BUILTIN_TYPE) || has_varargs) {
 			Value val;
@@ -1983,10 +1983,10 @@ static Status types_expr(Typer *tr, Expression *e) {
 			fn_decl = val.fn;
 		}
 		
-		Type *ret_type = f->type.fn.types;
+		Type *ret_type = f->type.fn->types;
 		Type *param_types = ret_type + 1;
 		Argument *args = c->args;
-		size_t nparams = arr_len(f->type.fn.types) - 1;
+		size_t nparams = arr_len(f->type.fn->types) - 1;
 		size_t nargs = arr_len(c->args);
 		Expression *arg_exprs = NULL;
 		size_t narg_exprs = 0;
@@ -2025,7 +2025,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 							arg_exprs[i].where = param->where;
 							arg_exprs[i].flags = param->expr.flags;
 							arg_exprs[i].type = param->type;
-							if (has_varargs || f->type.fn.constness) {
+							if (has_varargs || f->type.fn->constness) {
 								/* param->expr hasn't been typed or evaluated, because we passed type_of_fn a "generic" function */
 								/* we actually need to make a copy of this, so that copy_fn_expr still works later */
 								Expression default_arg;
@@ -2115,7 +2115,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 			}
 		}
 
-		FnType *fn_type = &f->type.fn;
+		FnType *fn_type = f->type.fn;
 		c->arg_exprs = arg_exprs;
 		FnExpr *original_fn = NULL;
 		FnExpr *fn_copy = NULL;
@@ -2304,7 +2304,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				}
 			}
 
-			ret_type = f->type.fn.types;
+			ret_type = f->type.fn->types;
 			param_types = ret_type + 1;
 		}
 
@@ -2755,7 +2755,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 			}
 			switch (lhs_type->kind) {
 			case TYPE_ARR:
-				*t = *lhs_type->arr.of;
+				*t = *lhs_type->arr->of;
 				break;
 			case TYPE_SLICE:
 				*t = *lhs_type->slice;
@@ -2900,7 +2900,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					e->val.i64 = (I64)arr_len(decl->val.varargs);
 				} else if (struct_type->kind == TYPE_ARR) {	
 					e->kind = EXPR_VAL;
-					e->val.i64 = (I64)struct_type->arr.n;
+					e->val.i64 = (I64)struct_type->arr->n;
 				}
 			} else if (type_is_builtin(struct_type, BUILTIN_NMS)) {
 				Value nms_val;
@@ -2951,7 +2951,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 			return false;
 		switch (s->of->type.kind) {
 		case TYPE_ARR:
-			t->slice = s->of->type.arr.of;
+			t->slice = s->of->type.arr->of;
 			break;
 		case TYPE_SLICE:
 			t->slice = s->of->type.slice;
@@ -3214,16 +3214,16 @@ static Status types_decl(Typer *tr, Declaration *d) {
 					if (!type_resolve(tr, val->type, d->where)) return false;
 				}
 			}
-		} else if (!(d->flags & DECL_IS_CONST) && t->kind == TYPE_FN && t->fn.constness) {
-			for (size_t p = 0; p < arr_len(t->fn.types)-1; ++p) {
-				if (t->fn.constness[p] == CONSTNESS_YES) {
+		} else if (!(d->flags & DECL_IS_CONST) && t->kind == TYPE_FN && t->fn->constness) {
+			for (size_t p = 0; p < arr_len(t->fn->types)-1; ++p) {
+				if (t->fn->constness[p] == CONSTNESS_YES) {
 					err_print(d->where, "You can't have a pointer to a function with constant parameters.");
 					success = false;
 					goto ret;
 				}
 			}
 			/* make constness NULL, so that semi-constant parameters turn into non-constant arguments */
-			t->fn.constness = NULL;
+			t->fn->constness = NULL;
 		}
 	}
 
@@ -3507,7 +3507,7 @@ top:
 				iter_type = iter_type->slice;
 				break;
 			case TYPE_ARR:
-				iter_type = iter_type->arr.of;
+				iter_type = iter_type->arr->of;
 				break;
 			case TYPE_BUILTIN:
 				switch (iter_type->builtin) {

@@ -186,14 +186,14 @@ static void cgen_type_pre(CGenerator *g, Type *t) {
 		cgen_write(g, "(*");
 		break;
 	case TYPE_ARR:
-		cgen_type_pre(g, t->arr.of);
+		cgen_type_pre(g, t->arr->of);
 		cgen_write(g, "(");
 		break;
 	case TYPE_FN:
-		if (cgen_uses_ptr(&t->fn.types[0])) {
+		if (cgen_uses_ptr(&t->fn->types[0])) {
 			cgen_write(g, "void");
 		} else {
-			cgen_type_pre(g, &t->fn.types[0]);
+			cgen_type_pre(g, &t->fn->types[0]);
 		}
 		cgen_write(g, " (*");
 		break;
@@ -222,23 +222,26 @@ static void cgen_type_post(CGenerator *g, Type *t) {
 		break;
 	case TYPE_ARR:
 		assert(t->flags & TYPE_IS_RESOLVED);
-		cgen_write(g, "[%lu])", (unsigned long)t->arr.n);
-		cgen_type_post(g, t->arr.of);
+		cgen_write(g, "[%lu])", (unsigned long)t->arr->n);
+		cgen_type_post(g, t->arr->of);
 		break;
 	case TYPE_FN: {
-		bool out_param = cgen_uses_ptr(&t->fn.types[0]);
+		Type *types = t->fn->types;
+		size_t ntypes = arr_len(types);
+		bool out_param = cgen_uses_ptr(&types[0]);
 		cgen_write(g, ")(");
-		for (size_t i = 1; i < arr_len(t->fn.types); ++i) {
+		for (size_t i = 1; i < ntypes; ++i) {
+			Type *type = &types[i];
 			if (i != 1)
 				cgen_write(g, ", ");
-			cgen_type_pre(g, &t->fn.types[i]);
-			if (cgen_uses_ptr(&t->fn.types[i]))
+			cgen_type_pre(g, type);
+			if (cgen_uses_ptr(type))
 				cgen_write(g, "(*)");
-			cgen_type_post(g, &t->fn.types[i]);
+			cgen_type_post(g, type);
 		}
 		if (out_param) {
-			Type *ret_type = &t->fn.types[0];
-			if (arr_len(t->fn.types) > 1)
+			Type *ret_type = &types[0];
+			if (ntypes > 1)
 				cgen_write(g, ", ");
 			if (ret_type->kind == TYPE_TUPLE) {
 				arr_foreach(ret_type->tuple, Type, x) {
@@ -255,11 +258,11 @@ static void cgen_type_post(CGenerator *g, Type *t) {
 				cgen_type_post(g, ret_type);
 			}
 		}
-		if (arr_len(t->fn.types) == 1 && !out_param)
+		if (ntypes == 1 && !out_param)
 			cgen_write(g, "void");
 		cgen_write(g, ")");
 		if (!out_param)
-			cgen_type_post(g, &t->fn.types[0]);
+			cgen_type_post(g, &types[0]);
 	} break;
 	case TYPE_BUILTIN:
 	case TYPE_UNKNOWN:
@@ -375,8 +378,8 @@ static void cgen_val_ptr_pre(CGenerator *g, void *v, Type *t) {
 		}
 	} break;
 	case TYPE_ARR:
-		for (size_t i = 0; i < t->arr.n; ++i) {
-			cgen_val_ptr_pre(g, (char *)*(void **)v + i * compiler_sizeof(t->arr.of), t->arr.of);
+		for (size_t i = 0; i < t->arr->n; ++i) {
+			cgen_val_ptr_pre(g, (char *)*(void **)v + i * compiler_sizeof(t->arr->of), t->arr->of);
 		}
 		break;
 	case TYPE_FN:
@@ -403,9 +406,10 @@ static void cgen_val_ptr(CGenerator *g, void *v, Type *t) {
 		return;
 	case TYPE_ARR:
 		cgen_write(g, "{");
-		for (size_t i = 0; i < t->arr.n; ++i) {
+		Type *of = t->arr->of;
+		for (size_t i = 0, n = t->arr->n; i < n; ++i) {
 			if (i) cgen_write(g, ", ");
-			cgen_val_ptr(g, (char *)v + i * compiler_sizeof(t->arr.of), t->arr.of);
+			cgen_val_ptr(g, (char *)v + i * compiler_sizeof(of), of);
 		}
 		cgen_write(g, "}");
 		break;
@@ -630,13 +634,14 @@ static void cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 		}
 		cgen_write(g, ";");
 		break;
-	case TYPE_ARR:
+	case TYPE_ARR: {
+		Type *of_type = type->arr->of;
 		cgen_write(g, "{");
 		cgen_nl(g);
 		cgen_write(g, "size_t i;");
-		cgen_type_pre(g, type->arr.of);
+		cgen_type_pre(g, of_type);
 		cgen_write(g, "(*arr__in)");
-		cgen_type_post(g, type->arr.of);
+		cgen_type_post(g, of_type);
 		cgen_write(g, " = ");
 		if (to_expr) {
 			cgen_expr(g, to_expr);
@@ -644,9 +649,9 @@ static void cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 			cgen_write(g, to_str);
 		}
 		cgen_write(g, "; ");
-		cgen_type_pre(g, type->arr.of);
+		cgen_type_pre(g, of_type);
 		cgen_write(g, "(*arr__out)");
-		cgen_type_post(g, type->arr.of);
+		cgen_type_post(g, of_type);
 		cgen_write(g, " = ");
 		if (set_expr) {
 			cgen_expr(g, set_expr);
@@ -655,10 +660,10 @@ static void cgen_set(CGenerator *g, Expression *set_expr, const char *set_str, E
 		}
 		cgen_write(g, ";");
 		cgen_nl(g);
-		cgen_write(g, "for (i = 0; i < %lu; ++i) arr__out[i] = arr__in[i];", (unsigned long)type->arr.n);
+		cgen_write(g, "for (i = 0; i < %lu; ++i) arr__out[i] = arr__in[i];", (unsigned long)type->arr->n);
 		cgen_nl(g);
 		cgen_write(g, "}");
-		break;
+	} break;
 	case TYPE_TUPLE:
 		assert(set_expr);
 		assert(to_expr);
@@ -700,7 +705,7 @@ static void cgen_set_tuple(CGenerator *g, Expression *exprs, Identifier *idents,
 		}
 		break;
 	case EXPR_CALL: {
-		FnType *fn_type = &to->call.fn->type.fn;
+		FnType *fn_type = to->call.fn->type.fn;
 		Type *ret_type = &fn_type->types[0];
 		Constness *constness = fn_type->constness;
 		int i = 0;
@@ -803,8 +808,9 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 	case EXPR_CALL: {
 		cgen_expr_pre(g, e->call.fn);
 		size_t i = 0;
-		Constness *constness = e->call.fn->type.fn.constness;
-		size_t nparams = arr_len(e->call.fn->type.fn.types)-1;
+		FnType *fn_type = e->call.fn->type.fn;
+		Constness *constness = fn_type->constness;
+		size_t nparams = arr_len(fn_type->types)-1;
 		arr_foreach(e->call.arg_exprs, Expression, arg) {
 			if (!constness || !arg_is_const(arg, constness[i])) {
 				cgen_arg_pre(g, arg);
@@ -869,7 +875,7 @@ static void cgen_expr_pre(CGenerator *g, Expression *e) {
 			assert(s->of->type.kind == TYPE_ARR);
 			cgen_write(g, "mkslice_(");
 			cgen_expr(g, s->of);
-			cgen_write(g, ", " U64_FMT, s->of->type.arr.n);
+			cgen_write(g, ", " U64_FMT, s->of->type.arr->n);
 			cgen_write(g, ")");
 		}
 		cgen_write(g, "; i64 ");
@@ -1177,7 +1183,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 		} else if (cgen_uses_ptr(&e->type)) {
 			cgen_ident_id(g, e->cgen.id);
 		} else {
-			FnType *fn_type = &e->call.fn->type.fn;
+			FnType *fn_type = e->call.fn->type.fn;
 			cgen_expr(g, e->call.fn);
 			cgen_write(g, "(");
 			bool first_arg = true;
@@ -1737,9 +1743,9 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 				cgen_write(g, "; ");
 				break;
 			case TYPE_ARR:
-				cgen_type_pre(g, of_type->arr.of);
+				cgen_type_pre(g, of_type->arr->of);
 				cgen_write(g, " (* of_)");
-				cgen_type_post(g, of_type->arr.of);
+				cgen_type_post(g, of_type->arr->of);
 				cgen_write(g, " = ");
 				if (uses_ptr) cgen_write(g, "*");
 				cgen_expr(g, fo->of);
@@ -1810,7 +1816,7 @@ static void cgen_stmt(CGenerator *g, Statement *s) {
 			cgen_write(g, ", (*end_) = p_ + ");
 			switch (of_type->kind) {
 			case TYPE_ARR:
-				cgen_write(g, U64_FMT, (U64)of_type->arr.n);
+				cgen_write(g, U64_FMT, (U64)of_type->arr->n);
 				break;
 			case TYPE_SLICE:
 				cgen_write(g, "of_.len");
@@ -1869,7 +1875,7 @@ static void cgen_fn_decl(CGenerator *g, FnExpr *f) {
 		Type *t = &f->foreign.type;
 		/* foreign function declaration */
 		cgen_write(g, "extern ");
-		Type *fn_types = t->fn.types;
+		Type *fn_types = t->fn->types;
 		const char *foreign_name = f->foreign.name;
 		CType *ctypes = f->foreign.ctypes;
 		if (ctypes[0].kind == CTYPE_NONE) {

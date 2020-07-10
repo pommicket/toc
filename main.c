@@ -8,9 +8,7 @@
 
 /* 
 @TODO:
-make slice a pointer field of Value
-make arr a pointer field of Type
-- start passing Types instead of pointers to Type
+start passing Types instead of pointers to Type
 figure out how printf is gonna work
 if we do #include "foo.toc", bar; and foo.toc fails, bar should be declared as TYPE_UNKNOWN (right now it's undeclared)
 fix #foreign not at global scope - right now the cgen'd definition doesn't use the proper type

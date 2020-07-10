@@ -52,7 +52,7 @@ static inline bool val_truthiness(Value v, Type *t) {
 	case TYPE_BUILTIN: return builtin_truthiness(v, t->builtin);
 	case TYPE_PTR: return v.ptr != NULL;
 	case TYPE_FN: return v.fn != NULL;
-	case TYPE_ARR: return t->arr.n != 0;
+	case TYPE_ARR: return t->arr->n != 0;
 	case TYPE_SLICE: return v.slice.len != 0;
 	case TYPE_TUPLE:
 	case TYPE_STRUCT:
@@ -211,13 +211,13 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 	} break;
 	case TYPE_ARR: {
 		fprintf(f, "["); /* @TODO: change? when array initializers are added */
-		size_t n = (size_t)t->arr.n;
+		size_t n = (size_t)t->arr->n;
 		if (n > 5) n = 5;
 		for (size_t i = 0; i < n; ++i) {
 			if (i) fprintf(f, ", ");
-			fprint_val_ptr(f, (char *)p + i * compiler_sizeof(t->arr.of), t->arr.of);
+			fprint_val_ptr(f, (char *)p + i * compiler_sizeof(t->arr->of), t->arr->of);
 		}
-		if (t->arr.n > n) {
+		if (t->arr->n > n) {
 			fprintf(f, ", ...");
 		}
 		fprintf(f, "]");
@@ -232,7 +232,7 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		if (n > 5) n = 5;
 		for (I64 i = 0; i < n; ++i) {
 			if (i) fprintf(f, ", ");
-			fprint_val_ptr(f, (char *)slice.data + i * (I64)compiler_sizeof(t->arr.of), t->arr.of);
+			fprint_val_ptr(f, (char *)slice.data + i * (I64)compiler_sizeof(t->arr->of), t->arr->of);
 		}
 		if (slice.len > n) {
 			fprintf(f, ", ...");
@@ -604,13 +604,13 @@ static Status eval_val_ptr_at_index(Location where, Value *arr, U64 i, Type *arr
 	}
 	switch (arr_type->kind) {
 	case TYPE_ARR: {
-		U64 arr_sz = (U64)arr_type->arr.n;
+		U64 arr_sz = (U64)arr_type->arr->n;
 		if (i > arr_sz) { /* this is INTENTIONALLY > and not >=, because it's okay to have a pointer to one past the end of an array */
 			err_print(where, "Array out of bounds (index = %lu, array size = %lu)\n", (unsigned long)i, (unsigned long)arr_sz);
 			return false;
 		}
-		*ptr = (char *)arr_ptr + compiler_sizeof(arr_type->arr.of) * i;
-		if (type) *type = arr_type->arr.of;
+		*ptr = (char *)arr_ptr + compiler_sizeof(arr_type->arr->of) * i;
+		if (type) *type = arr_type->arr->of;
 	} break;
 	case TYPE_SLICE: {
 		Slice slice = *(Slice *)arr_ptr;
@@ -993,7 +993,7 @@ static Value val_zero(Allocator *a, Type *t) {
 		val.struc = allocr_calloc(a, 1, compiler_sizeof(t));
 		break;
 	case TYPE_ARR:
-		val.arr = allocr_calloc(a, (size_t)t->arr.n, compiler_sizeof(t->arr.of));
+		val.arr = allocr_calloc(a, (size_t)t->arr->n, compiler_sizeof(t->arr->of));
 		break;
 	default:
 		break;
@@ -1278,7 +1278,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				if (!eval_expr(ev, &e->call.arg_exprs[i], &args[i]))
 					return false;
 			}
-			Type *ret_type = &e->call.fn->type.fn.types[0];
+			Type *ret_type = &e->call.fn->type.fn->types[0];
 			bool success = foreign_call(&ev->ffmgr, fn, ret_type, &e->call.arg_exprs[0].type, sizeof(Expression), args, nargs, e->where, v);
 			free(args);
 			if (!success)
@@ -1391,7 +1391,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		Type *of_type = &s->of->type;
 		if (!eval_expr(ev, s->of, &ofv))
 			return false;
-		U64 n = of_type->kind == TYPE_ARR ? of_type->arr.n : (U64)ofv.slice.len;
+		U64 n = of_type->kind == TYPE_ARR ? of_type->arr->n : (U64)ofv.slice.len;
 		U64 from, to;
 		if (s->from) {
 			Value fromv;
@@ -1680,7 +1680,7 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 			}
 			switch (of_type->kind) {
 			case TYPE_ARR:
-				len = (I64)of_type->arr.n;
+				len = (I64)of_type->arr->n;
 				if (uses_ptr) {
 					of.arr = of.ptr;
 				}

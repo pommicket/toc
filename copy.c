@@ -34,6 +34,10 @@ static Copier copier_create(Allocator *a, Block *b) {
 	return c;
 }
 
+static inline void *copier_malloc(Copier *c, size_t n) {
+	return allocr_malloc(c->allocr, n);
+}
+
 static void copy_val(Allocator *a, Value *out, Value in, Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
@@ -57,7 +61,7 @@ static void copy_val(Allocator *a, Value *out, Value in, Type *t) {
 		*out = in;
 		break;
 	case TYPE_ARR: {
-		size_t bytes = (size_t)t->arr.n * compiler_sizeof(t->arr.of);
+		size_t bytes = (size_t)t->arr->n * compiler_sizeof(t->arr->of);
 		out->arr = allocr_malloc(a, bytes);
 		memcpy(out->arr, in.arr, bytes);
 	} break;
@@ -129,11 +133,17 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 		out->expr = copy_expr_(c, in->expr);
 		break;
 	case TYPE_FN: {
-		size_t ntypes = arr_len(in->fn.types);
-		out->fn.types = NULL;
-		arr_set_lena(out->fn.types, ntypes, c->allocr);
+		FnType *outfn = copier_malloc(c, sizeof *outfn), *infn = in->fn;
+		size_t ntypes = arr_len(infn->types);
+		*outfn = *infn;
+		size_t constness_bytes = (ntypes-1) * sizeof *outfn->constness;
+		outfn->constness = allocr_malloc(c->allocr, constness_bytes);
+		memmove(outfn->constness, infn->constness, constness_bytes);
+
+		outfn->types = NULL;
+		arr_set_lena(outfn->types, ntypes, c->allocr);
 		for (size_t i = 0; i < ntypes; ++i) {
-			copy_type(c, &out->fn.types[i], &in->fn.types[i]);
+			copy_type(c, &outfn->types[i], &infn->types[i]);
 		}
 	} break;
 	case TYPE_TUPLE: {
@@ -144,14 +154,14 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 			copy_type(c, &out->tuple[i], &in->tuple[i]);
 		}
 	} break;
-	case TYPE_ARR:
-		if (in->flags & TYPE_IS_RESOLVED) {
-			out->arr.n = in->arr.n;
-		} else {
-			out->arr.n_expr = copy_expr_(c, in->arr.n_expr);
+	case TYPE_ARR:{
+		ArrType *oarr = out->arr = copier_malloc(c, sizeof *oarr), *iarr = in->arr; 
+		*oarr = *iarr;
+		if (!(in->flags & TYPE_IS_RESOLVED)) {
+			oarr->n_expr = copy_expr_(c, iarr->n_expr);
 		}
-		out->arr.of = copy_type_(c, in->arr.of);
-		break;
+		oarr->of = copy_type_(c, in->arr->of);
+	} break;
 	case TYPE_PTR:
 		out->ptr = copy_type_(c, in->ptr);
 		break;
@@ -179,10 +189,6 @@ static Type *copy_type_(Copier *c, Type *in) {
 	return out;
 }
 
-static inline void *copier_malloc(Copier *c, size_t n) {
-	return allocr_malloc(c->allocr, n);
-}
-
 enum {
 	  COPY_FN_EXPR_DONT_COPY_BODY = 0x01
 };
@@ -195,7 +201,7 @@ static void copy_fn_expr(Copier *c, FnExpr *fout, FnExpr *fin, U8 flags) {
 		copy_expr(c, fout->foreign.name_expr = copier_malloc(c, sizeof *fin->foreign.name_expr), fin->foreign.name_expr);
 		copy_expr(c, fout->foreign.lib_expr = copier_malloc(c, sizeof *fin->foreign.lib_expr), fin->foreign.lib_expr);
 		copy_type(c, &fout->foreign.type, &fin->foreign.type);
-		size_t nctypes = arr_len(fin->foreign.type.fn.types);
+		size_t nctypes = arr_len(fin->foreign.type.fn->types);
 		fout->foreign.ctypes = copier_malloc(c, nctypes * sizeof(CType));
 		memcpy(fout->foreign.ctypes, fin->foreign.ctypes, nctypes * sizeof(CType));
 	} else {

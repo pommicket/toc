@@ -99,14 +99,14 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 		}
 	} break;
 	case TYPE_FN: {
-		if (match->fn.constness || to->fn.constness) {
+		if (match->fn->constness || to->fn->constness) {
 			return true;
 		}
 		if (to->kind != TYPE_FN) return true;
-		if (arr_len(match->fn.types) != arr_len(to->fn.types)) return true;
-		size_t i, len = arr_len(match->fn.types);
+		if (arr_len(match->fn->types) != arr_len(to->fn->types)) return true;
+		size_t i, len = arr_len(match->fn->types);
 		for (i = 0; i < len; ++i) {
-			if (!infer_from_type(tr, &match->fn.types[i], &to->fn.types[i], idents, vals, types, where))
+			if (!infer_from_type(tr, &match->fn->types[i], &to->fn->types[i], idents, vals, types, where))
 				return false;
 		}
 	} break;
@@ -137,11 +137,11 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 		Type n_type;
 		construct_resolved_builtin_type(&n_type, BUILTIN_I64);
 		Value val;
-		val.i64 = (I64)to->arr.n;
+		val.i64 = (I64)to->arr->n;
 		/* try to match match's n expr to to's value */
-		if (!infer_from_expr(tr, match->arr.n_expr, val, &n_type, where, idents, vals, types))
+		if (!infer_from_expr(tr, match->arr->n_expr, val, &n_type, where, idents, vals, types))
 			return false;
-		if (!infer_from_type(tr, match->arr.of, to->arr.of, idents, vals, types, where))
+		if (!infer_from_type(tr, match->arr->of, to->arr->of, idents, vals, types, where))
 			return false;
 	} break;
 	}
