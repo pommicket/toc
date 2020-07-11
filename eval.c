@@ -12,6 +12,8 @@ static void evalr_create(Evaluator *ev, Typer *tr, Allocator *allocr) {
 	ev->returning = NULL;
 	ev->typer = tr;
 	ev->allocr = allocr;
+	ev->to_free = NULL;
+	ev->decls_given_values = NULL;
 	ffmgr_create(&ev->ffmgr, ev->allocr);
 }
 
@@ -265,12 +267,12 @@ static void print_val(Value v, Type *t) {
 	printf("\n");
 }
 
-static void *val_ptr_to_free(Value *v, Type *t) {
+static void *val_ptr_to_free(Value v, Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
 	case TYPE_BUILTIN:
 		if (t->builtin == BUILTIN_VARARGS)
-			return v->varargs ? arr_hdr(v->varargs) : NULL;
+			return v.varargs ? arr_hdr(v.varargs) : NULL;
 		return NULL;
 	case TYPE_FN:
 	case TYPE_PTR:
@@ -278,23 +280,23 @@ static void *val_ptr_to_free(Value *v, Type *t) {
 	case TYPE_UNKNOWN:
 		return NULL;
 	case TYPE_ARR:
-		return v->arr;
+		return v.arr;
 	case TYPE_TUPLE:
-		return v->tuple;
+		return v.tuple;
 	case TYPE_STRUCT:
-		return v->struc;
+		return v.struc;
 	case TYPE_EXPR:
 		break;
 	}
 	assert(0); return NULL;
 }
 
-static inline void val_free(Value *v, Type *t) {
+static inline void val_free(Value v, Type *t) {
 	free(val_ptr_to_free(v, t));
 }
 
 static inline void val_free_ptr(Value *v, Type *t) {
-	val_free(v, t);
+	val_free(*v, t);
 	free(v);
 }
 
@@ -725,18 +727,19 @@ static Status eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr, void
 		struct_type = struct_type->ptr;
 	}
 	if (struct_type->kind == TYPE_STRUCT) {
-		Value struc;
-		if (!eval_expr(ev, lhs, &struc))
-			return false;
 		void *struc_data;
 		if (is_ptr) {
-			struc_data = struc.ptr;
-			if (struc_data == NULL) {
-				err_print(dot_expr->where, "Attempt to dereference null pointer.");
+			Value struc_ptr;
+			if (!eval_expr(ev, lhs, &struc_ptr))
 				return false;
-			}
+			struc_data = struc_ptr.ptr;
 		} else {
-			struc_data = struc.struc;
+			if (!eval_address_of(ev, lhs, &struc_data))
+				return false;
+		}
+		if (struc_data == NULL) {
+			err_print(dot_expr->where, "Attempt to dereference null pointer.");
+			return false;
 		}
 		*p = (char *)struc_data + dot_expr->binary.field->offset;
 	} else if (struct_type->kind == TYPE_SLICE) {
@@ -1045,31 +1048,31 @@ static Status eval_ident(Evaluator *ev, Identifier ident, Value *v, Location whe
 	}
 	Value *ival = ident_val(ev, ident, where);
 	if (!ival) return false;
-	*v = *ival;
+	copy_val(NULL, v, *ival, decl_type_at_index(d, decl_ident_index(d, ident)));
 	return true;
 }
 
-static Value *decl_add_val(Declaration *d) {
-	Value *valp = err_malloc(sizeof *valp);
-	arr_add(d->val_stack, valp);
-	if (arr_len(d->idents) > 1) {
-		valp->tuple = err_malloc(arr_len(d->idents) * sizeof *valp->tuple);
-	}
-	return valp;
+static void evalr_add_val_on_stack(Evaluator *ev, Value v, Type *t) {
+	void *ptr = val_ptr_to_free(v, t);
+	arr_add(ev->to_free, ptr);
 }
-	
+
+/* remove and free the last value in d->val_stack */
 static void decl_remove_val(Declaration *d) {
-	assert(arr_len(d->val_stack));
-	Value *valp = arr_last(d->val_stack);
-	if (arr_len(d->idents) == 1 || d->type.kind == TYPE_TUPLE) {
-		val_free_ptr(valp, &d->type);
+	Type *t = &d->type;
+	Value *dval = arr_last(d->val_stack);
+	if (arr_len(d->idents) > 1) {
+		if (t->kind == TYPE_TUPLE) {
+			val_free(*dval, t);
+		} else {
+			arr_foreach(dval->tuple, Value, sub)
+				val_free(*sub, t);
+			free(dval->tuple);
+		}
 	} else {
-		long idx = 0;
-		arr_foreach(d->idents, Identifier, i)
-			val_free(&valp->tuple[idx++], &d->type);
-		free(valp->tuple);
-		free(valp);
+		val_free(*dval, t);
 	}
+	free(dval);
 	arr_remove_last(d->val_stack);
 }
 
@@ -1179,7 +1182,10 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			eval_numerical_bin_op(lhs, &e->binary.lhs->type, e->binary.op, rhs, &e->binary.rhs->type, v, &e->type);
 			break;
 		case BINARY_SET:
-			if (!eval_set(ev, e->binary.lhs, &rhs)) return false;
+			if (!eval_set(ev, lhs_expr, &rhs)) return false;
+			if (lhs_expr->kind == EXPR_TUPLE) {
+				free(rhs.tuple);
+			}
 			break;
 		case BINARY_SET_ADD:
 		case BINARY_SET_SUB:
@@ -1271,6 +1277,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		}
 		size_t nargs = arr_len(e->call.arg_exprs);
 		if (fn->flags & FN_EXPR_FOREIGN) {
+			/* evaluate foreign function */
 			Value *args = err_malloc(nargs * sizeof *args);
 			for (size_t i = 0; i < nargs; ++i) {
 				if (!eval_expr(ev, &e->call.arg_exprs[i], &args[i]))
@@ -1284,14 +1291,15 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			break;
 		}
 		
+		Type *ret_type = &fn->ret_type;
 		/* set parameter values */
-		Declaration *params = fn->params;
+		Declaration *params = fn->params, *ret_decls = fn->ret_decls;
 		Expression *arg = e->call.arg_exprs;
 		/* @OPTIM: figure out how much memory parameters use, then allocate that much space (possibly with alloca)? */
 		arr_foreach(params, Declaration, p) {
+			/* give each parameter its value */
 			int idx = 0;
 			bool multiple_idents = arr_len(p->idents) > 1;
-			bool is_tuple = p->type.kind == TYPE_TUPLE;
 			Value *pval = err_malloc(sizeof *pval);
 			if (type_is_builtin(&p->type, BUILTIN_VARARGS)) {
 				Expression *args_end = e->call.arg_exprs + nargs;
@@ -1308,9 +1316,8 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 					Value arg_val;
 					if (!eval_expr(ev, arg, &arg_val))
 						return false;
-					Type *type = is_tuple ? &p->type.tuple[idx] : &p->type;
 					Value *ival = multiple_idents ? &pval->tuple[idx] : pval;
-					copy_val(NULL, ival, arg_val, type);
+					*ival = arg_val;
 					++arg;
 					++idx;
 				}
@@ -1318,33 +1325,41 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			arr_add(p->val_stack, pval);
 		}
 
-		arr_foreach(fn->ret_decls, Declaration, d) {
+		arr_foreach(ret_decls, Declaration, d) {
+			/* give each return declaration its value */
 			int idx = 0;
 			Value ret_decl_val;
-			if (d->flags & DECL_HAS_EXPR)
+			DeclFlags has_expr = d->flags & DECL_HAS_EXPR;
+			if (has_expr) {
 				if (!eval_expr(ev, &d->expr, &ret_decl_val))
 					return false;
-			Value *dval = decl_add_val(d);
+			}
+			Value *dval = err_malloc(sizeof *dval);
 			bool multiple_idents = arr_len(d->idents) > 1;
 			bool is_tuple = d->type.kind == TYPE_TUPLE;
 			arr_foreach(d->idents, Identifier, i) {
 				Value *ival = multiple_idents ? &dval->tuple[idx] : dval;
 				Type *type = is_tuple ? &d->type.tuple[idx] : &d->type;
-				if (d->flags & DECL_HAS_EXPR) {
-					*ival = d->type.kind == TYPE_TUPLE ? ret_decl_val.tuple[idx] : ret_decl_val;
+				if (has_expr) {
+					*ival = is_tuple ? ret_decl_val.tuple[idx] : ret_decl_val;
 				} else {
 					*ival = val_zero(NULL, type);
+					evalr_add_val_on_stack(ev, *ival, type);
 				}
 				++idx;
 			}
+			if (is_tuple && has_expr)
+				free(ret_decl_val.tuple); /* we extracted the individual elements of this */
+			arr_add(d->val_stack, dval);
 		}
 
 		if (!eval_block(ev, &fn->body)) {
 			return false;
 		}
-		if (fn->ret_decls) {
+		if (ret_decls) {
+			/* extract return value from return declarations */
 			size_t nret_decls = 0;
-			arr_foreach(fn->ret_decls, Declaration, d) {
+			arr_foreach(ret_decls, Declaration, d) {
 				nret_decls += arr_len(d->idents);
 			}
 			
@@ -1353,20 +1368,18 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				tuple = err_malloc(nret_decls * sizeof *tuple);
 			size_t tuple_idx = 0;
 
-			arr_foreach(fn->ret_decls, Declaration, d) {
-				int i = 0;
-				arr_foreach(d->idents, Identifier, ident) {
-					Value this_one;
-					Expression expr;
-					expr.flags = EXPR_FOUND_TYPE;
-					expr.kind = EXPR_IDENT;
-					expr.ident = *ident;
-					if (!eval_expr(ev, &expr, &this_one))
-						return false;
-					Value *element = tuple ? &tuple[tuple_idx++] : v;
-					Type *type = decl_type_at_index(d, i);
-					copy_val(NULL, element, this_one, type);
-					++i;
+			arr_foreach(ret_decls, Declaration, d) {
+				Type *t = &d->type;
+				Value dval = *arr_last(d->val_stack);
+				size_t nidents = arr_len(d->idents);
+				if (nidents > 1) {
+					bool is_tuple = d->type.kind == TYPE_TUPLE;
+					for (size_t i = 0; i < nidents; ++i, ++tuple_idx)
+						copy_val(NULL, &tuple[tuple_idx], dval.tuple[i], is_tuple ? &t->tuple[tuple_idx] : t);
+				} else if (tuple) {
+					copy_val(NULL, &tuple[tuple_idx++], dval, t);
+				} else {
+					copy_val(NULL, v, dval, t);
 				}
 			}
 			if (tuple) {
@@ -1374,13 +1387,16 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			}
 		}
 		if (ev->returning) {
-			if (!type_is_void(&fn->ret_type) && !fn->ret_decls)
+			if (!type_is_void(ret_type) && !ret_decls)
 				*v = ev->ret_val;
 			ev->returning = NULL;
 		}
-		arr_foreach(fn->params, Declaration, p)
+
+		/* remove parameter values */
+		arr_foreach(params, Declaration, p)
 			decl_remove_val(p);
-		arr_foreach(fn->ret_decls, Declaration, d)
+		/* remove ret decl values */
+		arr_foreach(ret_decls, Declaration, d) 
 			decl_remove_val(d);
 	} break;
 	case EXPR_SLICE: {
@@ -1439,8 +1455,8 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 }
 
 static Status eval_decl(Evaluator *ev, Declaration *d) {
-	unsigned has_expr = d->flags & DECL_HAS_EXPR;
-	unsigned is_const = d->flags & DECL_IS_CONST;
+	DeclFlags has_expr = d->flags & DECL_HAS_EXPR;
+	DeclFlags is_const = d->flags & DECL_IS_CONST;
 	Value val = {0};
 
 	if (has_expr) {
@@ -1458,10 +1474,18 @@ static Status eval_decl(Evaluator *ev, Declaration *d) {
 	
 	if (!is_const) {
 		int index = 0;
-		Value *dval = decl_add_val(d);
+		
+		Value *dval = err_malloc(sizeof *dval);
+		arr_add(ev->to_free, dval);
+		arr_add(ev->decls_given_values, d);
+		arr_add(d->val_stack, dval);
+		if (arr_len(d->idents) > 1) {
+			dval->tuple = err_malloc(arr_len(d->idents) * sizeof *dval->tuple);
+			arr_add(ev->to_free, dval->tuple);
+		}
+
 		bool is_tuple = d->type.kind == TYPE_TUPLE;
 		bool multiple_idents = arr_len(d->idents) > 1;
-		bool need_to_copy = d->expr.kind != EXPR_CALL; /* don't copy if it's a return value */
 		
 		arr_foreach(d->idents, Identifier, ip) {
 			Value *ival = multiple_idents ? &dval->tuple[index] : dval;
@@ -1469,14 +1493,11 @@ static Status eval_decl(Evaluator *ev, Declaration *d) {
 			if (!is_const) {
 				if (has_expr) {
 					Value v = is_tuple ? val.tuple[index] : val;
-					if (need_to_copy) {
-						copy_val(NULL, ival, v, type);
-					} else {
-						*ival = v;
-					}
+					*ival = v;
 				} else {
 					*ival = val_zero(NULL, type);
 				}
+				evalr_add_val_on_stack(ev, *ival, type);
 			}
 			++index;
 		}
@@ -1486,18 +1507,6 @@ static Status eval_decl(Evaluator *ev, Declaration *d) {
 	return true;
 }
 
-
-static void eval_exit_stmts(Statement *stmts, Statement *last_reached) {
-	if (stmts) {
-		for (Statement *s = stmts; s <= last_reached; ++s) {
-			if (s->kind == STMT_DECL && !(s->decl->flags & DECL_IS_CONST)) {
-				Declaration *d = s->decl;
-				decl_remove_val(d);
-			}
-			/* inline blocks are handled by eval_stmt; don't worry */
-		}
-	}
-}
 
 static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 	switch (stmt->kind) {
@@ -1513,10 +1522,8 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 		Return *r = stmt->ret;
 
 		if (r->flags & RET_HAS_EXPR) {
-			Value v;
-			if (!eval_expr(ev, &r->expr, &v))
+			if (!eval_expr(ev, &r->expr, &ev->ret_val))
 				return false;
-			copy_val(NULL, &ev->ret_val, v, &r->expr.type);
 		}
 		ev->returning = r->referring_to;
 	} break;
@@ -1537,16 +1544,13 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 		break;
 	case STMT_INLINE_BLOCK: {
 		Statement *stmts = stmt->inline_block;
-		Statement *last_reached = arr_last_ptr(stmts);
 		arr_foreach(stmts, Statement, s) {
 			if (!eval_stmt(ev, s))
 				return false;
 			if (ev->returning) {
-				last_reached = s;
 				break;
 			}
 		}
-		eval_exit_stmts(stmts, last_reached);
 	} break;
 	case STMT_IF: {
 		for (If *i = stmt->if_; i; i = i->next_elif) {
@@ -1730,17 +1734,19 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 static Status eval_block(Evaluator *ev, Block *b) {
 	assert(b->flags & BLOCK_FOUND_TYPES);
 	Block *prev = ev->typer->block;
+	void **prev_to_free = ev->to_free;
+	Declaration **prev_dgv = ev->decls_given_values;
+	ev->to_free = NULL;
+	ev->decls_given_values = NULL;
 	ev->typer->block = b;
 	b->deferred = NULL;
 	bool success = true;
-	Statement *last_reached = arr_last_ptr(b->stmts);
 	arr_foreach(b->stmts, Statement, stmt) {
 		if (!eval_stmt(ev, stmt)) {
 			success = false;
 			goto ret;
 		}
 		if (ev->returning) {
-			last_reached = stmt;
 			break;
 		}
 	}
@@ -1752,15 +1758,27 @@ static Status eval_block(Evaluator *ev, Block *b) {
 		ev->returning = NULL; /* if we didn't set this, the deferred stmts would immediately return */
 		arr_foreach(b->deferred, StatementPtr, stmtp) {
 			Statement *stmt = *stmtp;
-			if (!eval_stmt(ev, stmt))
-				return false;
+			if (!eval_stmt(ev, stmt)) {
+				success = false;
+				goto ret;
+			}
 		}
 		arr_clear(b->deferred);
 		ev->returning = return_block;
 		ev->ret_val = return_val;
 	}
-	eval_exit_stmts(b->stmts, last_reached);
+	typedef void *voidptr;
+	arr_foreach(ev->to_free, voidptr, pp) {
+		free(*pp);
+	}
+	arr_clear(ev->to_free);
+	arr_foreach(ev->decls_given_values, DeclarationPtr, dp) {
+		arr_remove_last((*dp)->val_stack);
+	}
+	arr_clear(ev->decls_given_values);
  ret:
+ 	ev->to_free = prev_to_free;
+	ev->decls_given_values = prev_dgv;
 	ev->typer->block = prev;
 	return success;
 }

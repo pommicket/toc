@@ -1037,6 +1037,8 @@ typedef struct Evaluator {
 	struct Typer *typer;
     Block *returning; /* function body from which we are returning OR loop body in which we are continuing/breaking */
 	bool is_break; /* is returning because of a break, as opposed to a continue? */
+	void **to_free; /* array of pointers to free once block is exited */
+	Declaration **decls_given_values; /* array of declarations whose last value in their val stacks should be removed when the block is exited */
 	Value ret_val;
 	ForeignFnManager ffmgr;
 } Evaluator;

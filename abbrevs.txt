@@ -1,6 +1,4 @@
 Abbreviations used in this code
-Some of them are very common
-Others aren't
 
 allocr - allocator
 arg - argument
@@ -29,6 +27,7 @@ op - operator
 param - parameter
 ptr - pointer
 ret - return
+ret_decl - return declaration (named return values)
 stmt - statement
 str - string
 tokr - tokenizer
