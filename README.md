@@ -68,20 +68,6 @@ See `LICENSE` for the GNU General Public License.
 ##### Why?
 This improves compilation speeds (especially from scratch), since you don't have to include headers a bunch of times for each translation unit. This is more of a problem in C++, where, for example, doing `#include <map>` ends up turning into 25,000 lines after preprocessing. All of toc's source code, which includes most of the C standard library, at the time of this writing (Dec 2019) is only 22,000 lines after preprocessing; imagine including all of that once for each translation unit which includes `map`. It also obviates the need for fancy build systems like CMake.
 
-#### "New" features
-
-Here are all the C99 features which `toc` depends on (I might have forgotten some...):
-
-- Declare anywhere
-- `inttypes.h`
-- Non-constant struct literal initializers (e.g. `int x[2] = {y, z};`)
-- Flexible array members
-- `snprintf`
-
-And here are all of its (mandatory) C11 features:
-
-- Anonymous structures/unions
-
 #### More
 
 See `main.c` for a bit more information.

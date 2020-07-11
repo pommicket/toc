@@ -32,6 +32,17 @@
 #endif
 #endif
 
+#ifndef NO_ALLOCA
+#ifdef  __GNUC__
+#define toc_alloca(size) __builtin_alloca(size)
+#define ALLOCA_AVAILABLE 1
+#elif defined _MSC_VER
+#include <malloc.h>
+#define toc_alloca _malloca
+#define ALLOCA_AVAILABLE 1
+#endif
+#endif
+
 
 /* use toc_alignof only for non-structs. it may be incorrect for pre-C(++)11. */
 #if (__STDC_VERSION__ >= 201112 || __cplusplus >= 201103L) && !defined __TINYC__ && !defined __OpenBSD__ && !defined __FreeBSD__
@@ -119,6 +130,27 @@ static inline bool type_is_void(Type *t) {
 static inline bool type_is_slicechar(Type *t) {
 	return t->kind == TYPE_SLICE && type_is_builtin(t->slice, BUILTIN_CHAR);
 }
+
+//#define MALLOC_TRACKER
+
+static void *err_malloc_(size_t size
+#ifdef MALLOC_TRACKER
+	, int line, const char *file
+#endif
+);
+static void *err_calloc_(size_t n, size_t sz
+#ifdef MALLOC_TRACKER
+	, int line, const char *file
+#endif
+);
+static void *err_realloc(void *prev, size_t new_size);
+#ifdef MALLOC_TRACKER
+#define err_malloc(size) err_malloc_(size, __LINE__, __FILE__)
+#define err_calloc(n, size) err_calloc_(n, size, __LINE__, __FILE__)
+#else
+#define err_malloc err_malloc_
+#define err_calloc err_calloc_
+#endif
 
 /* utilities */
 #include "allocator.c"

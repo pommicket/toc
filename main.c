@@ -12,7 +12,6 @@ error when a template is used before it's defined
 if we do #include "foo.toc", bar; and foo.toc fails, bar should be declared as TYPE_UNKNOWN (right now it's undeclared)
 fix #foreign not at global scope - right now the cgen'd definition doesn't use the proper type
 figure out how printf is gonna work
-find out why loop with file output is really slow at compile time; try to improve it
 improve type_to_str:
 	Foo ::= struct(t::Type) {}
 	type_to_str(Foo(int))
@@ -48,6 +47,11 @@ once you have a bunch of test code:
 	-->on the contrary, should in_decls be off the allocator?
 maybe macros are just inline functions
 passing untyped expressions to macros
+
+
+@OPTIM:
+figure out how much stack space each block uses (make sure you only do the calculation one time for each block),
+	and allocate it at the start of the block, potentially with alloca (reduce number of mallocs)
 */
 
 #if defined __unix__ || (defined __APPLE__ && defined __MACH__)
@@ -122,6 +126,18 @@ static const char *replace_extension(Allocator *a, const char *filename, const c
 		return dflt;
 	}
 }
+
+#ifdef MALLOC_TRACKER
+static int compare_entries(const void *av, const void *bv) {
+	const AllocTrackerEntry *a = av, *b = bv;
+	if (a->amount > b->amount)
+		return -1;
+	else if (b->amount > a->amount)
+		return +1;
+	else
+		return 0;
+}
+#endif
 
 int main(int argc, char **argv) {
 #if BACKTRACE
@@ -336,5 +352,17 @@ int main(int argc, char **argv) {
 
 	if (verbose) printf("Cleaning up...\n");
 	allocr_free_all(&main_allocr);
+#ifdef MALLOC_TRACKER
+	qsort(eval_c, sizeof eval_c / sizeof *eval_c, sizeof *eval_c, compare_entries);
+	size_t total = 0;
+	for (size_t i = 0; i < sizeof eval_c / sizeof *eval_c; ++i) {
+		total += eval_c[i].amount;
+	}
+	printf("A total of %lu bytes were allocated by eval.c.\n", total);
+	for (size_t i = 0; i < 10; ++i) {
+		printf("Line %4d has %10lu bytes over %9lu allocations\n",
+			eval_c[i].line, (unsigned long)eval_c[i].amount, (unsigned long)eval_c[i].nallocs);
+	}
+#endif
 	return 0;
 }

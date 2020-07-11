@@ -267,28 +267,59 @@ static void warn_print_(
 #define warn_print warn_print_
 #endif
 
+#ifdef MALLOC_TRACKER
+typedef struct {
+	int line;
+	size_t nallocs;
+	size_t amount;
+} AllocTrackerEntry;
+static AllocTrackerEntry eval_c[10000];
+#endif
 
-static void *err_malloc(size_t size) {
+static void *err_malloc_(size_t size
+#ifdef MALLOC_TRACKER
+	, int line, const char *file
+#endif
+) {
 	if (size == 0) return NULL;
+
 	void *ret = malloc(size);
 	if (!ret) {
 		fprintf(stderr, "Error: Out of memory.\n");
 		exit(EXIT_FAILURE);
 	}
-	
+#ifdef MALLOC_TRACKER	
+	if (streq(file, "eval.c")) {
+		AllocTrackerEntry *entry = &eval_c[line];
+		entry->line = line;
+		entry->amount += size;
+		++entry->nallocs;
+	}
+#endif
 #ifdef MALLOC_FILL
 	memset(ret, MALLOC_FILL, size);
 #endif
 	return ret;
 }
 
-static void *err_calloc(size_t n, size_t size) {
+
+static void *err_calloc_(size_t n, size_t size
+#ifdef MALLOC_TRACKER
+	, int line, const char *file
+#endif
+) {
 	if (n == 0 || size == 0) return NULL;
 	void *ret = calloc(n, size);
 	if (!ret) {
 		fprintf(stderr, "Error: Out of memory.\n");
 		exit(EXIT_FAILURE);
 	}
+#ifdef MALLOC_TRACKER	
+	if (streq(file, "eval.c")) {
+		AllocTrackerEntry *entry = &eval_c[line];
+		entry->amount += n * size;
+	}
+#endif
 	return ret;
 }
 

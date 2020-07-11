@@ -1057,8 +1057,8 @@ static void evalr_add_val_on_stack(Evaluator *ev, Value v, Type *t) {
 	arr_add(ev->to_free, ptr);
 }
 
-/* remove and free the last value in d->val_stack */
-static void decl_remove_val(Declaration *d) {
+/* remove and free the last value in d->val_stack. if free_val_ptr is false, the last value's contents will be freed, but not its pointer. */
+static void decl_remove_val(Declaration *d, bool free_val_ptr) {
 	Type *t = &d->type;
 	Value *dval = arr_last(d->val_stack);
 	if (arr_len(d->idents) > 1) {
@@ -1072,7 +1072,7 @@ static void decl_remove_val(Declaration *d) {
 	} else {
 		val_free(*dval, t);
 	}
-	free(dval);
+	if (free_val_ptr) free(dval);
 	arr_remove_last(d->val_stack);
 }
 
@@ -1295,12 +1295,18 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		/* set parameter values */
 		Declaration *params = fn->params, *ret_decls = fn->ret_decls;
 		Expression *arg = e->call.arg_exprs;
-		/* @OPTIM: figure out how much memory parameters use, then allocate that much space (possibly with alloca)? */
+		size_t pbytes = arr_len(params) * sizeof(Value);
+		Value *pvals = 
+		#if ALLOCA_AVAILABLE
+			toc_alloca(pbytes);
+		#else
+			err_malloc(pbytes);
+		#endif
+		Value *pval = &pvals[0];
 		arr_foreach(params, Declaration, p) {
 			/* give each parameter its value */
 			int idx = 0;
 			bool multiple_idents = arr_len(p->idents) > 1;
-			Value *pval = err_malloc(sizeof *pval);
 			if (type_is_builtin(&p->type, BUILTIN_VARARGS)) {
 				Expression *args_end = e->call.arg_exprs + nargs;
 				/* set varargs */
@@ -1323,34 +1329,45 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				}
 			}
 			arr_add(p->val_stack, pval);
+			++pval;
 		}
 
-		arr_foreach(ret_decls, Declaration, d) {
-			/* give each return declaration its value */
-			int idx = 0;
-			Value ret_decl_val;
-			DeclFlags has_expr = d->flags & DECL_HAS_EXPR;
-			if (has_expr) {
-				if (!eval_expr(ev, &d->expr, &ret_decl_val))
-					return false;
-			}
-			Value *dval = err_malloc(sizeof *dval);
-			bool multiple_idents = arr_len(d->idents) > 1;
-			bool is_tuple = d->type.kind == TYPE_TUPLE;
-			arr_foreach(d->idents, Identifier, i) {
-				Value *ival = multiple_idents ? &dval->tuple[idx] : dval;
-				Type *type = is_tuple ? &d->type.tuple[idx] : &d->type;
+		size_t dbytes = arr_len(ret_decls) * sizeof(Value);
+		Value *dvals = 
+		#if ALLOCA_AVAILABLE
+			toc_alloca(dbytes);
+		#else
+			err_malloc(dbytes);
+		#endif
+		{
+			Value *dval = dvals;
+			arr_foreach(ret_decls, Declaration, d) {
+				/* give each return declaration its value */
+				int idx = 0;
+				Value ret_decl_val;
+				DeclFlags has_expr = d->flags & DECL_HAS_EXPR;
 				if (has_expr) {
-					*ival = is_tuple ? ret_decl_val.tuple[idx] : ret_decl_val;
-				} else {
-					*ival = val_zero(NULL, type);
-					evalr_add_val_on_stack(ev, *ival, type);
+					if (!eval_expr(ev, &d->expr, &ret_decl_val))
+						return false;
 				}
-				++idx;
+				bool multiple_idents = arr_len(d->idents) > 1;
+				bool is_tuple = d->type.kind == TYPE_TUPLE;
+				arr_foreach(d->idents, Identifier, i) {
+					Value *ival = multiple_idents ? &dval->tuple[idx] : dval;
+					Type *type = is_tuple ? &d->type.tuple[idx] : &d->type;
+					if (has_expr) {
+						*ival = is_tuple ? ret_decl_val.tuple[idx] : ret_decl_val;
+					} else {
+						*ival = val_zero(NULL, type);
+						evalr_add_val_on_stack(ev, *ival, type);
+					}
+					++idx;
+				}
+				if (is_tuple && has_expr)
+					free(ret_decl_val.tuple); /* we extracted the individual elements of this */
+				arr_add(d->val_stack, dval);
+				++dval;
 			}
-			if (is_tuple && has_expr)
-				free(ret_decl_val.tuple); /* we extracted the individual elements of this */
-			arr_add(d->val_stack, dval);
 		}
 
 		if (!eval_block(ev, &fn->body)) {
@@ -1394,10 +1411,16 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 
 		/* remove parameter values */
 		arr_foreach(params, Declaration, p)
-			decl_remove_val(p);
+			decl_remove_val(p, false);
+		#if !ALLOCA_AVAILABLE
+		free(pvals);
+		#endif
 		/* remove ret decl values */
 		arr_foreach(ret_decls, Declaration, d) 
-			decl_remove_val(d);
+			decl_remove_val(d, false);
+		#if !ALLOCA_AVAILABLE
+		free(dvals);
+		#endif
 	} break;
 	case EXPR_SLICE: {
 		SliceExpr *s = &e->slice;
