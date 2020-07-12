@@ -8,7 +8,6 @@
 
 /* 
 @TODO:
-error when a template is used before it's defined
 if we do #include "foo.toc", bar; and foo.toc fails, bar should be declared as TYPE_UNKNOWN (right now it's undeclared)
 fix #foreign not at global scope - right now the cgen'd definition doesn't use the proper type
 figure out how printf is gonna work
@@ -42,12 +41,9 @@ make sure that floating point literals are as exact as possible
 once you have a bunch of test code:
 - analyze memory usage by secretly passing __FILE__, __LINE__ to allocr_m/c/realloc
 - try making more Expression members pointers
-- try making Value.slice a pointer
-- should val_stack be on the allocator? what about temporary arrays?
-	-->on the contrary, should in_decls be off the allocator?
+- should in_decls be off the allocator?
 maybe macros are just inline functions
-passing untyped expressions to macros
-
+- passing untyped expressions to macros
 
 @OPTIM:
 figure out how much stack space each block uses (make sure you only do the calculation one time for each block),

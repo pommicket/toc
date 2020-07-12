@@ -1841,20 +1841,25 @@ static Status types_expr(Typer *tr, Expression *e) {
 			return false;
 		}
 		bool has_varargs = f->type.kind == TYPE_FN && fn_type_has_varargs(f->type.fn);
-		
+		bool fn_being_used_before_declared = false;
+
 		if (expr_is_definitely_const(f) || type_is_builtin(&f->type, BUILTIN_TYPE) || has_varargs) {
+			/* evaluate the function when possible (this allows us to use named arguments, default arguments, etc.) */
 			Value val;
 			if (f->kind == EXPR_IDENT) {
-				/* 
-					@TODO(eventually): this is a sort of cheat to avoid the fact that we can't evaluate future identifiers
-					this will cause problems
-				*/
-				if (!types_decl(tr, f->ident->decl))
-					return false;
+				/* necessary for future functions, including future foreign functions */
+				Declaration *d = f->ident->decl;
+				if (!(d->flags & DECL_FOUND_TYPE)) {
+					fn_being_used_before_declared = true;
+					if (!types_decl(tr, f->ident->decl))
+						return false;
+				}
 			}
 			if (!eval_expr(tr->evalr, f, &val))
 				return false;
+			fn_decl = val.fn;
 			if (type_is_builtin(&f->type, BUILTIN_TYPE)) {
+				/* structs with arguments */
 				Type *base = val.type;
 				if (base->kind != TYPE_STRUCT) {
 					err_print(e->where, "Cannot pass arguments to non-struct type.");
@@ -1868,7 +1873,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 				Copier cop = copier_create(tr->allocr, base->struc->body.parent);
 				HashTable *table = &base->struc->instances;
 				StructDef struc;
-				/* @OPTIM: don't copy struct body */
+				/* @OPTIM: don't copy the struct body unless necessary? */
+				/* make a copy of the struct. this is the specific version of the struct which we are producing. */
 				copy_struct(&cop, &struc, base->struc);
 
 				size_t nparams = 0;
@@ -1878,15 +1884,18 @@ static Status types_expr(Typer *tr, Expression *e) {
 				Value args_val = {0};
 				Type args_type = {0};
 				I16 *order;
+				/* get proper order of arguments (some of them might be named, etc.) */
 				if (!parameterized_struct_arg_order(&struc, c->args, &order, e->where)) {
 					free(order);
 					return false;
 				}
 				Type *arg_types = NULL;
 				arr_set_len(arg_types, nparams);
+				/* needs to stay around because the instance table keeps a reference to it (if it hasn't already been added) */
 				Value *arg_vals = typer_malloc(tr, nparams * sizeof *arg_vals);
 				ErrCtx *err_ctx = tr->gctx->err_ctx;
 				size_t p = 0;
+				/* give the parameters their values */
 				arr_foreach(struc.params, Declaration, param) {
 					Value param_val = {0};
 					bool is_tuple = arr_len(param->idents) > 1;
@@ -1937,31 +1946,13 @@ static Status types_expr(Typer *tr, Expression *e) {
 				args_type.flags = TYPE_IS_RESOLVED;
 				Instance *inst = instance_table_adda(tr->allocr, table, args_val, &args_type, &already_exists);
 				if (!already_exists) {
+					/* this is a new parameterization of the struct */
 					inst->struc = struc;
-					size_t i = 0;
-					arr_foreach(inst->struc.params, Declaration, param) {
-						param->flags |= DECL_FOUND_VAL;
-						if (arr_len(param->idents) == 1) {
-							param->val = arg_vals[i];
-							++i;
-						} else {
-
-							size_t nmembers = arr_len(param->idents);
-							param->val.tuple = typer_malloc(tr, nmembers * sizeof *param->val.tuple);
-							for (size_t idx = 0; idx < nmembers; ++idx) {
-								param->val.tuple[idx] = arg_vals[i];
-								++i;
-							}
-						}
-					}
-					assert(i == nparams);
-					Type struct_t = {0};
-					struct_t.kind = TYPE_STRUCT;
-					struct_t.struc = &inst->struc;
+					/* make error messages show we are resolving this struct parameterization */
 					arr_add(err_ctx->instance_stack, e->where);
 					Block *prev_block = tr->block;
 					tr->block = &inst->struc.body;
-					bool success = type_resolve(tr, &struct_t, e->where); /* resolve the struct */
+					bool success = struct_resolve(tr, &inst->struc); /* resolve the struct (evaluate array sizes, etc.) */
 					tr->block = prev_block;
 					arr_remove_last(err_ctx->instance_stack);
 					if (!success) return false;
@@ -1981,7 +1972,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 				arr_clear(arg_types);
 				goto ret;
 			}
-			fn_decl = val.fn;
 		}
 		
 		Type *ret_type = f->type.fn->types;
@@ -1991,7 +1981,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		size_t nargs = arr_len(c->args);
 		Expression *arg_exprs = NULL;
 		size_t narg_exprs = 0;
-		bool is_foreign = (fn_decl->flags & FN_EXPR_FOREIGN) != 0;
+		bool is_foreign = fn_decl && (fn_decl->flags & FN_EXPR_FOREIGN) != 0;
 		I16 *order = NULL;
 		if (fn_decl && !is_foreign) {
 			if (!call_arg_param_order(fn_decl, &f->type, c->args, e->where, &order)) {
@@ -2122,15 +2112,17 @@ static Status types_expr(Typer *tr, Expression *e) {
 		FnExpr *fn_copy = NULL;
 
 		if (fn_type->constness || (has_varargs && !is_foreign)) {
-			/* eval function, create copy */
-			
-			
-			/* the function had better be a compile time constant if it has constant params */
-			Value fn_val = {0};
-			if (!eval_expr(tr->evalr, f, &fn_val))
+			if (fn_being_used_before_declared) {
+				if (has_varargs) {
+					err_print(e->where, "Calling function with varargs before it's declared. This is not allowed.");
+				} else {
+					err_print(e->where, "Calling templatized function before it's declared. This is not allowed.");
+				}
+				info_print(fn_decl->where, "Function will be declared here.");
 				return false;
-
-			FnExpr *fn = fn_val.fn;
+			}
+			FnExpr *fn = fn_decl;
+			/* create a copy of the function header (we will copy the body if this instance hasn't been generated yet) */
 			/* fn is the instance, original_fn is not */
 			original_fn = fn;
 			fn_copy = typer_malloc(tr, sizeof *fn_copy);

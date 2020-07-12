@@ -1,9 +1,10 @@
 #include "std/io.toc", io;
 main ::= fn() {
-	file, err := io.fopen_write("test.txt");
-	for i := 0.,1000000 {
-		io.fputs(file, "!");
-	}
-	io.fclose(file);
+	foo(12);
 }
-main();
+
+use io;
+
+foo ::= fn(x :: int) {
+	puti(x);
+}
