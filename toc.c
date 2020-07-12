@@ -4,7 +4,7 @@
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
 
-/* Includes all of toc's files */
+// Includes all of toc's files
 #include <assert.h>
 #include <ctype.h>
 #include <stdio.h>
@@ -44,27 +44,27 @@
 #endif
 
 
-/* use toc_alignof only for non-structs. it may be incorrect for pre-C(++)11. */
+// use toc_alignof only for non-structs. it may be incorrect for pre-C(++)11.
 #if (__STDC_VERSION__ >= 201112 || __cplusplus >= 201103L) && !defined __TINYC__ && !defined __OpenBSD__ && !defined __FreeBSD__
 #include <stdalign.h>
 #define toc_alignof alignof
 
 #ifdef __GNUC__
-/* GCC supports non-string literals as the message for a static assertion */
+// GCC supports non-string literals as the message for a static assertion
 #define possibly_static_assert(cond) static_assert(cond, "Assertion " #cond " failed.")
 #else
 #define possibly_static_assert(cond) static_assert(cond, "Assertion failed")
 #endif
 
 
-#else /* __STDC_VERSION >= 201112 ... */
+#else // __STDC_VERSION >= 201112 ...
 
 #define toc_alignof sizeof
 
 #define possibly_static_assert(cond) assert(cond)
-#endif /* __STDC_VERSION >= 201112 ... */
+#endif // __STDC_VERSION >= 201112 ...
 
-/* this is to prevent erroneous warnings from GCC (v. 8.3.0) with -O3 */
+// this is to prevent erroneous warnings from GCC (v. 8.3.0) with -O3
 #if !defined(__clang__) && defined(__GNUC__)
 #define gcc_no_bounds_warnings_start _Pragma("GCC diagnostic push") \
 	_Pragma("GCC diagnostic ignored \"-Wstringop-overflow\"") \
@@ -78,7 +78,7 @@
 
 #include "types.h"
 
-/* forward declarations for debugging */
+// forward declarations for debugging
 static void print_val(Value v, Type *t);
 static void print_token(Token *t);
 static void print_type(Type *t);
@@ -88,7 +88,7 @@ static void print_stmt(Statement *s);
 static void print_block_location(Block *b);
 
 
-/* misc */
+// misc
 #define join3(a,b) a##b
 #define join2(a,b) join3(a,b)
 #define join(a,b) join2(a,b)
@@ -96,7 +96,7 @@ static void print_block_location(Block *b);
 #define stringify2(x) stringify3(x)
 #define stringify(x) stringify2(x)
 
-#ifdef __linux__ /* see also cgen_file */
+#ifdef __linux__ // see also cgen_file
 #define platform__ PLATFORM_LINUX
 #elif defined _WIN32
 #define platform__ PLATFORM_WINDOWS
@@ -152,7 +152,7 @@ static void *err_realloc(void *prev, size_t new_size);
 #define err_calloc err_calloc_
 #endif
 
-/* utilities */
+// utilities
 #include "allocator.c"
 #include "misc.c"
 #include "data_structures.c"
@@ -161,7 +161,7 @@ static size_t compiler_alignof(Type *t);
 static size_t compiler_sizeof(Type *t);
 #include "instance_table.c"
 
-/* returns NULL on error */
+// returns NULL on error
 static char *read_file_contents(Allocator *a, const char *filename, Location where) {
 	FILE *in = fopen(filename, "r");
 	
@@ -170,8 +170,8 @@ static char *read_file_contents(Allocator *a, const char *filename, Location whe
 		return NULL;
 	}
 	char *contents = allocr_malloc(a, 4096);
-	contents[0] = 0; /* put 0 byte at the start of the file. see err.c:err_print_location_text to find out why */
-	contents[1] = 0; /* if fgets fails the first time */
+	contents[0] = 0; // put 0 byte at the start of the file. see err.c:err_print_location_text to find out why
+	contents[1] = 0; // if fgets fails the first time
 	long contents_cap = 4095;
 	long contents_len = 1;
 	while (fgets(contents + contents_len, (int)(contents_cap - contents_len), in)) {

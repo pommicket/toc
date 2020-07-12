@@ -12,7 +12,8 @@ start.
 toc's memory management works using an allocator which never frees anything.
 This is because most of toc's data is kept around until the end of the program anyways.
 Use the allocator for "permanent" allocations, and err\_malloc/err\_calloc/err\_realloc for temporary
-allocations (to avoid having it take up space for a long time).
+allocations (to avoid having it take up space for a long time). Make sure you never pass
+a size of 0 to those functions.
 
 Memory leaks can happen if the compilation fails at any point, but they
 should not happen if the compilation succeeds. Usually if there's an error

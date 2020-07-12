@@ -48,7 +48,7 @@ static inline double foreign_calld(FnPtr fn, U64 *args, I64 nargs, bool *is_floa
 }
 #endif
 
-/* disable strict aliasing warnings */
+// disable strict aliasing warnings
 #ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstrict-aliasing"
@@ -80,7 +80,7 @@ static Status val_to_word(Value v, Type *t, Location where, U64 *w) {
 		*w = (U64)v.ptr; break;
 	default:
 	unsupported: {
-		/* @TODO(eventually) */
+		// @TODO(eventually)
 		char *s = type_to_str(t);
 		err_print(where, "#foreign functions can't take arguments of type %s at compile time on Windows.", s);
 		free(s);
@@ -94,7 +94,7 @@ static Status val_to_word(Value v, Type *t, Location where, U64 *w) {
 #endif
 
 static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, Type *arg_types, size_t arg_types_stride, Value *args, size_t nargs, Location call_where, Value *ret) {
-	possibly_static_assert(sizeof(double) == 8); /* if either of these assertions fails, you'll need to use libffcall */
+	possibly_static_assert(sizeof(double) == 8); // if either of these assertions fails, you'll need to use libffcall
 	possibly_static_assert(sizeof(float) == 4);
 
 #if 0
@@ -106,7 +106,7 @@ static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, 
 
 	FnPtr fn_ptr = foreign_get_fn_ptr(ffmgr, fn, call_where);
 	if (!fn_ptr) return false;
-	/* @OPTIM: use alloca/_malloca if available */
+	// @OPTIM: use alloca/_malloca if available
 	U64 *words = err_malloc(nargs * sizeof *words);
 	bool *is_float = err_malloc(nargs);
 	U64 *word = words;
@@ -122,7 +122,7 @@ static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, 
 		type += arg_types_stride;
 		++word;
 	}
-	int kind = 0; /* 0=>integer, 1=>f32, 2=>f64 */
+	int kind = 0; // 0=>integer, 1=>f32, 2=>f64
 	switch (ret_type->kind) {
 	case TYPE_BUILTIN:
 		switch (ret_type->builtin) {
@@ -153,7 +153,7 @@ static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, 
 	default:
 	unsupported: {
 		char *s = type_to_str(ret_type);
-		/* @TODO(eventually) */
+		// @TODO(eventually)
 		err_print(call_where, "You can't call functions which return type %s at compile time on Windows.", s);
 		free(s);
 		return false;

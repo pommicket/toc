@@ -22,9 +22,9 @@ For more information, please refer to <http://unlicense.org/>
 */
 
 #ifdef TOC_DEBUG
-//#define NO_ALLOCATOR 1 /* useful for debugging; valgrind checks writing past the end of a malloc, but that won't work with an allocator */
+//#define NO_ALLOCATOR 1 // useful for debugging; valgrind checks writing past the end of a malloc, but that won't work with an allocator
 #endif
-/* number of bytes a page hold, not including the header */
+// number of bytes a page hold, not including the header
 #define PAGE_BYTES (16384 - sizeof(Page))
 #define PAGE_MAX_ALIGNS (PAGE_BYTES / sizeof(MaxAlign))
 
@@ -41,14 +41,14 @@ static void *allocr_malloc(Allocator *a, size_t bytes) {
 		return NULL;
 	if (a == NULL)
 		return err_malloc(bytes);
-	/* position in this page to return */
+	// position in this page to return
 	size_t pos = PAGE_MAX_ALIGNS;
 	if (a->last)
 		pos = a->last->used;
 	size_t max_aligns = (bytes + sizeof(MaxAlign) - 1) / sizeof(MaxAlign);
 	
 	if (pos + max_aligns > PAGE_MAX_ALIGNS) {
-		/* make a new page for this data */
+		// make a new page for this data
 		Page *page = err_malloc(sizeof *page + (bytes > PAGE_BYTES ? bytes : PAGE_BYTES));
 		page->next = NULL;
 		page->used = max_aligns;
@@ -71,7 +71,7 @@ static void *allocr_calloc(Allocator *a, size_t n, size_t sz) {
 #endif
 	if (n == 0 || sz == 0) return NULL;
 	if (a == NULL) return err_calloc(n, sz);
-	/* @OPTIM: use calloc */
+	// @OPTIM: use calloc
 	size_t bytes = n * sz;
 	void *data = allocr_malloc(a, bytes);
 	memset(data, 0, bytes);
@@ -85,11 +85,11 @@ static void allocr_free(Allocator *a, void *data, size_t size) {
 	if (a == NULL) {
 		free(data);
 	}
-	/* @OPTIM */
+	// @OPTIM
 	(void)size;
 }
 
-/* @OPTIM */
+// @OPTIM
 static void *allocr_realloc(Allocator *a, void *data, size_t old_size, size_t new_size) {
 #if NO_ALLOCATOR
 	a = NULL;

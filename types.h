@@ -23,7 +23,7 @@ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 For more information, please refer to <http://unlicense.org/>
 */
-/* NOTE: make sure you edit copy.c and cgen_recurse_subexprs/types when you make a change to expression-related types or type-related types in this file! */
+// NOTE: make sure you edit copy.c and cgen_recurse_subexprs/types when you make a change to expression-related types or type-related types in this file!
 
 typedef double Floating;
 
@@ -42,10 +42,10 @@ typedef unsigned long ulonglong;
 #define ULONGLONG_FMT "%lu"
 #endif
 
-/* generic function pointer */
+// generic function pointer
 typedef void (*FnPtr)(void);
 
-/* try to find the type with the strictest alignment */
+// try to find the type with the strictest alignment
 typedef union {
 	double floating;
 	void *ptr;
@@ -96,7 +96,7 @@ typedef U8 bool;
 
 #define Status bool WarnUnusedResult
 
-/* NOTE: if you change these, make sure you change hash_tables.c */
+// NOTE: if you change these, make sure you change hash_tables.c
 typedef float F32;
 typedef double F64;
 #define F32_MANT_DIG FLT_MANT_DIG
@@ -107,19 +107,19 @@ typedef double F64;
 #define F32_FMT "%.10f"
 #define F64_FMT "%.18f"
 
-typedef U32 IdentID; /* identifier ID for cgen (anonymous variables). */
+typedef U32 IdentID; // identifier ID for cgen (anonymous variables).
 
 typedef struct ErrCtx {
 	bool enabled;
 	bool color_enabled;
 	bool have_errored;
-	struct Location *instance_stack; /* stack of locations which generate the instances we're dealing with */
+	struct Location *instance_stack; // stack of locations which generate the instances we're dealing with
 } ErrCtx;
 
 
 typedef struct Page {
 	struct Page *next;
-	size_t used; /* number MaxAligns used, not bytes */
+	size_t used; // number MaxAligns used, not bytes
 	MaxAlign data[];
 } Page;
 
@@ -128,7 +128,7 @@ typedef struct Allocator {
 	Page *last;
 } Allocator;
 
-/* initialize to 0 */
+// initialize to 0
 typedef struct HashTable {
 	void *data;
 	bool *occupied;
@@ -162,7 +162,7 @@ typedef union Value {
 	Slice slice;
 	struct Type *type;
 	struct Namespace *nms;
-	struct VarArg *varargs; /* dynamic array */
+	struct VarArg *varargs; // dynamic array
 } Value;
 typedef Value *ValuePtr;
 
@@ -173,18 +173,18 @@ typedef struct VarArg {
 
 typedef struct {
 	struct StructDef *struc;
-	struct Declaration *use_decl; /* field declaration which uses the identifier */
+	struct Declaration *use_decl; // field declaration which uses the identifier
 } UsedFrom;
 
 typedef struct IdentSlot {
 	char *str;
 	size_t len;
-	/* where this identifier was declared */
-	struct Declaration *decl; /* if NULL, a declaration hasn't been found for it yet */
+	// where this identifier was declared
+	struct Declaration *decl; // if NULL, a declaration hasn't been found for it yet
 	struct Identifiers *idents;
 	union {
-		struct Namespace *nms; /* only exists after typing, and only for namespace-level declarations (i.e. not local variables inside namespaces) */
-		UsedFrom *used_from; /* for stuff used inside structs -- NULL if this is actually in the struct body */
+		struct Namespace *nms; // only exists after typing, and only for namespace-level declarations (i.e. not local variables inside namespaces)
+		UsedFrom *used_from; // for stuff used inside structs -- NULL if this is actually in the struct body
 	};
 } IdentSlot;
 
@@ -201,7 +201,7 @@ typedef struct StrHashTable {
 	Allocator *allocr;
 	U32 rand_seed;
 	size_t data_size;
-	size_t nentries; /* # of filled slots */
+	size_t nentries; // # of filled slots
 } StrHashTable;
 
 typedef IdentSlot *Identifier;
@@ -210,7 +210,7 @@ typedef IdentSlot *IdentSlotPtr;
 typedef struct Identifiers {
 	StrHashTable table;
 	U32 rseed;
-	struct Block *scope; /* NULL for file scope */
+	struct Block *scope; // NULL for file scope
 } Identifiers;
 
 typedef enum {
@@ -283,7 +283,7 @@ typedef enum {
 	KW_COMMA,
 	KW_DOT,
 	KW_EQ,
-	KW_LAST_SYMBOL = KW_EQ, /* last one entirely consisting of symbols */
+	KW_LAST_SYMBOL = KW_EQ, // last one entirely consisting of symbols
 	KW_IF,
 	KW_ELIF,
 	KW_ELSE,
@@ -347,8 +347,8 @@ typedef String StrLiteral;
 
 typedef struct {
 	U32 line;
-	U32 start; /* index in file->contents */
-	U32 end; /* exclusive */
+	U32 start; // index in file->contents
+	U32 end; // exclusive
 } SourcePos;
 
 typedef struct Token {
@@ -370,13 +370,13 @@ typedef struct {
 	const char *filename;
 	char *contents;
 	Token *tokens;
-	U32 *no_warn_lines; /* in sorted order; right now we do a binary search */
+	U32 *no_warn_lines; // in sorted order; right now we do a binary search
 } File;
 
 typedef struct Location {
 	File *file;
-	U32 start; /* index of first token */
-	U32 end; /* index of one past last token */
+	U32 start; // index of first token
+	U32 end; // index of one past last token
 } Location;
 
 
@@ -384,10 +384,10 @@ typedef struct Tokenizer {
 	Allocator *allocr;
 	Token *tokens;
 	File *file;
-	char *s; /* string being parsed */
+	char *s; // string being parsed
 	ErrCtx *err_ctx;
 	U32 line;
-	Token *token; /* token currently being processed */
+	Token *token; // token currently being processed
 	Identifiers *globals;
 } Tokenizer;
 
@@ -400,7 +400,7 @@ typedef enum {
 	TYPE_ARR,
 	TYPE_PTR,
 	TYPE_SLICE,
-	TYPE_EXPR, /* just use this expression as the type. this kind of type doesn't exist after resolving. */
+	TYPE_EXPR, // just use this expression as the type. this kind of type doesn't exist after resolving.
 	TYPE_STRUCT
 #define TYPE_COUNT (TYPE_STRUCT+1)
 } TypeKind;
@@ -433,15 +433,15 @@ typedef U8 Constness;
 #define CONSTNESS_YES ((Constness)2)
 
 typedef struct FnType {
-	struct Type *types; /* dynamic array [0] = ret_type, [1:] = param_types  */
-	Constness *constness; /* [i] = constness of param #i. iff no parameters are constant, this is NULL. don't use it as a dynamic array, because it might not always be. */
+	struct Type *types; // dynamic array [0] = ret_type, [1:] = param_types 
+	Constness *constness; // [i] = constness of param #i. iff no parameters are constant, this is NULL. don't use it as a dynamic array, because it might not always be.
 } FnType;
 
 typedef struct {
 	struct Type *of;
 	union {
-		U64 n; /* after resolving */
-		struct Expression *n_expr; /* before resolving */
+		U64 n; // after resolving
+		struct Expression *n_expr; // before resolving
 	};
 } ArrType;
 
@@ -460,18 +460,18 @@ typedef struct Type {
 		ArrType *arr;
 		struct Type *ptr;
 		struct Type *slice;
-		struct StructDef *struc; /* multiple resolved types can refer to the same struct */
+		struct StructDef *struc; // multiple resolved types can refer to the same struct
 		struct Expression *expr;
 	};
 } Type;
 
 
-/* field of a struct */
+// field of a struct
 typedef struct Field {
 	Location where;
 	Identifier name;
 	Type *type;
-	size_t offset; /* offset during compile time */
+	size_t offset; // offset during compile time
 } Field;
 
 
@@ -490,19 +490,19 @@ typedef enum {
 
 typedef U8 BlockFlags;
 typedef struct Block {
-	/* NOTE: make sure you check copy.c when you add something to this */
+	// NOTE: make sure you check copy.c when you add something to this
 	BlockFlags flags;
 	BlockKind kind; /* set during the parsing phase, but don't access while this specific block is being
 	                   parsed, because sometimes it's set after parse_block */
 	struct {
-		IdentID break_lbl, cont_lbl; /* initially 0, set to non-zero values if needed (tr->lbl_counter); set during typing */
+		IdentID break_lbl, cont_lbl; // initially 0, set to non-zero values if needed (tr->lbl_counter); set during typing
 	} c;
 	Location where;
 	Identifiers idents;
 	struct Statement *stmts;
 	struct Block *parent;
-	struct Statement **deferred; /* deferred stuff from this block; used by both eval and cgen */
-	struct Use **uses; /* use statements (for types.c) */
+	struct Statement **deferred; // deferred stuff from this block; used by both eval and cgen
+	struct Use **uses; // use statements (for types.c)
 } Block;
 
 typedef Block *BlockPtr;
@@ -515,7 +515,7 @@ enum {
 };
 typedef U8 StructFlags;
 typedef struct StructDef {
-	/* these two only exist after resolving (before then, it's scope.stmts) */
+	// these two only exist after resolving (before then, it's scope.stmts)
 	Field *fields;
 	Location where;
 	/* 
@@ -527,15 +527,15 @@ typedef struct StructDef {
 	union {
 		HashTable instances;
 		struct {
-			size_t size; /* size of this struct during compile time */
+			size_t size; // size of this struct during compile time
 			size_t align;
-			U64 instance_id; /* ID of instance */
+			U64 instance_id; // ID of instance
 		};
 	};
 	Identifier name;
 	struct Declaration *params;
 	struct {
-		/* if name is NULL, use this */
+		// if name is NULL, use this
 		IdentID id;
 	} c;
 	StructFlags flags;
@@ -548,7 +548,7 @@ typedef enum {
 	EXPR_LITERAL_STR,
 	EXPR_LITERAL_BOOL,
 	EXPR_LITERAL_CHAR,
-	EXPR_IDENT, /* variable or constant */
+	EXPR_IDENT, // variable or constant
 	EXPR_BINARY_OP,
 	EXPR_UNARY_OP,
 	EXPR_FN,
@@ -570,10 +570,10 @@ typedef enum {
 
 typedef enum {
 	UNARY_MINUS,
-	UNARY_ADDRESS, /* &x */
-	UNARY_DEREF, /* *x */
-	UNARY_NOT, /* !x */
-	UNARY_TYPEOF, /* typeof x */
+	UNARY_ADDRESS, // &x
+	UNARY_DEREF, // *x
+	UNARY_NOT, // !x
+	UNARY_TYPEOF, // typeof x
 	UNARY_DSIZEOF,
 	UNARY_DALIGNOF,
 	UNARY_SIZEOF,
@@ -581,13 +581,13 @@ typedef enum {
 } UnaryOp;
 
 typedef enum {
-	BINARY_SET, /* e.g. x = y */
+	BINARY_SET, // e.g. x = y
 	BINARY_ADD,
 	BINARY_SUB,
 	BINARY_MUL,
 	BINARY_DIV,
 	BINARY_MOD,
-	BINARY_SET_ADD, /* e.g. x += y */
+	BINARY_SET_ADD, // e.g. x += y
 	BINARY_SET_SUB,
 	BINARY_SET_MUL,
 	BINARY_SET_DIV,
@@ -598,19 +598,19 @@ typedef enum {
 	BINARY_LE,
 	BINARY_EQ,
 	BINARY_NE,
-	BINARY_AT_INDEX, /* e.g. x[i] */
+	BINARY_AT_INDEX, // e.g. x[i]
 	BINARY_DOT,
-	BINARY_AND, /* && */
-	BINARY_OR /* || */
+	BINARY_AND, // &&
+	BINARY_OR // ||
 } BinaryOp;
 
 typedef struct CallExpr {
 	struct Expression *fn;
 	union {
-		struct Argument *args; /* before typing */
-		struct Expression *arg_exprs; /* after typing */
+		struct Argument *args; // before typing
+		struct Expression *arg_exprs; // after typing
 	};
-	struct Instance *instance; /* NULL = ordinary function, no compile time args */
+	struct Instance *instance; // NULL = ordinary function, no compile time args
 } CallExpr;
 
 
@@ -628,7 +628,7 @@ typedef enum {
 	CTYPE_UNSIGNED_INT = CTYPE_UNSIGNED|CTYPE_INT,
 	CTYPE_UNSIGNED_LONG = CTYPE_UNSIGNED|CTYPE_LONG,
 	CTYPE_UNSIGNED_LONGLONG = CTYPE_UNSIGNED|CTYPE_LONGLONG,
-	/* things that can't be unsigned */
+	// things that can't be unsigned
 	CTYPE_PTR = 0x10,
 	CTYPE_FLOAT,
 	CTYPE_DOUBLE,
@@ -637,33 +637,33 @@ typedef enum {
 } CTypeKind;
 typedef struct {
 	CTypeKind kind;
-	char *points_to; /* if kind == CTYPE_PTR, ident string of C type which it points to */
+	char *points_to; // if kind == CTYPE_PTR, ident string of C type which it points to
 } CType;
 
 enum {
 	FN_EXPR_FOREIGN = 0x01,
-	FN_EXPR_EXPORT = 0x02, /* set during typing */
+	FN_EXPR_EXPORT = 0x02, // set during typing
 	FN_EXPR_HAS_VARARGS = 0x04
 };
 typedef struct FnExpr {
 	Location where;
-	Block *declaration_block; /* block wherein this function is declared */
-	U64 instance_id; /* 0 if not an instance. needs to be available even for #foreign functions */
+	Block *declaration_block; // block wherein this function is declared
+	U64 instance_id; // 0 if not an instance. needs to be available even for #foreign functions
 	union {
 		struct {
-			struct Declaration *params; /* declarations of the parameters to this function */
-			struct Declaration *ret_decls; /* array of decls, if this has named return values. otherwise, NULL */
+			struct Declaration *params; // declarations of the parameters to this function
+			struct Declaration *ret_decls; // array of decls, if this has named return values. otherwise, NULL
 			Type ret_type;	
 			Block body;
 		};
 		struct {
-			Type type; /* type of this function */
-			CType *ctypes; /* ctypes[i] = CTYPE_NONE if this isn't a ctype, or the specified CType. don't use this as a dynamic array. */
+			Type type; // type of this function
+			CType *ctypes; // ctypes[i] = CTYPE_NONE if this isn't a ctype, or the specified CType. don't use this as a dynamic array.
 			const char *name;
-			/* name of foreign function and dynamic library file it comes from (dll/so) */
-			struct Expression *name_expr; /* STILL VALID even after running type_of_fn, because sometimes we run type_of_fn multiple times on a function */
+			// name of foreign function and dynamic library file it comes from (dll/so)
+			struct Expression *name_expr; // STILL VALID even after running type_of_fn, because sometimes we run type_of_fn multiple times on a function
 			const char *lib;
-			struct Expression *lib_expr; /* see name_expr */
+			struct Expression *lib_expr; // see name_expr
 			FnPtr fn_ptr;
 		} foreign;
 	};
@@ -672,18 +672,18 @@ typedef struct FnExpr {
 							 if the ith semi-constant parameter is constant.
 						  */
 	struct {
-		/* if name = NULL, this is an anonymous function, and id will be the ID of the fn. */
+		// if name = NULL, this is an anonymous function, and id will be the ID of the fn.
 		Identifier name;
 		IdentID id;
 	} c;
 	U8 flags;
-} FnExpr; /* an expression such as fn(x: int) int { return 2 * x; } */
+} FnExpr; // an expression such as fn(x: int) int { return 2 * x; }
 typedef FnExpr *FnExprPtr;
 
 typedef struct Instance {
-	Value val; /* key into hash table */
+	Value val; // key into hash table
 	union {
-		FnExpr *fn; /* the typed function */
+		FnExpr *fn; // the typed function
 		StructDef struc;
 	};
 } Instance;
@@ -696,13 +696,13 @@ typedef struct CastExpr {
 
 typedef struct NewExpr {
 	Type type;
-	struct Expression *n; /* e.g. for new(int, 5) */
+	struct Expression *n; // e.g. for new(int, 5)
 } NewExpr;
 
 typedef struct SliceExpr {
-	struct Expression *of; /* required */
-	struct Expression *from; /* optional */
-	struct Expression *to; /* optional */
+	struct Expression *of; // required
+	struct Expression *from; // optional
+	struct Expression *to; // optional
 	struct {
 		IdentID id;
 	} c;
@@ -731,10 +731,10 @@ const char *const builtin_val_names[BUILTIN_VAL_COUNT] =
 
 typedef struct Namespace {
 	Block body;
-	Identifier associated_ident; /* if this is foo ::= nms { ... }, then associated_ident is foo; can be NULL. used by cgen. only non-null if the namespace isn't in a non-namespace block */
-	struct IncludedFile *inc_file; /* NULL if this is not generated from an include to nms */
+	Identifier associated_ident; // if this is foo ::= nms { ... }, then associated_ident is foo; can be NULL. used by cgen. only non-null if the namespace isn't in a non-namespace block
+	struct IncludedFile *inc_file; // NULL if this is not generated from an include to nms
 	struct {
-		char *prefix; /* generated during typing */
+		char *prefix; // generated during typing
 	} c;
 } Namespace;
 typedef Namespace *NamespacePtr;
@@ -751,7 +751,7 @@ typedef struct Expression {
 	ExprKind kind;
 	ExprFlags flags;
 	struct {
-		IdentID id; /* cgen ID used for this expression */
+		IdentID id; // cgen ID used for this expression
 	} cgen;
 	union {
 		Floating floatl;
@@ -768,7 +768,7 @@ typedef struct Expression {
 			struct Expression *lhs;
 			union {
 				struct Expression *rhs;
-				Field *field; /* for struct., after resolving */
+				Field *field; // for struct., after resolving
 			};
 		} binary;
 		CallExpr call;
@@ -781,8 +781,8 @@ typedef struct Expression {
 				BuiltinVal val;
 			} which;
 		} builtin;
-		String ident_str; /* before typing */
-		Identifier ident; /* after typing */
+		String ident_str; // before typing
+		Identifier ident; // after typing
 		NewExpr new;
 		Namespace *nms;
 		struct {
@@ -792,7 +792,7 @@ typedef struct Expression {
 		CastExpr cast;
 		SliceExpr slice;
 		Block *block;
-		struct Expression *tuple; /* dynamic array, even after typing */
+		struct Expression *tuple; // dynamic array, even after typing
 		Type *typeval;
 		Value val;
 	};
@@ -801,7 +801,7 @@ typedef struct Expression {
 
 typedef struct Argument {
 	Location where;
-	char *name; /* NULL = no name */
+	char *name; // NULL = no name
 	Expression val;
 } Argument;
 
@@ -811,12 +811,12 @@ enum {
 	DECL_SEMI_CONST = 0x0004,
 	DECL_HAS_EXPR = 0x0008,
 	DECL_FOUND_TYPE = 0x0010,
-	DECL_ERRORED_ABOUT_SELF_REFERENCE = 0x0020, /* has there been an error about this decl referencing itself? */
+	DECL_ERRORED_ABOUT_SELF_REFERENCE = 0x0020, // has there been an error about this decl referencing itself?
 	DECL_FOUND_VAL = 0x0040,
-	DECL_INFER = 0x0080, /* infer the value (e.g. fn(t::Type=, x:t)) */
+	DECL_INFER = 0x0080, // infer the value (e.g. fn(t::Type=, x:t))
 	DECL_EXPORT = 0x0100,
 	DECL_IS_PARAM = 0x0200,
-	DECL_USE = 0x0400 /* e.g. use p: Point */
+	DECL_USE = 0x0400 // e.g. use p: Point
 };
 
 typedef U16 DeclFlags;
@@ -828,20 +828,20 @@ typedef struct Declaration {
 	DeclFlags flags;
 	union {
 		Expression expr;
-		Field *field; /* pointer to the field which the first identifier in this decl refers to */
+		Field *field; // pointer to the field which the first identifier in this decl refers to
 		struct {
 			union {
 				struct {
-					/* only exist before typing */
+					// only exist before typing
 					Expression *name;
 					Expression *lib;
 				};
-				/* only set for non-functions */
+				// only set for non-functions
 				const char *name_str;
 			};
 		} foreign;
 	};
-	Value val; /* only for constant decls, non-constant globals, and varargs. */
+	Value val; // only for constant decls, non-constant globals, and varargs.
 
 	/* 
 		for eval, for non-constant decls
@@ -858,8 +858,8 @@ enum {
 
 typedef struct If {
 	U8 flags;
-	Expression *cond; /* NULL = this is an else */
-	struct If *next_elif; /* next elif/else of this statement */
+	Expression *cond; // NULL = this is an else
+	struct If *next_elif; // next elif/else of this statement
 	Block body;
 } If;
 
@@ -880,11 +880,11 @@ typedef struct For {
 	Block body;
 	union {
 		struct {
-			Expression *from; /* can't be null */
-			Expression *to; /* can be null */
+			Expression *from; // can't be null
+			Expression *to; // can be null
 			union {
-				/* (either) can be null */
-				Expression *step; /* before typing */
+				// (either) can be null
+				Expression *step; // before typing
 				Value *stepval; /* after typing. the type of this is header.type.tuple[0] (i.e. the value type for this for loop),
 					NOTE: this might be different from the original ForExpr.step.type, because of implicit type conversions. */
 			};
@@ -898,12 +898,12 @@ enum {
 };
 typedef struct Return {
 	U8 flags;
-	Block *referring_to; /* eval uses this; it's the function body we're returning from */
+	Block *referring_to; // eval uses this; it's the function body we're returning from
 	Expression expr;
 } Return;
 
 enum {
-	INC_FILE_INCLUDING = 0x01, /* are we currently in the process of including this file (i.e. during typing)? */
+	INC_FILE_INCLUDING = 0x01, // are we currently in the process of including this file (i.e. during typing)?
 	INC_FILE_CGEND_SDECLS = 0x10,
 	INC_FILE_CGEND_DECLS = 0x20,
 	INC_FILE_CGEND_DEFS = 0x40,
@@ -912,7 +912,7 @@ enum {
 typedef U8 IncFileFlags;
 typedef struct IncludedFile {
 	IncFileFlags flags;
-	Namespace *main_nms; /* namespace of first inclusion */
+	Namespace *main_nms; // namespace of first inclusion
 	struct Statement *stmts;
 } IncludedFile;
 
@@ -924,7 +924,7 @@ enum {
 typedef struct {
 	U8 flags;
 	Expression filename;
-	char *nms; /* NULL if this is just a plain old #include, otherwise string which can be used with ident_get */
+	char *nms; // NULL if this is just a plain old #include, otherwise string which can be used with ident_get
 } Include;
 
 typedef enum {
@@ -949,7 +949,7 @@ typedef enum {
 	STMT_RET,
 	STMT_BREAK,
 	STMT_CONT,
-	STMT_INCLUDE, /* turns into STMT_INLINE_BLOCK after typing */
+	STMT_INCLUDE, // turns into STMT_INLINE_BLOCK after typing
 	STMT_MESSAGE,
 	STMT_DEFER,
 	STMT_USE,
@@ -957,25 +957,25 @@ typedef enum {
 	STMT_FOR,
 	STMT_WHILE,
 	STMT_BLOCK,
-	STMT_INLINE_BLOCK /* a group of statements acting as one statement, e.g. all the statements from a #include */
+	STMT_INLINE_BLOCK // a group of statements acting as one statement, e.g. all the statements from a #include
 } StatementKind;
 enum {
 	STMT_TYPED = 0x01,
-	STMT_IS_INIT = 0x02 /* is this an initialization statement? if so, during typing it will be added to gctx->inits (this can't be done at parsing because the statements array is changing) */
+	STMT_IS_INIT = 0x02 // is this an initialization statement? if so, during typing it will be added to gctx->inits (this can't be done at parsing because the statements array is changing)
 };
 typedef struct Statement {
 	Location where;
 	StatementKind kind;
 	U8 flags;
 	union {
-		Declaration *decl; /* we want the pointer to be fixed so that we can refer to it from an identifier */
+		Declaration *decl; // we want the pointer to be fixed so that we can refer to it from an identifier
 		Expression *expr;
 		Return *ret;
 		Include *inc;
-		Message *message; /* #error, #warn, #info */
-		Block *referring_to; /* for break/continue; set during typing */
+		Message *message; // #error, #warn, #info
+		Block *referring_to; // for break/continue; set during typing
 		struct Statement *defer;
-		struct Statement *inline_block; /* statements in an inline block (dynamic array) */
+		struct Statement *inline_block; // statements in an inline block (dynamic array)
 		Use *use;
 		If *if_;
 		While *while_;
@@ -1010,9 +1010,9 @@ typedef struct {
 		these are in order of appearance (which is the order in which they are called)
 	*/
 	Initialization *inits;
-	StrHashTable included_files; /* maps to IncludedFile. */
-	File *main_file; /* this is the file which the compiler is invoked on. needed for checking for circular includes. */
-	StatementWithCtx *static_ifs; /* all the #ifs */
+	StrHashTable included_files; // maps to IncludedFile.
+	File *main_file; // this is the file which the compiler is invoked on. needed for checking for circular includes.
+	StatementWithCtx *static_ifs; // all the #ifs
 	ErrCtx *err_ctx;
 	bool debug_build;
 } GlobalCtx;
@@ -1022,23 +1022,23 @@ typedef struct Parser {
 	Allocator *allocr;
 	Identifiers *globals;
 	File *file;
-	Block *block; /* which block are we in? NULL = file scope */
+	Block *block; // which block are we in? NULL = file scope
 	ParsedFile *parsed_file;
 	GlobalCtx *gctx;
 } Parser;
 
 typedef struct {
 	Allocator *allocr;
-	StrHashTable libs_loaded; /* of Library (NOTE: Library is defined in foreign_something.c) */
+	StrHashTable libs_loaded; // of Library (NOTE: Library is defined in foreign_something.c)
 } ForeignFnManager;
 
 typedef struct Evaluator {
 	Allocator *allocr;
 	struct Typer *typer;
-    Block *returning; /* function body from which we are returning OR loop body in which we are continuing/breaking */
-	bool is_break; /* is returning because of a break, as opposed to a continue? */
-	void **to_free; /* array of pointers to free once block is exited */
-	Declaration **decls_given_values; /* array of declarations whose last value in their val stacks should be removed when the block is exited */
+    Block *returning; // function body from which we are returning OR loop body in which we are continuing/breaking
+	bool is_break; // is returning because of a break, as opposed to a continue?
+	void **to_free; // array of pointers to free once block is exited
+	Declaration **decls_given_values; // array of declarations whose last value in their val stacks should be removed when the block is exited
 	Value ret_val;
 	ForeignFnManager ffmgr;
 } Evaluator;
@@ -1064,19 +1064,19 @@ typedef struct Typer {
 	Allocator *allocr;
 	Evaluator *evalr;
 	Identifiers *globals;
-	Use **uses; /* global used things */
-	Declaration **in_decls; /* array of declarations we are currently inside */
+	Use **uses; // global used things
+	Declaration **in_decls; // array of declarations we are currently inside
 	Block *block;
-	FnExpr *fn; /* the function we're currently parsing. */
+	FnExpr *fn; // the function we're currently parsing.
 	GlobalCtx *gctx;
 	ParsedFile *parsed_file;
 	Namespace *nms;
-	FnWithCtx *all_fns; /* does not include templates */
+	FnWithCtx *all_fns; // does not include templates
 	StructDef **all_structs;
-	DeclWithCtx *all_globals; /* includes stuff in namespaces, as long as it's not in a function */
+	DeclWithCtx *all_globals; // includes stuff in namespaces, as long as it's not in a function
 	IdentID lbl_counter;
-	unsigned long nms_counter; /* counter for namespace IDs */
-	StrHashTable included_files; /* maps to IncludedFile */
+	unsigned long nms_counter; // counter for namespace IDs
+	StrHashTable included_files; // maps to IncludedFile
 	/* 
 		have we had an error because we couldn't find a file that was #include'd 
 		(so that we can stop compiling immediately)
@@ -1088,14 +1088,14 @@ typedef struct CGenerator {
 	Allocator *allocr;
 	FILE *outc;
 	IdentID ident_counter, lbl_counter;
-	U16 indent_lvl; /* how many levels of indentation? */
-	bool will_indent; /* will the next thing be indented? */
+	U16 indent_lvl; // how many levels of indentation?
+	bool will_indent; // will the next thing be indented?
 	ParsedFile *file;
 	Block *block;
 	Namespace *nms;
-	FnExpr *fn; /* which function are we in? (NULL for none) - not used during decls */
+	FnExpr *fn; // which function are we in? (NULL for none) - not used during decls
 	Identifier main_ident;
 	Identifiers *globals;
-	char **nms_prefixes; /* dynamic (null-terminated) array of namespace prefixes */
+	char **nms_prefixes; // dynamic (null-terminated) array of namespace prefixes
 	GlobalCtx *gctx;
 } CGenerator;

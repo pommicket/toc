@@ -81,7 +81,7 @@ static inline U32 rand_u32(U32 seed) {
 
 #define plural_suffix(x) ((x) == 1 ? "" : "s")
 static const char *indefinite_article(const char *s) {
-	/* usually, words starting with "u" use "a" - "a unique thing", "a u64" */
+	// usually, words starting with "u" use "a" - "a unique thing", "a u64"
 	if (*s == 'a' || *s == 'e' || *s == 'i' || *s == 'o')
 		return "an";
 	return "a";

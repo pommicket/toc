@@ -73,7 +73,7 @@ static WarnUnusedResult void *arr_resva_(void *arr, size_t n, size_t item_sz, Al
 }
 
 
-/* accommodate one more element if necessary */
+// accommodate one more element if necessary
 static WarnUnusedResult void *arr_grow(void *arr, size_t item_sz) {
 	ArrHeader *hdr;
 	if (arr == NULL) {
@@ -131,7 +131,7 @@ static WarnUnusedResult void *arr_set_len_(void *arr, size_t n, size_t item_sz) 
 		arr = arr_resv_(arr, n, item_sz);
 	}
 	arr_hdr(arr)->len = (U32)n;
-	/* @OPTIM: shrink */
+	// @OPTIM: shrink
 	return arr;
 }
 static WarnUnusedResult void *arr_set_lena_(void *arr, size_t n, size_t item_sz, Allocator *a) {
@@ -173,7 +173,7 @@ static void *arr_end_(void *arr, size_t item_sz) {
 	}
 }
 
-/* @OPTIM: shrink array */
+// @OPTIM: shrink array
 static WarnUnusedResult void *arr_remove_last_(void *arr) {
 	assert(arr_hdr(arr)->len);
 	if (--arr_hdr(arr)->len == 0) {
@@ -232,7 +232,7 @@ You shouldn't rely on this, though, e.g. by doing
 #define arr_cleara(arr, allocr) arr = arr_cleara_((arr), sizeof *(arr), (allocr))
 #define arr_last(arr) arr[arr_len(arr)-1]
 #define arr_last_ptr(arr) arr_last_((arr), sizeof *(arr))
-/* one past last, or NULL if empty */
+// one past last, or NULL if empty
 #define arr_end(arr) arr_end_((arr), sizeof *(arr))
 #define arr_foreach(arr, type, var) for (type *var = (arr), *var##_foreach_end = arr_end(arr); var != var##_foreach_end; ++var)
 #define arr_foreach_reversed(arr, type, var) for (type *var = arr_last_ptr(arr), *var##_foreach_last = arr; var; var = var == var##_foreach_last ? NULL : (var-1))
@@ -241,7 +241,7 @@ You shouldn't rely on this, though, e.g. by doing
 #define arr_copya(out, in, allocr) do { assert(sizeof *(in) == sizeof *(out)); out = arr_copya_((out), (in), sizeof *(out), (allocr)); } while(0)
 
 #if RUN_TESTS
-/* @TODO(eventually): more extensive test? */
+// @TODO(eventually): more extensive test?
 static void arr_test(void) {
 	int *foos = NULL;
 	for (int i = 0; i < 10; ++i) {
@@ -259,7 +259,7 @@ static void arr_test(void) {
 }
 #endif
 
-/* string hash table. entries are zero initialized (toc stuff depends on this!) */
+// string hash table. entries are zero initialized (toc stuff depends on this!)
 
 static U64 str_hash(const char *s, size_t len) {
 	U32 x = 0xabcdef01;
@@ -335,7 +335,7 @@ static StrHashTableSlot *str_hash_table_insert_(StrHashTable *t, const char *str
 	return *slot;
 }
 
-/* use this if you don't need the slot */
+// use this if you don't need the slot
 static inline void *str_hash_table_insert(StrHashTable *t, const char *str, size_t len) {
 	return str_hash_table_insert_(t, str, len)->data;
 }
@@ -352,7 +352,7 @@ static StrHashTableSlot *str_hash_table_insert_anonymous_(StrHashTable *t) {
 	return *slot;
 }
 
-/* use this if you don't need the slot */
+// use this if you don't need the slot
 static inline void *str_hash_table_insert_anonymous(StrHashTable *t) {
 	return str_hash_table_insert_anonymous_(t)->data;
 }

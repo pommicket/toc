@@ -4,9 +4,9 @@
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
 
-/* see development.md for development information */
+/*
+see development.md for development information 
 
-/* 
 @TODO:
 if we do #include "foo.toc", bar; and foo.toc fails, bar should be declared as TYPE_UNKNOWN (right now it's undeclared)
 fix #foreign not at global scope - right now the cgen'd definition doesn't use the proper type
@@ -96,7 +96,7 @@ static void signal_handler(int num) {
 	static void *addrs[300];
 	int naddrs = (int)(sizeof addrs / sizeof *addrs);
 	naddrs = backtrace(addrs, naddrs);
-	/* char **syms = backtrace_symbols(addrs, naddrs); */
+	// char **syms = backtrace_symbols(addrs, naddrs);
 	char command[2048] = "addr2line -p -f -a -e ";
 	strcat(command, program_name);
 	strcat(command, " ");
@@ -105,7 +105,7 @@ static void signal_handler(int num) {
 		snprintf(command + strlen(command), sizeof command - strlen(command), "%p ", addrs[i]);
 	}
 	system(command);
-	/* free(syms); */
+	// free(syms);
 	signal(SIGABRT, SIG_DFL);
 	abort();
 }
@@ -164,13 +164,13 @@ int main(int argc, char **argv) {
 	bool default_color_enabled;
 #if UNISTD_AVAILABLE
 	#if defined _POSIX_VERSION && _POSIX_VERSION >= 200112L
-	/* isatty available */
-	default_color_enabled = (bool)isatty(2); /* is /dev/stderr a tty? */
+	// isatty available
+	default_color_enabled = (bool)isatty(2); // is /dev/stderr a tty?
 	#else
-	default_color_enabled = false; /* old posix version */
+	default_color_enabled = false; // old posix version
 	#endif
 #else
-	default_color_enabled = false; /* probably windows */
+	default_color_enabled = false; // probably windows
 #endif
 	err_ctx.color_enabled = default_color_enabled;
 	

@@ -1,10 +1,6 @@
 #include "std/io.toc", io;
 main ::= fn() {
-	foo(12);
+	io.puts("Hello, world!");
 }
+main();
 
-use io;
-
-foo ::= fn(x :: int) {
-	puti(x);
-}

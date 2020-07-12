@@ -142,7 +142,7 @@ static void u64_to_val(Value *v, BuiltinType v_type, U64 x) {
 	}
 }
 
-/* rerturns a pointer to the underlying data of v, e.g. an I64 * if t is the builtin BUILTIN_I64 */
+// rerturns a pointer to the underlying data of v, e.g. an I64 * if t is the builtin BUILTIN_I64
 static void *val_get_ptr(Value *v, Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
@@ -212,7 +212,7 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		fprintf(f, ")");
 	} break;
 	case TYPE_ARR: {
-		fprintf(f, "["); /* @TODO: change? when array initializers are added */
+		fprintf(f, "["); // @TODO: change? when array initializers are added
 		size_t n = (size_t)t->arr->n;
 		if (n > 5) n = 5;
 		for (size_t i = 0; i < n; ++i) {
@@ -228,7 +228,7 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		fprintf(f, "<pointer: %p>", *(void **)p);
 		break;
 	case TYPE_SLICE: {
-		fprintf(f, "["); /* @TODO: change? when slice initializers are added */
+		fprintf(f, "["); // @TODO: change? when slice initializers are added
 		Slice slice = *(Slice *)p;
 		I64 n = slice.len;
 		if (n > 5) n = 5;
@@ -242,7 +242,7 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		fprintf(f, "]");
 	} break;
 	case TYPE_STRUCT:
-		fprintf(f, "["); /* @TODO: change? when struct initializers are added */
+		fprintf(f, "["); // @TODO: change? when struct initializers are added
 		arr_foreach(t->struc->fields, Field, fi) {
 			if (fi != t->struc->fields)
 				fprintf(f, ", ");
@@ -372,7 +372,7 @@ static void val_builtin_cast(Value vin, BuiltinType from, Value *vout, BuiltinTy
 	case BUILTIN_CHAR:
 		switch (to) {
 			builtin_casts_to_int(charv);
-		case BUILTIN_CHAR: /* handled at top of func */
+		case BUILTIN_CHAR: // handled at top of func
 		case BUILTIN_F32:
 		case BUILTIN_F64:
 		case BUILTIN_BOOL:
@@ -508,13 +508,13 @@ static void val_cast(Value vin, Type *from, Value *vout, Type *to) {
 	}
 }
 
-/* type is the underlying type, not the pointer type. */
+// type is the underlying type, not the pointer type.
 static void eval_deref(Value *v, void *ptr, Type *type) {
 	assert(type->flags & TYPE_IS_RESOLVED);
 	switch (type->kind) {
 	case TYPE_PTR: v->ptr = *(void **)ptr; break;
-	case TYPE_ARR: v->arr = ptr; break; /* when we have a pointer to an array, it points directly to the data in that array. */
-	case TYPE_STRUCT: v->struc = ptr; break; /* same for structs */
+	case TYPE_ARR: v->arr = ptr; break; // when we have a pointer to an array, it points directly to the data in that array.
+	case TYPE_STRUCT: v->struc = ptr; break; // same for structs
 	case TYPE_FN: v->fn = *(FnExpr **)ptr; break;
 	case TYPE_TUPLE: v->tuple = *(Value **)ptr; break;
 	case TYPE_BUILTIN:
@@ -550,7 +550,7 @@ static void eval_deref(Value *v, void *ptr, Type *type) {
 		break;
 	}
 }
-/* inverse of eval_deref */
+// inverse of eval_deref
 static void eval_deref_set(void *set, Value *to, Type *type) {
 	assert(type->flags & TYPE_IS_RESOLVED);
 	switch (type->kind) {
@@ -604,7 +604,7 @@ static Status eval_val_ptr_at_index(Location where, Value *arr, U64 i, Type *arr
 	switch (arr_type->kind) {
 	case TYPE_ARR: {
 		U64 arr_sz = (U64)arr_type->arr->n;
-		if (i > arr_sz) { /* this is INTENTIONALLY > and not >=, because it's okay to have a pointer to one past the end of an array */
+		if (i > arr_sz) { // this is INTENTIONALLY > and not >=, because it's okay to have a pointer to one past the end of an array
 			err_print(where, "Array out of bounds (index = %lu, array size = %lu)\n", (unsigned long)i, (unsigned long)arr_sz);
 			return false;
 		}
@@ -614,7 +614,7 @@ static Status eval_val_ptr_at_index(Location where, Value *arr, U64 i, Type *arr
 	case TYPE_SLICE: {
 		Slice slice = *(Slice *)arr_ptr;
 		U64 slice_sz = (U64)slice.len;
-		if (i > slice_sz) { /* see above for why it's not >= */
+		if (i > slice_sz) { // see above for why it's not >=
 			err_print(where, "Slice out of bounds (index = %lu, slice size = %lu)\n", (unsigned long)i, (unsigned long)slice_sz);
 			return false;
 		}
@@ -638,7 +638,7 @@ static Status eval_val_ptr_at_index(Location where, Value *arr, U64 i, Type *arr
 			break;
 		}
 	}
-		/* fallthrough */
+		// fallthrough
 	default: assert(0); break;
 	}
 	return true;
@@ -671,7 +671,7 @@ static Value *ident_val(Evaluator *ev, Identifier i, Location where) {
 	assert(decl);
 	int idx = decl_ident_index(decl, i);
 	if (decl->type.kind == TYPE_UNKNOWN && ev->typer->gctx->err_ctx->have_errored)
-		return NULL; /* silently fail (something went wrong when we typed this decl) */
+		return NULL; // silently fail (something went wrong when we typed this decl)
 	if (decl->flags & DECL_IS_PARAM) {
 		if (decl->val_stack) {
 			Value *valp = arr_last(decl->val_stack);
@@ -681,14 +681,14 @@ static Value *ident_val(Evaluator *ev, Identifier i, Location where) {
 				return valp;
 		} else {
 			if (!(decl->flags & DECL_FOUND_VAL)) {
-				/* trying to access parameter, e.g. fn(y: int) { x ::= y; } */
+				// trying to access parameter, e.g. fn(y: int) { x ::= y; }
 				char *s = ident_to_str(i);
 				err_print(where, "You can't access non-constant parameter %s at compile time.", s);
 				info_print(decl->where, "%s was declared here.", s);
 				free(s);
 				return NULL;
 			}
-			/* struct parameter */
+			// struct parameter
 			if (arr_len(decl->idents) > 1)
 				return &decl->val.tuple[idx];
 			else
@@ -708,7 +708,7 @@ static Value *ident_val(Evaluator *ev, Identifier i, Location where) {
 		err_print(where, "You can't access non-constant variable %s at compile time.", s);
 		info_print(decl->where, "%s was declared here.", s);
 		free(s);
-		return NULL; /* uh oh... this is a runtime-only variable */
+		return NULL; // uh oh... this is a runtime-only variable
 	}
 }
 
@@ -755,11 +755,11 @@ static Status eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr, void
 				return false;
 		}
 		if (str_eq_cstr(member, "data")) {
-			/* access struct data */
+			// access struct data
 			*p = &((Slice *)ptr)->data;
 		} else {
 			assert(str_eq_cstr(member, "len"));
-			/* access struct length */
+			// access struct length
 			*p = &((Slice *)ptr)->len;
 		}
 	}
@@ -831,10 +831,10 @@ static Status eval_set(Evaluator *ev, Expression *set, Value *to) {
 		case BINARY_AT_INDEX: {
 			void *ptr;
 			Type *type;
-			/* get pointer to x[i] */
+			// get pointer to x[i]
 			if (!eval_expr_ptr_at_index(ev, set, &ptr, &type))
 				return false;
-			/* set it to to */
+			// set it to to
 			eval_deref_set(ptr, to, type);
 		} break;
 		case BINARY_DOT: {
@@ -859,9 +859,9 @@ static Status eval_set(Evaluator *ev, Expression *set, Value *to) {
 	return true;
 }
 
-/* @TODO(eventually): this could probably be made better */
+// @TODO(eventually): this could probably be made better
 static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value rhs, Type *rhs_type, Value *out, Type *out_type) {
-	/* WARNING: macros ahead */
+	// WARNING: macros ahead
 
 #define eval_unary_op_nums_only(op)				\
 	switch (builtin) {							\
@@ -1034,7 +1034,7 @@ static Status eval_ident(Evaluator *ev, Identifier ident, Value *v, Location whe
 	#if 0
 		Typer *tr = ev->typer;
 		Block *prev_block = tr->block;
-		/* make sure we're in the right block for typing the declaration */
+		// make sure we're in the right block for typing the declaration
 		tr->block = ident->idents->scope;
 		bool success = types_decl(ev->typer, d);
 		tr->block = prev_block;
@@ -1057,7 +1057,7 @@ static void evalr_add_val_on_stack(Evaluator *ev, Value v, Type *t) {
 	arr_add(ev->to_free, ptr);
 }
 
-/* remove and free the last value in d->val_stack. if free_val_ptr is false, the last value's contents will be freed, but not its pointer. */
+// remove and free the last value in d->val_stack. if free_val_ptr is false, the last value's contents will be freed, but not its pointer.
 static void decl_remove_val(Declaration *d, bool free_val_ptr) {
 	Type *t = &d->type;
 	Value *dval = arr_last(d->val_stack);
@@ -1103,7 +1103,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			Expression *o = e->unary.of;
 			if (type_is_builtin(&o->type, BUILTIN_TYPE)) {
 				if (!eval_expr(ev, e->unary.of, &of)) return false;
-				/* "address" of type (pointer to type) */
+				// "address" of type (pointer to type)
 				v->type = evalr_malloc(ev, sizeof *v->type);
 				v->type->flags = TYPE_IS_RESOLVED;
 				v->type->kind = TYPE_PTR;
@@ -1277,7 +1277,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		}
 		size_t nargs = arr_len(e->call.arg_exprs);
 		if (fn->flags & FN_EXPR_FOREIGN) {
-			/* evaluate foreign function */
+			// evaluate foreign function
 			Value *args = err_malloc(nargs * sizeof *args);
 			for (size_t i = 0; i < nargs; ++i) {
 				if (!eval_expr(ev, &e->call.arg_exprs[i], &args[i]))
@@ -1292,7 +1292,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		}
 		
 		Type *ret_type = &fn->ret_type;
-		/* set parameter values */
+		// set parameter values
 		Declaration *params = fn->params, *ret_decls = fn->ret_decls;
 		Expression *arg = e->call.arg_exprs;
 		size_t pbytes = arr_len(params) * sizeof(Value);
@@ -1304,12 +1304,12 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		#endif
 		Value *pval = &pvals[0];
 		arr_foreach(params, Declaration, p) {
-			/* give each parameter its value */
+			// give each parameter its value
 			int idx = 0;
 			bool multiple_idents = arr_len(p->idents) > 1;
 			if (type_is_builtin(&p->type, BUILTIN_VARARGS)) {
 				Expression *args_end = e->call.arg_exprs + nargs;
-				/* set varargs */
+				// set varargs
 				pval->varargs = NULL;
 				for (; arg != args_end; ++arg) {
 					VarArg *varg = arr_add_ptr(pval->varargs);
@@ -1342,7 +1342,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		{
 			Value *dval = dvals;
 			arr_foreach(ret_decls, Declaration, d) {
-				/* give each return declaration its value */
+				// give each return declaration its value
 				int idx = 0;
 				Value ret_decl_val;
 				DeclFlags has_expr = d->flags & DECL_HAS_EXPR;
@@ -1364,7 +1364,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 					++idx;
 				}
 				if (is_tuple && has_expr)
-					free(ret_decl_val.tuple); /* we extracted the individual elements of this */
+					free(ret_decl_val.tuple); // we extracted the individual elements of this
 				arr_add(d->val_stack, dval);
 				++dval;
 			}
@@ -1374,7 +1374,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			return false;
 		}
 		if (ret_decls) {
-			/* extract return value from return declarations */
+			// extract return value from return declarations
 			size_t nret_decls = 0;
 			arr_foreach(ret_decls, Declaration, d) {
 				nret_decls += arr_len(d->idents);
@@ -1409,13 +1409,13 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 			ev->returning = NULL;
 		}
 
-		/* remove parameter values */
+		// remove parameter values
 		arr_foreach(params, Declaration, p)
 			decl_remove_val(p, false);
 		#if !ALLOCA_AVAILABLE
 		free(pvals);
 		#endif
-		/* remove ret decl values */
+		// remove ret decl values
 		arr_foreach(ret_decls, Declaration, d) 
 			decl_remove_val(d, false);
 		#if !ALLOCA_AVAILABLE
@@ -1448,7 +1448,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		} else {
 			to = n;
 		}
-		/* @TODO: is this the best check? (Go also checks if from > to) */
+		// @TODO: is this the best check? (Go also checks if from > to)
 		if (to > n) {
 			err_print(e->where, "Slice index out of bounds (to = %lu, length = %lu).", (unsigned long)to, (unsigned long)n);
 			return false;
@@ -1588,7 +1588,7 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 				}
 				if (!eval_expr(ev, i->cond, &cond)) return false;
 				if (val_truthiness(cond, &i->cond->type)) {
-					/* condition is true */
+					// condition is true
 					if (!eval_block(ev, &i->body)) return false;
 					break;
 				}
@@ -1630,7 +1630,7 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 		Declaration *header = &fo->header;
 		Value *for_valp = err_malloc(sizeof *for_valp);
 		arr_add(header->val_stack, for_valp);
-		/* make a tuple */
+		// make a tuple
 		Value for_val_tuple[2];
 		for_valp->tuple = for_val_tuple;
 		Value *value_val = &for_val_tuple[0];
@@ -1662,7 +1662,7 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 			}
 			while (1) {
 				if (fo->range.to) {
-					/* check if loop has ended */
+					// check if loop has ended
 					Value lhs = x;
 					Value rhs = to;
 					Type boolt = {0};
@@ -1774,11 +1774,11 @@ static Status eval_block(Evaluator *ev, Block *b) {
 		}
 	}
 	{
-		/* deal with deferred stmts */
-		/* these could overwrite ev->returning, ev->ret_val, so we should save them */
+		// deal with deferred stmts
+		// these could overwrite ev->returning, ev->ret_val, so we should save them
 		Block *return_block = ev->returning;
 		Value return_val = ev->ret_val;
-		ev->returning = NULL; /* if we didn't set this, the deferred stmts would immediately return */
+		ev->returning = NULL; // if we didn't set this, the deferred stmts would immediately return
 		arr_foreach(b->deferred, StatementPtr, stmtp) {
 			Statement *stmt = *stmtp;
 			if (!eval_stmt(ev, stmt)) {

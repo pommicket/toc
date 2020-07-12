@@ -11,7 +11,7 @@ enum {
 	  PARSE_DECL_ALLOW_INFER = 0x0004,
 	  PARSE_DECL_ALLOW_EXPORT = 0x0008,
 	  PARSE_DECL_DONT_SET_IDECLS = 0x0010,
-	  PARSE_DECL_IGNORE_EXPR = 0x0020, /* NOTE: if you pass this to parse_decl, you must set d->where.end */
+	  PARSE_DECL_IGNORE_EXPR = 0x0020, // NOTE: if you pass this to parse_decl, you must set d->where.end
 	  DECL_CAN_END_WITH_SEMICOLON = 0x0100,
 	  DECL_CAN_END_WITH_RPAREN = 0x0200,
 	  DECL_CAN_END_WITH_LBRACE = 0x0400,
@@ -159,7 +159,7 @@ static inline void mklocation(Location *l, File *f, Token *start, Token *end) {
 	l->end = (U32)(end - f->tokens);
 }
 
-/* returns -1 on failure */
+// returns -1 on failure
 static int kw_to_builtin_type(Keyword kw) {
 	switch (kw) {
 	case KW_I8: return BUILTIN_I8;
@@ -179,7 +179,7 @@ static int kw_to_builtin_type(Keyword kw) {
 	case KW_TYPE: return BUILTIN_TYPE;
 	case KW_VOID: return BUILTIN_VOID;
 	case KW_NAMESPACE: return BUILTIN_NMS;
-	/* don't allow .. => varargs because it's not a normal type */
+	// don't allow .. => varargs because it's not a normal type
 	default: return -1;
 	}
 	return -1;
@@ -208,7 +208,7 @@ static Keyword builtin_type_to_kw(BuiltinType t) {
 	return KW_COUNT;
 }
 
-/* returns the number of characters written, not including the null character */
+// returns the number of characters written, not including the null character
 static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 	bool resolved = (t->flags & TYPE_IS_RESOLVED) != 0;
 	switch (t->kind) {
@@ -262,7 +262,7 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 			if (def->params) {
 				written += str_copy(buffer + written, bufsize - written, "(");
 				arr_foreach(def->params, Declaration, param) {
-					/* @TODO: val to str */
+					// @TODO: val to str
 					if (param != def->params)
 						written += str_copy(buffer + written, bufsize - written, ", ");
 					written += str_copy(buffer + written, bufsize - written, "<argument>");
@@ -306,21 +306,21 @@ static size_t type_to_str_(Type *t, char *buffer, size_t bufsize) {
 		return written;
 	}
 	case TYPE_EXPR:
-		/* @TODO: improve this... we're gonna need expr_to_str ): */
+		// @TODO: improve this... we're gonna need expr_to_str ):
 		return str_copy(buffer, bufsize, "<type expression>");
 	}
 	assert(0);
 	return 0;
 }
 
-/* return value should be freed by caller */
+// return value should be freed by caller
 static char *type_to_str(Type *t) {
 	char *ret = err_malloc(256);
 	type_to_str_(t, ret, 256);
 	return ret;
 }
 
-/* defaults start to wherever we are now */
+// defaults start to wherever we are now
 static inline Location parser_mk_loc(Parser *p) {
 	Location loc = {0};
 	loc.file = p->file;
@@ -367,19 +367,19 @@ static inline void *parser_calloc(Parser *p, size_t n, size_t bytes) {
 	return allocr_calloc(p->allocr, n, bytes);
 }
 
-/* allocate a new expression. */
+// allocate a new expression.
 static inline Expression *parser_new_expr(Parser *p) {
 	return parser_malloc(p, sizeof(Expression));
 }
 
 typedef enum {
-			  EXPR_CAN_END_WITH_COMMA = 0x01, /* a comma could end the expression */
+			  EXPR_CAN_END_WITH_COMMA = 0x01, // a comma could end the expression
 			  EXPR_CAN_END_WITH_LBRACE = 0x02,
 			  EXPR_CAN_END_WITH_COLON = 0x04,
 			  EXPR_CAN_END_WITH_DOTDOT = 0x08,
 			  EXPR_CAN_END_WITH_EQ = 0x10,
 			  EXPR_CAN_END_WITH_WHERE = 0x20
-			  /* note that parse_type uses -1 for this */
+			  // note that parse_type uses -1 for this
 } ExprEndFlags;
 
 static Token *expr_find_end(Parser *p, ExprEndFlags flags)  {
@@ -420,7 +420,7 @@ static Token *expr_find_end(Parser *p, ExprEndFlags flags)  {
 			case KW_RBRACE:
 				--brace_level;
 				if (paren_level == 0 && brace_level == 0 && square_level == 0) {
-					return token + 1; /* token afer } is end */
+					return token + 1; // token afer } is end
 				}
 				if (brace_level < 0)
 					return token;
@@ -448,31 +448,31 @@ static Token *expr_find_end(Parser *p, ExprEndFlags flags)  {
 		}
 		if (token->kind == TOKEN_EOF) {
 			if (brace_level > 0) {
-				tokr_err(t, "Opening brace { was never closed."); /* @TODO: Find out where this is */
+				tokr_err(t, "Opening brace { was never closed."); // @TODO: Find out where this is
 			} else if (paren_level > 0) {
 				tokr_err(t, "Opening parenthesis ( was never closed.");
 			} else if (square_level > 0) {
 				tokr_err(t, "Opening square bracket [ was never closed.");
 			} else {
 				tokr_err(t, "Could not find end of expression (did you forget a semicolon?).");
-				/* @TODO: ? improve err message */
+				// @TODO: ? improve err message
 			}
-			t->token = token; /* don't try to continue */
+			t->token = token; // don't try to continue
 			return NULL;
 		}
 		++token;
 	}
 }
 
-/* parses, e.g. "(3, 5, foo)" */
+// parses, e.g. "(3, 5, foo)"
 static Status parse_args(Parser *p, Argument **args) {
 	Tokenizer *t = p->tokr;
 	Token *start = t->token;
 	assert(token_is_kw(start, KW_LPAREN));
 	*args = NULL;
-	++t->token; /* move past ( */
+	++t->token; // move past (
 	if (!token_is_kw(t->token, KW_RPAREN)) {
-		/* non-empty arg list */
+		// non-empty arg list
 		while (1) {
 			if (t->token->kind == TOKEN_EOF) {
 				tokr_err(t, "Expected argument list to continue.");
@@ -481,7 +481,7 @@ static Status parse_args(Parser *p, Argument **args) {
 			}
 			Argument *arg = parser_arr_add_ptr(p, *args);
 			arg->where = parser_mk_loc(p);
-			/* named arguments */
+			// named arguments
 			if (t->token->kind == TOKEN_IDENT && token_is_kw(t->token + 1, KW_EQ)) {
 				arg->name = t->token->ident;
 				t->token += 2;
@@ -496,15 +496,15 @@ static Status parse_args(Parser *p, Argument **args) {
 			if (token_is_kw(t->token, KW_RPAREN))
 				break;
 			assert(token_is_kw(t->token, KW_COMMA));
-			++t->token;	/* move past , */
+			++t->token;	// move past ,
 		}
 	}
-	++t->token;	/* move past ) */
+	++t->token;	// move past )
 	return true;
 }
 static void correct_ret_type(Parser *p, Type *ret_type) {
 	if (ret_type->kind == TYPE_EXPR && ret_type->expr->kind == EXPR_TUPLE) {
-		/* it's returning a tuple! */
+		// it's returning a tuple!
 		Expression *tuple_members = ret_type->expr->tuple;
 		size_t ntuple_members = arr_len(tuple_members);
 		ret_type->kind = TYPE_TUPLE;
@@ -519,7 +519,7 @@ static void correct_ret_type(Parser *p, Type *ret_type) {
 	}
 }
 
-/* where will be filled out with the location, if not NULL */
+// where will be filled out with the location, if not NULL
 static Status parse_type(Parser *p, Type *type, Location *where) {
 	Tokenizer *t = p->tokr;
 	if (where) {
@@ -537,10 +537,10 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 				break;
 			}
 		}
-		/* Not a builtin */
+		// Not a builtin
 		switch (t->token->kw) {
 		case KW_FN: {
-			/* function type */
+			// function type
 			type->kind = TYPE_FN;
 			FnType *fn = type->fn = parser_calloc(p, 1, sizeof *type->fn);
 			++t->token;
@@ -548,7 +548,7 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 				tokr_err(t, "Expected ( to follow fn.");
 				return false;
 			}
-			parser_arr_add_ptr(p, fn->types); /* add return type */
+			parser_arr_add_ptr(p, fn->types); // add return type
 			++t->token;
 			if (!token_is_kw(t->token, KW_RPAREN)) {
 				while (1) {
@@ -561,12 +561,12 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 						tokr_err(t, "Expected , to continue function type parameter list.");
 						return false;
 					}
-					++t->token; /* move past , */
+					++t->token; // move past ,
 				}
 			}
-			++t->token;	/* move past ) */
+			++t->token;	// move past )
 			Type *ret_type = fn->types;
-			/* if there's a symbol that isn't [, (, or &, that can't be the start of a type */
+			// if there's a symbol that isn't [, (, or &, that can't be the start of a type
 			if ((t->token->kind == TOKEN_KW
 				 && t->token->kw <= KW_LAST_SYMBOL
 				 && t->token->kw != KW_LSQUARE
@@ -584,15 +584,15 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 			break;
 		}
 		case KW_LSQUARE: {
-			/* array/slice */
+			// array/slice
 			type->kind = TYPE_ARR;
 			ArrType *arr = type->arr = parser_malloc(p, sizeof *type->arr);
-			++t->token;	/* move past [ */
+			++t->token;	// move past [
 			if (token_is_kw(t->token, KW_RSQUARE)) {
-				/* slice */
+				// slice
 				type->kind = TYPE_SLICE;
 				type->slice = parser_malloc(p, sizeof *type->slice);
-				++t->token; /* move past ] */
+				++t->token; // move past ]
 				Location slice_where;
 				if (!parse_type(p, type->slice, &slice_where)) return false;
 				break;
@@ -600,37 +600,37 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 			Token *end = expr_find_end(p, 0);
 			arr->n_expr = parser_new_expr(p);
 			if (!parse_expr(p, arr->n_expr, end)) return false;
-			t->token = end + 1;	/* go past ] */
+			t->token = end + 1;	// go past ]
 			arr->of = parser_malloc(p, sizeof *arr->of);
 			Location of_where;
 			if (!parse_type(p, arr->of, &of_where)) return false;
 		} break;
 		case KW_AMPERSAND: {
-			/* pointer */
+			// pointer
 			type->kind = TYPE_PTR;
 			type->ptr = parser_malloc(p, sizeof *type->ptr);
-			++t->token;	/* move past & */
+			++t->token;	// move past &
 			Location ptr_where;
 			if (!parse_type(p, type->ptr, &ptr_where)) return false;
 		} break;
 		case KW_ANDAND: {	
-			/* pointer to pointer */
+			// pointer to pointer
 			type->kind = TYPE_PTR;
 			Type *ptr = type->ptr = parser_malloc(p, sizeof *type->ptr);
 			ptr->flags = 0;
 			ptr->kind = TYPE_PTR;
 			ptr->ptr = parser_malloc(p, sizeof *ptr->ptr);
-			++t->token; /* move past && */
+			++t->token; // move past &&
 			Location ptrptr_where;
 			if (!parse_type(p, ptr->ptr, &ptrptr_where)) return false;
 		} break;
 		case KW_STRUCT: {
-			/* struct */
+			// struct
 			type->kind = TYPE_STRUCT;
 			StructDef *struc = type->struc = parser_malloc(p, sizeof *type->struc);
 			struc->flags = 0;
 			struc->name = NULL;
-			/* help cgen out */
+			// help cgen out
 			struc->c.id = 0;
 			struc->params = NULL;
 			struc->where = parser_mk_loc(p);
@@ -659,7 +659,7 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 						goto struct_fail;
 					}
 					if ((param->flags & DECL_ANNOTATES_TYPE) && type_is_builtin(&param->type, BUILTIN_VARARGS)) {
-						/* @TODO(eventually) */
+						// @TODO(eventually)
 						err_print(param->where, "structs cannot have varargs parameters (yet).");
 						goto struct_fail;
 					}
@@ -684,7 +684,7 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 		break;
 	default:
 	type_expr: {
-			/* TYPE_EXPR */
+			// TYPE_EXPR
 			Token *end = expr_find_end(p, (ExprEndFlags)-1 /* end as soon as possible */);
 			if (parse_expr(p, type->expr = parser_new_expr(p), end)) {
 				type->kind = TYPE_EXPR;
@@ -714,13 +714,13 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 		case TOKEN_KW:
 			switch (t->token->kw) {
 			case KW_ANDAND:
-				/* &&int */
+				// &&int
 				return true;
 			case KW_STRUCT:
 				ret = true;
 				if (end) {
 					int level = 1;
-					t->token += 2; /* skip struct { */
+					t->token += 2; // skip struct {
 					while (t->token->kind != TOKEN_EOF) {
 						if (t->token->kind == TOKEN_KW) switch (t->token->kw) {
 							case KW_LBRACE:
@@ -751,7 +751,7 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 								if (level == 0) {
 									if (end) {
 										++t->token;
-										parser_is_definitely_type(p, &t->token); /* move to end of type */
+										parser_is_definitely_type(p, &t->token); // move to end of type
 									}
 									goto end;
 								}
@@ -779,13 +779,13 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 							--paren_level;
 							if (paren_level == 0) {
 								++t->token;
-								if (token_is_kw(t->token, KW_LBRACE)) goto end; /* void fn expr */
-								if (is_decl(t)) /* has return declaration */
+								if (token_is_kw(t->token, KW_LBRACE)) goto end; // void fn expr
+								if (is_decl(t)) // has return declaration
 									goto end;
 								
 								if (t->token->kind == TOKEN_KW &&
 									(t->token->kw == KW_SEMICOLON || t->token->kw == KW_COMMA || t->token->kw == KW_RPAREN || t->token->kw == KW_LBRACE)) {
-									/* void fn type */
+									// void fn type
 									ret = true;
 									goto end;
 								}
@@ -794,10 +794,10 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 									return false;
 								}
 								if (token_is_kw(t->token, KW_LBRACE)) {
-									/* non-void fn expr */
+									// non-void fn expr
 									goto end;
 								}
-								/* it's a non-void function type */
+								// it's a non-void function type
 								ret = true;
 								goto end;
 							}
@@ -810,7 +810,7 @@ static bool parser_is_definitely_type(Parser *p, Token **end) {
 			case KW_DOTDOT:
 				return true;
 			case KW_AMPERSAND:
-				++t->token; /* continue; see if next thing is definitely a type */
+				++t->token; // continue; see if next thing is definitely a type
 				goto continu;
 			default: {
 				int x = kw_to_builtin_type(t->token->kw);
@@ -854,14 +854,14 @@ static Status parse_block(Parser *p, Block *b, U8 flags) {
 	}
 	b->where = parser_mk_loc(p);
 #ifdef TOC_DEBUG
-	/* temporary, so we can still print the location of the block while we're parsing it. */
+	// temporary, so we can still print the location of the block while we're parsing it.
 	parser_set_end_to_token(p, &b->where, t->token + 1);
 #endif
-	++t->token;	/* move past { */
+	++t->token;	// move past {
 	b->stmts = NULL;
 	bool ret = true;
 	if (!token_is_kw(t->token, KW_RBRACE)) {
-		/* non-empty block */
+		// non-empty block
 		while (1) {
 			Statement *stmt = parser_arr_add_ptr(p, b->stmts);
 			bool was_a_statement;
@@ -876,7 +876,7 @@ static Status parse_block(Parser *p, Block *b, U8 flags) {
 				break;
 			}
 			if (t->token->kind == TOKEN_EOF) {
-				/* sometimes we skip to the end of the file to give up on parsing, so if there's already been an error, don't give this one. */
+				// sometimes we skip to the end of the file to give up on parsing, so if there's already been an error, don't give this one.
 				if (ret) {
 					tokr_err(t, "Expected '}' to close function body.");
 					ret = false;
@@ -886,19 +886,19 @@ static Status parse_block(Parser *p, Block *b, U8 flags) {
 			
 		}
 	}
-	++t->token;	/* move past } */
+	++t->token;	// move past }
 	parser_put_end(p, &b->where);
  end:
 	p->block = prev_block;
 	if (!ret) {
-		/* @TODO: better way of skipping to end of block */
+		// @TODO: better way of skipping to end of block
 		while (t->token->kind != TOKEN_EOF && !token_is_kw(t->token, KW_RBRACE))
 			++t->token;
 	}
 	return ret;
 }
 
-/* does NOT handle empty declaration lists */
+// does NOT handle empty declaration lists
 static Status parse_decl_list(Parser *p, Declaration **decls, U16 flags) {
 	Tokenizer *t = p->tokr;
 	bool ret = true;
@@ -912,13 +912,13 @@ static Status parse_decl_list(Parser *p, Declaration **decls, U16 flags) {
 		Declaration *decl = parser_arr_add_ptr(p, *decls);
 		if (!parse_decl(p, decl, flags)) {
 			ret = false;
-			/* skip to end of list */
+			// skip to end of list
 			while (t->token->kind != TOKEN_EOF && !ends_decl(t->token, flags))
 				++t->token;
 			break;
 		}
 		if (decl->flags & DECL_INFER) {
-			/* split this declaration */
+			// split this declaration
 			size_t nidents = arr_len(decl->idents);
 			for (size_t i = 1; i < nidents; ++i) {
 				Declaration *new_decl = parser_arr_add_ptr(p, *decls);
@@ -930,7 +930,7 @@ static Status parse_decl_list(Parser *p, Declaration **decls, U16 flags) {
 			parser_arr_set_len(p, decl->idents, 1);
 		}
 	}
-	/* correct ident decls because the pointers to declarations might have changed */
+	// correct ident decls because the pointers to declarations might have changed
 	arr_foreach(*decls, Declaration, decl) {
 		arr_foreach(decl->idents, Identifier, ident) {
 			(*ident)->decl = decl;
@@ -944,7 +944,7 @@ static Status parse_fn_expr(Parser *p, FnExpr *f) {
 	f->instance_id = 0;
 	f->ret_decls = NULL;
 	f->instances = NULL;
-	/* only called when token is fn */
+	// only called when token is fn
 	assert(token_is_kw(t->token, KW_FN));
 	++t->token;
 	if (!token_is_kw(t->token, KW_LPAREN)) {
@@ -955,7 +955,7 @@ static Status parse_fn_expr(Parser *p, FnExpr *f) {
 	f->params = NULL;
 	bool success = true;
 	Block *prev_block = p->block;
-	/* enter block so that parameters' scope will be the function body */
+	// enter block so that parameters' scope will be the function body
 	f->body.parent = p->block;
 	p->block = &f->body;
 	idents_create(&f->body.idents, p->allocr, &f->body);
@@ -977,7 +977,7 @@ static Status parse_fn_expr(Parser *p, FnExpr *f) {
 	}
 	
 	if (token_is_kw(t->token, KW_LBRACE)) {
-		/* void function */
+		// void function
 		f->ret_type.kind = TYPE_BUILTIN;
 		f->ret_type.builtin = BUILTIN_VOID;
 		f->ret_type.flags = 0;
@@ -990,8 +990,8 @@ static Status parse_fn_expr(Parser *p, FnExpr *f) {
 				success = false; goto ret;
 			}
 		}
-		--t->token;	/* move back to { */
-		/* just set return type to void. the actual return type will be set by types.c:type_of_fn */
+		--t->token;	// move back to {
+		// just set return type to void. the actual return type will be set by types.c:type_of_fn
 		f->ret_type.kind = TYPE_BUILTIN;
 		f->ret_type.builtin = BUILTIN_VOID;
 		f->ret_type.flags = 0;
@@ -1002,7 +1002,7 @@ static Status parse_fn_expr(Parser *p, FnExpr *f) {
 		}
 		correct_ret_type(p, &f->ret_type);
 	}
-	p->block = prev_block; /* be nice to parse_block */
+	p->block = prev_block; // be nice to parse_block
 	if (!parse_block(p, &f->body, PARSE_BLOCK_DONT_CREATE_IDENTS))
 		success = false;
  ret:
@@ -1015,7 +1015,7 @@ static void fprint_expr(FILE *out, Expression *e);
 
 
 #define NOT_AN_OP -1
-/* cast isn't really an operator since it operates on types, not exprs. */
+// cast isn't really an operator since it operates on types, not exprs.
 #define CAST_PRECEDENCE 2
 #define DSIZEOF_PRECEDENCE 5
 #define DALIGNOF_PRECEDENCE 5
@@ -1267,18 +1267,18 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 	}
 	{
 		Token *before = t->token;
-		/* @OPTIM very few expressions are types */
+		// @OPTIM very few expressions are types
 		if (parser_is_definitely_type(p, NULL)) {
-			/* it's a type! */
+			// it's a type!
 			e->kind = EXPR_TYPE;
 			if (!parse_type(p, e->typeval = parser_malloc(p, sizeof *e->typeval), NULL))
 				return false;
 			if (t->token == end) goto success;
-			/* there's more stuff after */
+			// there's more stuff after
 		}
 		t->token = before;
 		if (end - t->token == 1) {
-			/* 1-token expression */
+			// 1-token expression
 			switch (t->token->kind) {
 			case TOKEN_LITERAL_INT:
 				e->kind = EXPR_LITERAL_INT;
@@ -1339,7 +1339,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 		Token *start = t->token;
 		if (t->token->kind == TOKEN_KW) switch (t->token->kw) {
 			case KW_FN: {
-				/* this is a function */
+				// this is a function
 				e->kind = EXPR_FN;
 				Token *fn_start = t->token;
 				if (!parse_fn_expr(p, e->fn = parser_calloc(p, 1, sizeof *e->fn)))
@@ -1381,7 +1381,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			Type *fn_t = &fn->foreign.type;
 			fn_t->kind = TYPE_FN;
 			FnType *fn_type = fn_t->fn = parser_calloc(p, 1, sizeof *fn_type);
-			/* reserve space for return type (Type + CType) */
+			// reserve space for return type (Type + CType)
 			parser_arr_add_ptr(p, fn_type->types);
 			parser_arr_add_ptr(p, fn->foreign.ctypes);
 			
@@ -1436,7 +1436,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			Type *ret_type = &fn_type->types[0];
 			CType *ret_ctype = &fn->foreign.ctypes[0];
 			if (t->token == end) {
-				/* void */
+				// void
 				ret_ctype->kind = CTYPE_NONE;
 				ret_type->kind = TYPE_BUILTIN;
 				ret_type->builtin = BUILTIN_VOID;
@@ -1448,15 +1448,15 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			goto success;
 		}
 
-		/* NOTE: the . operator is not handled here, but further down, in order to allow some_struct.fn_member() */
-		Token *dot = NULL; /* this keeps track of it for later */
+		// NOTE: the . operator is not handled here, but further down, in order to allow some_struct.fn_member()
+		Token *dot = NULL; // this keeps track of it for later
 	
-		/* Find the lowest-precedence operator not in parentheses/braces/square brackets */
+		// Find the lowest-precedence operator not in parentheses/braces/square brackets
 		int paren_level = 0;
 		int brace_level = 0;
 		int square_level = 0;
 		int lowest_precedence = NOT_AN_OP;
-		/* e.g. (5+3) */
+		// e.g. (5+3)
 		bool entirely_within_parentheses = token_is_kw(t->token, KW_LPAREN);
 		Token *lowest_precedence_op = NULL;
 		for (Token *token = t->token; token < end; ++token) {
@@ -1554,40 +1554,40 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 		}
 	
 		if (entirely_within_parentheses) {
-			++t->token;	/* move past opening ( */
+			++t->token;	// move past opening (
 			if (token_is_kw(t->token, KW_RPAREN)) {
-				/* ()foo */
+				// ()foo
 				--t->token;
 				tokr_err(t, "Stray () (maybe try wrapping the stuff before this in parentheses)");
 				return false;
 			}
-			Token *new_end = end - 1; /* parse to ending ) */
+			Token *new_end = end - 1; // parse to ending )
 			U32 start_idx = e->where.start;
 			if (!parse_expr(p, e, new_end))
 				return false;
-			e->where.start = start_idx; /* make sure we keep e->where.start intact */
-			++t->token;	/* move past closing ) */
+			e->where.start = start_idx; // make sure we keep e->where.start intact
+			++t->token;	// move past closing )
 			goto success;
 		}
 	
 		if (lowest_precedence != NOT_AN_OP) {
 		
-			/* Check if this is a unary op not a binary one (e.g. +-3 => +(-3), not (+)-(3)). */
+			// Check if this is a unary op not a binary one (e.g. +-3 => +(-3), not (+)-(3)).
 			while (lowest_precedence_op != t->token
 				   && lowest_precedence_op[-1].kind == TOKEN_KW
 				   && op_precedence(lowest_precedence_op[-1].kw) != NOT_AN_OP) {
 				--lowest_precedence_op;
 			}
 			if (lowest_precedence_op == t->token) {
-				/* Unary */
+				// Unary
 				UnaryOp op;
 				bool is_unary = true;
 				if (t->token->kind == TOKEN_KW) {
 					switch (t->token->kw) {
 					case KW_PLUS:
-						/* unary + is ignored entirely */
+						// unary + is ignored entirely
 						++t->token;
-						/* re-parse this expression without + */
+						// re-parse this expression without +
 						return parse_expr(p, e, end);
 					case KW_MINUS:
 						op = UNARY_MINUS;
@@ -1644,7 +1644,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			}
 
 			if (lowest_precedence_op->kw == KW_AS) {
-				/* cast */
+				// cast
 				Expression *casted = parser_new_expr(p);
 				e->kind = EXPR_CAST;
 				e->cast.expr = casted;
@@ -1652,7 +1652,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					return false;
 				t->token = lowest_precedence_op + 1;
 				if (token_is_direct(t->token, DIRECT_C)) {
-					/* cast to #C type */
+					// cast to #C type
 					if (!parse_c_type(p, &e->cast.ctype, &e->cast.type))
 						return false;
 				} else {
@@ -1672,7 +1672,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				if (!parse_expr(p, &lhs, lowest_precedence_op)) return false;
 				t->token = lowest_precedence_op + 1;
 				if (!parse_expr(p, &rhs, end)) return false;
-				/* create tuple expr out of lhs, rhs */
+				// create tuple expr out of lhs, rhs
 				e->kind = EXPR_TUPLE;
 				e->tuple = NULL;
 				if (lhs.kind == EXPR_TUPLE) {
@@ -1768,15 +1768,15 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			}		
 			goto success;
 		} else {
-			/* function calls, array accesses, etc. */
+			// function calls, array accesses, etc.
 
 			if (t->token->kind == TOKEN_DIRECT) {
-				/* it's a directive */
-				Expression *single_arg = NULL; /* points to an expr if this is a directive with one expression argument */
+				// it's a directive
+				Expression *single_arg = NULL; // points to an expr if this is a directive with one expression argument
 			
 				switch (t->token->direct) {
 				case DIRECT_IF:
-					assert(0); /* handled above */
+					assert(0); // handled above
 					break;
 				case DIRECT_C:
 					e->kind = EXPR_C;
@@ -1810,10 +1810,10 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				}
 			}
 		
-			/* try a function call or array access */
+			// try a function call or array access
 			Token *token = t->token;
 		
-			/* currently unnecessary: paren_level = square_level = 0; */
+			// currently unnecessary: paren_level = square_level = 0;
 			/* 
 			   can't call at start, e.g. in (fn() {})(), it is not the empty function ""
 			   being called with fn() {} as an argument
@@ -1822,7 +1822,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				++paren_level;
 				++token;
 			}
-			/* which opening bracket starts the call/array access */
+			// which opening bracket starts the call/array access
 			Token *opening_bracket = NULL;
 			Token *closing_bracket = NULL;
 			for (; token < end; ++token) {
@@ -1831,14 +1831,14 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					case KW_LPAREN:
 						if (square_level == 0 && paren_level == 0 && brace_level == 0
 							&& token != t->tokens
-							&& token[-1].kind != TOKEN_DIRECT /* don't include directives */
-							&& !token_is_kw(&token[-1], KW_DOT)) /* or some_struct.("property") */
-							opening_bracket = token; /* maybe this left parenthesis opens the function call */
+							&& token[-1].kind != TOKEN_DIRECT // don't include directives
+							&& !token_is_kw(&token[-1], KW_DOT)) // or some_struct.("property")
+							opening_bracket = token; // maybe this left parenthesis opens the function call
 						++paren_level;
 						break;
 					case KW_LSQUARE:
 						if (square_level == 0 && paren_level == 0 && brace_level == 0)
-							opening_bracket = token; /* (array access) */
+							opening_bracket = token; // (array access)
 						++square_level;
 						break;
 					case KW_RPAREN:
@@ -1875,10 +1875,10 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			if (opening_bracket && closing_bracket && closing_bracket + 1 == end /* make sure there's nothing after the closing bracket */) {
 				switch (opening_bracket->kw) {
 				case KW_LPAREN: {
-					/* it's a function call! */
+					// it's a function call!
 					e->kind = EXPR_CALL;
 					e->call.fn = parser_new_expr(p);
-					if (!parse_expr(p, e->call.fn, opening_bracket)) { /* parse up to ( as function */
+					if (!parse_expr(p, e->call.fn, opening_bracket)) { // parse up to ( as function
 						return false;
 					}
 					t->token = opening_bracket;
@@ -1888,14 +1888,14 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				}
 				case KW_LSQUARE: {
 					Expression *arr = parser_new_expr(p);
-					/* it's an array access or slice */
-					/* parse array */
+					// it's an array access or slice
+					// parse array
 					if (!parse_expr(p, arr, opening_bracket)) return false;
 				
 					t->token = opening_bracket + 1;
 					Token *iend = NULL;
 					if (token_is_kw(t->token, KW_COLON)) {
-						/* slice */
+						// slice
 						goto expr_is_slice;
 					}
 					iend = expr_find_end(p, EXPR_CAN_END_WITH_COLON);
@@ -1905,7 +1905,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 					}
 					switch (iend->kw) {
 					case KW_RSQUARE:
-						/* array access */
+						// array access
 						e->kind = EXPR_BINARY_OP;
 						e->binary.op = BINARY_AT_INDEX;
 						e->binary.lhs = arr;
@@ -1915,7 +1915,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 						break;
 					expr_is_slice: 
 					case KW_COLON: {
-						/* slice */
+						// slice
 						SliceExpr *s = &e->slice;
 						e->kind = EXPR_SLICE;
 						s->of = arr;
@@ -1924,13 +1924,13 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 							if (!parse_expr(p, s->from, iend))
 								return false;
 						} else {
-							/* e.g. x[:5] */
+							// e.g. x[:5]
 							s->from = NULL;
 						}
 						assert(token_is_kw(t->token, KW_COLON));
 						++t->token;
 						if (token_is_kw(t->token, KW_RSQUARE)) {
-							/* e.g. x[5:] */
+							// e.g. x[5:]
 							s->to = NULL;
 						} else {
 							s->to = parser_new_expr(p);
@@ -1947,7 +1947,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 						err_print(token_location(p->file, iend), "Expected ] or : after index.");
 						return false;
 					}
-					++t->token;	/* move past ] */
+					++t->token;	// move past ]
 					goto success;
 				}
 				default:
@@ -2008,7 +2008,7 @@ static inline bool ends_decl(Token *t, U16 flags) {
 static Status parse_decl(Parser *p, Declaration *d, U16 flags) {
 	Tokenizer *t = p->tokr;
 	d->where = parser_mk_loc(p);
-	parser_set_end_to_token(p, &d->where, t->token+1); /* set temporary end in case this fails and we need to know the location of this declaration */
+	parser_set_end_to_token(p, &d->where, t->token+1); // set temporary end in case this fails and we need to know the location of this declaration
 	d->idents = NULL;
 	d->flags = 0;
 	d->val_stack = NULL;
@@ -2063,7 +2063,7 @@ static Status parse_decl(Parser *p, Declaration *d, U16 flags) {
 	}
 	
 	if (token_is_kw(t->token, KW_SEMICOLON) || token_is_kw(t->token, KW_RPAREN)) {
-		/* e.g. foo :; */
+		// e.g. foo :;
 		tokr_err(t, "Cannot infer type without expression.");
 		goto ret_false;
 	}
@@ -2122,7 +2122,7 @@ static Status parse_decl(Parser *p, Declaration *d, U16 flags) {
 		if (token_is_kw(t->token, KW_EQ)) {
 			++t->token;
 			if ((flags & PARSE_DECL_ALLOW_INFER) && ends_decl(t->token, flags)) {
-				/* inferred expression */
+				// inferred expression
 				d->flags |= DECL_INFER;
 				if (!(d->flags & DECL_IS_CONST)) {
 					tokr_err(t, "Inferred parameters must be constant.");
@@ -2152,11 +2152,11 @@ static Status parse_decl(Parser *p, Declaration *d, U16 flags) {
 				}
 				Expression *e = &d->expr;
 				if (!parse_expr(p, e, end)) {
-					t->token = end; /* move to ; */
+					t->token = end; // move to ;
 					goto ret_false;
 				}
 				if ((flags & DECL_CAN_END_WITH_SEMICOLON) && end > t->tokens && token_is_kw(end - 1, KW_RBRACE)) {
-					/* allow semicolon to be ommitted, e.g. f ::= fn() {} */
+					// allow semicolon to be ommitted, e.g. f ::= fn() {}
 				} else if (ends_decl(t->token, flags)) {
 					++t->token;
 				} else {
@@ -2174,7 +2174,7 @@ static Status parse_decl(Parser *p, Declaration *d, U16 flags) {
 	
 	if ((d->flags & DECL_IS_CONST) && !(d->flags & DECL_HAS_EXPR) && !(flags & PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR)) {
 		--t->token;
-		/* disallow constant without an expression, e.g. x :: int; */
+		// disallow constant without an expression, e.g. x :: int;
 		tokr_err(t, "You must have an expression at the end of this constant declaration.");
 		goto ret_false;
 	}
@@ -2182,11 +2182,11 @@ static Status parse_decl(Parser *p, Declaration *d, U16 flags) {
 	
 	parser_put_end(p, &d->where);
 	if (!token_is_kw(t->token, KW_SEMICOLON))
-		--d->where.end; /* e.g., in fn(x: float), the param decl does not contain the ) */
+		--d->where.end; // e.g., in fn(x: float), the param decl does not contain the )
 	return true;
 	
  ret_false:
-	/* move past end of decl */
+	// move past end of decl
 	tokr_skip_semicolon(t);
 	return false;
 }
@@ -2194,11 +2194,11 @@ static Status parse_decl(Parser *p, Declaration *d, U16 flags) {
 static bool is_decl(Tokenizer *t) {
 	Token *token = t->token;
 	
-	/* you can only export declarations */
+	// you can only export declarations
 	if (token_is_direct(token, DIRECT_EXPORT))
 		return true;	
 	
-	/* use decls, e.g. use p: Point */
+	// use decls, e.g. use p: Point
 	if (token_is_kw(token, KW_USE))
 		++token;
 
@@ -2217,7 +2217,7 @@ static bool is_for_range_separator(Keyword kw) {
 	return kw == KW_DOTDOT || kw == KW_DOTCOMMA || kw == KW_COMMADOT || kw == KW_COMMACOMMA;
 }
 
-/* sets *was_a_statement to false if s was not filled, but the token was advanced */
+// sets *was_a_statement to false if s was not filled, but the token was advanced
 static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 	Tokenizer *t = p->tokr;
 	if (t->token->kind == TOKEN_EOF) {
@@ -2239,7 +2239,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			++t->token;
 			break;
 		case KW_LBRACE:
-			/* it's a block */
+			// it's a block
 			s->kind = STMT_BLOCK;
 			if (!parse_block(p, s->block = parser_malloc(p, sizeof *s->block), 0)) return false;
 			break;
@@ -2249,14 +2249,14 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			Return *r = s->ret = parser_malloc(p, sizeof *r);
 			r->flags = 0;
 			if (token_is_kw(t->token, KW_SEMICOLON)) {
-				/* return with no expr */
+				// return with no expr
 				++t->token;
 				break;
 			}
 			r->flags |= RET_HAS_EXPR;
 			Token *end = expr_find_end(p, 0);
 			if (!end) {
-				while (t->token->kind != TOKEN_EOF) ++t->token; /* move to end of file */
+				while (t->token->kind != TOKEN_EOF) ++t->token; // move to end of file
 				return false;
 			}
 			if (!token_is_kw(end, KW_SEMICOLON)) {
@@ -2352,7 +2352,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 					next->cond = NULL;
 					if (!parse_block(p, &next->body, 0)) return false;
 				} else {
-					/* elif */
+					// elif
 					++t->token;
 					cond_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE);
 					if (!cond_end) {
@@ -2388,7 +2388,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			}
 			Expression *cond = parser_new_expr(p);
 			w->cond = cond;
-			/* parse the body even if the condition fails */
+			// parse the body even if the condition fails
 			bool cond_success = parse_expr(p, cond, cond_end);
 			t->token = cond_end;
 			if (!parse_block(p, &w->body, 0)) return false;
@@ -2427,7 +2427,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				fo->flags |= FOR_IS_RANGE;
 				fo->range.from = first;
 				if (token_is_kw(first_end, KW_COMMA)) {
-					/* step */
+					// step
 					++t->token;
 					fo->range.step = parser_new_expr(p);
 					Token *step_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE|EXPR_CAN_END_WITH_DOTDOT);
@@ -2448,9 +2448,9 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 					if (separator == KW_DOTDOT || separator == KW_COMMADOT)
 						fo->flags |= FOR_INCLUDES_TO;
 				}
-				++t->token; /* move past .. */
+				++t->token; // move past ..
 				if (token_is_kw(t->token, KW_LBRACE)) {
-					fo->range.to = NULL; /* infinite loop! */
+					fo->range.to = NULL; // infinite loop!
 				} else {
 					fo->range.to = parser_new_expr(p);
 					Token *to_end = expr_find_end(p, EXPR_CAN_END_WITH_LBRACE);
@@ -2583,8 +2583,8 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 		}
 		bool valid = parse_expr(p, s->expr = parser_malloc(p, sizeof *s->expr), end);
 		
-		/* go past end of expr regardless of whether successful or not */
-		t->token = end + 1;	/* skip ; */
+		// go past end of expr regardless of whether successful or not
+		t->token = end + 1;	// skip ;
 		
 		if (!valid) return false;
 	}
@@ -2622,7 +2622,7 @@ static Status parse_file(Parser *p, ParsedFile *f) {
 	return ret;
 }
 
-#define PARSE_PRINT_LOCATION(l)  /* fprintf(out, "[%lu:%lu]", (unsigned long)(l).line, (unsigned long)(l).pos); */
+#define PARSE_PRINT_LOCATION(l)  // fprintf(out, "[%lu:%lu]", (unsigned long)(l).line, (unsigned long)(l).pos);
 
 static void fprint_expr(FILE *out, Expression *e);
 static void fprint_stmt(FILE *out, Statement *s);

@@ -3,14 +3,14 @@
   This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
-/* WARNING: In this file, you will find crazy macros and dubious usage of avcall. Beware! */
+// WARNING: In this file, you will find crazy macros and dubious usage of avcall. Beware!
 
 #if CHAR_BIT != 8
 #error "Compile-time foreign functions can only be used on systems where CHAR_BIT is 8."
 #endif
 
-/* avcall has some sign conversion problems on BSD */
-/* (the macros it defines cause problems too, which is why this is ignored for so long) */
+// avcall has some sign conversion problems on BSD
+// (the macros it defines cause problems too, which is why this is ignored for so long)
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -135,7 +135,7 @@ static Status arg_list_start(av_alist *arg_list, FnPtr fn, Value *return_val, Ty
 			toc_av_start(18446744073709551615)(*arg_list, fn, &return_val->u64);
 			break;
 		case BUILTIN_BOOL:
-			/* bool is probably just unsigned char.... hopefully... */
+			// bool is probably just unsigned char.... hopefully...
 			av_start_uchar(*arg_list, fn, &return_val->u8);
 			break;
 		case BUILTIN_CHAR:
@@ -166,7 +166,7 @@ static Status arg_list_start(av_alist *arg_list, FnPtr fn, Value *return_val, Ty
 		StructDef *struc = return_type->struc;
 		return_val->struc = err_calloc(1, struct_size);
 		bool splittable;
-		/* hopefully this is right! */
+		// hopefully this is right!
 		if (struct_size <= sizeof(long)) {
 			splittable = true;
 		} else if (struct_size > 2*sizeof(long)) {
@@ -174,7 +174,7 @@ static Status arg_list_start(av_alist *arg_list, FnPtr fn, Value *return_val, Ty
 		} else if (arr_len(struc->fields) > 4) {
 			splittable = false;
 		} else {
-			/* NOTE: this warning is not because splittable is being computed incorrectly! it doesn't handle it right with *either* splittable = 0 or splittable = 1 */
+			// NOTE: this warning is not because splittable is being computed incorrectly! it doesn't handle it right with *either* splittable = 0 or splittable = 1
 			warn_print(where, "Dynamically calling function which returns a struct. avcall seems to not handle structs of size ~2*sizeof(long) correctly.");
 			splittable = true;
 			size_t word_size = sizeof(__avword);
@@ -185,7 +185,7 @@ static Status arg_list_start(av_alist *arg_list, FnPtr fn, Value *return_val, Ty
 				}
 			}
 		}
-		/* getting warning on Debian stretch about splittable being set but not used */
+		// getting warning on Debian stretch about splittable being set but not used
 		_av_start_struct(*arg_list, fn, struct_size, splittable, return_val->struc); (void)splittable;
 	} break;
 	case TYPE_SLICE:
@@ -202,7 +202,7 @@ static Status arg_list_add(av_alist *arg_list, Value val, Type *type, Location w
 	switch (type->kind) {
 	case TYPE_TUPLE:
 	case TYPE_UNKNOWN:
-	case TYPE_ARR: { /* @TODO: maybe just pass pointer for arr? */
+	case TYPE_ARR: { // @TODO: maybe just pass pointer for arr?
 		char *s = type_to_str(type);
 		err_print(where, "Cannot pass type %s to foreign function.", s);
 		free(s);

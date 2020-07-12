@@ -4,7 +4,7 @@
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
 
-/* can this character be used in an identifier? */
+// can this character be used in an identifier?
 static int is_ident(int c) {
 	if (c >= 'a' && c <= 'z')
 		return 1;
@@ -14,22 +14,22 @@ static int is_ident(int c) {
 		return 1;
 	if (c == '_') return 1;
 #if CHAR_MIN < 0
-	if (c < 0) /* on systems where char = signed char, UTF-8 characters are probably < 0? */
+	if (c < 0) // on systems where char = signed char, UTF-8 characters are probably < 0?
 		return 1;
 #endif
-	if (c > 127) /* UTF-8 */
+	if (c > 127) // UTF-8
 		return 1;
 	return 0;
 }
 
-/* Initialize Identifiers. */
+// Initialize Identifiers.
 static void idents_create(Identifiers *ids, Allocator *allocr, Block *scope) {
 	str_hash_table_create(&ids->table, sizeof(IdentSlot) - sizeof(StrHashTableSlot), allocr);
 	ids->rseed = 0x27182818;
 	ids->scope = scope;
 }
 
-/* advances s until a non-identifier character is reached, then returns the number of characters advanced */
+// advances s until a non-identifier character is reached, then returns the number of characters advanced
 static size_t ident_str_len_advance(char **s) {
 	char *original = *s;
 	while (is_ident(**s)) {
@@ -42,7 +42,7 @@ static size_t ident_str_len(char *s) {
 	return ident_str_len_advance(&s);
 }
 
-/* are these strings equal, up to the first non-ident character? */
+// are these strings equal, up to the first non-ident character?
 static bool ident_str_eq_str(const char *s, const char *t) {
 	while (is_ident(*s) && is_ident(*t)) {
 		if (*s != *t) return false;
@@ -67,9 +67,9 @@ static inline Identifier ident_insert_with_len(Identifiers *ids, char *s, size_t
 	return slot;
 }
 
-/* moves s to the char after the identifier */
-/* inserts if does not exist. reads until non-ident char is found. */
-/* advances past identifier */
+// moves s to the char after the identifier
+// inserts if does not exist. reads until non-ident char is found.
+// advances past identifier
 static inline Identifier ident_insert(Identifiers *ids, char **s) {
 	char *original = *s;
 	size_t len = ident_str_len_advance(s);
@@ -78,7 +78,7 @@ static inline Identifier ident_insert(Identifiers *ids, char **s) {
 
 static char *ident_to_str(Identifier i) {
 	char *str = err_malloc(i->len + 1);
-	/* for some reason, GCC thinks that i->len is -1 when this is called from type_to_str_ (in release mode) */
+	// for some reason, GCC thinks that i->len is -1 when this is called from type_to_str_ (in release mode)
 
 gcc_no_bounds_warnings_start
 	memcpy(str, i->str, i->len);
@@ -111,7 +111,7 @@ static void print_ident(Identifier id) {
 	printf("\n");
 }
 
-/* reduced charset = a-z, A-Z, 0-9, _ */
+// reduced charset = a-z, A-Z, 0-9, _
 static void fprint_ident_reduced_charset(FILE *out, Identifier id) {
 	assert(id);
 	for (const char *s = id->str; is_ident(*s); ++s) {
@@ -155,13 +155,13 @@ static inline Identifier ident_get_with_len(Identifiers *ids, char *s, size_t le
 	return (Identifier)str_hash_table_get_(&ids->table, s, len);
 }
 
-/* NULL = no such identifier. returns identifier "foo" for both "foo\0" and "foo+92384324..." */
+// NULL = no such identifier. returns identifier "foo" for both "foo\0" and "foo+92384324..."
 static inline Identifier ident_get(Identifiers *ids, char *s) {
 	size_t len = ident_str_len(s);
 	return ident_get_with_len(ids, s, len);
 }
 
-/* translate and insert if not already there */
+// translate and insert if not already there
 static inline Identifier ident_translate_forced(Identifier i, Identifiers *to_idents) {
 	char *p = i->str;
 	Identifier translated = ident_insert(to_idents, &p);
@@ -169,12 +169,12 @@ static inline Identifier ident_translate_forced(Identifier i, Identifiers *to_id
 	return translated;
 }
 
-/* translate but don't add it if it's not there */
+// translate but don't add it if it's not there
 static inline Identifier ident_translate(Identifier i, Identifiers *to_idents) {
 	return ident_get(to_idents, i->str);
 }
 
-/* returns true if i and j are equal, even if they're not in the same table */
+// returns true if i and j are equal, even if they're not in the same table
 static inline bool ident_eq(Identifier i, Identifier j) {
 	return i->len == j->len && memcmp(i->str, j->str, i->len) == 0;
 }

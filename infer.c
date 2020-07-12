@@ -20,7 +20,7 @@ static bool infer_from_expr(Typer *tr, Expression *match, Value to, Type *to_typ
 	assert(to_type->flags & TYPE_IS_RESOLVED);
 	switch (match->kind) {
 	case EXPR_IDENT:
-		/* an identifier! maybe it's one of idents... */
+		// an identifier! maybe it's one of idents...
 		arr_foreach(idents, Identifier, ident) {
 			if (ident_eq_string(*ident, match->ident_str)) {
 				long idx = (long)(ident - idents);
@@ -34,7 +34,7 @@ static bool infer_from_expr(Typer *tr, Expression *match, Value to, Type *to_typ
 		if (!types_expr(tr, match->call.fn))
 			return false;
 		if (type_is_builtin(&match->call.fn->type, BUILTIN_TYPE)) {
-			/* it's a parameterized struct */
+			// it's a parameterized struct
 			if (!type_is_builtin(to_type, BUILTIN_TYPE) || to.type->kind != TYPE_STRUCT) {
 				err_print(to_where, "Wrong argument type. Expected this to be a struct, but it's not.");
 				info_print(match->where, "Parameter was declared here.");
@@ -65,7 +65,7 @@ static bool infer_from_expr(Typer *tr, Expression *match, Value to, Type *to_typ
 			}
 			free(order);
 		}
-		/* don't try to match other kinds of function calls. it's impossible to get any information out of it. */
+		// don't try to match other kinds of function calls. it's impossible to get any information out of it.
 	} break;
 	default: break;
 	}
@@ -88,7 +88,7 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 	switch (match->kind) {
 	case TYPE_UNKNOWN:
 	case TYPE_BUILTIN:
-		break; /* nothing we can do here */
+		break; // nothing we can do here
 	case TYPE_TUPLE: {
 		if (arr_len(match->tuple) != arr_len(to->tuple)) return true;
 		Type *b = to->tuple;
@@ -138,7 +138,7 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 		construct_resolved_builtin_type(&n_type, BUILTIN_I64);
 		Value val;
 		val.i64 = (I64)to->arr->n;
-		/* try to match match's n expr to to's value */
+		// try to match match's n expr to to's value
 		if (!infer_from_expr(tr, match->arr->n_expr, val, &n_type, where, idents, vals, types))
 			return false;
 		if (!infer_from_type(tr, match->arr->of, to->arr->of, idents, vals, types, where))

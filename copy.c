@@ -47,13 +47,13 @@ static void copy_val(Allocator *a, Value *out, Value in, Type *t) {
 			out->varargs = NULL;
 			arr_set_lena(out->varargs, n, a);
 			for (size_t i = 0; i < n; ++i) {
-				Copier c = copier_create(a, NULL); /* since the type is resolved, it doesn't matter that the block is wrong */
+				Copier c = copier_create(a, NULL); // since the type is resolved, it doesn't matter that the block is wrong
 				out->varargs[i].type = copy_type_(&c, in.varargs[i].type);
 				out->varargs[i].val = in.varargs[i].val;
 			}
 			break;
 		}
-		/* fallthrough */
+		// fallthrough
 	case TYPE_FN:
 	case TYPE_PTR:
 	case TYPE_SLICE:
@@ -122,7 +122,7 @@ static void copy_struct(Copier *c, StructDef *out, StructDef *in) {
 	c->block = prev;
 }
 
-/* works on unresolved and resolved types (for inference) */
+// works on unresolved and resolved types (for inference)
 static void copy_type(Copier *c, Type *out, Type *in) {
 	*out = *in;
 	switch (in->kind) {
@@ -172,7 +172,7 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 		break;
 	case TYPE_STRUCT: {
 		if (in->flags & TYPE_IS_RESOLVED) {
-			/* we don't actually need to make a copy of the struct here */
+			// we don't actually need to make a copy of the struct here
 		} else {
 			/* 
 			   it's okay to copy the struct definition here, because before resolving,
@@ -237,7 +237,7 @@ static inline void copier_ident_translate(Copier *c, Identifier *i) {
 	*i = ident_translate_forced(*i, &c->block->idents);
 }
 
-/* in must be untyped! */
+// in must be untyped!
 static void copy_expr(Copier *c, Expression *out, Expression *in) {
 	Allocator *a = c->allocr;
 	*out = *in; /* NOTE : if in the future you are removing this, make sure in->type is still copied for EXPR_VAL,
@@ -431,12 +431,12 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 		copy_block(c, out->block = copier_malloc(c, sizeof *out->block), in->block, 0);
 		break;
 	case STMT_INLINE_BLOCK:
-		assert(0); /* only exists after typing */
+		assert(0); // only exists after typing
 		break;
 	}
 }
 
-/* COPY_BLOCK_DONT_CREATE_IDENTS is for copy_fn_expr, etc. */
+// COPY_BLOCK_DONT_CREATE_IDENTS is for copy_fn_expr, etc.
 static void copy_block(Copier *c, Block *out, Block *in, U8 flags) {
 	assert(!(in->flags & BLOCK_FINDING_TYPES));
 	out->flags = in->flags;

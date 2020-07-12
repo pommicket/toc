@@ -13,7 +13,7 @@ typedef size_t Word;
 #error "What's going on? The 32-bit Windows file was included, but size_t isn't 32 bits!"
 #endif
 
-/* f64s take 2 words */
+// f64s take 2 words
 static Status val_to_words(Value v, Type *t, Location where, Word *w) {
 	switch (t->kind) {
 	case TYPE_BUILTIN:
@@ -45,7 +45,7 @@ static Status val_to_words(Value v, Type *t, Location where, Word *w) {
 		*w = (Word)v.ptr; break;
 	default:
 	unsupported: {
-		/* @TODO(eventually) */
+		// @TODO(eventually)
 		char *s = type_to_str(t);
 		err_print(where, "#foreign functions can't take arguments of type %s at compile time on Windows.", s);
 		free(s);
@@ -66,7 +66,7 @@ a lot more functions to support different combinations of integer and floating-p
 registers)
 */
 
-/* call function with 0 arguments, returning some sort of integer (or pointer) */
+// call function with 0 arguments, returning some sort of integer (or pointer)
 static U64 msvc_call0i(FnPtr fn, Word *w) {
 	(void)w;
 	return ((U64(*)(void))fn)();
@@ -116,7 +116,7 @@ static U64 (*const msvc_calli[11])(FnPtr fn, Word *w) = {
 };
 
 
-/* call function with 0 arguments, returning a float or double */
+// call function with 0 arguments, returning a float or double
 static double msvc_call0f(FnPtr fn, Word *w) {
 	(void)w;
 	return ((double(*)(void))fn)();
@@ -215,7 +215,7 @@ static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, 
 	default:
 	unsupported: {
 		char *s = type_to_str(ret_type);
-		/* @TODO(eventually) */
+		// @TODO(eventually)
 		err_print(call_where, "You can't call functions which return type %s at compile time on Windows.", s);
 		free(s);
 		return false;
@@ -226,7 +226,7 @@ static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, 
 		double d = msvc_callf[nwords](fn_ptr, words);
 		assert(ret_type->kind == TYPE_BUILTIN);
 		if (ret_type->builtin == BUILTIN_F32) {
-			ret->f32 = (F32)d; /* turns out functions just always return doubles */
+			ret->f32 = (F32)d; // turns out functions just always return doubles
 		} else {
 			assert(ret_type->builtin == BUILTIN_F64);
 			ret->f64 = d;

@@ -32,11 +32,11 @@ static void print_pos_highlight(FILE *out, ErrCtx *ctx, File *file, U32 start_po
 	char *line_start = start;
 	char *end = str + end_pos;
 
-	/* go back to last newline / 0 byte */
+	// go back to last newline / 0 byte
 	while (*line_start != '\0' && *line_start != '\n') --line_start;
 	if (line_start < start) ++line_start;
 
-	/* skip space at start of line */
+	// skip space at start of line
 	while (isspace(*line_start) && line_start < end)
 		++line_start;
 		
@@ -48,21 +48,21 @@ static void print_pos_highlight(FILE *out, ErrCtx *ctx, File *file, U32 start_po
 	if (!line_start[0])
 		fprintf(out, "<end of file>");
 	else {
-		/* write up to start of error */
+		// write up to start of error
 		fwrite(line_start, 1, (size_t)(start - line_start), out);
 		if (ctx->color_enabled)
 			fprintf(out, TEXT_INDICATOR_START);
 		if (line_end < end) {
-			/* write error part (only go to end of line) */
+			// write error part (only go to end of line)
 			fwrite(start, 1, (size_t)(line_end - start), out);
 			if (ctx->color_enabled)
 				fprintf(out, TEXT_INDICATOR_END);
 		} else {
-			/* write error part */
+			// write error part
 			fwrite(start, 1, (size_t)(end - start), out);
 			if (ctx->color_enabled)
 				fprintf(out, TEXT_INDICATOR_END);
-			/* write rest of line */
+			// write rest of line
 			fwrite(end, 1, (size_t)(line_end - end), out);
 		}
 	}
@@ -86,14 +86,14 @@ static void print_location_highlight(FILE *out, Location where) {
 	assert(where.end >= where.start);
 	File *f = where.file;
 	ErrCtx *ctx = f->ctx;
-	if (where.start == 0 && where.end == 0) { fprintf(out, "\n"); return; } /* null location */
+	if (where.start == 0 && where.end == 0) { fprintf(out, "\n"); return; } // null location
 	Token *first = &f->tokens[where.start];
 	Token *last = &f->tokens[where.end-1];
 	
 	print_pos_highlight(out, ctx, f, first->pos.start, last->pos.end);
 }
 
-/* for debugging */
+// for debugging
 static void fprint_location(FILE *out, Location location) {
 	File *f = location.file;
 	if (location.start == 0 && location.end == 0) {
@@ -188,7 +188,7 @@ static void err_print_footer_(Location where, bool show_ctx_stack) {
 	}
 }
 
-/* Write nicely-formatted errors to the error file */
+// Write nicely-formatted errors to the error file
 
 static void err_vprint(Location where, const char *fmt, va_list args) {
 	ErrCtx *ctx = where.file->ctx;
@@ -243,10 +243,10 @@ static void warn_print_(
 	ErrCtx *ctx = where.file->ctx;
 	if (!ctx->enabled) return;
 	if (where.file) {
-		/* check if there's a #no_warn directive */
+		// check if there's a #no_warn directive
 		U32 *no_warn_lines = where.file->no_warn_lines;
 		if (bsearch_u32(no_warn_lines, arr_len(no_warn_lines), where.file->tokens[where.start].pos.line)) {
-			/* yes there is */
+			// yes there is
 			return;
 		}
 	}

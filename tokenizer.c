@@ -6,8 +6,8 @@
 
 static inline const char *kw_to_str(Keyword k) { return keywords[k]; }
 
-/* Returns KW_COUNT if it's not a keyword */
-/* @OPTIM: don't use strncmp so much */
+// Returns KW_COUNT if it's not a keyword
+// @OPTIM: don't use strncmp so much
 static Keyword tokenize_kw(char **s) {
 	for (Keyword k = 0; k < KW_COUNT; k = k + 1) {
 		size_t len = strlen(keywords[k]);
@@ -29,7 +29,7 @@ static Keyword tokenize_kw(char **s) {
 
 
 
-/* Returns DIRECT_COUNT if it's not a directive */
+// Returns DIRECT_COUNT if it's not a directive
 static Directive tokenize_direct(char **s) {
 	for (Directive d = 0; d < DIRECT_COUNT; d = d + 1) {
 		size_t len = strlen(directives[d]);
@@ -110,7 +110,7 @@ static inline void tokr_nextchar(Tokenizer *t) {
 	++t->s;
 }
 
-/* returns -1 if not a hex digit, otherwise 0-15 */
+// returns -1 if not a hex digit, otherwise 0-15
 static inline int char_as_hex_digit(char c) {
 	if (c >= '0' && c <= '9')
 		return c - '0';
@@ -121,9 +121,9 @@ static inline int char_as_hex_digit(char c) {
 	return -1;
 }
 
-/* returns -1 if escape sequence is invalid */
+// returns -1 if escape sequence is invalid
 static int tokr_esc_seq(Tokenizer *t) {
-	/* @TODO: octal (\032)? */
+	// @TODO: octal (\032)?
 	switch (*t->s) {
 	case '\'':
 		tokr_nextchar(t);
@@ -168,7 +168,7 @@ static void print_token_location(File *file, Token *t) {
 	print_location(token_location(file, t));
 }
 
-/* for use during tokenization */
+// for use during tokenization
 static void tokenization_err_(
 #if ERR_SHOW_SOURCE_LOCATION
 							  const char *src_file, int src_line,
@@ -203,7 +203,7 @@ static void tokenization_err_(
 #define tokenization_err tokenization_err_
 #endif
 
-/* for use after tokenization */
+// for use after tokenization
 static void tokr_err_(
 #if ERR_SHOW_SOURCE_LOCATION
 					  const char *src_file, int src_line,
@@ -275,17 +275,17 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 		}
 		
 		if (*t->s == '/') {
-			/* maybe it's a comment */
+			// maybe it's a comment
 			int is_comment = 1;
 			switch (t->s[1]) {
-			case '/': /* single line comment */
+			case '/': // single line comment
 				tokr_nextchar(t);
 				while (*t->s && *t->s != '\n') ++t->s;
-				if (*t->s) tokr_nextchar(t); /* skip newline */
+				if (*t->s) tokr_nextchar(t); // skip newline
 				break;
-			case '*': { /* multi line comment */
+			case '*': { // multi line comment
 				tokr_nextchar(t);
-				int comment_level = 1; /* allow nested multi-line comments */
+				int comment_level = 1; // allow nested multi-line comments
 				while (1) {
 					if (t->s[0] == '*' && t->s[1] == '/') {
 						t->s += 2;
@@ -314,13 +314,13 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 		}
 		
 		if (*t->s == '#') {
-			/* it's a directive */
+			// it's a directive
 			Token token;
 			tokr_put_start_pos(t, &token);
-			++t->s; /* move past # */
+			++t->s; // move past #
 			Directive direct = tokenize_direct(&t->s);
 			if (direct != DIRECT_COUNT) {
-				/* it's a directive */
+				// it's a directive
 				if (direct == DIRECT_NO_WARN) {
 					arr_adda(file->no_warn_lines, t->line, t->allocr);
 				} else {
@@ -331,7 +331,7 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 				}
 				continue;
 			}
-			--t->s; /* go back to # */
+			--t->s; // go back to #
 			tokenization_err(t, "Unrecognized directive.");
 			goto err;
 		}
@@ -341,7 +341,7 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 			tokr_put_start_pos(t, &token);
 			Keyword kw = tokenize_kw(&t->s);
 			if (kw != KW_COUNT) {
-				/* it's a keyword */
+				// it's a keyword
 				tokr_put_end_pos(t, &token);
 				token.kind = TOKEN_KW;
 				token.kw = kw;
@@ -350,9 +350,9 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 			}
 		}
 		
-		/* check if it's a number */
+		// check if it's a number
 		if (isdigit(*t->s)) {
-			/* it's a numeric literal */
+			// it's a numeric literal
 			int base = 10;
 			Floating decimal_pow10 = 0;
 			Token *token = tokr_add(t);
@@ -361,9 +361,9 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 			
 			if (*t->s == '0') {
 				tokr_nextchar(t);
-				/* octal/hexadecimal/binary (or zero) */
+				// octal/hexadecimal/binary (or zero)
 				char format = *t->s;
-				if (isdigit(format)) /* octal */
+				if (isdigit(format)) // octal
 					base = 8;
 				else {
 					switch (format) {
@@ -380,7 +380,7 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 						tokr_nextchar(t);
 						break;
 					default:
-						/* it's 0/0.something etc.  */
+						// it's 0/0.something etc. 
 						break;
 					}
 				}
@@ -388,7 +388,7 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 			while (1) {
 				if (*t->s == '.') {
 					if (!isdigit(t->s[1])) {
-						/* not a decimal point; end the number here (could be .. or .,) */
+						// not a decimal point; end the number here (could be .. or .,)
 						break;
 					}
 					if (token->kind == TOKEN_LITERAL_FLOAT) {
@@ -412,10 +412,10 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 						U64 i = token->intl;
 						token->floatl = (Floating)i;
 					}
-					/* @TODO: check if exceeding maximum exponent */
+					// @TODO: check if exceeding maximum exponent
 					int exponent = 0;
 					if (*t->s == '+')
-						tokr_nextchar(t); /* ignore + after e */
+						tokr_nextchar(t); // ignore + after e
 					
 					int negative_exponent = 0;
 					if (*t->s == '-') {
@@ -426,7 +426,7 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 						exponent *= 10;
 						exponent += *t->s - '0';
 					}
-					/* @OPTIM: Slow for very large exponents (unlikely to happen) */
+					// @OPTIM: Slow for very large exponents (unlikely to happen)
 					for (int i = 0; i < exponent; ++i) {
 						if (negative_exponent)
 							token->floatl /= 10;
@@ -449,18 +449,18 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 				}
 				if (digit < 0 || digit >= base) {
 					if (isdigit(*t->s)) {
-						/* something like 0b011012 */
+						// something like 0b011012
 						tokenization_err(t, "Digit %d cannot appear in a base %d number.", digit, base);
 						goto err;
 					}
-					/* end of numeric literal */
+					// end of numeric literal
 					break;
 				}
 				switch (token->kind) {
 				case TOKEN_LITERAL_INT:
 					if (token->intl > U64_MAX / (U64)base ||
 						token->intl * (U64)base > U64_MAX - (U64)digit) {
-						/* too big! */
+						// too big!
 						tokenization_err(t, "Number too big to fit in a numeric literal.");
 						goto err;
 					}
@@ -480,12 +480,12 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 		}
 
 		if (*t->s == '\'') {
-			/* it's a character literal! */
+			// it's a character literal!
 			Token *token = tokr_add(t);
 			tokr_nextchar(t);
 			char c;
 			if (*t->s == '\\') {
-				/* escape sequence */
+				// escape sequence
 				tokr_nextchar(t);
 				int e = tokr_esc_seq(t);
 				if (e == -1) {
@@ -509,16 +509,16 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 		}
 
 		if (*t->s == '"') {
-			/* it's a string literal! */
+			// it's a string literal!
 			Token *token = tokr_add(t);
 			tokr_nextchar(t);
-			size_t len = 0; /* counts \n as 2 chars */
+			size_t len = 0; // counts \n as 2 chars
 			size_t backslashes = 0;
 			while (*t->s != '"' || backslashes % 2 == 1) {
 				if (*t->s == '\\') {
 					++backslashes;
 				} else if (*t->s == 0) {
-					/* return t to opening " */
+					// return t to opening "
 					tokr_get_start_pos(t, token);
 					tokenization_err(t, "No matching \" found.");
 					goto err;
@@ -531,7 +531,7 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 			char *strlit = tokr_malloc(t, len + 1);
 			char *strptr = strlit;
 			tokr_get_start_pos(t, token);
-			tokr_nextchar(t); /* past opening " */
+			tokr_nextchar(t); // past opening "
 			while (*t->s != '"') {
 				assert(*t->s);
 				if (*t->s == '\\') {
@@ -551,13 +551,13 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 			token->kind = TOKEN_LITERAL_STR;
 			token->str.len = (size_t)(strptr - strlit);
 			token->str.str = strlit;
-			tokr_nextchar(t); /* move past closing " */
+			tokr_nextchar(t); // move past closing "
 			tokr_put_end_pos(t, token);
 			continue;
 		}
 
 		if (is_ident(*t->s)) {
-			/* it's an identifier */
+			// it's an identifier
 			Token *token = tokr_add(t);
 			token->kind = TOKEN_IDENT;
 			token->ident = t->s;
@@ -577,7 +577,7 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 	return !has_err;
 }
 
-/* skip to one token past the next semicolon not in braces (or the end of the file). */
+// skip to one token past the next semicolon not in braces (or the end of the file).
 static void tokr_skip_semicolon(Tokenizer *t) {
 	int brace_level = 0;
 	while (t->token->kind != TOKEN_EOF) {
@@ -597,5 +597,5 @@ static void tokr_skip_semicolon(Tokenizer *t) {
 }
 
 static inline void tokr_skip_to_eof(Tokenizer *t) {
-	while (t->token->kind != TOKEN_EOF) ++t->token; /* move to end of file */
+	while (t->token->kind != TOKEN_EOF) ++t->token; // move to end of file
 }

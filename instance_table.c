@@ -10,7 +10,7 @@
    are designed)
 */
 
-/* NOTE: any time you see 0x then 16 hexadecimal digits, that's probably a random number for hashing */
+// NOTE: any time you see 0x then 16 hexadecimal digits, that's probably a random number for hashing
 
 /*
   hash tables are initialized by setting them to {0}, e.g.
@@ -22,7 +22,7 @@ static bool val_eq(Value u, Value v, Type *t);
 static bool type_eq_exact(Type *t1, Type *t2);
 
 static U64 f32_hash(F32 f) {
-	/* @OPTIM */
+	// @OPTIM
 	U64 hash = 0;
 	if (f < 0) {
 		hash = 0x9a6db29edcba8af4;
@@ -34,7 +34,7 @@ static U64 f32_hash(F32 f) {
 		++exponent;
 		f /= 10;
 		if (f == last) {
-			/* +/- infinity probably */
+			// +/- infinity probably
 			hash ^= 0x78bf61a81e80b9f2;
 			return hash;
 		}
@@ -48,7 +48,7 @@ static U64 f32_hash(F32 f) {
 }
 
 static U64 f64_hash(F64 f) {
-	/* @OPTIM */
+	// @OPTIM
 	U64 hash = 0;
 	if (f < 0) {
 		hash = 0x9a6db29edcba8af4;
@@ -60,7 +60,7 @@ static U64 f64_hash(F64 f) {
 		++exponent;
 		f /= 10;
 		if (f == last) {
-			/* +/- infinity probably */
+			// +/- infinity probably
 			hash ^= 0x78bf61a81e80b9f2;
 			return hash;
 		}
@@ -118,7 +118,7 @@ static U64 type_hash(Type *t) {
 	assert(0); return 0;
 }
 
-/* Note that for these value hashing functions, values of different types may collide */
+// Note that for these value hashing functions, values of different types may collide
 static U64 val_ptr_hash(void *v, Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
 	switch (t->kind) {
@@ -304,7 +304,7 @@ static bool val_eq(Value u, Value v, Type *t) {
   and set already_exists accordingly
   make sure v's data remains valid
 */
-/* @OPTIM: store instances in a block array (remember that the pointers need to stay valid!) */
+// @OPTIM: store instances in a block array (remember that the pointers need to stay valid!)
 static Instance *instance_table_adda(Allocator *a, HashTable *h, Value v, Type *t,
 									 bool *already_exists) {	
 	if (h->n * 2 >= h->cap) {
@@ -314,9 +314,9 @@ static Instance *instance_table_adda(Allocator *a, HashTable *h, Value v, Type *
 		Instance **old_data = h->data;
 		bool *old_occupied = h->occupied;
 		for (U64 i = 0; i < h->cap; ++i) {
-			/* re-hash */
+			// re-hash
 			if (old_occupied[i]) {
-				/* @OPTIM: keep hashes around */
+				// @OPTIM: keep hashes around
 				U64 index = val_hash(old_data[i]->val, t) % new_cap;
 				while (new_occupied[index]) {
 					++index;
@@ -347,7 +347,7 @@ static Instance *instance_table_adda(Allocator *a, HashTable *h, Value v, Type *
 			index -= h->cap;
 	}
 	if (already_exists) {
-		/* create, because it doesn't exist */
+		// create, because it doesn't exist
 		*already_exists = false;
 		data[index] = allocr_malloc(a, sizeof *data[index]);
 		data[index]->val = v;
@@ -360,7 +360,7 @@ static Instance *instance_table_adda(Allocator *a, HashTable *h, Value v, Type *
 
 
 #if 0
-/* only call if you're not using an allocator */
+// only call if you're not using an allocator
 static void hash_table_free(HashTable *h) {
 	free(h->data);
 	free(h->occupied);
