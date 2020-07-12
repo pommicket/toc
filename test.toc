@@ -1,7 +1,9 @@
-#include "main.c", t;
-
 main ::= fn() {
-	t.puts("hi");
+	foo ::= #foreign("sleep", "libc.so.6") fn(#C unsigned) #C unsigned;
+	foo(1);
+	bar ::= foo;
+	bar(2);
+	x ::= 8;
 }
-main();
+//main();
 

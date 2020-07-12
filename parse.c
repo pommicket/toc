@@ -2667,7 +2667,7 @@ static void print_block_location(Block *b) {
 
 static void fprint_fn_expr(FILE *out, FnExpr *f) {
 	if (f->flags & FN_EXPR_FOREIGN) {
-		fprintf(out, "#foreign fn;");
+		fprintf(out, "#foreign fn");
 	} else {
 		fprintf(out, "fn (");
 		arr_foreach(f->params, Declaration, decl) {

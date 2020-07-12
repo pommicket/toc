@@ -8,11 +8,11 @@
 see development.md for development information 
 
 @TODO:
-fix #foreign not at global scope - right now the cgen'd definition doesn't use the proper type
 figure out how printf is gonna work
 improve type_to_str:
 	Foo ::= struct(t::Type) {}
 	type_to_str(Foo(int))
+  - maybe make a bunch of functions for dynamic arrays of char?
 switch
  - #fallthrough
 enums

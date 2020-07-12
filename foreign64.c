@@ -97,9 +97,8 @@ static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, 
 	possibly_static_assert(sizeof(double) == 8); // if either of these assertions fails, you'll need to use libffcall
 	possibly_static_assert(sizeof(float) == 4);
 
-#if 0
-#define FOREIGN_DEBUGGING 1
-#endif
+//#define FOREIGN_DEBUGGING 1
+
 #if FOREIGN_DEBUGGING
 	printf("Foreign call: %s(", fn->foreign.name);
 #endif
@@ -122,6 +121,10 @@ static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, 
 		type += arg_types_stride;
 		++word;
 	}
+#if FOREIGN_DEBUGGING
+	printf(") => ");
+	fflush(stdout);
+#endif
 	int kind = 0; // 0=>integer, 1=>f32, 2=>f64
 	switch (ret_type->kind) {
 	case TYPE_BUILTIN:
@@ -194,7 +197,6 @@ static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, 
 		break;
 	}
 #if FOREIGN_DEBUGGING
-	printf(") => ");
 	fprint_val(stdout, *ret, ret_type);
 #if 1
 	printf(" (errno: %d)", errno);

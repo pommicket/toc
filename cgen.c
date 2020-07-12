@@ -1415,15 +1415,20 @@ static void cgen_fn(CGenerator *g, FnExpr *f) {
 static void cgen_decl(CGenerator *g, Declaration *d) {
 	if (!g->block || (g->block->kind == BLOCK_NMS))
 		return; // already dealt with
-	int has_expr = d->flags & DECL_HAS_EXPR;
-	if (cgen_fn_is_direct(g, d))
-		return; // dealt with in the loop that defines all the functions in cgen_file
-	if (d->flags & DECL_FOUND_VAL) {
+	DeclFlags flags = d->flags;
+	DeclFlags has_expr = flags & DECL_HAS_EXPR,
+		is_const = flags & DECL_IS_CONST;
+	
+	if (flags & DECL_FOUND_VAL) {
 		// declarations where we use a value
 		for (int idx = 0, nidents = (int)arr_len(d->idents); idx < nidents; ++idx) {
 			Identifier i = d->idents[idx];
 			if (ident_eq_str(i, "_")) continue;
 			Type *type = decl_type_at_index(d, idx);
+			if (type->kind == TYPE_FN) {
+				// we don't need to generate this, because we can just use the function's name
+				continue;
+			}
 			if (type_is_compileonly(&d->type)) {
 				continue;
 			}
@@ -1431,10 +1436,10 @@ static void cgen_decl(CGenerator *g, Declaration *d) {
 			if (has_expr) {
 				cgen_val_pre(g, val, type);
 			}
-			if (d->flags & DECL_IS_CONST)
+			if (is_const)
 				cgen_write(g, "static ");
 			cgen_type_pre(g, type);
-			cgen_write(g, " ");
+			cgen_write(g, is_const ? " const " : " ");
 			cgen_ident(g, i);
 			cgen_type_post(g, type);
 			if (has_expr) {
@@ -1467,7 +1472,7 @@ static void cgen_decl(CGenerator *g, Declaration *d) {
 		}
 		if (has_expr) {
 			Expression *expr = &d->expr;
-			assert((g->block || g->fn) && !(d->flags & DECL_IS_CONST));
+			assert((g->block || g->fn) && !is_const);
 			if (expr->type.kind == TYPE_TUPLE) {
 				cgen_set_tuple(g, NULL, d->idents, NULL, expr);
 			} else {
