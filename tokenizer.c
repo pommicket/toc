@@ -363,26 +363,27 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 				tokr_nextchar(t);
 				// octal/hexadecimal/binary (or zero)
 				char format = *t->s;
-				if (isdigit(format)) // octal
+				if (isdigit(format)) {
+					--t->s;
+					tokenization_err(t, "Number starts with a 0. If you're trying to do an octal number, use 0o (e.g. 0o54123).");
+					goto err;
+				}
+				switch (format) {
+				case 'b':
+					base = 2;
+					tokr_nextchar(t);
+					break;
+				case 'x':
+					base = 16;
+					tokr_nextchar(t);
+					break;
+				case 'o': // also octal
 					base = 8;
-				else {
-					switch (format) {
-					case 'b':
-						base = 2;
-						tokr_nextchar(t);
-						break;
-					case 'x':
-						base = 16;
-						tokr_nextchar(t);
-						break;
-					case 'o':
-						base = 8;
-						tokr_nextchar(t);
-						break;
-					default:
-						// it's 0/0.something etc. 
-						break;
-					}
+					tokr_nextchar(t);
+					break;
+				default:
+					// it's 0/0.something etc. 
+					break;
 				}
 			}
 			while (1) {

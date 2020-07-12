@@ -1,9 +1,14 @@
+#include "std/io.toc", io;
+
 main ::= fn() {
-	foo ::= #foreign("sleep", "libc.so.6") fn(#C unsigned) #C unsigned;
-	foo(1);
-	bar ::= foo;
-	bar(2);
-	x ::= 8;
+	foo0 := int == int;
+	bar0 := int == float;
+	foo1 := &&&int == &&&u8;
+	bar1 := &&&int != &&&int;
+	io.putb(foo0);
+	io.putb(bar0);
+	io.putb(foo1);
+	io.putb(bar1);
 }
 //main();
 

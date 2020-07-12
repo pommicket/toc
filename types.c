@@ -2612,8 +2612,30 @@ static Status types_expr(Typer *tr, Expression *e) {
 			} else {
 				// numerical binary ops
 				if (lhs_type->kind == TYPE_BUILTIN && type_eq_implicit(lhs_type, rhs_type)) {
-					// int + int, etc.
-					valid = true;
+					switch (lhs_type->builtin) {
+						case BUILTIN_I8:
+						case BUILTIN_U8:
+						case BUILTIN_I16:
+						case BUILTIN_U16:
+						case BUILTIN_I32:
+						case BUILTIN_U32:
+						case BUILTIN_I64:
+						case BUILTIN_U64:
+						case BUILTIN_F32:
+						case BUILTIN_F64:
+						case BUILTIN_CHAR:
+						case BUILTIN_BOOL:
+							valid = true;
+							break;
+						case BUILTIN_NMS:
+						case BUILTIN_VOID:
+						case BUILTIN_VARARGS:
+							valid = false;
+							break;
+						case BUILTIN_TYPE:
+							valid = (o == BINARY_EQ || o == BINARY_NE);
+							break;
+					}
 				}
 				if (o == BINARY_ADD || o == BINARY_SUB || o == BINARY_SET_ADD || o == BINARY_SET_SUB) {
 					if (lhs_type->kind == TYPE_PTR &&
@@ -2638,19 +2660,11 @@ static Status types_expr(Typer *tr, Expression *e) {
 							valid = false;
 						}
 					}
-				}
-				if (o == BINARY_LT || o == BINARY_GT || o == BINARY_LE || o == BINARY_GE
+				} else if (o == BINARY_LT || o == BINARY_GT || o == BINARY_LE || o == BINARY_GE
 					|| o == BINARY_EQ || o == BINARY_NE) {
-					// comparable types
-					if (type_eq_implicit(lhs_type, rhs_type)) {
-						switch (lhs_type->kind) {
-						case TYPE_PTR:
-						case TYPE_BUILTIN: // all builtins are comparable
-							valid = true;
-						default:
-							break;
-						}
-					}
+					// non-builtin comparable types
+					if (lhs_type->kind == TYPE_PTR && type_eq_implicit(lhs_type->ptr, rhs_type->ptr))
+						valid = true;
 				}
 			}
 			if (valid) {
@@ -2664,17 +2678,38 @@ static Status types_expr(Typer *tr, Expression *e) {
 				case BINARY_GT:
 				case BINARY_LE:
 				case BINARY_GE:
+					t->kind = TYPE_BUILTIN;
+					t->builtin = BUILTIN_BOOL;
+					break;
 				case BINARY_EQ:
 				case BINARY_NE:
 					t->kind = TYPE_BUILTIN;
 					t->builtin = BUILTIN_BOOL;
+					if (type_is_compileonly(lhs_type)) {
+						if (type_is_builtin(lhs_type, BUILTIN_TYPE)) {
+							// comparing two types for equality (int == int)
+							assert(type_is_builtin(rhs_type, BUILTIN_TYPE));
+							// evaluate this right now.
+							Value lhs_val = {0}, rhs_val = {0};
+							if (!eval_expr(tr->evalr, lhs, &lhs_val)) return false;
+							if (!eval_expr(tr->evalr, rhs, &rhs_val)) return false;
+							e->kind = EXPR_VAL;
+							bool equal = type_eq_exact(lhs_val.type, rhs_val.type);
+							if (o == BINARY_NE)
+								e->val.boolv = !equal;
+							else 
+								e->val.boolv = equal;
+						} else {
+							valid = false;
+						}
+					}
 					break;
 				default: {
 					if (t->kind == TYPE_UNKNOWN) { // have not yet determined type
 						*t = *overriding_type(lhs_type, rhs_type);
 						if ((o == BINARY_MOD || o == BINARY_SET_MOD)
 							&& type_builtin_is_float(t->builtin)) {
-							err_print(e->where, "Cannot use operator % on floating-point numbers.");
+							err_print(e->where, "Cannot use operator %% on floating-point numbers.");
 							errored = true;
 							valid = false;
 						}
@@ -2682,7 +2717,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 				} break;
 				}
 			}
-			if (!valid) {
+			if (!valid) { // this can't just be an else; we sometimes modify valid in block above
+				t->kind = TYPE_UNKNOWN;
 				if (!errored) {
 					char *s1, *s2;
 					s1 = type_to_str(lhs_type);

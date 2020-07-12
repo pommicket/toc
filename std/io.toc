@@ -151,7 +151,6 @@ MODE_WRITE :: FileMode = 2;
 
 IO_DEBUG ::= base.DEBUG;
 
-// @TODO: flush for read files -- discard buffer
 // @TODO: error flag
 // @TODO: locking?
 File ::= struct {
@@ -247,12 +246,12 @@ fputs ::= fn(f: &File, s: []char) err : FileError {
 	}
 }
 
-writes ::= fn(s: []char) FileError {
-	return fwrites(&std_out, s);
+writes ::= fn(s: []char) {
+	fwrites(&std_out, s);
 }
 
-puts ::= fn(s: []char) FileError {
-	return fputs(&std_out, s);
+puts ::= fn(s: []char) {
+	fputs(&std_out, s);
 }
 
 fwritei ::= fn(use f: &File, x: int) err : FileError {
@@ -306,14 +305,20 @@ fwritei ::= fn(use f: &File, x: int) err : FileError {
 	}
 }
 
-writei ::= fn(x: int) FileError {
-	return fwritei(&std_out, x);
+writei ::= fn(x: int) {
+	fwritei(&std_out, x);
 }
 
-puti ::= fn(x: int) err : FileError {
-	err = writei(x);
-	if !err {
-		err = writes("\n");
+puti ::= fn(x: int) {
+	writei(x);
+	writes("\n");
+}
+
+putb ::= fn(x: bool)  {
+	if x {
+		writes("true\n");
+	} else {
+		writes("false\n");
 	}
 }
 
