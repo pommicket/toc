@@ -3878,7 +3878,6 @@ top:
 		{
 			char *contents = read_file_contents(tr->allocr, filename, s->where);
 			if (!contents) {
-				tr->had_include_err = true;
 				success = false; goto nms_done;
 			}
 
@@ -3919,7 +3918,11 @@ top:
 			tr->block = prev_block;
 		}
 		if (inc_f) inc_f->flags &= (IncFileFlags)~(IncFileFlags)INC_FILE_INCLUDING;
-		if (!success) return false;
+		if (!success) {
+			// give up on typing if #include failed
+			tr->had_include_err = true;
+			return false;
+		}
 	} break;
 	case STMT_MESSAGE: {
 		Message *m = s->message;

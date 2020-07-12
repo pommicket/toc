@@ -1,6 +1,7 @@
-#include "std/io.toc", io;
+#include "main.c", t;
+
 main ::= fn() {
-	io.puts("Hello, world!");
+	t.puts("hi");
 }
 main();
 
