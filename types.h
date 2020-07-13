@@ -234,7 +234,6 @@ typedef enum {
 	DIRECT_INCLUDE,
 	DIRECT_FORCE,
 	DIRECT_IF,
-	DIRECT_FOR,
 	DIRECT_ERROR,
 	DIRECT_WARN,
 	DIRECT_INFO,
@@ -244,7 +243,7 @@ typedef enum {
 } Directive;
 
 static const char *directives[DIRECT_COUNT] = {
-	"C", "sizeof", "alignof", "export", "foreign", "builtin", "include", "force", "if", "for",
+	"C", "sizeof", "alignof", "export", "foreign", "builtin", "include", "force", "if",
 	"error", "warn", "info", "no_warn", "init"
 };
 
@@ -875,8 +874,7 @@ typedef struct While {
 enum {
 	FOR_IS_RANGE = 0x01,
 	FOR_INCLUDES_FROM = 0x02,
-	FOR_INCLUDES_TO = 0x04,
-	FOR_STATIC = 0x08
+	FOR_INCLUDES_TO = 0x04
 };
 typedef U8 ForFlags;
 typedef struct For {

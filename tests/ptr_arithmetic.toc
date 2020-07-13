@@ -1,4 +1,4 @@
-#include "std/io.toc";
+#include "std/io.toc", io;
 #include "std/mem.toc";
 
 ptr_arithmetic_test ::= fn() total := 0 {
@@ -28,6 +28,6 @@ ptr_arithmetic_test ::= fn() total := 0 {
 main ::= fn() {
 	x ::= ptr_arithmetic_test();
 	y := ptr_arithmetic_test();
-	puti(x);
-	puti(y);
+	io.puti(x);
+	io.puti(y);
 }

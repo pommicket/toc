@@ -10,6 +10,7 @@ see development.md for development information
 @TODO:
 #for
 figure out how printf is gonna work
+when putf is done, migrate tests to new std
 make a global table of builtin types, so if you ever need a pointer to one you can just point to the table
 improve type_to_str:
 	Foo ::= struct(t::Type) {}
