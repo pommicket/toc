@@ -9,6 +9,7 @@ see development.md for development information
 
 @TODO:
 figure out how printf is gonna work
+make a global table of builtin types, so if you ever need a pointer to one you can just point to the table
 improve type_to_str:
 	Foo ::= struct(t::Type) {}
 	type_to_str(Foo(int))

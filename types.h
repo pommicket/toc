@@ -408,12 +408,12 @@ typedef enum {
 
 typedef enum {
 	BUILTIN_I8,
-	BUILTIN_I16,
-	BUILTIN_I32,
-	BUILTIN_I64,
 	BUILTIN_U8,
+	BUILTIN_I16,
 	BUILTIN_U16,
+	BUILTIN_I32,
 	BUILTIN_U32,
+	BUILTIN_I64,
 	BUILTIN_U64,
 	BUILTIN_F32,
 	BUILTIN_F64,
@@ -454,6 +454,7 @@ typedef struct Type {
 	TypeKind kind;
 	TypeFlags flags;
 	union {
+		// NOTE: if you modify this, please make sure type information still works (see BINARY_DOT under types_expr)
 		BuiltinType builtin;
 		FnType *fn;
 		struct Type *tuple;

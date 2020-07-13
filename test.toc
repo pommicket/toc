@@ -9,6 +9,14 @@ main ::= fn() {
 	io.putb(bar0);
 	io.putb(foo1);
 	io.putb(bar1);
+
+	x ::= 4 as u64;
+
+	t ::= typeof(x);
+	if t._kind == 1 {
+		io.writes("BUILTIN ");
+		io.puti(t._builtin);
+	}
 }
-//main();
+main();
 

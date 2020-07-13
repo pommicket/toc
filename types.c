@@ -2512,6 +2512,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 			t->builtin = BUILTIN_BOOL;
 			break;
 		case UNARY_TYPEOF: {
+			// @TODO: these should be removed, and you should make sure you can't do something like t ::= &typeof(some_tuple);
+			// (right now printf won't work with varargs/tuples)
 			if (type_is_builtin(&of->type, BUILTIN_VARARGS)) {
 				err_print(of->where, "You can't apply typeof to varargs.");
 				return false;
@@ -2763,6 +2765,10 @@ static Status types_expr(Typer *tr, Expression *e) {
 				if (!eval_expr(tr->evalr, rhs, &val)) {
 					return false;
 				}
+				if (val.slice.len <= 0) {
+					err_print(e->where, "Invalid string for accessing member using [] (the string's length is " I64_FMT ", but it should be at least 1).", val.slice.len);
+					return false;
+				}
 				rhs->kind = EXPR_IDENT;
 				rhs->flags = 0;
 				rhs->ident_str.str = val.slice.data;
@@ -2835,16 +2841,117 @@ static Status types_expr(Typer *tr, Expression *e) {
 						  expr_kind_to_str(rhs->kind));
 				return false;
 			}
+			String member = rhs->ident_str;
+
 			if (type_is_builtin(struct_type, BUILTIN_TYPE)) {
-				// accessing struct constant/parameter with a Type
 				Value lval = {0};
 				if (!eval_expr(tr->evalr, lhs, &lval))
 					return false;
+				Type *ltype = lval.type;
 				
+				if (member.str[0] == '_') {
+					// accessing information about the type
+					if (str_eq_cstr(member, "_kind")) {
+						construct_resolved_builtin_type(t, BUILTIN_I64);
+						e->kind = EXPR_VAL;
+						e->val.i64 = ltype->kind;
+						break;
+					} else if (str_eq_cstr(member, "_builtin")) {
+						construct_resolved_builtin_type(t, BUILTIN_I64);
+						e->kind = EXPR_VAL;
+						e->val.i64 = ltype->builtin;
+						break;
+					} else if (str_eq_cstr(member, "_of")) {
+						construct_resolved_builtin_type(t, BUILTIN_TYPE);
+						e->kind = EXPR_VAL;
+						switch (ltype->kind) {
+						case TYPE_ARR:
+							e->val.type = ltype->arr->of;
+							break;
+						case TYPE_SLICE:
+							e->val.type = ltype->slice;
+							break;
+						case TYPE_PTR:
+							e->val.type = ltype->ptr;
+							break;
+						case TYPE_TUPLE: {
+							t->kind = TYPE_SLICE;
+							t->slice = typer_malloc(tr, sizeof *t->slice);
+							construct_resolved_builtin_type(t->slice, BUILTIN_TYPE);
+							Type *tuple_types = ltype->tuple;
+							size_t ntypes = arr_len(tuple_types);
+							e->val.slice.len = (I64)ntypes;
+							Type **type_ptrs = typer_malloc(tr, ntypes * sizeof *type_ptrs);
+							for (size_t i = 0; i < ntypes; ++i) {
+								type_ptrs[i] = &tuple_types[i];
+							}
+							e->val.slice.data = type_ptrs;
+						} break;
+						case TYPE_FN: {
+							t->kind = TYPE_SLICE;
+							t->slice = typer_malloc(tr, sizeof *t->slice);
+							construct_resolved_builtin_type(t->slice, BUILTIN_TYPE);
+							Type *param_types = ltype->fn->types + 1;
+							size_t nparams = arr_len(ltype->fn->types) - 1;
+							e->val.slice.len = (I64)nparams;
+							Type **type_ptrs = typer_malloc(tr, nparams * sizeof *type_ptrs);
+							for (size_t i = 0; i < nparams; ++i) {
+								if (!(param_types[i].flags & TYPE_IS_RESOLVED)) {
+									err_print(e->where, "You can't access this type information, because this function type is a template.\n"
+										"You can access the ._is_template member, which tells you if this function type is a template or not.");
+									return false;
+								}
+								type_ptrs[i] = &param_types[i];
+							}
+							e->val.slice.data = type_ptrs;
+						} break;
+						default: {
+							char *s = type_to_str(ltype);
+							err_print(e->where, "Type %s doesn't have an '_of' member.", s);
+							free(s);
+							return false;
+						} break;
+						}
+						break;
+					} else if (str_eq_cstr(member, "_returns")) {
+						construct_resolved_builtin_type(t, BUILTIN_TYPE);
+						e->kind = EXPR_VAL;
+						Type *ret = e->val.type = &ltype->fn->types[0];
+						if (!(ret->flags & TYPE_IS_RESOLVED)) {
+							err_print(e->where, "You can't access this type information, because this function type is a template.\n"
+								"You can access the ._is_template member, which tells you if this function type is a template or not.");
+						}
+						break;
+					} else if (str_eq_cstr(member, "_is_template")) {
+						construct_resolved_builtin_type(t, BUILTIN_BOOL);
+						e->kind = EXPR_VAL;
+						e->val.boolv = false;
+						arr_foreach(ltype->fn->types, Type, sub) {
+							if (!(sub->flags & TYPE_IS_RESOLVED)) {
+								e->val.boolv = true;
+								break;
+							}
+						}
+					} else if (str_eq_cstr(member, "_n")) {
+						if (ltype->kind == TYPE_ARR) {
+							construct_resolved_builtin_type(t, BUILTIN_I64);
+							e->kind = EXPR_VAL;
+							e->val.i64 = (I64)ltype->arr->n;
+							break;
+						} else {
+							char *s = type_to_str(ltype);
+							err_print(e->where, "Type %s doesn't have an '_n' member (only arrays do).", s);
+							free(s);
+							return false;
+						}
+					}
+				}
+				
+				// accessing struct constant/parameter with a Type
 				lhs->kind = EXPR_VAL;
 				lhs->flags = EXPR_FOUND_TYPE;
 				lhs->val = lval;
-				Type *struc = lhs->val.type;
+				Type *struc = ltype;
 				if (struc->kind != TYPE_STRUCT) {
 					char *s = type_to_str(struc);
 					err_print(lhs->where, "Cannot access member from non-struct type (%s).", s);
@@ -2852,17 +2959,17 @@ static Status types_expr(Typer *tr, Expression *e) {
 					return false;
 				}
 				if (!struct_resolve(tr, struc->struc)) return false;
-				if (!get_struct_constant(struc->struc, rhs->ident_str, e))
+				if (!get_struct_constant(struc->struc, member, e))
 					return false;
 				break;
 			} else if (struct_type->kind == TYPE_STRUCT) {
 				StructDef *struc = struct_type->struc;
 				if (!struct_resolve(tr, struc)) return false;
 
-				Identifier struct_ident = ident_get_with_len(&struc->body.idents, rhs->ident_str.str, rhs->ident_str.len);
+				Identifier struct_ident = ident_get_with_len(&struc->body.idents, member.str, member.len);
 				if (!struct_ident) {
 					char *struc_s = get_struct_name(struc);
-					char *member_s = str_to_cstr(rhs->ident_str);
+					char *member_s = str_to_cstr(member);
 					err_print(e->where, "%s is not a member of structure %s.", member_s, struc_s);
 					return false;
 				}
@@ -2892,12 +2999,12 @@ static Status types_expr(Typer *tr, Expression *e) {
 					e->binary.field = field;
 					*t = *field->type;
 				} else {
-					if (!get_struct_constant(struct_type->struc, rhs->ident_str, e))
+					if (!get_struct_constant(struct_type->struc, member, e))
 						return false;
 				}
 				break;
 			} else if (struct_type->kind == TYPE_SLICE || struct_type->kind == TYPE_ARR || type_is_builtin(struct_type, BUILTIN_VARARGS)) {
-				if (str_eq_cstr(rhs->ident_str, "data") && struct_type->kind == TYPE_SLICE) {
+				if (str_eq_cstr(member, "data") && struct_type->kind == TYPE_SLICE) {
 					// allow access of slice pointer
 					t->kind = TYPE_PTR;
 					t->ptr = typer_calloc(tr, 1, sizeof *t->ptr);
@@ -2906,7 +3013,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					t->ptr->flags = TYPE_IS_RESOLVED;
 					break;
 				}
-				if (!str_eq_cstr(rhs->ident_str, "len")) {
+				if (!str_eq_cstr(member, "len")) {
 					char *s = type_to_str(struct_type);
 					err_print(rhs->where, "Field of %s must be .len", s);
 					free(s);
@@ -2932,10 +3039,9 @@ static Status types_expr(Typer *tr, Expression *e) {
 				if (!eval_expr(tr->evalr, lhs, &nms_val))
 					return false;
 				Namespace *nms = nms_val.nms;
-				String str = rhs->ident_str;
-				Identifier i = rhs->ident = ident_get_with_len(&nms->body.idents, str.str, str.len);
+				Identifier i = rhs->ident = ident_get_with_len(&nms->body.idents, member.str, member.len);
 				if (!i) {
-					char *s = cstr(str.str, str.len);
+					char *s = cstr(member.str, member.len);
 					err_print(e->where, "'%s' is not a member of this namespace.", s);
 					free(s);
 					return false;
