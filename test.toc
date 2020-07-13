@@ -1,3 +1,25 @@
+#include "std/io.toc";
+
+putis ::= fn(x: ..) {
+	for a := x {
+		#if typeof(a) != int {
+			#error "Arguments to putis must all be ints.";
+		}
+		puti(a);
+	}
+}
+
+main ::= fn() {
+	puti(-12);
+	putis(3,4,5);
+	putis(3,4,5,-12);
+	putis(3,4,5,565);
+}
+main();
+
+
+
+/*
 #include "std/io.toc", io;
 #include "std/types.toc";
 
@@ -99,4 +121,4 @@ main ::= fn() {
 	print_typeof(v);
 }
 main();
-
+*/

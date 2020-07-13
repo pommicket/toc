@@ -2395,16 +2395,20 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			if (!cond_success) return false;
 			w->body.kind = BLOCK_WHILE;
 		} break;
-		case KW_FOR: {
+		case KW_FOR: 
+		for_stmt: {
 			s->kind = STMT_FOR;
 			For *fo = s->for_ = parser_malloc(p, sizeof *fo);
 			fo->flags = 0;
+			if (t->token->kind == TOKEN_DIRECT) {
+				fo->flags |= FOR_STATIC;
+			}
 			Block *prev_block = p->block;
 			fo->body.parent = p->block;
 			p->block = &fo->body;
 			Declaration *header_decl = &fo->header;
 			idents_create(&p->block->idents, p->allocr, p->block);
-			++t->token;
+			++t->token; // move past 'for'
 			if (!parse_decl(p, header_decl, PARSE_DECL_IGNORE_EXPR | DECL_CAN_END_WITH_LBRACE)) {
 				tokr_skip_to_eof(t);
 				goto for_fail;
@@ -2514,6 +2518,8 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 		} break;
 		case DIRECT_IF:
 			goto if_stmt;
+		case DIRECT_FOR:
+			goto for_stmt;
 		case DIRECT_ERROR:
 		case DIRECT_WARN:
 		case DIRECT_INFO: {

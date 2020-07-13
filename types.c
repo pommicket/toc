@@ -2385,7 +2385,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				copy_block(&cop, &fn_copy->body, &original_fn->body, COPY_BLOCK_DONT_CREATE_IDENTS);
 				c->instance->fn = fn_copy;
 				// fix parameter and return types (they were kind of problematic before, because we didn't know about the instance)
-				fn_copy->instance_id = 1+original_fn->instances->n; // let's help cgen out and assign a non-zero ID to this
+				fn_copy->instance_id = original_fn->instances->n; // let's help cgen out and assign a non-zero ID to this
 				// type this instance
 				
 				// if anything happens, make sure we let the user know that this happened while generating a fn
@@ -3164,8 +3164,8 @@ static Status types_block(Typer *tr, Block *b) {
 	arr_foreach(b->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {
 			success = false;
-			if (tr->had_include_err) {
-				// stop immediately; prevent too many "undeclared identifier" errors
+			if (tr->had_fatal_err) {
+				// stop immediately
 				break;
 			}
 			continue;
@@ -3488,8 +3488,9 @@ top:
 		bool in_header = true;
 		Block *prev_block = tr->block; { // additional block because c++
 		For *fo = s->for_;
+		ForFlags flags = fo->flags;
 		Declaration *header = &fo->header;
-		U32 is_range = fo->flags & FOR_IS_RANGE;
+		U32 is_range = flags & FOR_IS_RANGE;
 		typer_arr_add(tr, tr->in_decls, header);
 		fo->body.uses = NULL;
 		typer_block_enter(tr, &fo->body);
@@ -3551,6 +3552,100 @@ top:
 		
 		if (!index_type->flags) {
 			construct_resolved_builtin_type(index_type, BUILTIN_I64);
+		}
+
+		if (flags & FOR_STATIC) {
+		static_for:
+			// exit for body
+			tr->block = prev_block;
+			arr_remove_lasta(tr->in_decls, tr->allocr);
+			// create one block, containing a block for each vararg
+			// e.g. for x := varargs { total += x; } => { { x := varargs[0]; total += x; } { x := varargs[0]; total += x; } }
+			assert(fo->of->kind == EXPR_IDENT);
+			Identifier varargs_ident = fo->of->ident;
+			Declaration *idecl = varargs_ident->decl;
+			VarArg *varargs = idecl->val.varargs;
+			size_t nvarargs = arr_len(varargs);
+			// create surrounding block
+			s->kind = STMT_BLOCK;
+			Block *b = s->block = typer_calloc(tr, 1, sizeof *s->block);
+			idents_create(&b->idents, tr->allocr, b);
+			b->stmts = NULL;
+			b->parent = tr->block;
+			b->where = s->where;
+			arr_set_lena(b->stmts, nvarargs, tr->allocr);
+			Statement *stmt = b->stmts;
+			size_t nstmts = arr_len(fo->body.stmts);
+			Declaration *header_decl = &fo->header;
+
+			assert(arr_len(header_decl->idents) == 2);
+			Identifier val_ident = header_decl->idents[0];
+			Identifier index_ident = header_decl->idents[1];
+			bool has_val = !ident_eq_str(val_ident, "_");
+			bool has_index = !ident_eq_str(index_ident, "_");
+
+			for (size_t i = 0; i < nvarargs; ++i, ++stmt) {
+				// create sub-block #i
+				memset(stmt, 0, sizeof *stmt);
+				stmt->kind = STMT_BLOCK;
+				Block *sub = stmt->block = typer_calloc(tr, 1, sizeof *sub);
+				sub->parent = b;
+				idents_create(&sub->idents, tr->allocr, sub);
+				sub->stmts = NULL;
+				sub->where = s->where;
+				size_t total_nstmts = nstmts + has_val + has_index;
+				arr_set_lena(sub->stmts, total_nstmts, tr->allocr);
+				Copier copier = copier_create(tr->allocr, sub);
+				if (has_val) {
+					// @TODO(eventually): don't put a decl in each block, just put one at the start
+					Statement *decl_stmt = &sub->stmts[0];
+					decl_stmt->flags = 0;
+					decl_stmt->kind = STMT_DECL;
+					decl_stmt->where = s->where;
+
+					// declare value
+					Declaration *decl = decl_stmt->decl = typer_calloc(tr, 1, sizeof *decl);
+					decl->where = fo->of->where;
+					Identifier ident = ident_translate_forced(val_ident, &sub->idents);
+					typer_arr_add(tr, decl->idents, ident);
+					ident->decl = decl;
+
+					decl->flags |= DECL_HAS_EXPR;
+					decl->expr.kind = EXPR_BINARY_OP;
+					decl->expr.binary.op = BINARY_AT_INDEX;
+					decl->expr.binary.lhs = fo->of;
+					decl->expr.where = fo->of->where;
+					Expression *index = decl->expr.binary.rhs = typer_calloc(tr, 1, sizeof *decl->expr.binary.rhs);
+					index->kind = EXPR_LITERAL_INT;
+					index->intl = (U64)i;
+					index->where = fo->of->where;
+				}
+				if (has_index) {
+					// @TODO(eventually): don't put a decl in each block, just put one at the start
+					Statement *decl_stmt = &sub->stmts[has_val];
+					decl_stmt->flags = 0;
+					decl_stmt->kind = STMT_DECL;
+					decl_stmt->where = s->where;
+
+					// declare value
+					Declaration *decl = decl_stmt->decl = typer_calloc(tr, 1, sizeof *decl);
+					decl->where = fo->of->where;
+					Identifier ident = ident_translate_forced(index_ident, &sub->idents);
+					typer_arr_add(tr, decl->idents, ident);
+					ident->decl = decl;
+
+					decl->flags |= DECL_HAS_EXPR;
+					decl->expr.kind = EXPR_LITERAL_INT;
+					decl->expr.intl = (U64)i;
+					decl->expr.where = fo->of->where;
+				}
+
+				size_t start = total_nstmts - nstmts;
+				for (size_t idx = start; idx < total_nstmts; ++idx) {
+					copy_stmt(&copier, &sub->stmts[idx], &fo->body.stmts[idx-start]);
+				}
+			}
+			goto top;
 		}
 
 		if (is_range) {
@@ -3657,96 +3752,8 @@ top:
 			case TYPE_BUILTIN:
 				switch (iter_type->builtin) {
 				case BUILTIN_VARARGS: {
-					// exit for body
-					tr->block = prev_block;
-					arr_remove_lasta(tr->in_decls, tr->allocr);
-					// create one block, containing a block for each vararg
-					// e.g. for x := varargs { total += x; } => { { x := varargs[0]; total += x; } { x := varargs[0]; total += x; } }
-					assert(fo->of->kind == EXPR_IDENT);
-					Identifier varargs_ident = fo->of->ident;
-					Declaration *idecl = varargs_ident->decl;
-					VarArg *varargs = idecl->val.varargs;
-					size_t nvarargs = arr_len(varargs);
-					// create surrounding block
-					s->kind = STMT_BLOCK;
-					Block *b = s->block = typer_calloc(tr, 1, sizeof *s->block);
-					idents_create(&b->idents, tr->allocr, b);
-					b->stmts = NULL;
-					b->parent = tr->block;
-					b->where = s->where;
-					arr_set_lena(b->stmts, nvarargs, tr->allocr);
-					Statement *stmt = b->stmts;
-					size_t nstmts = arr_len(fo->body.stmts);
-					Declaration *header_decl = &fo->header;
-					
-					assert(arr_len(header_decl->idents) == 2);
-					Identifier val_ident = header_decl->idents[0];
-					Identifier index_ident = header_decl->idents[1];
-					bool has_val = !ident_eq_str(val_ident, "_");
-					bool has_index = !ident_eq_str(index_ident, "_");
-					
-					for (size_t i = 0; i < nvarargs; ++i, ++stmt) {
-						// create sub-block #i
-						memset(stmt, 0, sizeof *stmt);
-						stmt->kind = STMT_BLOCK;
-						Block *sub = stmt->block = typer_calloc(tr, 1, sizeof *sub);
-						sub->parent = b;
-						idents_create(&sub->idents, tr->allocr, sub);
-						sub->stmts = NULL;
-						sub->where = s->where;
-						size_t total_nstmts = nstmts + has_val + has_index;
-						arr_set_lena(sub->stmts, total_nstmts, tr->allocr);
-						Copier copier = copier_create(tr->allocr, sub);
-						if (has_val) {
-							// @TODO(eventually): don't put a decl in each block, just put one at the start
-							Statement *decl_stmt = &sub->stmts[0];
-							decl_stmt->flags = 0;
-							decl_stmt->kind = STMT_DECL;
-							decl_stmt->where = s->where;
-
-							// declare value
-							Declaration *decl = decl_stmt->decl = typer_calloc(tr, 1, sizeof *decl);
-							decl->where = fo->of->where;
-							Identifier ident = ident_translate_forced(val_ident, &sub->idents);
-							typer_arr_add(tr, decl->idents, ident);
-							ident->decl = decl;
-							
-							decl->flags |= DECL_HAS_EXPR;
-							decl->expr.kind = EXPR_BINARY_OP;
-							decl->expr.binary.op = BINARY_AT_INDEX;
-							decl->expr.binary.lhs = fo->of;
-							decl->expr.where = fo->of->where;
-							Expression *index = decl->expr.binary.rhs = typer_calloc(tr, 1, sizeof *decl->expr.binary.rhs);
-							index->kind = EXPR_LITERAL_INT;
-							index->intl = (U64)i;
-							index->where = fo->of->where;
-						}
-						if (has_index) {
-							// @TODO(eventually): don't put a decl in each block, just put one at the start
-							Statement *decl_stmt = &sub->stmts[has_val];
-							decl_stmt->flags = 0;
-							decl_stmt->kind = STMT_DECL;
-							decl_stmt->where = s->where;
-
-							// declare value
-							Declaration *decl = decl_stmt->decl = typer_calloc(tr, 1, sizeof *decl);
-							decl->where = fo->of->where;
-							Identifier ident = ident_translate_forced(index_ident, &sub->idents);
-							typer_arr_add(tr, decl->idents, ident);
-							ident->decl = decl;
-							
-							decl->flags |= DECL_HAS_EXPR;
-							decl->expr.kind = EXPR_LITERAL_INT;
-							decl->expr.intl = (U64)i;
-							decl->expr.where = fo->of->where;
-						}
-						
-						size_t start = total_nstmts - nstmts;
-						for (size_t idx = start; idx < total_nstmts; ++idx) {
-							copy_stmt(&copier, &sub->stmts[idx], &fo->body.stmts[idx-start]);
-						}
-					}
-					goto top;
+					fo->flags = flags |= FOR_STATIC;
+					goto static_for;
 				}
 				default: break;
 				}
@@ -4070,7 +4077,7 @@ top:
 		if (inc_f) inc_f->flags &= (IncFileFlags)~(IncFileFlags)INC_FILE_INCLUDING;
 		if (!success) {
 			// give up on typing if #include failed
-			tr->had_include_err = true;
+			tr->had_fatal_err = true;
 			return false;
 		}
 	} break;
@@ -4088,6 +4095,7 @@ top:
 			break;
 		case MESSAGE_ERROR:
 			err_print(s->where, "%s", text);
+			tr->had_fatal_err = true; // consider #error to be a fatal error (stop typing)
 			return false;
 		}
 	} break;
@@ -4200,7 +4208,7 @@ static Status types_file(Typer *tr, ParsedFile *f) {
 	tr->uses = NULL;
 	arr_foreach(f->stmts, Statement, s) {
 		if (!types_stmt(tr, s)) {
-			if (tr->had_include_err) {
+			if (tr->had_fatal_err) {
 				// stop immediately; prevent too many "undeclared identifier" errors
 				return false;
 			}

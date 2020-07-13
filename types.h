@@ -234,6 +234,7 @@ typedef enum {
 	DIRECT_INCLUDE,
 	DIRECT_FORCE,
 	DIRECT_IF,
+	DIRECT_FOR,
 	DIRECT_ERROR,
 	DIRECT_WARN,
 	DIRECT_INFO,
@@ -243,8 +244,8 @@ typedef enum {
 } Directive;
 
 static const char *directives[DIRECT_COUNT] = {
-	"C", "sizeof", "alignof", "export", "foreign", "builtin", "include", "force", "if", "error", "warn",
-	"info", "no_warn", "init"
+	"C", "sizeof", "alignof", "export", "foreign", "builtin", "include", "force", "if", "for",
+	"error", "warn", "info", "no_warn", "init"
 };
 
 typedef enum {
@@ -874,7 +875,8 @@ typedef struct While {
 enum {
 	FOR_IS_RANGE = 0x01,
 	FOR_INCLUDES_FROM = 0x02,
-	FOR_INCLUDES_TO = 0x04
+	FOR_INCLUDES_TO = 0x04,
+	FOR_STATIC = 0x08
 };
 typedef U8 ForFlags;
 typedef struct For {
@@ -1080,11 +1082,8 @@ typedef struct Typer {
 	IdentID lbl_counter;
 	unsigned long nms_counter; // counter for namespace IDs
 	StrHashTable included_files; // maps to IncludedFile
-	/* 
-		have we had an error because we couldn't find a file that was #include'd 
-		(so that we can stop compiling immediately)
-	*/
-	bool had_include_err; 
+	// did we get an error which is bad enough that we should stop typing?
+	bool had_fatal_err; 
 } Typer;
 
 typedef struct CGenerator {
