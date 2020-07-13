@@ -1,4 +1,76 @@
 #include "std/io.toc", io;
+#include "std/types.toc";
+
+print_type ::= fn(t :: Type) {
+	k ::= t._kind;
+	use TypeKind;
+	#if k == UNKNOWN {
+		io.puts("???");
+	} elif k == BUILTIN {
+		b ::= t._builtin;
+		use BuiltinType;
+		#if b == I8 {
+			io.puts("i8");
+		} elif b == U8 {
+			io.puts("u8");
+		} elif b == I16 {
+			io.puts("i16");
+		} elif b == U16 {
+			io.puts("u16");
+		} elif b == I32 {
+			io.puts("i32");
+		} elif b == U32 {
+			io.puts("u32");
+		} elif b == I64 {
+			io.puts("i64");
+		} elif b == U64 {
+			io.puts("u64");
+		} elif b == F32 {
+			io.puts("f32");
+		} elif b == F64 {
+			io.puts("f64");
+		} elif b == CHAR {
+			io.puts("char");
+		} elif b == BOOL {
+			io.puts("bool");
+		} elif b == TYPE {
+			io.puts("Type");
+		} elif b == VARARGS {
+			io.puts("..");
+		} elif b == NMS {
+			io.puts("Namespace");
+		} elif b == VOID {
+			io.puts("void");
+		} else {
+			io.puts("<unknown builtin type>");
+		}
+	} elif k == FN {
+		// @TODO
+	} elif k == TUPLE {
+		// @TODO
+	} elif k == ARR {
+		io.writes("[");
+		io.writei(t._n);
+		io.writes("]");
+		print_type(t._of);
+	} elif k == PTR {
+		io.writes("&");
+		print_type(t._of);
+	} elif k == SLICE {
+		io.writes("[]");
+		print_type(t._of);
+	} elif k == EXPR {
+		io.puts("<type expression>");
+	} elif k == STRUCT {
+		// @TODO
+	} else {
+		io.puts("<unknown type kind>");
+	}
+}
+
+print_typeof ::= fn (t ::=, x : t) {
+	print_type(t);
+}
 
 main ::= fn() {
 	foo0 := int == int;
@@ -11,12 +83,20 @@ main ::= fn() {
 	io.putb(bar1);
 
 	x ::= 4 as u64;
+	y := 7.3432;
+	z := "foo";
+	w := &z;
+	t : [x*x]int;
+	u := &t;
+	v : &void;
 
-	t ::= typeof(x);
-	if t._kind == 1 {
-		io.writes("BUILTIN ");
-		io.puti(t._builtin);
-	}
+	print_typeof(x);
+	print_typeof(y);
+	print_typeof(z);
+	print_typeof(w);
+	print_typeof(t);
+	print_typeof(u);
+	print_typeof(v);
 }
 main();
 

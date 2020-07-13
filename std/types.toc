@@ -1,0 +1,31 @@
+// @TODO: enum
+TypeKind ::= nms {
+	UNKNOWN ::= 0;
+	BUILTIN ::= 1;
+	FN ::= 2;
+	TUPLE ::= 3;
+	ARR ::= 4;
+	PTR ::= 5;
+	SLICE ::= 6;
+	EXPR ::= 7; // in theory, you should never get this kind of type (it's only used internally by the compiler)
+	STRUCT ::= 8;
+}
+
+BuiltinType ::= nms {
+	I8 ::= 0;
+	U8 ::= 1;
+	I16 ::= 2;
+	U16 ::= 3;
+	I32 ::= 4;
+	U32 ::= 5;
+	I64 ::= 6;
+	U64 ::= 7;
+	F32 ::= 8;
+	F64 ::= 9;
+	CHAR ::= 10;
+	BOOL ::= 11;
+	TYPE ::= 12;
+	VARARGS ::= 13;
+	NMS ::= 14;
+	VOID ::= 15;
+}

@@ -2914,6 +2914,10 @@ static Status types_expr(Typer *tr, Expression *e) {
 						}
 						break;
 					} else if (str_eq_cstr(member, "_returns")) {
+						if (ltype->kind != TYPE_FN) {
+							err_print(e->where, "This type doesn't have a '_returns' member (only functions do).");
+							return false;
+						}
 						construct_resolved_builtin_type(t, BUILTIN_TYPE);
 						e->kind = EXPR_VAL;
 						Type *ret = e->val.type = &ltype->fn->types[0];
@@ -2923,6 +2927,10 @@ static Status types_expr(Typer *tr, Expression *e) {
 						}
 						break;
 					} else if (str_eq_cstr(member, "_is_template")) {
+						if (ltype->kind != TYPE_FN) {
+							err_print(e->where, "This type doesn't have a '_is_template' member (only functions do).");
+							return false;
+						}
 						construct_resolved_builtin_type(t, BUILTIN_BOOL);
 						e->kind = EXPR_VAL;
 						e->val.boolv = false;

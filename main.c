@@ -8,6 +8,7 @@
 see development.md for development information 
 
 @TODO:
+#for
 figure out how printf is gonna work
 make a global table of builtin types, so if you ever need a pointer to one you can just point to the table
 improve type_to_str:
@@ -21,6 +22,8 @@ unions
 bitwise operations
 ---
 #compile_only for functions only used at compile time
+if we do bar ::= nms { #include "foo.toc", foo;  } ; #include "foo.toc", foo;   
+	foo's functions should be defined as foo__etc, not bar__foo__etc
 warn about x : u8 = 1283;
 switch to / add as an alternative: libffi
 	- better yet, inline assembly

@@ -393,36 +393,38 @@ typedef struct Tokenizer {
 
 
 typedef enum {
-	TYPE_UNKNOWN,
-	TYPE_BUILTIN,
-	TYPE_FN,
-	TYPE_TUPLE,
-	TYPE_ARR,
-	TYPE_PTR,
-	TYPE_SLICE,
-	TYPE_EXPR, // just use this expression as the type. this kind of type doesn't exist after resolving.
-	TYPE_STRUCT
-#define TYPE_COUNT (TYPE_STRUCT+1)
+	// if you change this enum, make sure you change std/types.toc (preferrably, add stuff to the end of the enum)
+	TYPE_UNKNOWN = 0,
+	TYPE_BUILTIN = 1,
+	TYPE_FN = 2,
+	TYPE_TUPLE = 3,
+	TYPE_ARR = 4,
+	TYPE_PTR = 5,
+	TYPE_SLICE = 6,
+	TYPE_EXPR = 7, // just use this expression as the type. this kind of type doesn't exist after resolving.
+	TYPE_STRUCT = 8
+#define TYPE_COUNT 9
 } TypeKind;
 
 
 typedef enum {
-	BUILTIN_I8,
-	BUILTIN_U8,
-	BUILTIN_I16,
-	BUILTIN_U16,
-	BUILTIN_I32,
-	BUILTIN_U32,
-	BUILTIN_I64,
-	BUILTIN_U64,
-	BUILTIN_F32,
-	BUILTIN_F64,
-	BUILTIN_CHAR,
-	BUILTIN_BOOL,
-	BUILTIN_TYPE,
-	BUILTIN_VARARGS,
-	BUILTIN_NMS,
-	BUILTIN_VOID
+	// if you change this enum, make sure you change std/types.toc (preferrably, add stuff to the end of the enum)
+	BUILTIN_I8 = 0,
+	BUILTIN_U8 = 1,
+	BUILTIN_I16 = 2,
+	BUILTIN_U16 = 3,
+	BUILTIN_I32 = 4,
+	BUILTIN_U32 = 5,
+	BUILTIN_I64 = 6,
+	BUILTIN_U64 = 7,
+	BUILTIN_F32 = 8,
+	BUILTIN_F64 = 9,
+	BUILTIN_CHAR = 10,
+	BUILTIN_BOOL = 11,
+	BUILTIN_TYPE = 12,
+	BUILTIN_VARARGS = 13,
+	BUILTIN_NMS = 14,
+	BUILTIN_VOID = 15
 } BuiltinType;
 
 
