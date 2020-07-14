@@ -13,7 +13,7 @@ static Keyword tokenize_kw(char **s) {
 		size_t len = strlen(keywords[k]);
 		if (strncmp(*s, keywords[k], len) == 0) {
 			if (k > KW_LAST_SYMBOL) {
-				/* 
+				/*
 				   it's not a symbol, so we need to check if it's something like "intfoo"
 				 */
 				if (is_ident((*s)[len])) {
@@ -149,7 +149,7 @@ static int tokr_esc_seq(Tokenizer *t) {
 		tokr_nextchar(t);
 		tokr_nextchar(t);
 		return (char)(c1 * 16 + c2);
-	}	
+	}
 	default:
 		return -1;
 	}
@@ -241,7 +241,7 @@ static void tokr_get_start_pos(Tokenizer *tokr, Token *t) {
 	tokr->s = tokr->file->contents + t->pos.start;
 }
 
-/* 
+/*
 the allocator you pass it will be used for string literals, so it shouldn't be freed
 until everything is done
 */
@@ -382,7 +382,7 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 					tokr_nextchar(t);
 					break;
 				default:
-					// it's 0/0.something etc. 
+					// it's 0/0.something etc.
 					break;
 				}
 			}
@@ -565,7 +565,7 @@ static Status tokenize_file(Tokenizer *t, File *file) {
 			while (is_ident(*t->s)) ++t->s;
 			tokr_put_end_pos(t, token);
 			continue;
-		}		
+		}
 		tokenization_err(t, "Token not recognized");
 	err:
 		has_err = 1;

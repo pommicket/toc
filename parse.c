@@ -613,7 +613,7 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 			Location ptr_where;
 			if (!parse_type(p, type->ptr, &ptr_where)) return false;
 		} break;
-		case KW_ANDAND: {	
+		case KW_ANDAND: {
 			// pointer to pointer
 			type->kind = TYPE_PTR;
 			Type *ptr = type->ptr = parser_malloc(p, sizeof *type->ptr);
@@ -699,8 +699,8 @@ static Status parse_type(Parser *p, Type *type, Location *where) {
 	
 }
 
-/* 
-   is the thing we're looking at definitely a type, as opposed to an expression? 
+/*
+   is the thing we're looking at definitely a type, as opposed to an expression?
    if end is not NULL, it is set to the token one past the last one in the type,
    assuming it's successful
 */
@@ -904,10 +904,9 @@ static Status parse_decl_list(Parser *p, Declaration **decls, U16 flags) {
 	bool ret = true;
 	bool first = true;
 	*decls = NULL;
-	while (t->token->kind != TOKEN_EOF &&
-		   (first || (
-					  !token_is_kw(t->token - 1, KW_RPAREN) &&
-					  !token_is_kw(t->token - 1, KW_LBRACE)))) {
+	while (t->token->kind != TOKEN_EOF && (first || (
+		!token_is_kw(t->token - 1, KW_RPAREN) &&
+		!token_is_kw(t->token - 1, KW_LBRACE)))) {
 		first = false;
 		Declaration *decl = parser_arr_add_ptr(p, *decls);
 		if (!parse_decl(p, decl, flags)) {
@@ -963,7 +962,7 @@ static Status parse_fn_expr(Parser *p, FnExpr *f) {
 		++t->token;
 	} else {
 		if (!parse_decl_list(p, &f->params, DECL_CAN_END_WITH_RPAREN
-			| DECL_CAN_END_WITH_COMMA | PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR 
+			| DECL_CAN_END_WITH_COMMA | PARSE_DECL_ALLOW_CONST_WITH_NO_EXPR
 			| PARSE_DECL_ALLOW_SEMI_CONST | PARSE_DECL_ALLOW_INFER))
 			return false;
 		arr_foreach(f->params, Declaration, param) {
@@ -1403,7 +1402,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 				if (!token_is_kw(t->token, KW_RPAREN)) {
 					tokr_err(t, "Expected ) to follow #foreign lib.");
 					return false;
-				}	
+				}
 			}
 			++t->token;
 					
@@ -1574,8 +1573,8 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 		
 			// Check if this is a unary op not a binary one (e.g. +-3 => +(-3), not (+)-(3)).
 			while (lowest_precedence_op != t->token
-				   && lowest_precedence_op[-1].kind == TOKEN_KW
-				   && op_precedence(lowest_precedence_op[-1].kw) != NOT_AN_OP) {
+				&& lowest_precedence_op[-1].kind == TOKEN_KW
+				&& op_precedence(lowest_precedence_op[-1].kw) != NOT_AN_OP) {
 				--lowest_precedence_op;
 			}
 			if (lowest_precedence_op == t->token) {
@@ -1765,7 +1764,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			e->binary.rhs = rhs;
 			if (!parse_expr(p, rhs, end)) {
 				return false;
-			}		
+			}
 			goto success;
 		} else {
 			// function calls, array accesses, etc.
@@ -1814,7 +1813,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 			Token *token = t->token;
 		
 			// currently unnecessary: paren_level = square_level = 0;
-			/* 
+			/*
 			   can't call at start, e.g. in (fn() {})(), it is not the empty function ""
 			   being called with fn() {} as an argument
 			*/
@@ -1913,7 +1912,7 @@ static Status parse_expr(Parser *p, Expression *e, Token *end) {
 						if (!parse_expr(p, e->binary.rhs, iend))
 							return false;
 						break;
-					expr_is_slice: 
+					expr_is_slice:
 					case KW_COLON: {
 						// slice
 						SliceExpr *s = &e->slice;
@@ -2196,7 +2195,7 @@ static bool is_decl(Tokenizer *t) {
 	
 	// you can only export declarations
 	if (token_is_direct(token, DIRECT_EXPORT))
-		return true;	
+		return true;
 	
 	// use decls, e.g. use p: Point
 	if (token_is_kw(token, KW_USE))
@@ -2292,7 +2291,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 			Token *deferred_start = t->token;
 			s->defer = parser_malloc(p, sizeof *s->defer);
 			if (!parse_stmt(p, s->defer, was_a_statement))
-				return false; 
+				return false;
 			if (!*was_a_statement) {
 				err_print(token_location(p->file, deferred_start), "Invalid defer (are you missing a statement?).");
 				return false;
@@ -2422,7 +2421,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				goto for_fail;
 			if (token_is_kw(first_end, KW_LBRACE)) {
 				fo->of = first;
-			} else if (first_end->kind == TOKEN_KW && 
+			} else if (first_end->kind == TOKEN_KW &&
 				(is_for_range_separator(first_end->kw) || first_end->kw == KW_COMMA)) {
 				fo->flags |= FOR_IS_RANGE;
 				fo->range.from = first;
@@ -2538,7 +2537,7 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				tokr_skip_semicolon(t);
 				return false;
 			}
-		    break;
+			break;
 		}
 		case DIRECT_INIT: {
 			if (!parser_is_at_top_level(p)) {
@@ -2747,7 +2746,7 @@ static void fprint_expr(FILE *out, Expression *e) {
 				lhs_type = lhs_type->ptr;
 			}
 			if (e->binary.op == BINARY_DOT && lhs_type->kind == TYPE_STRUCT) {
-				fprint_ident(out, e->binary.field->name);	
+				fprint_ident(out, e->binary.field->name);
 				break;
 			}
 		}

@@ -1,4 +1,4 @@
-/* 
+/*
 This is free and unencumbered software released into the public domain.
 
 Anyone is free to copy, modify, publish, use, compile, sell, or
@@ -52,17 +52,17 @@ extern uint64_t win64_call(FnPtr fn, void *args, int64_t nargs);
 extern float win64_callf(FnPtr fn, void *args, int64_t nargs);
 extern double win64_calld(FnPtr fn, void *args, int64_t nargs);
 float asdf(float a, double b, int c, double d, long e, float f) {
-    return (float)f;
+	return (float)f;
 }
 void foobar(void) {
-    FnPtr fn = (FnPtr)asdf;
-    float a = -1.6f;
-    double b = 3.0, d = 33.7;
-    unsigned long long args[6] = {
-         *(uint32_t *)&a, *(uint64_t *)&b, -12, *(uint64_t *)&d, 4, *(uint32_t *)&a
-    };
-    float ret = win64_callf(fn, args, 6);
-    printf("6 returned: %f\n", ret);
+	FnPtr fn = (FnPtr)asdf;
+	float a = -1.6f;
+	double b = 3.0, d = 33.7;
+	unsigned long long args[6] = {
+		*(uint32_t *)&a, *(uint64_t *)&b, -12, *(uint64_t *)&d, 4, *(uint32_t *)&a
+	};
+	float ret = win64_callf(fn, args, 6);
+	printf("6 returned: %f\n", ret);
 }
 
 uint64_t test_fn(long long a, uint64_t b, uint64_t c, int d) {
@@ -78,28 +78,28 @@ double test_fp(double a, double b, float c, int d, float e, int f, double g) {
 
 
 int foo(int a, int b, int c) {
-    return a+b+c;
+	return a+b+c;
 }
 void main1(void) {
-    FnPtr fn = (FnPtr)foo;
-    unsigned long long args[3] = {
-         -1000, -3, 65
-    };
-    int ret = (int)win64_call(fn, args, 3);
-    printf("7 returned: %d\n", ret);
+	FnPtr fn = (FnPtr)foo;
+	unsigned long long args[3] = {
+		-1000, -3, 65
+	};
+	int ret = (int)win64_call(fn, args, 3);
+	printf("7 returned: %d\n", ret);
 }
 float bar(float a, double b, int c, double d, long e) {
-    return a-(float)b + sinf((float)c) - (float)cos(d) + (float)e;
+	return a-(float)b + sinf((float)c) - (float)cos(d) + (float)e;
 }
 void main2(void) {
-    FnPtr fn = (FnPtr)bar;
-    float a = -1.6f;
-    double b = 3.0, d = 33.7;
-    unsigned long long args[5] = {
-         *(uint32_t *)&a, *(uint64_t *)&b, -12, *(uint64_t *)&d, 4
-    };
-    float ret = win64_callf(fn, args, 5);
-    printf("8 returned: %f\n", ret);
+	FnPtr fn = (FnPtr)bar;
+	float a = -1.6f;
+	double b = 3.0, d = 33.7;
+	unsigned long long args[5] = {
+		*(uint32_t *)&a, *(uint64_t *)&b, -12, *(uint64_t *)&d, 4
+	};
+	float ret = win64_callf(fn, args, 5);
+	printf("8 returned: %f\n", ret);
 }
 
 int main(void) {
@@ -144,7 +144,7 @@ int main(void) {
 		*(uint64_t *)&num1,
 		*(uint64_t *)&num2,
 		*(uint32_t *)&two,
-		-6, 
+		-6,
 		*(uint32_t *)&two,
 		55,
 		*(uint64_t *)&num3

@@ -202,9 +202,10 @@ static void err_vprint(Location where, const char *fmt, va_list args) {
 
 static void err_print_(
 #if ERR_SHOW_SOURCE_LOCATION
-					   int line, const char *file,
+	int line, const char *file,
 #endif
-					   Location where, const char *fmt, ...) {
+	Location where, const char *fmt, ...) {
+	
 	va_list args;
 #if ERR_SHOW_SOURCE_LOCATION
 	ErrCtx *ctx = where.file->ctx;
@@ -236,9 +237,10 @@ static void info_print(Location where, const char *fmt, ...) {
 
 static void warn_print_(
 #if ERR_SHOW_SOURCE_LOCATION
-						int line, const char *file,
+	int line, const char *file,
 #endif
-						Location where, const char *fmt, ...) {
+	Location where, const char *fmt, ...) {
+
 	va_list args;
 	ErrCtx *ctx = where.file->ctx;
 	if (!ctx->enabled) return;
@@ -288,7 +290,7 @@ static void *err_malloc_(size_t size
 		fprintf(stderr, "Error: Out of memory.\n");
 		exit(EXIT_FAILURE);
 	}
-#ifdef MALLOC_TRACKER	
+#ifdef MALLOC_TRACKER
 	if (streq(file, "eval.c")) {
 		AllocTrackerEntry *entry = &eval_c[line];
 		entry->line = line;
@@ -314,7 +316,7 @@ static void *err_calloc_(size_t n, size_t size
 		fprintf(stderr, "Error: Out of memory.\n");
 		exit(EXIT_FAILURE);
 	}
-#ifdef MALLOC_TRACKER	
+#ifdef MALLOC_TRACKER
 	if (streq(file, "eval.c")) {
 		AllocTrackerEntry *entry = &eval_c[line];
 		entry->amount += n * size;

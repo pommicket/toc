@@ -3,9 +3,9 @@
   This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
-/* 
-   @TODO: better hash functions, especially for integers 
-   (right now, nearby integers are close together in hash 
+/*
+   @TODO: better hash functions, especially for integers
+   (right now, nearby integers are close together in hash
    space, which is bad with the way these hash tables
    are designed)
 */
@@ -237,7 +237,7 @@ static bool val_ptr_eq(void *u, void *v, Type *t) {
 					return false;
 			}
 			return true;
-		}	
+		}
 		case BUILTIN_TYPE:
 			return type_eq_exact(*(Type **)u, *(Type **)v);
 		case BUILTIN_NMS:
@@ -306,8 +306,7 @@ static bool val_eq(Value u, Value v, Type *t) {
   make sure v's data remains valid
 */
 // @OPTIM: store instances in a block array (remember that the pointers need to stay valid!)
-static Instance *instance_table_adda(Allocator *a, HashTable *h, Value v, Type *t,
-									 bool *already_exists) {	
+static Instance *instance_table_adda(Allocator *a, HashTable *h, Value v, Type *t, bool *already_exists) {
 	if (h->n * 2 >= h->cap) {
 		U64 new_cap = h->cap * 2 + 3;
 		Instance **new_data = allocr_malloc(a, (size_t)new_cap * sizeof *new_data);

@@ -37,7 +37,7 @@ static FnPtr foreign_get_fn_ptr(ForeignFnManager *ffmgr, FnExpr *fn, Location ca
 			err_print(call_where, "Could not get function from dynamic library: %s.", name);
 			return NULL;
 		}
-		fn->foreign.fn_ptr = fn_ptr;		
+		fn->foreign.fn_ptr = fn_ptr;
 	}
 	return fn_ptr;
 }

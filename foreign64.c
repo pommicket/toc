@@ -129,11 +129,11 @@ static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, 
 	switch (ret_type->kind) {
 	case TYPE_BUILTIN:
 		switch (ret_type->builtin) {
-		case BUILTIN_I8: 
+		case BUILTIN_I8:
 		case BUILTIN_I16:
 		case BUILTIN_I32:
 		case BUILTIN_I64:
-		case BUILTIN_U8: 
+		case BUILTIN_U8:
 		case BUILTIN_U16:
 		case BUILTIN_U32:
 		case BUILTIN_U64:

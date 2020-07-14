@@ -1,4 +1,4 @@
-/* 
+/*
 Dynamic arrays and hash tables in C
 
 This is free and unencumbered software released into the public domain.
@@ -54,7 +54,7 @@ static WarnUnusedResult void *arr_resv_(void *arr, size_t n, size_t item_sz) {
 		hdr->cap = (U32)n;
 		hdr = err_realloc(hdr, item_sz * n + sizeof(ArrHeader));
 		if (hdr->len > hdr->cap) hdr->len = hdr->cap;
-	}		
+	}
 	return hdr->data;
 }
 static WarnUnusedResult void *arr_resva_(void *arr, size_t n, size_t item_sz, Allocator *a) {
@@ -205,7 +205,7 @@ static WarnUnusedResult void *arr_copya_(void *out, void *in, size_t item_sz, Al
 #endif
 
 #if HAS_TYPEOF
-/* 
+/*
 this is to cast the return value of arr_add so that gcc produces a warning if you
 do something like:
 float *arr = NULL;

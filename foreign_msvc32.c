@@ -56,7 +56,7 @@ static Status val_to_words(Value v, Type *t, Location where, Word *w) {
 }
 
 
-/* 
+/*
 because of the way the MSVC "cdecl" calling convention works, the only things that affect the way a function is called are
 the number of arguments and whether the function returns an integer (or pointer), floating-point number,
 or struct (struct return values are not supported yet).
@@ -190,11 +190,11 @@ static Status foreign_call(ForeignFnManager *ffmgr, FnExpr *fn, Type *ret_type, 
 	switch (ret_type->kind) {
 	case TYPE_BUILTIN:
 		switch (ret_type->builtin) {
-		case BUILTIN_I8: 
+		case BUILTIN_I8:
 		case BUILTIN_I16:
 		case BUILTIN_I32:
 		case BUILTIN_I64:
-		case BUILTIN_U8: 
+		case BUILTIN_U8:
 		case BUILTIN_U16:
 		case BUILTIN_U32:
 		case BUILTIN_U64:

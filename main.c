@@ -5,7 +5,7 @@
 */
 
 /*
-see development.md for development information 
+see development.md for development information
 
 @TODO:
 see todo in test.toc
@@ -27,7 +27,7 @@ unions
 bitwise operations
 ---
 #compile_only for functions only used at compile time
-if we do bar ::= nms { #include "foo.toc", foo;  } ; #include "foo.toc", foo;   
+if we do bar ::= nms { #include "foo.toc", foo;  } ; #include "foo.toc", foo;
 	foo's functions should be defined as foo__etc, not bar__foo__etc
 warn about x : u8 = 1283;
 switch to / add as an alternative: libffi
@@ -35,7 +35,7 @@ switch to / add as an alternative: libffi
 don't bother generating ret_ if nothing's deferred
 X ::= newtype(int); or something
 any odd number of "s for a string
-give each warning a number; #no_warn(warning), #no_warn_throughout_this_file(warning) 
+give each warning a number; #no_warn(warning), #no_warn_throughout_this_file(warning)
 test various parse errors; see if they can be improved, e.g. if else { 3; }
 use point #except x;
 optional -Wshadow
@@ -153,7 +153,7 @@ int main(int argc, char **argv) {
 	signal(SIGILL, signal_handler);
 	signal(SIGFPE, signal_handler);
 #endif
-#if RUN_TESTS	
+#if RUN_TESTS
 	printf("running tests...\n");
 	test_all();
 #endif

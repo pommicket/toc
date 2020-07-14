@@ -1,4 +1,4 @@
-/* 
+/*
 Miscellaneous C functions which toc uses.
 
 This is free and unencumbered software released into the public domain.
@@ -24,7 +24,7 @@ For more information, please refer to <http://unlicense.org/>
 */
 
 
-/* 
+/*
 A better alternative to strncpy. dest is guaranteed to be a null-terminated string
 after this function is run.
 Returns the number of characters copied to dest, not including the null character.
@@ -52,7 +52,7 @@ static char *str_dup(const char *s) {
 	size_t bufsz = strlen(s)+1;
 	char *ret = err_malloc(bufsz);
 	memcpy(ret, s, bufsz);
-	return ret;	
+	return ret;
 }
 
 static char *cstr(const char *str, size_t len) {

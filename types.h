@@ -89,7 +89,7 @@ typedef U8 bool;
 #endif
 
 #if defined __GNUC__ && !defined NO_WARN_UNUSED_RESULT
-#define WarnUnusedResult __attribute__((warn_unused_result)) 
+#define WarnUnusedResult __attribute__((warn_unused_result))
 #else
 #define WarnUnusedResult
 #endif
@@ -435,7 +435,7 @@ typedef U8 Constness;
 #define CONSTNESS_YES ((Constness)2)
 
 typedef struct FnType {
-	struct Type *types; // dynamic array [0] = ret_type, [1:] = param_types 
+	struct Type *types; // dynamic array [0] = ret_type, [1:] = param_types
 	Constness *constness; // [i] = constness of param #i. iff no parameters are constant, this is NULL. don't use it as a dynamic array, because it might not always be.
 } FnType;
 
@@ -495,8 +495,9 @@ typedef U8 BlockFlags;
 typedef struct Block {
 	// NOTE: make sure you check copy.c when you add something to this
 	BlockFlags flags;
-	BlockKind kind; /* set during the parsing phase, but don't access while this specific block is being
-	                   parsed, because sometimes it's set after parse_block */
+	// set during the parsing phase, but don't access while this specific block is being
+	// parsed, because sometimes it's set after parse_block
+	BlockKind kind;
 	struct {
 		IdentID break_lbl, cont_lbl; // initially 0, set to non-zero values if needed (tr->lbl_counter); set during typing
 	} c;
@@ -521,7 +522,7 @@ typedef struct StructDef {
 	// these two only exist after resolving (before then, it's scope.stmts)
 	Field *fields;
 	Location where;
-	/* 
+	/*
 		use this instead of fields when looking up a field, because it will include "use"d things.
 		this only consists of statements which are declarations after typing (and not #ifs,
 		for example)
@@ -563,12 +564,12 @@ typedef enum {
 	EXPR_SLICE,
 	EXPR_TYPE,
 	EXPR_NMS,
-	/* 
-	   a value (it's useful to have this). 
+	/*
+	   a value (it's useful to have this).
 	   right now they don't work with cgen_set_tuple
 	   (as of yet, that is unneeded)
 	 */
-	EXPR_VAL 
+	EXPR_VAL
 } ExprKind;
 
 typedef enum {
@@ -656,7 +657,7 @@ typedef struct FnExpr {
 		struct {
 			struct Declaration *params; // declarations of the parameters to this function
 			struct Declaration *ret_decls; // array of decls, if this has named return values. otherwise, NULL
-			Type ret_type;	
+			Type ret_type;
 			Block body;
 		};
 		struct {
@@ -846,7 +847,7 @@ typedef struct Declaration {
 	};
 	Value val; // only for constant decls, non-constant globals, and varargs.
 
-	/* 
+	/*
 		for eval, for non-constant decls
 		the pointers to values need to be fixed, which is why this isn't just Value *.
 		no, this can't be a union with val, because of global variables and varargs
@@ -992,7 +993,7 @@ typedef Statement *StatementPtr;
 /*
 	Statements to be run before any code in main is called.
 	This is mainly for the standard library, so you don't have to do something weird
-	like io.init(); 
+	like io.init();
 */
 typedef struct {
 	Statement *stmt;
@@ -1009,7 +1010,7 @@ typedef struct {
 } StatementWithCtx;
 
 typedef struct {
-	/* 
+	/*
 		statements to be run before main function is called.
 		these are in order of appearance (which is the order in which they are called)
 	*/
@@ -1039,7 +1040,7 @@ typedef struct {
 typedef struct Evaluator {
 	Allocator *allocr;
 	struct Typer *typer;
-    Block *returning; // function body from which we are returning OR loop body in which we are continuing/breaking
+	Block *returning; // function body from which we are returning OR loop body in which we are continuing/breaking
 	bool is_break; // is returning because of a break, as opposed to a continue?
 	void **to_free; // array of pointers to free once block is exited
 	Declaration **decls_given_values; // array of declarations whose last value in their val stacks should be removed when the block is exited
@@ -1048,8 +1049,8 @@ typedef struct Evaluator {
 } Evaluator;
 
 
-/* 
-	so there are loops in cgen that generate all the function declarations/definitions 
+/*
+	so there are loops in cgen that generate all the function declarations/definitions
 	and they need to know what namespace they're in (because we name mangle stuff in namespaces)
 */
 typedef struct {
@@ -1082,7 +1083,7 @@ typedef struct Typer {
 	unsigned long nms_counter; // counter for namespace IDs
 	StrHashTable included_files; // maps to IncludedFile
 	// did we get an error which is bad enough that we should stop typing?
-	bool had_fatal_err; 
+	bool had_fatal_err;
 } Typer;
 
 typedef struct CGenerator {

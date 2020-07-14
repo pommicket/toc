@@ -121,8 +121,7 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 			return false;
 		break;
 	case TYPE_STRUCT:
-		/* this would be difficult because match could contain #ifs and 
-		   no sane person will ever write something that needs this */
+		// this would be difficult because match could contain #ifs and no one will ever need this
 		break;
 	case TYPE_EXPR: {
 		Type type;
@@ -148,7 +147,7 @@ static bool infer_from_type(Typer *tr, Type *match, Type *to, Identifier *idents
 	return true;
 }
 
-/* 
+/*
 match and to are dynamic arrays of equal size
 idents is a dyn array of distinct identifiers
 find the value of each ident by matching match[i] to to[i], i = 0..arr_len(match)-1

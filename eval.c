@@ -252,7 +252,7 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		}
 		fprintf(f, "]");
 		break;
-	case TYPE_EXPR: 
+	case TYPE_EXPR:
 		assert(0);
 		break;
 	}
@@ -741,7 +741,7 @@ static Status eval_ptr_to_struct_field(Evaluator *ev, Expression *dot_expr, void
 		*p = (char *)struc_data + dot_expr->binary.field->offset;
 	} else if (struct_type->kind == TYPE_SLICE) {
 		String member = dot_expr->binary.rhs->ident_str;
-	    void *ptr;
+		void *ptr;
 		if (is_ptr) {
 			Value v;
 			if (!eval_expr(ev, lhs, &v))
@@ -878,7 +878,7 @@ static void eval_numerical_bin_op(Value lhs, Type *lhs_type, BinaryOp op, Value 
 	eval_binary_op_one(u8, U8, op);				\
 	eval_binary_op_one(u16, U16, op);			\
 	eval_binary_op_one(u32, U32, op);			\
-	eval_binary_op_one(u64, U64, op);			
+	eval_binary_op_one(u64, U64, op);
 	
 #define eval_binary_op_nums(builtin, op)		\
 	eval_binary_op_ints(builtin, op);			\
@@ -1209,7 +1209,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 				return false;
 			eval_deref(v, ptr, type);
 		} break;
-		}	
+		}
 	} break;
 	case EXPR_LITERAL_INT:
 		assert(e->type.kind == TYPE_BUILTIN);
@@ -1293,7 +1293,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		Declaration *params = fn->params, *ret_decls = fn->ret_decls;
 		Expression *arg = e->call.arg_exprs;
 		size_t pbytes = arr_len(params) * sizeof(Value);
-		Value *pvals = 
+		Value *pvals =
 		#if ALLOCA_AVAILABLE
 			toc_alloca(pbytes);
 		#else
@@ -1330,7 +1330,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		}
 
 		size_t dbytes = arr_len(ret_decls) * sizeof(Value);
-		Value *dvals = 
+		Value *dvals =
 		#if ALLOCA_AVAILABLE
 			toc_alloca(dbytes);
 		#else
@@ -1413,7 +1413,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		free(pvals);
 		#endif
 		// remove ret decl values
-		arr_foreach(ret_decls, Declaration, d) 
+		arr_foreach(ret_decls, Declaration, d)
 			decl_remove_val(d, false);
 		#if !ALLOCA_AVAILABLE
 		free(dvals);
@@ -1654,7 +1654,7 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 			} else {
 				compare_binop = step_is_negative ? BINARY_GT : BINARY_LT;
 			}
-			if (!(flags & FOR_INCLUDES_FROM)) { 
+			if (!(flags & FOR_INCLUDES_FROM)) {
 				eval_numerical_bin_op(x, value_type, BINARY_ADD, stepval, value_type, &x, value_type);
 			}
 			while (1) {

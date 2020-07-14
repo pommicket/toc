@@ -447,7 +447,7 @@ static void cgen_val_ptr(CGenerator *g, void *v, Type *t) {
 		case BUILTIN_U64: cgen_write(g, U64_FMT, *(U64 *)v); break;
 		case BUILTIN_F32: cgen_write(g, F32_FMT "f", *(F32 *)v); break;
 		case BUILTIN_F64: cgen_write(g, F64_FMT, *(F64 *)v); break;
-		case BUILTIN_CHAR: 
+		case BUILTIN_CHAR:
 			cgen_write(g, "'");
 			cgen_char(g, *(char *)v);
 			cgen_write(g, "'");
@@ -487,7 +487,7 @@ static void cgen_fn_params(CGenerator *g, FnExpr *f) {
 		if (type_is_builtin(&d->type, BUILTIN_VARARGS)) {
 			int idx = 0;
 			arr_foreach(d->val.varargs, VarArg, varg) {
-				if (any_params) 
+				if (any_params)
 					cgen_write(g, ", ");
 				any_params = true;
 				cgen_type_pre(g, varg->type);
@@ -500,7 +500,7 @@ static void cgen_fn_params(CGenerator *g, FnExpr *f) {
 		} else {
 			int idx = 0;
 			arr_foreach(d->idents, Identifier, i) {
-				if (any_params) 
+				if (any_params)
 					cgen_write(g, ", ");
 				any_params = true;
 				Type *type = d->type.kind == TYPE_TUPLE ? &d->type.tuple[idx++] : &d->type;
@@ -575,7 +575,7 @@ static void cgen_fn_header(CGenerator *g, FnExpr *f) {
 		cgen_type_pre(g, &f->ret_type);
 		cgen_write(g, " ");
 	}
-	cgen_fn_name(g, f);	
+	cgen_fn_name(g, f);
 	cgen_fn_params(g, f);
 	if (!out_param) {
 		cgen_type_post(g, &f->ret_type);
@@ -601,8 +601,8 @@ static inline void cgen_deferred_up_to_not_including(CGenerator *g, Block *to) {
 		cgen_deferred_from_block(g, b);
 }
 
-/* 
-   Either set_expr or set_str should be NULL and either to_expr or to_str should be NULL 
+/*
+   Either set_expr or set_str should be NULL and either to_expr or to_str should be NULL
    Also, set_str and/or to_str should be NULL
    this DOES NOT call cgen_expr_pre for set_expr or to_expr
 */
@@ -1020,7 +1020,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			s = "/"; break;
 		case BINARY_MOD:
 			s = "%"; break;
-		case BINARY_SET: 
+		case BINARY_SET:
 			cgen_set(g, lhs, NULL, rhs, NULL);
 			break;
 		case BINARY_GT:
@@ -1249,7 +1249,7 @@ static void cgen_expr(CGenerator *g, Expression *e) {
 			cgen_expr(g, e->cast.expr);
 			cgen_write(g, ")");
 			if (from->kind == TYPE_SLICE // casting from a slice to a non-slice
-				&& to->kind != TYPE_SLICE) 
+				&& to->kind != TYPE_SLICE)
 				cgen_write(g, ".data");
 			cgen_write(g, ")");
 		}
@@ -1983,7 +1983,7 @@ static void cgen_file(CGenerator *g, ParsedFile *f, Typer *tr) {
 	// if in debug mode, don't buffer output C file
 	setbuf(cgen_writing_to(g), NULL);
 	#endif
-	cgen_write(g, 
+	cgen_write(g,
 		"#include <stdint.h>\n"
 		"#include <stddef.h>\n"
 		"typedef int8_t i8;\n"
@@ -2023,7 +2023,7 @@ static void cgen_file(CGenerator *g, ParsedFile *f, Typer *tr) {
 		cgen_write(g, "struct ");
 		if (!sdef->name) {
 			sdef->c.id = ++g->ident_counter;
-		} 
+		}
 		cgen_struct_name(g, sdef);
 		cgen_write(g, ";");
 		cgen_nl(g);

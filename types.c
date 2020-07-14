@@ -12,8 +12,8 @@ static void val_cast(Value vin, Type *from, Value *vout, Type *to);
 static U64 val_to_u64(Value v, BuiltinType v_type);
 static I64 val_to_i64(Value v, BuiltinType v_type);
 static bool val_truthiness(Value v, Type *t);
-static Value val_zero(Allocator *a, Type *t); 
-static Status eval_stmt(Evaluator *ev, Statement *stmt); 
+static Value val_zero(Allocator *a, Type *t);
+static Status eval_stmt(Evaluator *ev, Statement *stmt);
 static Status struct_resolve(Typer *tr, StructDef *s);
 static Status expr_must_usable(Typer *tr, Expression *e);
 
@@ -211,10 +211,10 @@ static Status struct_add_stmts(Typer *tr, StructDef *s, Statement *stmts) {
 	return true;
 }
 
-/* 
-	set the field pointers of the declarations in this struct, so that when we look up the declaration of 
+/*
+	set the field pointers of the declarations in this struct, so that when we look up the declaration of
 	a member of the struct, we know which Field it refers to.
-	this needs to be a different step after struct_add_stmts, because the pointers to Fields can change 
+	this needs to be a different step after struct_add_stmts, because the pointers to Fields can change
 	during struct_add_stmts
 */
 static void struct_set_decl_field_ptrs(Typer *tr, StructDef *s, Statement *stmts) {
@@ -297,7 +297,7 @@ static size_t compiler_sizeof(Type *t) {
 }
 
 static Status struct_resolve(Typer *tr, StructDef *s) {
-	if (s->flags & STRUCT_DEF_RESOLVING_FAILED) 
+	if (s->flags & STRUCT_DEF_RESOLVING_FAILED)
 		return false; // silently fail; do not try to resolve again, because there'll be duplicate errors
 	if (!(s->flags & STRUCT_DEF_RESOLVED)) {
 		s->flags |= STRUCT_DEF_RESOLVING;
@@ -454,15 +454,15 @@ static Type *overriding_type(Type *a, Type *b) {
 	if (b->flags & TYPE_IS_FLEXIBLE)
 		return a;
 
-	if (a->kind == TYPE_PTR && type_is_builtin(a->ptr, BUILTIN_VOID)) 
+	if (a->kind == TYPE_PTR && type_is_builtin(a->ptr, BUILTIN_VOID))
 		return b;
 
 	// doesn't matter
 	return a;
 }
 
-/* 
-prints an error and returns false if the given expression is not an l-value 
+/*
+prints an error and returns false if the given expression is not an l-value
 purpose is something like "take address of"
 */
 static Status expr_must_lval(Expression *e, const char *purpose) {
@@ -502,7 +502,7 @@ static Status expr_must_lval(Expression *e, const char *purpose) {
 				return false;
 			}
 			return true;
-		case BINARY_DOT:  
+		case BINARY_DOT:
 			if (e->type.kind == TYPE_PTR) return true; // structure->member is always an lvalue
 			return expr_must_lval(e->binary.lhs, purpose);
 		default: break;
@@ -512,7 +512,7 @@ static Status expr_must_lval(Expression *e, const char *purpose) {
 	case EXPR_TUPLE:
 		// x, y is an lval, but 3, "hello" is not.
 		arr_foreach(e->tuple, Expression, x) {
-			if (!expr_must_lval(x, purpose)) 
+			if (!expr_must_lval(x, purpose))
 				return false;
 		}
 		return true;
@@ -675,7 +675,7 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 						}
 					}
 				}
-			} 
+			}
 		}
 		U32 is_at_all_const = param->flags & (DECL_IS_CONST | DECL_SEMI_CONST);
 		if (is_at_all_const) {
@@ -746,7 +746,7 @@ static Status type_of_fn(Typer *tr, FnExpr *f, Type *t, U16 flags) {
 				success = false;
 				goto ret;
 			}
-			/* 
+			/*
 			   a function which returns a compile-only type but has non-constant parameters is weird...
 			   but might be useful, so let's warn
 			*/
@@ -850,7 +850,7 @@ static Status type_of_ident(Typer *tr, Location where, Identifier i, Type *t) {
 			#if 0
 			Block *decl_block = i->idents->scope;
 			if (block_is_at_top_level(decl_block)) {
-				/* 
+				/*
 					let's type the declaration, and redo this (for calling future functions at compile time)
 					this makes sure the error is right for:
 					foo();
@@ -1231,7 +1231,7 @@ static Status types_fn(Typer *tr, FnExpr *f, Type *t, Instance *instance) {
 				goto ret;
 		}
 		char *expected = type_to_str(ret_type);
-		err_print(token_location(f->body.where.file, &f->body.where.file->tokens[f->body.where.end-1]), 
+		err_print(token_location(f->body.where.file, &f->body.where.file->tokens[f->body.where.end-1]),
 				"Function which should return %s is missing a return statement (or it does not clearly always return).", expected);
 		free(expected);
 		info_print(f->where, "Function was declared here:");
@@ -1377,13 +1377,11 @@ static Status call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Lo
 	return true;
 }
 
-/* 
- *order must be freed, regardless of return value. if (*order)[i] == -1, that parameter was not set.
-*/
+// order must be freed, regardless of return value. if (*order)[i] == -1, that parameter was not set.
 static Status parameterized_struct_arg_order(StructDef *struc, Argument *args, I16 **order, Location where) {
 	size_t nargs = arr_len(args);
 	
-	/* 
+	/*
 	   it would be nice if this code and the code for arguments to normal functions
 	   weren't split into two separate functions.
 	*/
@@ -1510,7 +1508,7 @@ static void get_builtin_val_type(Allocator *a, BuiltinVal val, Type *t) {
 }
 
 
-// gets a struct's constant or parameter, and puts it into e->val. 
+// gets a struct's constant or parameter, and puts it into e->val.
 static Status get_struct_constant(StructDef *struc, String ident, Expression *e) {
 	if (struc->params && !(struc->params[0].flags & DECL_FOUND_VAL)) {
 		err_print(e->where, "To access constants from a parameterized struct, you must supply its arguments.");
@@ -1631,7 +1629,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 	e->flags |= EXPR_FOUND_TYPE; // even if failed, pretend we found the type
 	if (e->kind == EXPR_VAL) {
 		// can exist, e.g. for null
-		return true; 
+		return true;
 	}
 	Type *t = &e->type;
 	t->flags = TYPE_IS_RESOLVED;
@@ -1696,7 +1694,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 				print_block_location(i->idents->body);
 				printf(" to \n");
 				print_block_location(translated->idents->body);
-#endif			
+#endif
 				final_ident = translated;
 				undeclared = false;
 			}
@@ -1845,7 +1843,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		bool has_varargs = f->type.kind == TYPE_FN && fn_type_has_varargs(f->type.fn);
 		bool fn_being_used_before_declared = false;
 
-		if (expr_is_definitely_const(f) || type_is_builtin(&f->type, BUILTIN_TYPE) || has_varargs) { 
+		if (expr_is_definitely_const(f) || type_is_builtin(&f->type, BUILTIN_TYPE) || has_varargs) {
 			// evaluate the function when possible (this allows us to use named arguments, default arguments, etc.)
 			Value val;
 			if (f->kind == EXPR_IDENT) {
@@ -2011,7 +2009,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 			Declaration *last_param = arr_last_ptr(fn_decl->params);
 			arr_foreach(fn_decl->params, Declaration, param) {
 				if (has_varargs && param == last_param) continue;
-				arr_foreach(param->idents, Identifier, ident) { 
+				arr_foreach(param->idents, Identifier, ident) {
 					I16 arg_idx = order[i];
 					if (arg_idx == -1) {
 						if (param->flags & DECL_HAS_EXPR) {
@@ -2175,7 +2173,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					if (param->flags & DECL_INFER) {
 						arr_add(inferred_idents, *ident);
 					} else if ((param->flags & DECL_ANNOTATES_TYPE)
-							   && !type_is_builtin(&param->type, BUILTIN_VARARGS)) {
+						&& !type_is_builtin(&param->type, BUILTIN_VARARGS)) {
 						// add to stuff infer can use
 						// @OPTIM: don't do this if we're not inferring
 						arr_add(decl_types, &param->type);
@@ -2301,7 +2299,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 							}
 						}
 						++i;
-					}	
+					}
 				}
 			}
 
@@ -2582,14 +2580,14 @@ static Status types_expr(Typer *tr, Expression *e) {
 			t->kind = TYPE_BUILTIN;
 			t->builtin = BUILTIN_I64;
 		} break;
-		} 
+		}
 	} break;
 	case EXPR_BINARY_OP: {
 		Expression *lhs = e->binary.lhs;
 		Expression *rhs = e->binary.rhs;
 		Type *lhs_type = &lhs->type;
 		Type *rhs_type = &rhs->type;
-			   
+
 		BinaryOp o = e->binary.op;
 		if (o != BINARY_DOT) {
 			bool lhs_success = types_expr(tr, lhs);
@@ -2718,7 +2716,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 							bool equal = type_eq_exact(lhs_val.type, rhs_val.type);
 							if (o == BINARY_NE)
 								e->val.boolv = !equal;
-							else 
+							else
 								e->val.boolv = equal;
 						} else {
 							valid = false;
@@ -3125,7 +3123,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 					Declaration *decl = ident->decl;
 					e->kind = EXPR_VAL;
 					e->val.i64 = (I64)arr_len(decl->val.varargs);
-				} else if (struct_type->kind == TYPE_ARR) {	
+				} else if (struct_type->kind == TYPE_ARR) {
 					e->kind = EXPR_VAL;
 					e->val.i64 = (I64)struct_type->arr->n;
 				}
@@ -3358,7 +3356,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 				copy_val(tr->allocr, &d->val, val, dtype);
 				flags |= DECL_FOUND_VAL;
 				if (!(flags & DECL_IS_CONST)) {
-					/* 
+					/*
 						create a value stack for this declaration so that it can be modified by compile time execution,
 						but not permanently (i.e. output will still have old value)
 					*/
@@ -3383,7 +3381,7 @@ static Status types_decl(Typer *tr, Declaration *d) {
 		arr_adda(d->val_stack, val, tr->allocr); // arr_adda because this will never be freed
 		if (n_idents > 1 && dtype->kind != TYPE_TUPLE) {
 			Value *tuple = val->tuple = typer_malloc(tr, n_idents * sizeof *tuple);
-			for (size_t i = 0; i < n_idents; ++i)	
+			for (size_t i = 0; i < n_idents; ++i)
 				tuple[i] = val_zero(tr->allocr, dtype);
 		} else {
 			*val = val_zero(tr->allocr, dtype);
@@ -3588,7 +3586,7 @@ top:
 		{
 			size_t nidents = arr_len(header->idents);
 			if (nidents > 2) {
-				err_print(header->where, "Expected at most 2 identifiers in for declaration (index and value) but got %lu.", 
+				err_print(header->where, "Expected at most 2 identifiers in for declaration (index and value) but got %lu.",
 					(unsigned long)nidents);
 				goto for_fail;
 			}
@@ -3907,7 +3905,7 @@ top:
 					err_print(s->where, "Static for loops can only be used with type int right now.\n"
 						"Either switch from :: to : or cast the range bounds to int.");
 					goto for_fail;
-				} 
+				}
 				Value from_val, to_val;
 				if (!eval_expr(tr->evalr, r->from, &from_val)) return false;
 				if (!eval_expr(tr->evalr, r->to, &to_val)) return false;
@@ -3918,7 +3916,7 @@ top:
 				err_print(s->where, "Only range-based static for loops (e.g. for x ::= 1..10) are supported right now. You need to change :: to :");
 				goto for_fail;
 			}
-			if (!(flags & FOR_INCLUDES_FROM)) 
+			if (!(flags & FOR_INCLUDES_FROM))
 				from += step;
 
 			Statement *for_body_stmts = fo->body.stmts;
@@ -4056,7 +4054,7 @@ top:
 			err_print(s->where, "return outside of a function.");
 			return false;
 		}
-	    r->referring_to = &tr->fn->body;
+		r->referring_to = &tr->fn->body;
 		if (r->flags & RET_HAS_EXPR) {
 			if (type_is_void(&tr->fn->ret_type)) {
 				err_print(s->where, "Return value in a void function.");
@@ -4113,7 +4111,7 @@ top:
 			if (i->decl) {
 				Declaration *d2 = i->decl;
 				// maybe they included it twice into one namespace
-				if ((d2->flags & DECL_HAS_EXPR) && (d2->expr.kind == EXPR_NMS) && 
+				if ((d2->flags & DECL_HAS_EXPR) && (d2->expr.kind == EXPR_NMS) &&
 					(d2->expr.nms->inc_file == inc_f)) {
 					// that's okay; get rid of this declaration
 					s->kind = STMT_INLINE_BLOCK;
@@ -4221,7 +4219,7 @@ top:
 	} break;
 	case STMT_MESSAGE: {
 		Message *m = s->message;
-	    char *text = eval_expr_as_cstr(tr, &m->text, "message");
+		char *text = eval_expr_as_cstr(tr, &m->text, "message");
 		if (!text)
 			return false;
 		switch (m->kind) {
@@ -4248,7 +4246,7 @@ top:
 					if (!block->c.break_lbl) {
 						block->c.break_lbl = ++tr->lbl_counter;
 					}
-				} else {	
+				} else {
 					assert(s->kind == STMT_CONT);
 					if (!block->c.cont_lbl) {
 						block->c.cont_lbl = ++tr->lbl_counter;

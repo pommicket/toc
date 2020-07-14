@@ -6,10 +6,10 @@
 
   these copy functions MUST be used before typing!!!! (except for copy_val)
 
-  ----- 
-  IMPORTANT:   
+  -----
+  IMPORTANT:
   These functions are like memcpy, in that in and out must not overlap!
-  -----  
+  -----
 */
 
 typedef struct {
@@ -157,7 +157,7 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 		}
 	} break;
 	case TYPE_ARR:{
-		ArrType *oarr = out->arr = copier_malloc(c, sizeof *oarr), *iarr = in->arr; 
+		ArrType *oarr = out->arr = copier_malloc(c, sizeof *oarr), *iarr = in->arr;
 		*oarr = *iarr;
 		if (!(in->flags & TYPE_IS_RESOLVED)) {
 			oarr->n_expr = copy_expr_(c, iarr->n_expr);
@@ -174,7 +174,7 @@ static void copy_type(Copier *c, Type *out, Type *in) {
 		if (in->flags & TYPE_IS_RESOLVED) {
 			// we don't actually need to make a copy of the struct here
 		} else {
-			/* 
+			/*
 			   it's okay to copy the struct definition here, because before resolving,
 			   only one thing can point to a given StructDef
 			*/
@@ -292,7 +292,7 @@ static void copy_expr(Copier *c, Expression *out, Expression *in) {
 		out->c.code = copy_expr_(c, in->c.code);
 		break;
 	case EXPR_BUILTIN:
-		out->builtin.which.expr = copy_expr_(c, in->builtin.which.expr); 
+		out->builtin.which.expr = copy_expr_(c, in->builtin.which.expr);
 		break;
 	case EXPR_SLICE: {
 		SliceExpr *sin = &in->slice;
