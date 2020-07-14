@@ -8,8 +8,9 @@
 see development.md for development information 
 
 @TODO:
-#for
+see note in types.c : we probably shouldn't go to the trouble of evaluating this (just do this stuff if it's an ident)
 figure out how printf is gonna work
+make error when you give too few arguments better
 when putf is done, migrate tests to new std
 make a global table of builtin types, so if you ever need a pointer to one you can just point to the table
 improve type_to_str:

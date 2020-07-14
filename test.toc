@@ -1,19 +1,14 @@
 #include "std/io.toc";
 
-putis ::= fn(x: ..) {
-	for a := x {
-		#if typeof(a) != int {
-			#error "Arguments to putis must all be ints.";
-		}
-		puti(a);
-	}
-}
-
 main ::= fn() {
-	puti(-12);
-	putis(3,4,5);
-	putis(3,4,5,-12);
-	putis(3,4,5,565);
+	a : [5]int;
+	for i ::= 1..10 {
+		a : [i]int;
+		a[0] = 7;
+		for j ::= 0.,i {
+			puti(a[j]);
+		}
+	}
 }
 main();
 

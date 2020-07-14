@@ -1433,22 +1433,15 @@ static void cgen_decl(CGenerator *g, Declaration *d) {
 				continue;
 			}
 			Value *val = decl_val_at_index(d, idx);
-			if (has_expr) {
-				cgen_val_pre(g, val, type);
-			}
+			cgen_val_pre(g, val, type);
 			if (is_const)
 				cgen_write(g, "static ");
 			cgen_type_pre(g, type);
 			cgen_write(g, is_const ? " const " : " ");
 			cgen_ident(g, i);
 			cgen_type_post(g, type);
-			if (has_expr) {
-				cgen_write(g, " = ");
-				cgen_val(g, val, type);
-			} else {
-				cgen_write(g, " = ");
-				cgen_zero_value(g, type);
-			}
+			cgen_write(g, " = ");
+			cgen_val(g, val, type);
 			cgen_write(g, ";");
 			cgen_nl(g);
 		}

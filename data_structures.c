@@ -100,9 +100,9 @@ static WarnUnusedResult void *arr_growa(void *arr, size_t item_sz, Allocator *al
 		hdr = arr_hdr(arr);
 		if (hdr->len >= hdr->cap) {
 			size_t old_size = sizeof *hdr + item_sz * hdr->cap;
-			size_t new_size = sizeof *hdr + item_sz * hdr->cap * 2;
-			hdr = allocr_realloc(allocr, hdr, old_size, new_size);
 			hdr->cap *= 2;
+			size_t new_size = sizeof *hdr + item_sz * hdr->cap;
+			hdr = allocr_realloc(allocr, hdr, old_size, new_size);
 		}
 	}
 	return hdr->data;

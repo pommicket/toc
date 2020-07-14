@@ -234,7 +234,7 @@ static void fprint_val_ptr(FILE *f, void *p, Type *t) {
 		if (n > 5) n = 5;
 		for (I64 i = 0; i < n; ++i) {
 			if (i) fprintf(f, ", ");
-			fprint_val_ptr(f, (char *)slice.data + i * (I64)compiler_sizeof(t->arr->of), t->arr->of);
+			fprint_val_ptr(f, (char *)slice.data + i * (I64)compiler_sizeof(t->slice), t->slice);
 		}
 		if (slice.len > n) {
 			fprintf(f, ", ...");
@@ -593,14 +593,7 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 	}
 }
 
-static Status eval_val_ptr_at_index(Location where, Value *arr, U64 i, Type *arr_type, void **ptr, Type **type) {
-	void *arr_ptr = NULL;
-	if (arr_type->kind == TYPE_PTR) {
-		arr_ptr = arr->ptr;
-		arr_type = arr_type->ptr;
-	} else {
-		arr_ptr = val_get_ptr(arr, arr_type);
-	}
+static Status eval_val_ptr_at_index(Location where, void *arr_ptr, U64 i, Type *arr_type, void **ptr, Type **type) {
 	switch (arr_type->kind) {
 	case TYPE_ARR: {
 		U64 arr_sz = (U64)arr_type->arr->n;
@@ -629,7 +622,7 @@ static Status eval_val_ptr_at_index(Location where, Value *arr, U64 i, Type *arr
 		VarArg *varargs = *(VarArg **)arr_ptr;
 		if (arr_type->builtin == BUILTIN_VARARGS) {
 			if (i >= (U64)arr_len(varargs)) {
-				err_print(where, "Varargs out of bounds (index = %lu, varargs size = %lu)\n", (unsigned long)i, (unsigned long)arr_len(arr->varargs));
+				err_print(where, "Varargs out of bounds (index = %lu, varargs size = %lu)\n", (unsigned long)i, (unsigned long)arr_len(varargs));
 				return false;
 			}
 			VarArg *vararg = &varargs[i];
@@ -645,8 +638,8 @@ static Status eval_val_ptr_at_index(Location where, Value *arr, U64 i, Type *arr
 }
 
 static Status eval_expr_ptr_at_index(Evaluator *ev, Expression *e, void **ptr, Type **type) {
-	Value arr;
-	if (!eval_expr(ev, e->binary.lhs, &arr)) return false;
+	void *arr_p;
+	if (!eval_address_of(ev, e->binary.lhs, &arr_p)) return false;
 	Value index;
 	if (!eval_expr(ev, e->binary.rhs, &index)) return false;
 	Type *ltype = &e->binary.lhs->type;
@@ -663,7 +656,7 @@ static Status eval_expr_ptr_at_index(Evaluator *ev, Expression *e, void **ptr, T
 		}
 		i = (U64)signed_index;
 	}
-	return eval_val_ptr_at_index(e->where, &arr, i, ltype, ptr, type);
+	return eval_val_ptr_at_index(e->where, arr_p, i, ltype, ptr, type);
 }
 
 static Value *ident_val(Evaluator *ev, Identifier i, Location where) {
@@ -1455,7 +1448,7 @@ static Status eval_expr(Evaluator *ev, Expression *e, Value *v) {
 		}
 		if (from < to) {
 			void *ptr_start = NULL;
-			if (!eval_val_ptr_at_index(e->where, &ofv, from, of_type, &ptr_start, NULL))
+			if (!eval_val_ptr_at_index(e->where, val_get_ptr(&ofv, of_type), from, of_type, &ptr_start, NULL))
 				return false;
 			v->slice.data = ptr_start;
 			v->slice.len = (I64)(to - from);
@@ -1723,7 +1716,7 @@ static Status eval_stmt(Evaluator *ev, Statement *stmt) {
 			index->i64 = 0;
 			while (index->i64 < len) {
 				void *ptr = NULL;
-				if (!eval_val_ptr_at_index(stmt->where, &of, (U64)index->i64, of_type, &ptr, NULL))
+				if (!eval_val_ptr_at_index(stmt->where, val_get_ptr(&of, of_type), (U64)index->i64, of_type, &ptr, NULL))
 					return false;
 				if (uses_ptr)
 					value_val->ptr = ptr;

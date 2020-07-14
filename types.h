@@ -877,21 +877,22 @@ enum {
 	FOR_INCLUDES_TO = 0x04
 };
 typedef U8 ForFlags;
+typedef struct {
+	Expression *from; // can't be null
+	Expression *to; // can be null
+	union {
+		// (either) can be null
+		Expression *step; // before typing
+		Value *stepval; /* after typing. the type of this is header.type.tuple[0] (i.e. the value type for this for loop),
+NOTE: this might be different from the original ForExpr.step.type, because of implicit type conversions. */
+	};
+} RangeFor;
 typedef struct For {
 	ForFlags flags;
 	Declaration header;
 	Block body;
 	union {
-		struct {
-			Expression *from; // can't be null
-			Expression *to; // can be null
-			union {
-				// (either) can be null
-				Expression *step; // before typing
-				Value *stepval; /* after typing. the type of this is header.type.tuple[0] (i.e. the value type for this for loop),
-					NOTE: this might be different from the original ForExpr.step.type, because of implicit type conversions. */
-			};
-		} range;
+		RangeFor range;
 		Expression *of;
 	};
 } For;

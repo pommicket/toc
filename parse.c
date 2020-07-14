@@ -2741,15 +2741,17 @@ static void fprint_expr(FILE *out, Expression *e) {
 		fprintf(out, "(");
 		fprint_expr(out, e->binary.lhs);
 		fprintf(out, ")%s(", binary_op_to_str(e->binary.op));
-		Type *lhs_type = &e->binary.lhs->type;
-		if (lhs_type->kind == TYPE_PTR) {
-			lhs_type = lhs_type->ptr;
+		if (found_type) {
+			Type *lhs_type = &e->binary.lhs->type;
+			if (lhs_type->kind == TYPE_PTR) {
+				lhs_type = lhs_type->ptr;
+			}
+			if (e->binary.op == BINARY_DOT && lhs_type->kind == TYPE_STRUCT) {
+				fprint_ident(out, e->binary.field->name);	
+				break;
+			}
 		}
-		if (e->binary.op == BINARY_DOT && found_type && lhs_type->kind == TYPE_STRUCT) {
-			fprint_ident(out, e->binary.field->name);	
-		} else {
-			fprint_expr(out, e->binary.rhs);
-		}
+		fprint_expr(out, e->binary.rhs);
 		fprintf(out, ")");
 	} break;
 	case EXPR_UNARY_OP:
@@ -3105,3 +3107,4 @@ static inline bool struct_is_template(StructDef *s) {
 static inline bool fn_is_template(FnExpr *f) {
 	return f->instances && !f->instance_id;
 }
+

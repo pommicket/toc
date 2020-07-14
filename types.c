@@ -85,6 +85,13 @@ static size_t compiler_alignof_builtin(BuiltinType b) {
 	return 0;
 }
 
+static inline void typer_block_create(Typer *tr, Block *b, Location where) {
+	memset(b, 0, sizeof *b);
+	b->parent = tr->block;
+	b->where = where;
+	idents_create(&b->idents, tr->allocr, b);
+}
+
 static inline char *get_struct_name(StructDef *s) {
 	return s->name ? ident_to_str(s->name) : str_dup("anonymous struct");
 }
@@ -1838,7 +1845,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 		bool has_varargs = f->type.kind == TYPE_FN && fn_type_has_varargs(f->type.fn);
 		bool fn_being_used_before_declared = false;
 
-		if (expr_is_definitely_const(f) || type_is_builtin(&f->type, BUILTIN_TYPE) || has_varargs) {
+		if (expr_is_definitely_const(f) || type_is_builtin(&f->type, BUILTIN_TYPE) || has_varargs) { 
 			// evaluate the function when possible (this allows us to use named arguments, default arguments, etc.)
 			Value val;
 			if (f->kind == EXPR_IDENT) {
@@ -1850,6 +1857,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 						return false;
 				}
 			}
+			// @TODO: we probably shouldn't go to the trouble of evaluating this (just do this stuff if it's an ident)
 			if (!eval_expr(tr->evalr, f, &val))
 				return false;
 			fn_decl = val.fn;
@@ -3463,6 +3471,10 @@ static Status include_stmts_link_to_nms(Typer *tr, Namespace *nms, Statement *st
 static Status types_stmt(Typer *tr, Statement *s) {
 top:
 	if (s->flags & STMT_TYPED) return true;
+#if 0
+	printf("Typing ");
+	print_location(s->where);
+#endif
 	switch (s->kind) {
 	case STMT_EXPR: {
 		Expression *e = s->expr;
@@ -3483,7 +3495,6 @@ top:
 			}
 		}
 	} break;
-
 	case STMT_FOR: {
 		bool in_header = true;
 		Block *prev_block = tr->block; { // additional block because c++
@@ -3543,6 +3554,13 @@ top:
 				*val_type = header->type;
 			}
 		}
+
+		assert(arr_len(header->idents) == 2);
+		Identifier val_ident = header->idents[0];
+		Identifier index_ident = header->idents[1];
+		bool has_val = !ident_eq_str(val_ident, "_");
+		bool has_index = !ident_eq_str(index_ident, "_");
+		
 		Type *fo_type = &header->type;
 		fo_type->flags = TYPE_IS_RESOLVED;
 		fo_type->kind = TYPE_TUPLE;
@@ -3552,12 +3570,6 @@ top:
 		
 		if (!index_type->flags) {
 			construct_resolved_builtin_type(index_type, BUILTIN_I64);
-		}
-		
-		if (header->flags & DECL_IS_CONST) {
-			// static for
-			// @TODO ASDF
-
 		}
 
 		if (is_range) {
@@ -3680,23 +3692,14 @@ top:
 					arr_set_lena(s->inline_block, nvarargs, tr->allocr);
 					Statement *stmt = s->inline_block;
 					size_t nstmts = arr_len(fo->body.stmts);
-					Declaration *header_decl = &fo->header;
-
-					assert(arr_len(header_decl->idents) == 2);
-					Identifier val_ident = header_decl->idents[0];
-					Identifier index_ident = header_decl->idents[1];
-					bool has_val = !ident_eq_str(val_ident, "_");
-					bool has_index = !ident_eq_str(index_ident, "_");
 
 					for (size_t i = 0; i < nvarargs; ++i, ++stmt) {
 						// create block #i
 						memset(stmt, 0, sizeof *stmt);
+						stmt->where = s->where;
 						stmt->kind = STMT_BLOCK;
-						Block *b = stmt->block = typer_calloc(tr, 1, sizeof *b);
-						b->parent = tr->block;
-						idents_create(&b->idents, tr->allocr, b);
-						b->stmts = NULL;
-						b->where = s->where;
+						Block *b = stmt->block = typer_malloc(tr, sizeof *b);
+						typer_block_create(tr, b, s->where);
 						size_t total_nstmts = nstmts + has_val + has_index;
 						arr_set_lena(b->stmts, total_nstmts, tr->allocr);
 						Copier copier = copier_create(tr->allocr, b);
@@ -3729,7 +3732,7 @@ top:
 							decl_stmt->kind = STMT_DECL;
 							decl_stmt->where = s->where;
 
-							// declare value
+							// declare index
 							Declaration *decl = decl_stmt->decl = typer_calloc(tr, 1, sizeof *decl);
 							decl->where = fo->of->where;
 							Identifier ident = ident_translate_forced(index_ident, &b->idents);
@@ -3803,6 +3806,76 @@ top:
 		}
 
 		tr->block = prev_block;
+		
+		if (header->flags & DECL_IS_CONST) {
+			// static for
+			// let's turn `for i ::= 1..3 { ... }` into `{ i ::= 1; ... } { i ::= 2; ... } { i ::= 3; ... }`
+			I64 from, to, step;
+			s->kind = STMT_INLINE_BLOCK;
+			s->inline_block = NULL;
+
+			if (is_range) {
+				RangeFor *r = &fo->range;
+				if (has_index) {
+					err_print(s->where, "Static for loop with an index variable are not supported right now.");
+					return false;
+				}
+				if (!r->to) {
+					err_print(s->where, "Static for loops (for loops with ::) can't be infinite. You have to specify an end value to the range.");
+					goto for_fail;
+				}
+				if (!type_is_builtin(&r->from->type, BUILTIN_I64) || !type_is_builtin(&r->to->type, BUILTIN_I64)) {
+					err_print(s->where, "Static for loops can only be used with type int right now.\n"
+						"Either switch from :: to : or cast the range bounds to int.");
+					goto for_fail;
+				} 
+				Value from_val, to_val;
+				if (!eval_expr(tr->evalr, r->from, &from_val)) return false;
+				if (!eval_expr(tr->evalr, r->to, &to_val)) return false;
+				from = from_val.i64;
+				to = to_val.i64;
+				step = r->stepval ? r->stepval->i64 : 1;
+			} else {
+				err_print(s->where, "Only range-based static for loops (e.g. for x ::= 1..10) are supported right now. You need to change :: to :");
+				goto for_fail;
+			}
+			if (!(flags & FOR_INCLUDES_FROM)) 
+				from += step;
+
+			Statement *for_body_stmts = fo->body.stmts;
+			size_t for_body_nstmts = arr_len(for_body_stmts);
+			for (I64 x = from; flags & FOR_INCLUDES_TO ? x <= to : x < to; x += step) {
+				// create inner blocks, e.g. { i ::= 1; ... }
+				Statement *stmt = typer_arr_add_ptr(tr, s->inline_block);
+				memset(stmt, 0, sizeof *stmt);
+				stmt->kind = STMT_BLOCK;
+				stmt->where = s->where;
+				Block *b = stmt->block = typer_malloc(tr, sizeof *b);
+				typer_block_create(tr, b, s->where);
+				size_t nstmts = 1+for_body_nstmts;
+				arr_set_lena(b->stmts, nstmts, tr->allocr);
+				Statement *vdecl_stmt = &b->stmts[0];
+				memset(vdecl_stmt, 0, sizeof *vdecl_stmt);
+				vdecl_stmt->where = s->where;
+				Declaration *vdecl = vdecl_stmt->decl = typer_calloc(tr, 1, sizeof *vdecl);
+				vdecl->where = s->where;
+				vdecl->flags = DECL_IS_CONST | DECL_FOUND_TYPE | DECL_FOUND_VAL;
+				vdecl->idents = NULL;
+				arr_set_lena(vdecl->idents, 1, tr->allocr);
+				Identifier id = vdecl->idents[0] = ident_translate_forced(val_ident, &b->idents);
+				id->decl = vdecl;
+				construct_resolved_builtin_type(&vdecl->type, BUILTIN_I64);
+				vdecl->val.i64 = x;
+				
+				Copier c = copier_create(tr->allocr, b);
+				// create a copy of each statement in each block
+				for (size_t i = 0; i < for_body_nstmts; ++i) {
+					copy_stmt(&c, &b->stmts[i+1], &for_body_stmts[i]);
+				}
+			}
+			goto top;
+		}
+
 		if (!types_block(tr, &fo->body)) goto for_fail;
 		
 		} break;
@@ -3833,12 +3906,6 @@ top:
 					s->inline_block = true_block->stmts;
 					if (!fix_ident_decls_inline_block(tr, s->inline_block))
 						return false;
-					/* 
-						erase identifiers in old block - we don't want anyone to think that
-						stuff is actually declared in the old block.
-						this isn't ideal, but oh well
-					*/
-					idents_create(&true_block->idents, tr->allocr, true_block);
 					bool success = true;
 					arr_foreach(s->inline_block, Statement, sub) {
 						if (!types_stmt(tr, sub)) {
@@ -3953,10 +4020,8 @@ top:
 			inc_nms = typer_calloc(tr, 1, sizeof *inc_nms);
 			
 			Block *body = &inc_nms->body;
+			typer_block_create(tr, body, s->where);
 			body->kind = BLOCK_NMS;
-			body->where = s->where;
-			idents_create(&body->idents, tr->allocr, body);
-			body->parent = tr->block;
 
 			inc_nms->inc_file = inc_f;
 			// turn #include "foo", bar into bar ::= nms { ... }
@@ -4156,8 +4221,12 @@ top:
 	}
 success:
 	s->flags |= STMT_TYPED;
+	if (s->flags & STMT_IS_INIT) {
+		Initialization *init = typer_arr_add_ptr(tr, tr->gctx->inits);
+		init->stmt = s;
+	}
 	if (tr->block == NULL || tr->block->kind == BLOCK_NMS) {
-		// evaluate statements at global scope
+		// evaluate top level statements
 		switch (s->kind) {
 		case STMT_DECL:
 		case STMT_USE:
@@ -4182,10 +4251,6 @@ success:
 			assert(0);
 			break;
 		}
-	}
-	if (s->flags & STMT_IS_INIT) {
-		Initialization *init = typer_arr_add_ptr(tr, tr->gctx->inits);
-		init->stmt = s;
 	}
 	return true;
 }
