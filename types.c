@@ -2275,7 +2275,11 @@ static Status types_expr(Typer *tr, Expression *e) {
 		}
 		if (fn_type->constness || (has_varargs && !is_foreign)) {
 			// type params, return declarations, etc
-			if (!type_of_fn(tr, fn_copy, &f->type, TYPE_OF_FN_IS_INSTANCE))
+			ErrCtx *err_ctx = e->where.file->ctx;
+			arr_add(err_ctx->instance_stack, e->where);
+			bool success = type_of_fn(tr, fn_copy, &f->type, TYPE_OF_FN_IS_INSTANCE);
+			arr_remove_last(err_ctx->instance_stack);
+			if (!success)
 				return false;
 
 			if (fn_type->constness) {
@@ -2520,18 +2524,25 @@ static Status types_expr(Typer *tr, Expression *e) {
 			t->builtin = BUILTIN_BOOL;
 			break;
 		case UNARY_TYPEOF: {
-			// @TODO: these should be removed, and you should make sure you can't do something like t ::= &typeof(some_tuple);
-			// (right now printf won't work with varargs/tuples)
-			if (type_is_builtin(&of->type, BUILTIN_VARARGS)) {
+			Type *of_t = &of->type;
+			if (type_is_builtin(of_t, BUILTIN_VARARGS)) {
 				err_print(of->where, "You can't apply typeof to varargs.");
 				return false;
 			}
-			if (of->type.kind == TYPE_TUPLE) {
+			if (of_t->kind == TYPE_TUPLE) {
 				err_print(of->where, "You can't apply typeof to a tuple.");
 				return false;
 			}
+			if (of_t->kind == TYPE_FN) {
+				arr_foreach(of_t->fn->types, Type, sub) {
+					if (!(sub->flags & TYPE_IS_RESOLVED)) {
+						err_print(of->where, "You can't apply typeof to a function template.");
+						return false;
+					}
+				}
+			}
 			e->kind = EXPR_TYPE;
-			e->typeval = &of->type;
+			e->typeval = of_t;
 			t->kind = TYPE_BUILTIN;
 			t->builtin = BUILTIN_TYPE;
 		} break;
@@ -2890,9 +2901,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 							e->val.type = ltype->ptr;
 							break;
 						case TYPE_TUPLE: {
-							t->kind = TYPE_SLICE;
-							t->slice = typer_malloc(tr, sizeof *t->slice);
-							construct_resolved_builtin_type(t->slice, BUILTIN_TYPE);
+							construct_resolved_slice_of_builtin(tr->allocr, t, BUILTIN_TYPE);
 							Type *tuple_types = ltype->tuple;
 							size_t ntypes = arr_len(tuple_types);
 							e->val.slice.len = (I64)ntypes;
@@ -2903,9 +2912,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 							e->val.slice.data = type_ptrs;
 						} break;
 						case TYPE_FN: {
-							t->kind = TYPE_SLICE;
-							t->slice = typer_malloc(tr, sizeof *t->slice);
-							construct_resolved_builtin_type(t->slice, BUILTIN_TYPE);
+							construct_resolved_slice_of_builtin(tr->allocr, t, BUILTIN_TYPE);
 							Type *param_types = ltype->fn->types + 1;
 							size_t nparams = arr_len(ltype->fn->types) - 1;
 							e->val.slice.len = (I64)nparams;
@@ -2942,19 +2949,23 @@ static Status types_expr(Typer *tr, Expression *e) {
 						}
 						break;
 					} else if (str_eq_cstr(member, "_is_template")) {
-						if (ltype->kind != TYPE_FN) {
-							err_print(e->where, "This type doesn't have a '_is_template' member (only functions do).");
-							return false;
-						}
 						construct_resolved_builtin_type(t, BUILTIN_BOOL);
 						e->kind = EXPR_VAL;
-						e->val.boolv = false;
-						arr_foreach(ltype->fn->types, Type, sub) {
-							if (!(sub->flags & TYPE_IS_RESOLVED)) {
-								e->val.boolv = true;
-								break;
+						if (ltype->kind == TYPE_FN) {
+							e->val.boolv = false;
+							arr_foreach(ltype->fn->types, Type, sub) {
+								if (!(sub->flags & TYPE_IS_RESOLVED)) {
+									e->val.boolv = true;
+									break;
+								}
 							}
+						} else if (ltype->kind == TYPE_STRUCT) {
+							e->val.boolv = ltype->struc->params != NULL;
+						} else {
+							err_print(e->where, "This type doesn't have a '_is_template' member (only functions and structs do).");
+							return false;
 						}
+						break;
 					} else if (str_eq_cstr(member, "_n")) {
 						if (ltype->kind == TYPE_ARR) {
 							construct_resolved_builtin_type(t, BUILTIN_I64);
@@ -2967,6 +2978,67 @@ static Status types_expr(Typer *tr, Expression *e) {
 							free(s);
 							return false;
 						}
+					} else if (str_eq_cstr(member, "_member_names")) {
+						// access a slice of the names of the fields of this struct
+						// @TODO: cache this stuff
+						if (ltype->kind != TYPE_STRUCT) {
+							err_print(e->where, "This type doesn't have a '_member_names' member (only structs do).");
+							return false;
+						}
+						StructDef *struc = ltype->struc;
+						if (struc->params) {
+							err_print(e->where, "You can't access the '_member_names' type information from a struct template.");
+							return false;
+						}
+						if (!(struc->flags & STRUCT_DEF_RESOLVED)) {
+							if (!struct_resolve(tr, struc))
+								return false;
+						}
+
+						t->kind = TYPE_SLICE;
+						t->flags = TYPE_IS_RESOLVED;
+						Type *slicechar = t->slice = typer_malloc(tr, sizeof *t->slice);
+						construct_resolved_slice_of_builtin(tr->allocr, slicechar, BUILTIN_CHAR);
+						Field *fields = struc->fields;
+						size_t nfields = arr_len(fields);
+						Slice *names = typer_malloc(tr, nfields * sizeof *names);
+						Slice *name = names;
+						arr_foreach(fields, Field, f) {
+							// point directly to the identifier's internal string
+							name->len = (I64)f->name->len;
+							name->data = f->name->str;
+							++name;
+						}
+						e->kind = EXPR_VAL;
+						e->val.slice.len = (I64)nfields;
+						e->val.slice.data = names;
+						break;
+					} else if (str_eq_cstr(member, "_member_types")) {
+						// access a slice of the types of the fields of this struct
+						// @TODO: cache this stuff
+						if (ltype->kind != TYPE_STRUCT) {
+							err_print(e->where, "This type doesn't have a '_member_types' member (only structs do).");
+							return false;
+						}
+						StructDef *struc = ltype->struc;
+						if (struc->params) {
+							err_print(e->where, "You can't access the '_member_types' type information from a struct template.");
+							return false;
+						}
+
+						construct_resolved_slice_of_builtin(tr->allocr, t, BUILTIN_TYPE);
+						
+						Field *fields = struc->fields;
+						size_t nfields = arr_len(fields);
+						Type **type_ptrs = typer_malloc(tr, nfields * sizeof *type_ptrs);
+						size_t i = 0;
+						arr_foreach(fields, Field, f) {
+							type_ptrs[i++] = f->type;
+						}
+						e->kind = EXPR_VAL;
+						e->val.slice.len = (I64)nfields;
+						e->val.slice.data = type_ptrs;
+						break;
 					}
 				}
 				

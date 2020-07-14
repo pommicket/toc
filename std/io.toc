@@ -239,15 +239,30 @@ fwrites ::= fn(use f: &File, s : []char) FileError {
 	}
 }
 
+fwritec ::= fn(use f: &File, c : char) err : FileError {
+	if buffer_used > BUFSZ-1 {
+		flush(f);
+		buffer[0] = c;
+	} else {
+		buffer[buffer_used] = c;
+		buffer_used += 1;
+	}
+	if nobuffer { flush(f); }
+}
+
 fputs ::= fn(f: &File, s: []char) err : FileError {
 	err = fwrites(f, s);
 	if !err {
-		err = fwrites(f, "\n");
+		err = fwritec(f, '\n');
 	}
 }
 
 writes ::= fn(s: []char) {
 	fwrites(&std_out, s);
+}
+
+writec ::= fn(c: char) {
+	fwritec(&std_out, c);
 }
 
 puts ::= fn(s: []char) {
@@ -311,7 +326,7 @@ writei ::= fn(x: int) {
 
 puti ::= fn(x: int) {
 	writei(x);
-	writes("\n");
+	writec('\n');
 }
 
 putb ::= fn(x: bool)  {

@@ -1,95 +1,135 @@
 #include "std/io.toc";
 
-main ::= fn() {
-	a : [5]int;
-	for i ::= 1..10 {
-		a : [i]int;
-		a[0] = 7;
-		for j ::= 0.,i {
-			puti(a[j]);
-		}
-	}
-}
-main();
-
-
-
-/*
 #include "std/io.toc", io;
 #include "std/types.toc";
 
-print_type ::= fn(t :: Type) {
+write_type ::= fn(f : &File, t :: Type) {
 	k ::= t._kind;
 	use TypeKind;
 	#if k == UNKNOWN {
-		io.puts("???");
+		io.fwrites(f, "???");
 	} elif k == BUILTIN {
 		b ::= t._builtin;
 		use BuiltinType;
 		#if b == I8 {
-			io.puts("i8");
+			io.fwrites(f, "i8");
 		} elif b == U8 {
-			io.puts("u8");
+			io.fwrites(f, "u8");
 		} elif b == I16 {
-			io.puts("i16");
+			io.fwrites(f, "i16");
 		} elif b == U16 {
-			io.puts("u16");
+			io.fwrites(f, "u16");
 		} elif b == I32 {
-			io.puts("i32");
+			io.fwrites(f, "i32");
 		} elif b == U32 {
-			io.puts("u32");
+			io.fwrites(f, "u32");
 		} elif b == I64 {
-			io.puts("i64");
+			io.fwrites(f, "i64");
 		} elif b == U64 {
-			io.puts("u64");
+			io.fwrites(f, "u64");
 		} elif b == F32 {
-			io.puts("f32");
+			io.fwrites(f, "f32");
 		} elif b == F64 {
-			io.puts("f64");
+			io.fwrites(f, "f64");
 		} elif b == CHAR {
-			io.puts("char");
+			io.fwrites(f, "char");
 		} elif b == BOOL {
-			io.puts("bool");
+			io.fwrites(f, "bool");
 		} elif b == TYPE {
-			io.puts("Type");
+			io.fwrites(f, "Type");
 		} elif b == VARARGS {
-			io.puts("..");
+			io.fwrites(f, "..");
 		} elif b == NMS {
-			io.puts("Namespace");
+			io.fwrites(f, "Namespace");
 		} elif b == VOID {
-			io.puts("void");
+			io.fwrites(f, "void");
 		} else {
-			io.puts("<unknown builtin type>");
+			io.fwrites(f, "<unknown builtin type>");
 		}
 	} elif k == FN {
-		// @TODO
+		#if t._is_template {
+			io.fwrites(f, "<function template>");
+		} else {
+			io.fwrites(f, "fn(");
+			param_types ::= t._of;
+			for i ::= 0.,param_types.len {
+				#if i > 0 {
+					io.fwrites(f, ", ");
+				}
+				write_type(f, param_types[i]);
+			}
+			io.fwritec(f, ')');
+			ret ::= t._returns;
+			if ret != void {
+				io.fwritec(f, ' ');
+				write_type(f, ret);
+			}
+		}
 	} elif k == TUPLE {
-		// @TODO
+		io.fwritec(f, '(');
+		sub_types ::= t._of;
+		for i ::= 0.,sub_types.len {
+			#if i > 0 {
+				io.fwrites(f, ", ");
+			}
+			write_type(f, sub_types[i]);
+		}
+		io.fwritec(f, ')');
 	} elif k == ARR {
-		io.writes("[");
+		io.fwritec(f, '[');
 		io.writei(t._n);
-		io.writes("]");
-		print_type(t._of);
+		io.fwritec(f, ']');
+		write_type(f, t._of);
 	} elif k == PTR {
-		io.writes("&");
-		print_type(t._of);
+		io.fwritec(f, '&');
+		write_type(f, t._of);
 	} elif k == SLICE {
-		io.writes("[]");
-		print_type(t._of);
+		io.fwrites(f, "[]");
+		write_type(f, t._of);
 	} elif k == EXPR {
-		io.puts("<type expression>");
+		io.fwrites(f, "<type expression>");
 	} elif k == STRUCT {
-		// @TODO
+		if t._is_template {
+			io.fwrites(f, "<struct template>");
+		} else {
+			io.fwrites(f, "struct { ");
+			member_names ::= t._member_names;
+			member_types ::= t._member_types;
+			for i ::= 0.,member_names.len {
+				io.fwrites(f, member_names[i]);
+				io.fwrites(f, ": ");
+				write_type(f, member_types[i]);
+				io.fwrites(f, "; ");
+			}
+			io.fwritec(f, '}');
+		}
 	} else {
-		io.puts("<unknown type kind>");
+		io.fwrites(f, "<unknown type kind>");
 	}
 }
 
+put_type ::= fn(t :: Type) {
+	write_type(&std_out, t);
+	writec('\n');
+}
+
 print_typeof ::= fn (t ::=, x : t) {
-	print_type(t);
+	put_type(t);
+}
+
+
+some_fn ::= fn(a,b,c: int, d,e,f := 3.0) y : f64 = 3.111 {
 }
 
 main ::= fn() {
+	// @TODO: moving this to the bottom of main screws up the order the structs are generated in.
+	Point2D ::= struct {
+		x, y : int;
+	}
+	Point ::= struct {
+		use p: Point2D;
+		z: float;
+	}
 	foo0 := int == int;
 	bar0 := int == float;
 	foo1 := &&&int == &&&u8;
@@ -106,6 +146,7 @@ main ::= fn() {
 	t : [x*x]int;
 	u := &t;
 	v : &void;
+	p: Point;
 
 	print_typeof(x);
 	print_typeof(y);
@@ -114,6 +155,12 @@ main ::= fn() {
 	print_typeof(t);
 	print_typeof(u);
 	print_typeof(v);
+	print_typeof(main);
+	print_typeof(some_fn);
+	print_typeof(xx);
+	print_typeof(p);
+	xx ::= fn() (int, int) {
+		return 3, 5;
+	}
 }
 main();
-*/

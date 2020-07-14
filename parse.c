@@ -3079,6 +3079,13 @@ static inline void construct_resolved_builtin_type(Type *t, BuiltinType builtin)
 	t->flags = TYPE_IS_RESOLVED;
 }
 
+static inline void construct_resolved_slice_of_builtin(Allocator *a, Type *t, BuiltinType builtin) {
+	t->kind = TYPE_SLICE;
+	t->flags = TYPE_IS_RESOLVED;
+	t->slice = allocr_malloc(a, sizeof *t->slice);
+	construct_resolved_builtin_type(t->slice, builtin);
+}
+
 #ifndef TOC_DEBUG
 static
 #endif

@@ -97,8 +97,9 @@ static U64 type_hash(Type *t) {
 			hash = hash * type_hash(sub) + 0x16225b0aa9993299;
 		return hash;
 	case TYPE_FN:
-		arr_foreach(t->fn->types, Type, sub)
+		arr_foreach(t->fn->types, Type, sub) {
 			hash = hash * type_hash(sub) + 0x2092d851ab2008de;
+		}
 		return hash;
 	case TYPE_PTR:
 		hash += type_hash(t->ptr) * 0x277caae472151119 + 0xf5c6ae7b4dae3bcf;
