@@ -594,6 +594,10 @@ static void eval_deref_set(void *set, Value *to, Type *type) {
 }
 
 static Status eval_val_ptr_at_index(Location where, void *arr_ptr, U64 i, Type *arr_type, void **ptr, Type **type) {
+	if (arr_type->kind == TYPE_PTR) {
+		arr_type = arr_type->ptr;
+		arr_ptr = *(void **)arr_ptr;
+	}
 	switch (arr_type->kind) {
 	case TYPE_ARR: {
 		U64 arr_sz = (U64)arr_type->arr->n;

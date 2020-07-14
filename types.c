@@ -2792,6 +2792,13 @@ static Status types_expr(Typer *tr, Expression *e) {
 			if (lhs_type->kind == TYPE_PTR) {
 				lhs_type = lhs_type->ptr;
 			}
+
+			// in order to index an array, we need a pointer to it
+			if (lhs_type->kind == TYPE_ARR && !expr_must_lval(lhs, "access an index of")) {
+				info_print(lhs->where, "Maybe try extracting this into a variable.");
+				return false;
+			}
+			
 			switch (lhs_type->kind) {
 			case TYPE_ARR:
 				*t = *lhs_type->arr->of;
