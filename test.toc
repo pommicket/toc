@@ -122,14 +122,6 @@ some_fn ::= fn(a,b,c: int, d,e,f := 3.0) y : f64 = 3.111 {
 }
 
 main ::= fn() {
-	// @TODO: moving this to the bottom of main screws up the order the structs are generated in.
-	Point2D ::= struct {
-		x, y : int;
-	}
-	Point ::= struct {
-		use p: Point2D;
-		z: float;
-	}
 	foo0 := int == int;
 	bar0 := int == float;
 	foo1 := &&&int == &&&u8;
@@ -161,6 +153,13 @@ main ::= fn() {
 	print_typeof(p);
 	xx ::= fn() (int, int) {
 		return 3, 5;
+	}
+	Point2D ::= struct {
+		x, y : int;
+	}
+	Point ::= struct {
+		use p: Point2D;
+		z: float;
 	}
 }
 main();

@@ -1974,6 +1974,61 @@ static void cgen_global_decl(CGenerator *g, Declaration *d) {
 	}
 }
 
+// this complicated stuff is necessary so that the order of the struct definitions is correct.
+// for example, if we have
+// a ::= struct { x: [5]b; }
+// b ::= struct { foo: int; }
+// we need b to be generated before a
+
+static void cgen_struct_def(CGenerator *g, StructDef *sdef);
+
+static void cgen_struct_defs_needed_by_type(CGenerator *g, Type *t) {
+	switch (t->kind) {
+	case TYPE_STRUCT:
+		cgen_struct_def(g, t->struc);
+		break;
+	case TYPE_ARR:
+		cgen_struct_defs_needed_by_type(g, t->arr->of);
+		break;
+	case TYPE_FN:
+	case TYPE_SLICE:
+	case TYPE_PTR:
+	case TYPE_BUILTIN:
+		break;
+	case TYPE_TUPLE:
+	case TYPE_UNKNOWN:
+	case TYPE_EXPR:
+		assert(0);
+		break;
+	}
+}
+
+static void cgen_struct_def(CGenerator *g, StructDef *sdef) {
+	assert(sdef->flags & STRUCT_DEF_RESOLVED);
+	if (sdef->flags & STRUCT_DEF_CGENERATED) {
+		return;
+	}
+	sdef->flags |= STRUCT_DEF_CGENERATED;
+	arr_foreach(sdef->fields, Field, field)
+		cgen_struct_defs_needed_by_type(g, field->type);
+	cgen_write(g, "struct ");
+	cgen_struct_name(g, sdef);
+	cgen_write(g, "{");
+	cgen_nl(g);
+	++g->indent_lvl;
+	arr_foreach(sdef->fields, Field, field) {
+		cgen_type_pre(g, field->type);
+		cgen_write(g, " ");
+		cgen_ident_simple(g, field->name);
+		cgen_type_post(g, field->type);
+		cgen_write(g, ";");
+		cgen_nl(g);
+	}
+	--g->indent_lvl;
+	cgen_write(g, "};");
+	cgen_nl(g);
+}
+
 static void cgen_file(CGenerator *g, ParsedFile *f, Typer *tr) {
 	g->block = NULL;
 	g->nms = NULL;
@@ -2032,22 +2087,7 @@ static void cgen_file(CGenerator *g, ParsedFile *f, Typer *tr) {
 	// struct definitions
 	arr_foreach(tr->all_structs, StructDefPtr, sdefp) {
 		StructDef *sdef = *sdefp;
-		cgen_write(g, "struct ");
-		cgen_struct_name(g, sdef);
-		cgen_write(g, "{");
-		cgen_nl(g);
-		++g->indent_lvl;
-		arr_foreach(sdef->fields, Field, field) {
-			cgen_type_pre(g, field->type);
-			cgen_write(g, " ");
-			cgen_ident_simple(g, field->name);
-			cgen_type_post(g, field->type);
-			cgen_write(g, ";");
-			cgen_nl(g);
-		}
-		--g->indent_lvl;
-		cgen_write(g, "};");
-		cgen_nl(g);
+		cgen_struct_def(g, sdef);
 	}
 	
 	cgen_write(g, "/* declarations */\n");
