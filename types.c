@@ -2958,6 +2958,23 @@ static Status types_expr(Typer *tr, Expression *e) {
 						e->val.slice.len = (I64)nfields;
 						e->val.slice.data = type_ptrs;
 						break;
+					} else if (str_eq_cstr(member, "_name")) {
+						if (ltype->kind != TYPE_STRUCT) {
+							err_print(e->where, "This type doesn't have a '_name' member (only structs do).");
+							return false;
+						}
+						e->kind = EXPR_VAL;
+						construct_resolved_slice_of_builtin(tr->allocr, t, BUILTIN_CHAR);
+						Slice *s = &e->val.slice;
+						Identifier name = ltype->struc->name;
+						if (name) {
+							s->data = name->str;
+							s->len  = (I64)name->len;
+						} else {
+							s->data = NULL;
+							s->len  = 0;
+						}
+						break;
 					}
 				}
 				
@@ -3232,10 +3249,6 @@ static Status types_decl(Typer *tr, Declaration *d) {
 		} else if (e->kind == EXPR_NMS) {
 			if (typer_is_at_top_level(tr))
 				e->nms->associated_ident = d->idents[0];
-		} else if (e->kind == EXPR_TYPE
-			&& e->typeval->kind == TYPE_STRUCT
-			&& tr->fn == NULL) {
-			e->typeval->struc->name = d->idents[0];
 		}
 		
 		if (!types_expr(tr, e)) {

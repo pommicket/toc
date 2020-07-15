@@ -2154,6 +2154,11 @@ static Status parse_decl(Parser *p, Declaration *d, U16 flags) {
 					t->token = end; // move to ;
 					goto ret_false;
 				}
+				if (e->kind == EXPR_TYPE
+					&& e->typeval->kind == TYPE_STRUCT
+					&& p->block == NULL) {
+					e->typeval->struc->name = d->idents[0];
+				}
 				if ((flags & DECL_CAN_END_WITH_SEMICOLON) && end > t->tokens && token_is_kw(end - 1, KW_RBRACE)) {
 					// allow semicolon to be ommitted, e.g. f ::= fn() {}
 				} else if (ends_decl(t->token, flags)) {

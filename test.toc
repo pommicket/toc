@@ -91,7 +91,13 @@ write_type ::= fn(f : &File, t :: Type) {
 		if t._is_template {
 			io.fwrites(f, "<struct template>");
 		} else {
-			io.fwrites(f, "struct { ");
+			io.fwrites(f, "struct ");
+			name ::= t._name;
+			if name {
+				io.fwrites(f, name);
+				io.fwritec(f, ' ');
+			}
+			io.fwrites(f, "{ ");
 			member_names ::= t._member_names;
 			member_types ::= t._member_types;
 			for i ::= 0.,member_names.len {
@@ -153,12 +159,12 @@ main ::= fn() {
 	xx ::= fn() (int, int) {
 		return 3, 5;
 	}
-	Point2D ::= struct(t :: Type) {
-		x, y : t;
-	}
 	Point ::= struct(t :: Type) {
 		use p: Point2D(t);
 		z: float;
 	}
 }
 main();
+Point2D ::= struct(t :: Type) {
+	x, y : t;
+}
