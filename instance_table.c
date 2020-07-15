@@ -3,13 +3,6 @@
   This file is part of toc. toc is distributed under version 3 of the GNU General Public License, without any warranty whatsoever.
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
-/*
-   @TODO: better hash functions, especially for integers
-   (right now, nearby integers are close together in hash
-   space, which is bad with the way these hash tables
-   are designed)
-*/
-
 // NOTE: any time you see 0x then 16 hexadecimal digits, that's probably a random number for hashing
 
 /*
@@ -75,15 +68,15 @@ static U64 f64_hash(F64 f) {
 
 static U64 type_hash(Type *t) {
 	static const U64 starters[TYPE_COUNT] = {
-											 0x40d8675d0f148df7,
-											 0xee4db91f31fdf2e1,
-											 0x94963ca71f7f0df4,
-											 0x95b9d36f45f27cf2,
-											 0x68d393d7cade0570,
-											 0x8191b5178d728e8c,
-											 0x50da97f1211b2423,
-											 0xc3977306abd0ae6c,
-											 0x87ea684427e1c521
+		0x40d8675d0f148df7,
+		0xee4db91f31fdf2e1,
+		0x94963ca71f7f0df4,
+		0x95b9d36f45f27cf2,
+		0x68d393d7cade0570,
+		0x8191b5178d728e8c,
+		0x50da97f1211b2423,
+		0xc3977306abd0ae6c,
+		0x87ea684427e1c521
 	};
 	U64 hash = starters[t->kind];
 	assert(t->flags & TYPE_IS_RESOLVED);
@@ -119,6 +112,11 @@ static U64 type_hash(Type *t) {
 	assert(0); return 0;
 }
 
+// make x more random.
+static inline U64 hash_u64(U64 x) {
+	return x * 0x442a1f5f377a25e9 + 0x36e1049ba954eac4; // room for improvement here
+}
+
 // Note that for these value hashing functions, values of different types may collide
 static U64 val_ptr_hash(void *v, Type *t) {
 	assert(t->flags & TYPE_IS_RESOLVED);
@@ -126,18 +124,18 @@ static U64 val_ptr_hash(void *v, Type *t) {
 	case TYPE_UNKNOWN: return 0;
 	case TYPE_BUILTIN:
 		switch (t->builtin) {
-		case BUILTIN_I8: return (U64)*(I8 *)v;
-		case BUILTIN_U8: return (U64)*(U8 *)v;
-		case BUILTIN_I16: return (U64)*(I16 *)v;
-		case BUILTIN_U16: return (U64)*(U16 *)v;
-		case BUILTIN_I32: return (U64)*(I32 *)v;
-		case BUILTIN_U32: return (U64)*(U32 *)v;
-		case BUILTIN_I64: return (U64)*(I64 *)v;
-		case BUILTIN_U64: return (U64)*(U64 *)v;
-		case BUILTIN_F32: return f32_hash(*(F32 *)v);
-		case BUILTIN_F64: return f64_hash(*(F64 *)v);
-		case BUILTIN_CHAR: return (U64)*(char *)v;
-		case BUILTIN_BOOL: return (U64)*(bool *)v;
+		case BUILTIN_I8:   return hash_u64((U64)*(I8 *)v);
+		case BUILTIN_U8:   return hash_u64((U64)*(U8 *)v);
+		case BUILTIN_I16:  return hash_u64((U64)*(I16 *)v);
+		case BUILTIN_U16:  return hash_u64((U64)*(U16 *)v);
+		case BUILTIN_I32:  return hash_u64((U64)*(I32 *)v);
+		case BUILTIN_U32:  return hash_u64((U64)*(U32 *)v);
+		case BUILTIN_I64:  return hash_u64((U64)*(I64 *)v);
+		case BUILTIN_U64:  return hash_u64((U64)*(U64 *)v);
+		case BUILTIN_F32:  return f32_hash(*(F32 *)v);
+		case BUILTIN_F64:  return f64_hash(*(F64 *)v);
+		case BUILTIN_CHAR: return hash_u64((U64)*(char *)v);
+		case BUILTIN_BOOL: return hash_u64((U64)*(bool *)v);
 		case BUILTIN_VARARGS: {
 			U64 hash = 1;
 			VarArg *vals = *(VarArg **)v;
