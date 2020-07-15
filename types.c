@@ -302,13 +302,18 @@ static size_t compiler_sizeof(Type *t) {
 static Status struct_resolve(Typer *tr, StructDef *s) {
 	if (s->flags & STRUCT_DEF_RESOLVING_FAILED)
 		return false; // silently fail; do not try to resolve again, because there'll be duplicate errors
+	if (s->flags & STRUCT_DEF_RESOLVING)
+		return true; // silently succeed; this is so that circularly dependent structs work.
 	if (!(s->flags & STRUCT_DEF_RESOLVED)) {
 		s->flags |= STRUCT_DEF_RESOLVING;
 		typer_arr_add(tr, tr->all_structs, s);
 		{ // resolving stuff
 			Block *body = &s->body;
-			if (!types_block(tr, body))
-				goto fail;
+			tr->evalr->evaluating_struct_member_type = true;
+			bool success = types_block(tr, body);
+			tr->evalr->evaluating_struct_member_type = false;
+
+			if (!success) goto fail;
 			s->fields = NULL;
 			Statement *stmts = body->stmts;
 			if (!struct_add_stmts(tr, s, stmts))
@@ -2912,10 +2917,8 @@ static Status types_expr(Typer *tr, Expression *e) {
 							err_print(e->where, "You can't access the '_member_names' type information from a struct template.");
 							return false;
 						}
-						if (!(struc->flags & STRUCT_DEF_RESOLVED)) {
-							if (!struct_resolve(tr, struc))
-								return false;
-						}
+						if (!struct_resolve(tr, struc))
+							return false;
 
 						t->kind = TYPE_SLICE;
 						t->flags = TYPE_IS_RESOLVED;

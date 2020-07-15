@@ -10,6 +10,7 @@ static Value get_builtin_val(GlobalCtx *gctx, BuiltinVal val);
 
 static void evalr_create(Evaluator *ev, Typer *tr, Allocator *allocr) {
 	ev->returning = NULL;
+	ev->evaluating_struct_member_type = false;
 	ev->typer = tr;
 	ev->allocr = allocr;
 	ev->to_free = NULL;
@@ -1020,7 +1021,7 @@ static Status eval_ident(Evaluator *ev, Identifier ident, Value *v, Location whe
 		return false;
 	}
 	Declaration *d = ident->decl;
-	if ((d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_TYPE && d->expr.typeval->kind == TYPE_STRUCT) {
+	if (ev->evaluating_struct_member_type && (d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_TYPE && d->expr.typeval->kind == TYPE_STRUCT) {
 		// necessary for circularly-dependent structs
 		v->type = allocr_malloc(ev->allocr, sizeof *v->type);
 		v->type->flags = TYPE_IS_RESOLVED;

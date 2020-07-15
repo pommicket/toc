@@ -1,12 +1,12 @@
+#include "std/io.toc";
+a ::= struct {
+	foo: File;
+}
 main ::= fn() {
 	x: &a;
 	k := x.foo;
 }
 main();
-#include "std/io.toc";
-a ::= struct {
-	foo: File;
-}
 
 
 /*

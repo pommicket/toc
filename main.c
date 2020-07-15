@@ -8,7 +8,6 @@
 see development.md for development information
 
 @TODO:
-fix problem with a : b; #include "file_which_defines_X"; b ::= struct { a: X; }
 see note in types.c : we probably shouldn't go to the trouble of evaluating this (just do this stuff if it's an ident)
 ensure that in s[a:b] s is an l-value if it's an array
 make sure you can't pass a function template or a tuple to varargs

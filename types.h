@@ -1047,6 +1047,7 @@ typedef struct Evaluator {
 	Declaration **decls_given_values; // array of declarations whose last value in their val stacks should be removed when the block is exited
 	Value ret_val;
 	ForeignFnManager ffmgr;
+	bool evaluating_struct_member_type; // we only allow references to future structs if it's within another struct (so that circularly dependent structs can exist). hence, this keeps track of if we're evaluating the type of a declaration inside a struct.
 } Evaluator;
 
 
