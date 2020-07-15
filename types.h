@@ -929,7 +929,7 @@ enum {
 
 typedef struct {
 	U8 flags;
-	Expression filename;
+	String filename;
 	char *nms; // NULL if this is just a plain old #include, otherwise string which can be used with ident_get
 } Include;
 

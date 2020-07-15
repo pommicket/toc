@@ -104,6 +104,14 @@ static void *allocr_realloc(Allocator *a, void *data, size_t old_size, size_t ne
 	return ret;
 }
 
+static char *allocr_str_to_cstr(Allocator *a, String s) {
+	size_t len = s.len;
+	char *ret = allocr_malloc(a, len + 1);
+	memcpy(ret, s.str, len);
+	ret[len] = 0;
+	return ret;
+}
+
 static void allocr_free_all(Allocator *a) {
 	for (Page *page = a->first; page;) {
 		Page *next = page->next;
@@ -111,3 +119,4 @@ static void allocr_free_all(Allocator *a) {
 		page = next;
 	}
 }
+

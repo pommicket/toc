@@ -359,7 +359,6 @@ static void copy_stmt(Copier *c, Statement *out, Statement *in) {
 	case STMT_INCLUDE:
 		out->inc = copier_malloc(c, sizeof *out->inc);
 		*out->inc = *in->inc;
-		copy_expr(c, &out->inc->filename, &in->inc->filename);
 		break;
 	case STMT_EXPR:
 		out->expr = copy_expr_(c, in->expr);

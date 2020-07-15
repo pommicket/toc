@@ -4085,9 +4085,8 @@ top:
 	} break;
 	case STMT_INCLUDE: {
 		Include *inc = s->inc;
-		char *filename = eval_expr_as_cstr(tr, &inc->filename, "import filename");
-		if (!filename)
-			return false;
+		char *filename = allocr_str_to_cstr(tr->allocr, inc->filename);
+		size_t filename_len = inc->filename.len;
 		Namespace *prev_nms = tr->nms;
 		Block *prev_block = tr->block;
 		IncludedFile *inc_f = NULL;
@@ -4145,24 +4144,23 @@ top:
 		}
 
 		if (!(inc->flags & INC_FORCED)) {
-			size_t filename_len = strlen(filename);
 			if (streq(filename, tr->gctx->main_file->filename)) {
 				err_print(s->where, "Circular #include detected. You can add #force to this #include to force it to be included.");
-				success = false; goto nms_done;
+				success = false; goto inc_end;
 			}
 			inc_f = str_hash_table_get(&tr->included_files, filename, filename_len);
 			if (inc_f) {
 				// has already been included
 				if (inc_f->flags & INC_FILE_INCLUDING) {
 					err_print(s->where, "Circular #include detected. You can add #force to this #include to force it to be included.");
-					success = false; goto nms_done;
+					success = false; goto inc_end;
 				}
 				if (s->kind == STMT_INLINE_BLOCK) s->inline_block = NULL; // nothing needed here
 				// just set ident declarations
 				if (!include_stmts_link_to_nms(tr, inc_f->main_nms, inc_f->stmts)) {
-					success = false; goto nms_done;
+					success = false; goto inc_end;
 				}
-				goto nms_done;
+				goto inc_end;
 			}
 			inc_f = str_hash_table_insert(&tr->included_files, filename, filename_len);
 			inc_f->flags |= INC_FILE_INCLUDING;
@@ -4171,7 +4169,7 @@ top:
 		{
 			char *contents = read_file_contents(tr->allocr, filename, s->where);
 			if (!contents) {
-				success = false; goto nms_done;
+				success = false; goto inc_end;
 			}
 
 			Tokenizer tokr;
@@ -4182,14 +4180,14 @@ top:
 			file->ctx = tr->gctx->err_ctx;
 			
 			if (!tokenize_file(&tokr, file)) {
-				success = false; goto nms_done;
+				success = false; goto inc_end;
 			}
 			Parser parser;
 			parser_create(&parser, tr->globals, &tokr, tr->allocr, tr->gctx);
 			parser.block = tr->block;
 			ParsedFile parsed_file;
 			if (!parse_file(&parser, &parsed_file)) {
-				success = false; goto nms_done;
+				success = false; goto inc_end;
 			}
 			Statement *stmts_inc = parsed_file.stmts;
 			if (inc_f) {
@@ -4198,18 +4196,16 @@ top:
 			if (s->kind == STMT_INLINE_BLOCK) s->inline_block = stmts_inc;
 			arr_foreach(stmts_inc, Statement, s_incd) {
 				if (!types_stmt(tr, s_incd)) {
-					success = false; goto nms_done;
+					success = false; goto inc_end;
 				}
 			}
 			if (inc_nms) {
 				inc_nms->body.stmts = stmts_inc;
 			}
 		}
-	nms_done:
-		if (inc_nms) {
-			tr->nms = prev_nms;
-			tr->block = prev_block;
-		}
+	inc_end:
+		tr->nms = prev_nms;
+		tr->block = prev_block;
 		if (inc_f) inc_f->flags &= (IncFileFlags)~(IncFileFlags)INC_FILE_INCLUDING;
 		if (!success) {
 			// give up on typing if #include failed

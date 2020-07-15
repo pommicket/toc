@@ -2489,10 +2489,12 @@ static Status parse_stmt(Parser *p, Statement *s, bool *was_a_statement) {
 				i->flags |= INC_FORCED;
 				++t->token;
 			}
-			if (!parse_expr(p, &i->filename, expr_find_end(p, EXPR_CAN_END_WITH_COMMA))) {
-				tokr_skip_semicolon(t);
+			if (t->token->kind != TOKEN_LITERAL_STR) {
+				tokr_err(t, "Expected string literal for #include file name.");
 				return false;
 			}
+			i->filename = t->token->str;
+			++t->token;
 			if (token_is_kw(t->token, KW_COMMA)) {
 				++t->token;
 				if (t->token->kind != TOKEN_IDENT) {
@@ -2883,7 +2885,7 @@ static void fprint_stmt(FILE *out, Statement *s) {
 	case STMT_INCLUDE: {
 		Include *i = s->inc;
 		fprintf(out, "#include ");
-		fprint_expr(out, &i->filename);
+		fprint_string(out, i->filename);
 		fprintf(out, ";\n");
 	} break;
 	case STMT_MESSAGE: {
