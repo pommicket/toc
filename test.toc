@@ -1,7 +1,20 @@
+main ::= fn() {
+	x: &a;
+	k := x.foo;
+}
+main();
 #include "std/io.toc";
+a ::= struct {
+	foo: File;
+}
+
+
+/*
+
 
 #include "std/io.toc", io;
 #include "std/types.toc";
+
 write_type ::= fn(f : &File, t :: Type) {
 	k ::= t._kind;
 	use TypeKind;
@@ -168,3 +181,4 @@ main();
 Point2D ::= struct(t :: Type) {
 	x, y : t;
 }
+*/

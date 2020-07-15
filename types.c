@@ -263,6 +263,7 @@ static size_t compiler_alignof(Type *t) {
 }
 
 // size of a type at compile time
+// returns a value >= SIZE_MAX-1 if something goes wrong
 static size_t compiler_sizeof(Type *t) {
 	Value v;
 	assert(t->flags & TYPE_IS_RESOLVED);
@@ -273,14 +274,16 @@ static size_t compiler_sizeof(Type *t) {
 		return sizeof v.fn;
 	case TYPE_PTR:
 		return sizeof v.ptr;
-	case TYPE_ARR:
-		return (size_t)t->arr->n * compiler_sizeof(t->arr->of);
+	case TYPE_ARR: {
+		size_t of_size = compiler_sizeof(t->arr->of);
+		if (of_size >= SIZE_MAX-1) return of_size;
+		return (size_t)t->arr->n * of_size;
+	}
 	case TYPE_TUPLE:
 		return sizeof v.tuple;
 	case TYPE_SLICE:
 		return sizeof v.slice;
 	case TYPE_STRUCT: {
-		// these two ifs are purely for struct_resolve, so that it can detect use of future structs in a non-pointery way
 		if (t->struc->flags & STRUCT_DEF_RESOLVING)
 			return SIZE_MAX-1;
 		if (!(t->struc->flags & STRUCT_DEF_RESOLVED))

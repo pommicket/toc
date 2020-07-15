@@ -1021,6 +1021,7 @@ static Status eval_ident(Evaluator *ev, Identifier ident, Value *v, Location whe
 	}
 	Declaration *d = ident->decl;
 	if ((d->flags & DECL_HAS_EXPR) && d->expr.kind == EXPR_TYPE && d->expr.typeval->kind == TYPE_STRUCT) {
+		// necessary for circularly-dependent structs
 		v->type = allocr_malloc(ev->allocr, sizeof *v->type);
 		v->type->flags = TYPE_IS_RESOLVED;
 		v->type->kind = TYPE_STRUCT;
