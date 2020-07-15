@@ -4,7 +4,6 @@
   You should have received a copy of the GNU General Public License along with toc. If not, see <https://www.gnu.org/licenses/>.
 */
 static bool call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Location where, I16 **orderp);
-static bool parameterized_struct_arg_order(StructDef *struc, Argument *args, I16 **order, Location where);
 static bool types_expr(Typer *tr, Expression *e);
 
 static bool infer_from_expr(Typer *tr, Expression *match, Value to, Type *to_type, Location to_where, Identifier *idents, Value *vals, Type *types) {
@@ -41,29 +40,23 @@ static bool infer_from_expr(Typer *tr, Expression *match, Value to, Type *to_typ
 				return false;
 			}
 			Type *fn_type = to.type;
-			I16 *order;
-			if (!parameterized_struct_arg_order(fn_type->struc, match->call.args, &order, match->where)) {
-				free(order);
-				return false;
-			}
 			Declaration *params = fn_type->struc->params;
-			int arg_idx = 0;
+			Argument *args = match->call.args;
+			size_t nargs = arr_len(args);
+			size_t arg_idx = 0;
 			arr_foreach(params, Declaration, param) {
 				int ident_idx = 0;
 				arr_foreach(param->idents, Identifier, i) {
-					if (order[arg_idx] != -1) {
-						Expression *arg = &match->call.args[order[arg_idx]].val;
-						Value val = *decl_val_at_index(param, ident_idx);
-						if (!infer_from_expr(tr, arg, val, decl_type_at_index(param, ident_idx), param->where, idents, vals, types)) {
-							free(order);
-							return false;
-						}
+					if (arg_idx >= nargs) break;
+					Expression *arg = &args[arg_idx].val;
+					Value val = *decl_val_at_index(param, ident_idx);
+					if (!infer_from_expr(tr, arg, val, decl_type_at_index(param, ident_idx), param->where, idents, vals, types)) {
+						return false;
 					}
 					++arg_idx;
 					++ident_idx;
 				}
 			}
-			free(order);
 		}
 		// don't try to match other kinds of function calls. it's impossible to get any information out of it.
 	} break;

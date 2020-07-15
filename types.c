@@ -1377,83 +1377,6 @@ static Status call_arg_param_order(FnExpr *fn, Type *fn_type, Argument *args, Lo
 	return true;
 }
 
-// order must be freed, regardless of return value. if (*order)[i] == -1, that parameter was not set.
-static Status parameterized_struct_arg_order(StructDef *struc, Argument *args, I16 **order, Location where) {
-	size_t nargs = arr_len(args);
-	
-	/*
-	   it would be nice if this code and the code for arguments to normal functions
-	   weren't split into two separate functions.
-	*/
-	size_t nparams = 0;
-	arr_foreach(struc->params, Declaration, param)
-		nparams += arr_len(param->idents);
-
-	*order = err_malloc(nparams * sizeof **order);
-	
-	if (nargs > nparams) {
-		err_print(args[nparams].where, "Expected at most %lu argument%s to parameterized type, but got %lu.", nparams, plural_suffix(nparams), nargs);
-		return false;
-	}
-	for (size_t i = 0; i < nparams; ++i)
-		(*order)[i] = -1;
-	int p = 0; // sequential parameter
-	I16 argno = 0;
-	
-	arr_foreach(args, Argument, arg) {
-		int param_idx;
-		if (arg->name) {
-			param_idx = 0;
-			arr_foreach(struc->params, Declaration, param) {
-				arr_foreach(param->idents, Identifier, ident) {
-					if (ident_eq_str(*ident, arg->name))
-						goto struct_params_done;
-					++param_idx;
-				}
-			}
-		struct_params_done:;
-		} else {
-			param_idx = p;
-			++p;
-		}
-		if ((*order)[param_idx] != -1) {
-			Identifier param_name = NULL;
-			int counter = param_idx;
-			arr_foreach(struc->params, Declaration, param) {
-				arr_foreach(param->idents, Identifier, ident) {
-					if (--counter < 0) {
-						param_name = *ident;
-						break;
-					}
-				}
-				if (param_name) break;
-			}
-
-			char *s = ident_to_str(param_name);
-			err_print(arg->where, "Parameter #%d (%s) set twice in parameterized type instantiation.", param_idx+1, s);
-			free(s);
-			return false;
-		}
-		(*order)[param_idx] = argno;
-		++argno;
-	}
-	
-	p = 0;
-	arr_foreach(struc->params, Declaration, param) {
-		arr_foreach(param->idents, Identifier, ident) {
-			if ((*order)[p] == -1 && !(param->flags & DECL_HAS_EXPR)) {
-				char *s = ident_to_str(*ident);
-				err_print(where, "Parameter #%d (%s) not set in parameterized struct instantiation.", p+1, s);
-				free(s);
-				return false;
-			}
-			++p;
-		}
-	}
-	
-	return true;
-}
-
 static Value get_builtin_val(GlobalCtx *gctx, BuiltinVal val) {
 	Value v;
 	switch (val) {
@@ -1884,12 +1807,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 				bool already_exists;
 				Value args_val = {0};
 				Type args_type = {0};
-				I16 *order;
-				// get proper order of arguments (some of them might be named, etc.)
-				if (!parameterized_struct_arg_order(&struc, c->args, &order, e->where)) {
-					free(order);
-					return false;
-				}
 				Type *arg_types = NULL;
 				arr_set_len(arg_types, nparams);
 				// needs to stay around because the instance table keeps a reference to it (if it hasn't already been added)
@@ -1909,15 +1826,20 @@ static Status types_expr(Typer *tr, Expression *e) {
 					arr_remove_last(err_ctx->instance_stack);
 					tr->block = prev;
 					if (!success) return false;
-					
+					Argument *args = c->args;
+					size_t arg_idx = 0, nargs = arr_len(args);
 					arr_foreach(param->idents, Identifier, ident) {
 						Type *type = decl_type_at_index(param, ident_idx);
 						arg_types[p] = *type;
 						Value ident_val;
-						if (order[p] == -1) {
+						if (arg_idx >= nargs) {
 							ident_val = *decl_val_at_index(param, ident_idx);
 						} else {
-							Argument *arg = &c->args[order[p]];
+							Argument *arg = &args[arg_idx++];
+							if (arg->name) {
+								err_print(arg->where, "struct arguments can't be named.");
+								return false;
+							}
 							assert(arg->val.type.flags & TYPE_IS_RESOLVED);
 							assert(type->flags & TYPE_IS_RESOLVED);
 							if (!type_eq_implicit(&arg->val.type, type)) {
@@ -1940,7 +1862,6 @@ static Status types_expr(Typer *tr, Expression *e) {
 					param->val = param_val;
 					param->flags |= DECL_FOUND_VAL;
 				}
-				free(order);
 				args_val.tuple = arg_vals;
 				args_type.tuple = arg_types;
 				args_type.kind = TYPE_TUPLE;
@@ -2958,7 +2879,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 								}
 							}
 						} else if (ltype->kind == TYPE_STRUCT) {
-							e->val.boolv = ltype->struc->params != NULL;
+							e->val.boolv = struct_is_template(ltype->struc);
 						} else {
 							err_print(e->where, "This type doesn't have a '_is_template' member (only functions and structs do).");
 							return false;
@@ -2984,7 +2905,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 							return false;
 						}
 						StructDef *struc = ltype->struc;
-						if (struc->params) {
+						if (struct_is_template(struc)) {
 							err_print(e->where, "You can't access the '_member_names' type information from a struct template.");
 							return false;
 						}
@@ -3019,7 +2940,7 @@ static Status types_expr(Typer *tr, Expression *e) {
 							return false;
 						}
 						StructDef *struc = ltype->struc;
-						if (struc->params) {
+						if (struct_is_template(struc)) {
 							err_print(e->where, "You can't access the '_member_types' type information from a struct template.");
 							return false;
 						}

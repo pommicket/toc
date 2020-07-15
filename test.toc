@@ -2,7 +2,6 @@
 
 #include "std/io.toc", io;
 #include "std/types.toc";
-
 write_type ::= fn(f : &File, t :: Type) {
 	k ::= t._kind;
 	use TypeKind;
@@ -138,7 +137,7 @@ main ::= fn() {
 	t : [x*x]int;
 	u := &t;
 	v : &void;
-	p: Point;
+	p: Point(u8);
 
 	print_typeof(x);
 	print_typeof(y);
@@ -154,11 +153,11 @@ main ::= fn() {
 	xx ::= fn() (int, int) {
 		return 3, 5;
 	}
-	Point2D ::= struct {
-		x, y : int;
+	Point2D ::= struct(t :: Type) {
+		x, y : t;
 	}
-	Point ::= struct {
-		use p: Point2D;
+	Point ::= struct(t :: Type) {
+		use p: Point2D(t);
 		z: float;
 	}
 }
